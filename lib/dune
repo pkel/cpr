@@ -1,0 +1,4 @@
+(library
+  (name cpr)
+  (inline_tests)
+  (preprocess (pps ppx_expect)))
