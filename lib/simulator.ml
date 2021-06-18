@@ -19,16 +19,21 @@ type ('a, 'b) state =
   }
 
 module Interface = struct
-  type ('global, 'local, 'state) action =
-    | Broadcast of 'global Dag.node
-    | Append of { append_to: 'global Dag.node list
-                ; extend_with: 'local
-                ; handle_new: 'global Dag.node -> 'state * ('global, 'local, 'state) action list
-                }
+  exception Invalid_extension
+
+  type ('global, 'local) context =
+    { view: ('global, 'local) Dag.view
+    ; release: 'global Dag.node -> unit
+    ; extend_dag: 'global Dag.node list -> 'local -> 'global Dag.node
+    }
+
+  type 'global event =
+    | Activate
+    | Deliver of 'global Dag.node
 
   type ('global, 'local, 'state) protocol =
-    { deliver: ('global, 'local) Dag.view -> 'state -> 'global Dag.node -> 'state * ('global, 'local, 'state) action list
-    ; activate: ('global, 'local) Dag.view -> 'state -> 'state * ('global, 'local, 'state) action list
+    { event_handler: ('global, 'local) context -> 'state -> 'global event -> 'state
+    ; dag_invariant: parents:'local list -> child:'local -> bool
     }
 end
 
@@ -36,26 +41,30 @@ module Nakamoto = struct
   open Interface
   type block = { height: int }
 
-  type 'a state =
-    { longest_chain: 'a Dag.node }
+  let dag_invariant ~parents ~child =
+    match parents with
+    | [ p ] -> child.height = p.height + 1
+    | _ -> false
 
-  let deliver view state rcv_packed =
-    let rcv = Dag.data view rcv_packed
-    and head = Dag.data view state.longest_chain in
-    if rcv.height > head.height then
-      { longest_chain= rcv_packed }, []
-    else
-      state, []
+  let event_handler ctx preferred = function
+    | Activate ->
+      let head = Dag.data ctx.view preferred in
+      let head' = ctx.extend_dag [preferred] {height= head.height + 1} in
+      ctx.release head';
+      head'
+    | Deliver gnode ->
+      (* TODO: Preference can break when order of messages is off. *)
+      (* TODO: Only prefer gnode if its heritage is visible. *)
+      (* TODO: Consider gnode's offspring. *)
+      let node = Dag.data ctx.view gnode
+      and head = Dag.data ctx.view preferred in
+      if node.height > head.height then
+        gnode
+      else
+        preferred
 
-  let activate view state =
-    let head = Dag.data view state.longest_chain in
-    state, [ Append { append_to = [ state.longest_chain ]
-                    ; extend_with = { height= head.height + 1 }
-                    ; handle_new = fun head' ->
-                        { longest_chain= head'}, [Broadcast head']
-                    } ]
-
-  let protocol : _ protocol = {deliver; activate}
+  let protocol: _ protocol =
+    { dag_invariant; event_handler }
 end
 
 module B_k_leaderless = struct
@@ -63,77 +72,76 @@ module B_k_leaderless = struct
 
   type block = { height: int }
 
-  type dag_node =
+  type node =
     | Vote
     | Block of block
 
-  type 'a state = { preferred: 'a Dag.node }
+  let dag_invariant ~k ~parents ~child =
+    match parents, child with
+    | [ Block _ ], Vote -> true
+    | Block b :: votes, Block b' ->
+      List.for_all (function Vote -> true | _ -> false) votes &&
+      List.length (votes) = k &&
+      b.height + 1 = b'.height
+    | _ -> false
 
-  let parent_block view block =
-    let parent_blocks =
-      Dag.parents view block |> List.filter_map (fun node ->
-          match Dag.data view node with
-          | Vote -> None
-          | Block b -> Some (node, b))
-    in
-    (* TODO: preference breaks when order of messages is off. Can we avoid maintaining a receive buffer? *)
-    match parent_blocks with
-    | [] -> None (* parent is not available locally *)
-    | [ b ] -> Some b
-    | _ -> failwith "invalid dag"
-
-  let child_votes view block =
+  let vote_children view block =
     Dag.children view block |> List.filter (fun node ->
         match Dag.data view node with
         | Vote -> true
         | Block _ -> false
       )
 
-  let deliver view state rcv_packed =
-    let head =
-      match Dag.data view state.preferred with
-      | Block b -> b
-      | _ -> failwith "invalid preference"
-    in
-    let update_head (b_packed, b) =
-      let state =
-        if (b.height > head.height) ||
-           ((b.height = head.height) &&
-            (child_votes view b_packed |> List.length) >
-            (child_votes view state.preferred |> List.length))
-        then
-          { preferred= b_packed }
-        else state
-      in
-      state, []
-    in
-    match Dag.data view rcv_packed with
-    (* TODO: preference breaks when order of messages is off. Can we avoid maintaining a receive buffer? *)
-    | Vote ->
-      ( match parent_block view rcv_packed with
-        | None -> state, [] (* parent not visible yet *)
-        | Some candidate -> update_head candidate
-      )
-    | Block b -> update_head (rcv_packed, b)
+  let block_data_exn view node =
+    match Dag.data view node with
+    | Block b -> b
+    | _ -> raise (Invalid_argument "not a block")
 
-  let activate k view state =
-    let child_votes = child_votes view state.preferred in
-    if (List.length child_votes >= k) then
-      let head =
-        match Dag.data view state.preferred with
-        | Block b -> b
-        | _ -> failwith "invalid preference"
+  let first n =
+    let rec h n acc l =
+      if n <= 0 then List.rev acc
+      else match l with
+        | [] -> raise (Invalid_argument "list too short")
+        | hd :: tl -> h (n - 1) (hd :: acc) tl
+    in h n []
+
+  let event_handler ~k ctx preferred = function
+    | Activate ->
+      let votes = vote_children ctx.view preferred in
+      if (List.length votes >= k) then
+        let head = block_data_exn ctx.view preferred in
+        let head' =
+          ctx.extend_dag
+            (preferred :: (first k votes))
+            (Block { height= head.height + 1 })
+        in
+        ctx.release head';
+        head'
+      else
+        let vote = ctx.extend_dag [preferred] Vote in
+        ctx.release vote;
+        preferred
+    | Deliver gnode ->
+      (* TODO: Preference can break when order of messages is off. *)
+      (* TODO: Only prefer gnode if its heritage is visible. *)
+      (* TODO: Consider gnode's offspring. *)
+      let head = block_data_exn ctx.view preferred in
+      let update_head (gblock, block) =
+        if (block.height > head.height) ||
+           ((block.height = head.height) &&
+            (vote_children ctx.view gblock |> List.length) >
+            (vote_children ctx.view preferred |> List.length))
+        then gblock
+        else preferred
       in
-      state, [ Append { append_to = state.preferred :: child_votes
-                      ; extend_with = Block { height= head.height + 1 }
-                      ; handle_new = fun head' ->
-                          { preferred =  head'}, [Broadcast head']
-                      } ]
-    else
-      state, [ Append { append_to = [state.preferred]
-                      ; extend_with = Vote
-                      ; handle_new = fun vote ->
-                          state, [Broadcast vote]
-                      } ]
+      match Dag.data ctx.view gnode with
+      | Vote ->
+        ( match Dag.parents ctx.view gnode with
+          | [] -> preferred (* parent not visible yet *)
+          | [ gnode ] ->
+            let node = block_data_exn ctx.view gnode in
+            update_head (gnode, node)
+          | _ -> failwith "invalid dag"
+        )
+      | Block b -> update_head (gnode, b)
 end
-
