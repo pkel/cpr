@@ -1,27 +1,29 @@
 type 'a t = unit
 
 type 'a node =
-  { parent: 'a node option
+  { parents: 'a node list
   ; mutable children: 'a node list
   ; data: 'a
   }
 
-let create data =
+let root data =
   let b =
-    { parent = None
+    { parents = []
     ; children = []
     ; data
     }
   in (), b
 
-let append _t node data =
+let append () parents data =
   let node' =
-    { parent = Some node
+    { parents
     ; children = []
     ; data
     }
   in
-  node.children <- node' :: node.children;
+  List.iter (fun node ->
+      node.children <- node' :: node.children;
+    ) parents;
   node'
 
 type ('a, 'b) view = ('a -> bool) * ('a -> 'b)
@@ -31,17 +33,14 @@ let global_view t = local_view (fun _ -> true) (fun x -> x) t
 
 exception Invalid_node_argument
 
-let protect f (flt, _ as view) b =
-  if flt b.data then f view b else raise Invalid_node_argument
+let protect f (flt, _ as view) n =
+  if flt n.data then f view n else raise Invalid_node_argument
 
-let data (_, map) b = map b.data
+let data (_, map) n = map n.data
 let data v = protect data v
 
-let parent (flt, _) b =
-    match b.parent with
-    | None -> None
-    | Some b -> if flt b.data then Some b else None
-let parent v = protect parent v
+let parents (flt, _) n = List.filter (fun x -> flt x.data) n.parents
+let parents n = protect parents n
 
 let children (flt, _) b =
     List.filter (fun b -> flt b.data) b.children
@@ -68,7 +67,8 @@ let print ?(indent="") v data_to_string b =
   h indent (children v b)
 
 let%expect_test _ =
-  let t, r = create 0 in
+  let append t r = append t [r] in
+  let t, r = root 0 in
   let ra = append t r 1
   and rb = append t r 2 in
   let _raa = append t ra 3

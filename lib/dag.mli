@@ -1,11 +1,11 @@
-(* mutable tree *)
+(* mutable dag *)
 
 type 'a t
 type 'a node
 
 (* maintenance *)
-val create: 'a -> 'a t * 'a node
-val append: 'a t -> 'a node -> 'a -> 'a node
+val root: 'a -> 'a t * 'a node
+val append: 'a t -> 'a node list -> 'a -> 'a node
 
 (* partial visibility of nodes ; views cannot be edited *)
 type ('a, 'b) view
@@ -23,7 +23,7 @@ val data: ('a, 'b) view -> 'a node -> 'b
 
 (* local navigation *)
 
-val parent: ('a, 'b) view -> 'a node -> 'a node option
+val parents: ('a, 'b) view -> 'a node -> 'a node list
 (** Raises {Invalid_node_argument}. *)
 
 val children: ('a, 'b) view -> 'a node -> 'a node list
