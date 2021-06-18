@@ -1,8 +1,8 @@
 type 'a t = unit
 
-type 'a block =
-  { parent: 'a block option
-  ; mutable children: 'a block list
+type 'a node =
+  { parent: 'a node option
+  ; mutable children: 'a node list
   ; data: 'a
   }
 
@@ -14,25 +14,25 @@ let create data =
     }
   in (), b
 
-let append _t block data =
-  let block' =
-    { parent = Some block
+let append _t node data =
+  let node' =
+    { parent = Some node
     ; children = []
     ; data
     }
   in
-  block.children <- block' :: block.children;
-  block'
+  node.children <- node' :: node.children;
+  node'
 
 type ('a, 'b) view = ('a -> bool) * ('a -> 'b)
 
 let local_view flt map () : _ view = flt, map
 let global_view t = local_view (fun _ -> true) (fun x -> x) t
 
-exception Invalid_block_argument
+exception Invalid_node_argument
 
 let protect f (flt, _ as view) b =
-  if flt b.data then f view b else raise Invalid_block_argument
+  if flt b.data then f view b else raise Invalid_node_argument
 
 let data (_, map) b = map b.data
 let data v = protect data v
