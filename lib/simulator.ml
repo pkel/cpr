@@ -21,19 +21,20 @@ type ('a, 'b) state =
 module Interface = struct
   exception Invalid_extension
 
-  type ('global, 'local) context =
+  type ('global, 'local, 'pow) context =
     { view: ('global, 'local) Dag.view
     ; release: 'global Dag.node -> unit
-    ; extend_dag: 'global Dag.node list -> 'local -> 'global Dag.node
+    ; extend_dag: ?pow:'pow -> 'global Dag.node list -> 'local -> 'global Dag.node
     }
 
-  type 'global event =
-    | Activate
+  type ('global, 'pow) event =
+    | Activate of 'pow
     | Deliver of 'global Dag.node
 
-  type ('global, 'local, 'state) protocol =
-    { event_handler: ('global, 'local) context -> 'state -> 'global event -> 'state
-    ; dag_invariant: parents:'local list -> child:'local -> bool
+  type ('global, 'local, 'state, 'pow) protocol =
+    { event_handler: ('global, 'local, 'pow) context -> 'state
+        -> ('global, 'pow) event -> 'state
+    ; dag_invariant: pow:bool -> parents:'local list -> child:'local -> bool
     }
 end
 
@@ -41,9 +42,9 @@ module Nakamoto = struct
   open Interface
   type block = { height: int }
 
-  let dag_invariant ~parents ~child =
-    match parents with
-    | [ p ] -> child.height = p.height + 1
+  let dag_invariant ~pow ~parents ~child =
+    match pow, parents with
+    | true, [ p ] -> child.height = p.height + 1
     | _ -> false
 
   let have_common_ancestor view =
@@ -77,9 +78,9 @@ module Nakamoto = struct
     in h [] gnode
 
   let event_handler ctx preferred = function
-    | Activate ->
+    | Activate pow ->
       let head = Dag.data ctx.view preferred in
-      let head' = ctx.extend_dag [preferred] {height= head.height + 1} in
+      let head' = ctx.extend_dag ~pow [preferred] {height= head.height + 1} in
       ctx.release head';
       head'
     | Deliver gnode ->
@@ -111,10 +112,10 @@ module B_k_leaderless = struct
     | Vote
     | Block of block
 
-  let dag_invariant ~k ~parents ~child =
-    match parents, child with
-    | [ Block _ ], Vote -> true
-    | Block b :: votes, Block b' ->
+  let dag_invariant ~k ~pow ~parents ~child =
+    match pow, parents, child with
+    | true, [ Block _ ], Vote -> true
+    | true, Block b :: votes, Block b' ->
       List.for_all (function Vote -> true | _ -> false) votes &&
       List.length (votes) = k &&
       b.height + 1 = b'.height
@@ -141,12 +142,12 @@ module B_k_leaderless = struct
     in h n []
 
   let event_handler ~k ctx preferred = function
-    | Activate ->
+    | Activate pow ->
       let votes = vote_children ctx.view preferred in
       if (List.length votes >= k) then
         let head = block_data_exn ctx.view preferred in
         let head' =
-          ctx.extend_dag
+          ctx.extend_dag ~pow
             (preferred :: (first k votes))
             (Block { height= head.height + 1 })
         in
@@ -179,4 +180,9 @@ module B_k_leaderless = struct
           | _ -> failwith "invalid dag"
         )
       | Block b -> update_head (gnode, b)
+
+  let protocol ~k : _ protocol =
+    { dag_invariant = dag_invariant ~k
+    ; event_handler = event_handler ~k
+    }
 end
