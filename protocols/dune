@@ -1,5 +1,6 @@
 (library
- (name cpr_lib)
+ (name cpr_protocols)
+ (libraries cpr_lib)
  (inline_tests)
  (preprocess
   (pps ppx_expect)))
