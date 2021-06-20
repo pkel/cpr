@@ -13,5 +13,7 @@ type ('global, 'pow) event =
 type ('global, 'local, 'state, 'pow) protocol =
   { event_handler :
       ('global, 'local, 'pow) context -> 'state -> ('global, 'pow) event -> 'state
+  ; init : roots:'global Dag.node list -> 'state
+  ; dag_roots : 'local list
   ; dag_invariant : pow:bool -> parents:'local list -> child:'local -> bool
   }

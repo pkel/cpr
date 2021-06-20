@@ -7,6 +7,8 @@ type node =
   | Vote
   | Block of block
 
+let dag_roots = [ Block { height = 0 } ]
+
 let dag_invariant ~k ~pow ~parents ~child =
   match pow, parents, child with
   | true, [ Block _ ], Vote -> true
@@ -19,6 +21,12 @@ let dag_invariant ~k ~pow ~parents ~child =
     && List.length votes = k
     && b.height + 1 = b'.height
   | _ -> false
+;;
+
+let init ~roots =
+  match roots with
+  | [ genesis ] -> genesis
+  | _ -> failwith "invalid roots"
 ;;
 
 let vote_children view block =
@@ -62,7 +70,7 @@ let event_handler ~k ctx preferred = function
       ctx.release head';
       head')
     else (
-      let vote = ctx.extend_dag [ preferred ] Vote in
+      let vote = ctx.extend_dag ~pow [ preferred ] Vote in
       ctx.release vote;
       preferred)
   | Deliver gnode ->
@@ -91,5 +99,13 @@ let event_handler ~k ctx preferred = function
 ;;
 
 let protocol ~k : _ protocol =
-  { dag_invariant = dag_invariant ~k; event_handler = event_handler ~k }
+  { init; dag_roots; dag_invariant = dag_invariant ~k; event_handler = event_handler ~k }
+;;
+
+let%expect_test _ =
+  let open Simulator in
+  let params =
+    { n_nodes = 32; n_activations = 8000; activation_delay = 1.; message_delay = 1. }
+  in
+  init params (protocol ~k:8) |> loop params |> ignore
 ;;

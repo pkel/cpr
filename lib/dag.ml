@@ -6,10 +6,7 @@ type 'a node =
   ; data : 'a
   }
 
-let root data =
-  let b = { parents = []; children = []; data } in
-  (), b
-;;
+let roots data = (), List.map (fun data -> { parents = []; children = []; data }) data
 
 let append () parents data =
   let node' = { parents; children = []; data } in
@@ -58,7 +55,8 @@ let print ?(indent = "") v data_to_string b =
 
 let%expect_test _ =
   let append t r = append t [ r ] in
-  let t, r = root 0 in
+  let t, rs = roots [ 0 ] in
+  let r = List.hd rs in
   let ra = append t r 1
   and rb = append t r 2 in
   let _raa = append t ra 3

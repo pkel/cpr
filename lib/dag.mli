@@ -4,7 +4,7 @@ type 'a t
 type 'a node
 
 (* maintenance *)
-val root : 'a -> 'a t * 'a node
+val roots : 'a list -> 'a t * 'a node list
 val append : 'a t -> 'a node list -> 'a -> 'a node
 
 (* partial visibility of nodes ; views cannot be edited *)

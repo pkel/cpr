@@ -3,10 +3,18 @@ open Protocol
 
 type block = { height : int }
 
+let dag_roots = [ { height = 0 } ]
+
 let dag_invariant ~pow ~parents ~child =
   match pow, parents with
   | true, [ p ] -> child.height = p.height + 1
   | _ -> false
+;;
+
+let init ~roots =
+  match roots with
+  | [ genesis ] -> genesis
+  | _ -> failwith "invalid roots"
 ;;
 
 let have_common_ancestor view =
@@ -66,4 +74,12 @@ let event_handler ctx preferred = function
     else preferred
 ;;
 
-let protocol : _ protocol = { dag_invariant; event_handler }
+let protocol : _ protocol = { init; dag_roots; dag_invariant; event_handler }
+
+let%expect_test _ =
+  let open Simulator in
+  let params =
+    { n_nodes = 32; n_activations = 1000; activation_delay = 1.; message_delay = 1. }
+  in
+  init params protocol |> loop params |> ignore
+;;
