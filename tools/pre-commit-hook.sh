@@ -1,0 +1,9 @@
+#!/bin/bash
+
+fail () {
+  echo "ERROR: pre-commit test failed: $1"
+  false
+}
+
+dune runtest || fail "\`dune runtest\`"
+dune build @fmt || fail "\`dune build @fmt\` (fix with \`make format\`)"
