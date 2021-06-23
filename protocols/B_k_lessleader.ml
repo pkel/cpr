@@ -18,7 +18,7 @@ let dag_invariant ~k ~pow ~parents ~child =
         | Vote -> true
         | _ -> false)
       votes
-    && List.length votes = k
+    && List.length votes = k - 1
     && b.height + 1 = b'.height
   | _ -> false
 ;;
@@ -58,13 +58,13 @@ let first n =
 let event_handler ~k ctx preferred = function
   | Activate pow ->
     let votes = vote_children ctx.view preferred in
-    if List.length votes >= k
+    if List.length votes >= k - 1
     then (
       let head = block_data_exn ctx.view preferred in
       let head' =
         ctx.extend_dag
           ~pow
-          (preferred :: first k votes)
+          (preferred :: first (k - 1) votes)
           (Block { height = head.height + 1 })
       in
       ctx.release head';
@@ -102,10 +102,20 @@ let protocol ~k : _ protocol =
   { init; dag_roots; dag_invariant = dag_invariant ~k; event_handler = event_handler ~k }
 ;;
 
-let%expect_test _ =
+let%test _ =
   let open Simulator in
   let params =
-    { n_nodes = 32; n_activations = 8000; activation_delay = 1.; message_delay = 1. }
+    { n_nodes = 32; n_activations = 8000; activation_delay = 10.; message_delay = 1. }
   in
-  init params (protocol ~k:8) |> loop params |> ignore
+  init params (protocol ~k:8)
+  |> loop params
+  |> fun { node_state; dag; _ } ->
+  let view = Dag.global_view dag in
+  Array.for_all
+    (fun pref ->
+      match (Dag.data view pref).value with
+      | Block b -> b.height > 900
+      (* more than 900 blocks in a sequence imply less than 10% orphans. *)
+      | _ -> failwith "invalid dag")
+    node_state
 ;;

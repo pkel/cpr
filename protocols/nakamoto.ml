@@ -76,10 +76,18 @@ let event_handler ctx preferred = function
 
 let protocol : _ protocol = { init; dag_roots; dag_invariant; event_handler }
 
-let%expect_test _ =
+let%test _ =
   let open Simulator in
   let params =
-    { n_nodes = 32; n_activations = 1000; activation_delay = 1.; message_delay = 1. }
+    { n_nodes = 32; n_activations = 1000; activation_delay = 10.; message_delay = 1. }
   in
-  init params protocol |> loop params |> ignore
+  init params protocol
+  |> loop params
+  |> fun { node_state; dag; _ } ->
+  let view = Dag.global_view dag in
+  Array.for_all
+    (fun pref ->
+      (Dag.data view pref).value.height > 900
+      (* more than 900 blocks in a sequence imply less than 10% orphans. *))
+    node_state
 ;;
