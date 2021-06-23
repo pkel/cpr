@@ -29,16 +29,19 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
+let is_vote = function
+  | Vote -> true
+  | _ -> false
+;;
+
 let vote_children ctx block =
-  Dag.children ctx.view block
-  |> List.filter (fun node ->
-         match ctx.data node with
-         | Vote -> true
-         | Block _ -> false)
+  let votes_only = Dag.filter (fun n -> ctx.read n |> is_vote) ctx.view in
+  Dag.children votes_only block
 ;;
 
 let block_data_exn ctx node =
-  match ctx.data node with
+  let data n = Dag.data n |> ctx.read in
+  match data node with
   | Block b -> b
   | _ -> raise (Invalid_argument "not a block")
 ;;
@@ -55,7 +58,9 @@ let first n =
   h n []
 ;;
 
-let event_handler ~k ctx preferred = function
+let event_handler ~k ctx preferred =
+  let data n = Dag.data n |> ctx.read in
+  function
   | Activate pow ->
     let votes = vote_children ctx preferred in
     if List.length votes >= k - 1
@@ -87,7 +92,7 @@ let event_handler ~k ctx preferred = function
       then gblock
       else preferred
     in
-    (match ctx.data gnode with
+    (match data gnode with
     | Vote ->
       (match Dag.parents ctx.view gnode with
       | [] -> preferred (* parent not visible yet *)

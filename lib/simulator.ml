@@ -60,9 +60,9 @@ let init params protocol : _ sim_state =
   let node_state = Array.init params.n_nodes (fun _i -> protocol.init ~roots) in
   let node_ctx =
     Array.init params.n_nodes (fun i ->
-        let data n = (Dag.data n).value in
+        let read d = d.value in
         { view = Dag.filter (fun n -> n.visibility.(i)) global_view
-        ; data
+        ; read
         ; release =
             (fun n ->
               for i' = 0 to params.n_nodes - 1 do
@@ -84,7 +84,7 @@ let init params protocol : _ sim_state =
               in
               let () =
                 (* check dag invariant *)
-                let parents = List.map data parents in
+                let parents = List.map (fun n -> Dag.data n |> read) parents in
                 if not (protocol.dag_invariant ~pow ~parents ~child)
                 then raise Invalid_dag_extension
               in

@@ -18,12 +18,13 @@ let init ~roots =
 ;;
 
 let have_common_ancestor ctx =
+  let data n = Dag.data n |> ctx.read in
   let rec h a b =
     if a == b
     then true
     else (
-      let a' = ctx.data a
-      and b' = ctx.data b in
+      let a' = data a
+      and b' = data b in
       if a'.height = b'.height
       then (
         match Dag.parents ctx.view a, Dag.parents ctx.view b with
@@ -54,9 +55,11 @@ let leaves view gnode =
   h [] gnode
 ;;
 
-let event_handler ctx preferred = function
+let event_handler ctx preferred =
+  let data n = Dag.data n |> ctx.read in
+  function
   | Activate pow ->
-    let head = ctx.data preferred in
+    let head = data preferred in
     let head' = ctx.extend_dag ~pow [ preferred ] { height = head.height + 1 } in
     ctx.release head';
     head'
@@ -65,8 +68,8 @@ let event_handler ctx preferred = function
     if have_common_ancestor ctx gnode preferred
     then (
       let consider preferred gnode =
-        let node = ctx.data gnode
-        and head = ctx.data preferred in
+        let node = data gnode
+        and head = data preferred in
         if node.height > head.height then gnode else preferred
       in
       (* delayed gnode might connect nodes delivered previously *)

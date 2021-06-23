@@ -2,7 +2,7 @@ exception Invalid_dag_extension
 
 type ('env, 'data, 'pow) context =
   { view : 'env Dag.view
-  ; data : 'env Dag.node -> 'data
+  ; read : 'env -> 'data
   ; release : 'env Dag.node -> unit
   ; extend_dag : ?pow:'pow -> 'env Dag.node list -> 'data -> 'env Dag.node
   }

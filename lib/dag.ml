@@ -20,15 +20,9 @@ type 'a view = ('a -> bool) list
 
 let view () : 'a view = []
 let filter a b = a :: b
-
-exception Invalid_node_argument
-
 let visible view n = List.for_all (fun flt -> flt n.data) view
-let protect f view n = if visible view n then f view n else raise Invalid_node_argument
 let parents view n = List.filter (visible view) n.parents
-let parents n = protect parents n
 let children view b = List.filter (visible view) b.children
-let children v = protect children v
 
 let print ?(indent = "") v data_to_string b =
   let rec h indent bl =
