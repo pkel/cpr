@@ -23,7 +23,7 @@ type 'prot_data sim_time =
 type ('prot_data, 'node_state) sim_state =
   { time : 'prot_data sim_time
   ; dag : 'prot_data sim_data Dag.t
-  ; global_view : ('prot_data sim_data, 'prot_data sim_data) Dag.view
+  ; global_view : 'prot_data sim_data Dag.view
   ; node_state : 'node_state array
   ; node_ctx : ('prot_data sim_data, 'prot_data, pow) Protocol.context array
   ; protocol : ('prot_data sim_data, 'prot_data, 'node_state, pow) Protocol.protocol
@@ -56,11 +56,13 @@ let init params protocol : _ sim_state =
   in
   let time = { queue = OrderedQueue.init Float.compare; now = 0.; activations = 0 } in
   let () = schedule_activation params time in
-  let global_view = Dag.global_view dag in
+  let global_view = Dag.view dag in
   let node_state = Array.init params.n_nodes (fun _i -> protocol.init ~roots) in
   let node_ctx =
     Array.init params.n_nodes (fun i ->
-        { view = Dag.local_view (fun n -> n.visibility.(i)) (fun n -> n.value) dag
+        let data n = (Dag.data n).value in
+        { view = Dag.filter (fun n -> n.visibility.(i)) global_view
+        ; data
         ; release =
             (fun n ->
               for i' = 0 to params.n_nodes - 1 do
@@ -82,9 +84,7 @@ let init params protocol : _ sim_state =
               in
               let () =
                 (* check dag invariant *)
-                let parents =
-                  List.map (fun n -> (Dag.data global_view n).value) parents
-                in
+                let parents = List.map data parents in
                 if not (protocol.dag_invariant ~pow ~parents ~child)
                 then raise Invalid_dag_extension
               in
@@ -102,7 +102,7 @@ let handle_event params state ev =
       state.time.activations <- state.time.activations + 1;
       if state.time.activations < params.n_activations
       then schedule_activation params state.time
-    | Deliver gnode -> (Dag.data state.global_view gnode).visibility.(ev.node) <- true
+    | Deliver gnode -> (Dag.data gnode).visibility.(ev.node) <- true
   in
   state.node_state.(ev.node)
     <- state.protocol.event_handler

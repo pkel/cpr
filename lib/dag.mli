@@ -3,29 +3,29 @@
 type 'a t
 type 'a node
 
-(* maintenance *)
+(** maintenance *)
+
 val roots : 'a list -> 'a t * 'a node list
 val append : 'a t -> 'a node list -> 'a -> 'a node
 
-(* partial visibility of nodes ; views cannot be edited *)
-type ('a, 'b) view
+(** data access *)
+val data : 'a node -> 'a
 
-val global_view : 'a t -> ('a, 'a) view
-val local_view : ('a -> bool) -> ('a -> 'b) -> 'a t -> ('a, 'b) view
+(** views can restrict visibility of nodes; views cannot be edited *)
+type 'a view
 
-(** Raised by functions that operate on view and node when the node is not
-  * visible in view. *)
+val view : 'a t -> 'a view
+
+(** restrict visibility of nodes *)
+val filter : ('a -> bool) -> 'a view -> 'a view
+
+(** Raised by view functions view when the node argument is not visible. *)
 exception Invalid_node_argument
-
-(* data access *)
-
-(** Raises {Invalid_node_argument}. *)
-val data : ('a, 'b) view -> 'a node -> 'b
 
 (* local navigation *)
 
 (** Raises {Invalid_node_argument}. *)
-val parents : ('a, 'b) view -> 'a node -> 'a node list
+val parents : 'a view -> 'a node -> 'a node list
 
 (** Raises {Invalid_node_argument}. *)
-val children : ('a, 'b) view -> 'a node -> 'a node list
+val children : 'a view -> 'a node -> 'a node list

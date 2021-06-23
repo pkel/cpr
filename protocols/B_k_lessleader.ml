@@ -29,16 +29,16 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
-let vote_children view block =
-  Dag.children view block
+let vote_children ctx block =
+  Dag.children ctx.view block
   |> List.filter (fun node ->
-         match Dag.data view node with
+         match ctx.data node with
          | Vote -> true
          | Block _ -> false)
 ;;
 
-let block_data_exn view node =
-  match Dag.data view node with
+let block_data_exn ctx node =
+  match ctx.data node with
   | Block b -> b
   | _ -> raise (Invalid_argument "not a block")
 ;;
@@ -57,10 +57,10 @@ let first n =
 
 let event_handler ~k ctx preferred = function
   | Activate pow ->
-    let votes = vote_children ctx.view preferred in
+    let votes = vote_children ctx preferred in
     if List.length votes >= k - 1
     then (
-      let head = block_data_exn ctx.view preferred in
+      let head = block_data_exn ctx preferred in
       let head' =
         ctx.extend_dag
           ~pow
@@ -77,22 +77,22 @@ let event_handler ~k ctx preferred = function
     (* TODO: Preference can break when order of messages is off. *)
     (* TODO: Only prefer gnode if its heritage is visible. *)
     (* TODO: Consider gnode's offspring. *)
-    let head = block_data_exn ctx.view preferred in
+    let head = block_data_exn ctx preferred in
     let update_head (gblock, block) =
       if block.height > head.height
          || (block.height = head.height
-            && vote_children ctx.view gblock
+            && vote_children ctx gblock
                |> List.length
-               > (vote_children ctx.view preferred |> List.length))
+               > (vote_children ctx preferred |> List.length))
       then gblock
       else preferred
     in
-    (match Dag.data ctx.view gnode with
+    (match ctx.data gnode with
     | Vote ->
       (match Dag.parents ctx.view gnode with
       | [] -> preferred (* parent not visible yet *)
       | [ gnode ] ->
-        let node = block_data_exn ctx.view gnode in
+        let node = block_data_exn ctx gnode in
         update_head (gnode, node)
       | _ -> failwith "invalid dag")
     | Block b -> update_head (gnode, b))
@@ -109,11 +109,10 @@ let%test _ =
   in
   init params (protocol ~k:8)
   |> loop params
-  |> fun { node_state; dag; _ } ->
-  let view = Dag.global_view dag in
+  |> fun { node_state; _ } ->
   Array.for_all
     (fun pref ->
-      match (Dag.data view pref).value with
+      match (Dag.data pref).value with
       | Block b -> b.height > 900
       (* more than 900 blocks in a sequence imply less than 10% orphans. *)
       | _ -> failwith "invalid dag")

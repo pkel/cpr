@@ -1,19 +1,19 @@
 exception Invalid_dag_extension
 
-type ('global, 'local, 'pow) context =
-  { view : ('global, 'local) Dag.view
-  ; release : 'global Dag.node -> unit
-  ; extend_dag : ?pow:'pow -> 'global Dag.node list -> 'local -> 'global Dag.node
+type ('env, 'data, 'pow) context =
+  { view : 'env Dag.view
+  ; data : 'env Dag.node -> 'data
+  ; release : 'env Dag.node -> unit
+  ; extend_dag : ?pow:'pow -> 'env Dag.node list -> 'data -> 'env Dag.node
   }
 
-type ('global, 'pow) event =
+type ('env, 'pow) event =
   | Activate of 'pow
-  | Deliver of 'global Dag.node
+  | Deliver of 'env Dag.node
 
-type ('global, 'local, 'state, 'pow) protocol =
-  { event_handler :
-      ('global, 'local, 'pow) context -> 'state -> ('global, 'pow) event -> 'state
-  ; init : roots:'global Dag.node list -> 'state
-  ; dag_roots : 'local list
-  ; dag_invariant : pow:bool -> parents:'local list -> child:'local -> bool
+type ('env, 'data, 'state, 'pow) protocol =
+  { event_handler : ('env, 'data, 'pow) context -> 'state -> ('env, 'pow) event -> 'state
+  ; init : roots:'env Dag.node list -> 'state
+  ; dag_roots : 'data list
+  ; dag_invariant : pow:bool -> parents:'data list -> child:'data -> bool
   }

@@ -17,27 +17,27 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
-let have_common_ancestor view =
+let have_common_ancestor ctx =
   let rec h a b =
     if a == b
     then true
     else (
-      let a' = Dag.data view a
-      and b' = Dag.data view b in
+      let a' = ctx.data a
+      and b' = ctx.data b in
       if a'.height = b'.height
       then (
-        match Dag.parents view a, Dag.parents view b with
+        match Dag.parents ctx.view a, Dag.parents ctx.view b with
         | [ a ], [ b ] -> h a b
         | [], _ | _, [] -> false
         | _ -> failwith "invalid dag")
       else if a'.height > b'.height
       then (
-        match Dag.parents view a with
+        match Dag.parents ctx.view a with
         | [ a ] -> h a b
         | [] -> false
         | _ -> failwith "invalid dag")
       else (
-        match Dag.parents view b with
+        match Dag.parents ctx.view b with
         | [ b ] -> h a b
         | [] -> false
         | _ -> failwith "invalid dag"))
@@ -56,17 +56,17 @@ let leaves view gnode =
 
 let event_handler ctx preferred = function
   | Activate pow ->
-    let head = Dag.data ctx.view preferred in
+    let head = ctx.data preferred in
     let head' = ctx.extend_dag ~pow [ preferred ] { height = head.height + 1 } in
     ctx.release head';
     head'
   | Deliver gnode ->
     (* Only consider gnode if its heritage is visible. *)
-    if have_common_ancestor ctx.view gnode preferred
+    if have_common_ancestor ctx gnode preferred
     then (
       let consider preferred gnode =
-        let node = Dag.data ctx.view gnode
-        and head = Dag.data ctx.view preferred in
+        let node = ctx.data gnode
+        and head = ctx.data preferred in
         if node.height > head.height then gnode else preferred
       in
       (* delayed gnode might connect nodes delivered previously *)
@@ -83,11 +83,10 @@ let%test _ =
   in
   init params protocol
   |> loop params
-  |> fun { node_state; dag; _ } ->
-  let view = Dag.global_view dag in
+  |> fun { node_state; _ } ->
   Array.for_all
     (fun pref ->
-      (Dag.data view pref).value.height > 900
+      (Dag.data pref).value.height > 900
       (* more than 900 blocks in a sequence imply less than 10% orphans. *))
     node_state
 ;;

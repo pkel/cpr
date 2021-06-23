@@ -14,22 +14,20 @@ let append () parents data =
   node'
 ;;
 
-type ('a, 'b) view = ('a -> bool) * ('a -> 'b)
+let data n = n.data
 
-let local_view flt map () : _ view = flt, map
-let global_view t = local_view (fun _ -> true) (fun x -> x) t
+type 'a view = ('a -> bool) list
+
+let view () : 'a view = []
+let filter a b = a :: b
 
 exception Invalid_node_argument
 
-let protect f ((flt, _) as view) n =
-  if flt n.data then f view n else raise Invalid_node_argument
-;;
-
-let data (_, map) n = map n.data
-let data v = protect data v
-let parents (flt, _) n = List.filter (fun x -> flt x.data) n.parents
+let visible view n = List.for_all (fun flt -> flt n.data) view
+let protect f view n = if visible view n then f view n else raise Invalid_node_argument
+let parents view n = List.filter (visible view) n.parents
 let parents n = protect parents n
-let children (flt, _) b = List.filter (fun b -> flt b.data) b.children
+let children view b = List.filter (visible view) b.children
 let children v = protect children v
 
 let print ?(indent = "") v data_to_string b =
@@ -64,8 +62,8 @@ let%expect_test _ =
   and _rbb = append t rb 5 in
   let rbaa = append t rba 6 in
   let _rbaaa = append t rbaa 7 in
-  let global = global_view t
-  and local = local_view (fun i -> i mod 2 = 0) (fun x -> x) t in
+  let global = view t in
+  let local = filter (fun i -> i mod 2 = 0) global in
   print ~indent:"global:   " global string_of_int r;
   print ~indent:"subtree:  " global string_of_int rb;
   print ~indent:"local:    " local string_of_int r;
