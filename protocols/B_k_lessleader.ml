@@ -23,7 +23,7 @@ let dag_invariant ~k ~pow parents child =
   | _ -> false
 ;;
 
-let init _ctx ~roots =
+let init ~roots =
   match roots with
   | [ genesis ] -> genesis
   | _ -> failwith "invalid roots"
@@ -104,7 +104,8 @@ let handler ~k ctx preferred =
 ;;
 
 let protocol ~k : _ protocol =
-  { init; dag_roots; dag_invariant = dag_invariant ~k; handler = handler ~k }
+  let spawn ctx = { handler = handler ~k ctx; init } in
+  { dag_roots; dag_invariant = dag_invariant ~k; spawn }
 ;;
 
 let%test _ =
@@ -114,12 +115,12 @@ let%test _ =
   in
   init params (protocol ~k:8)
   |> loop params
-  |> fun { node_state; _ } ->
+  |> fun { nodes; _ } ->
   Array.for_all
-    (fun pref ->
-      match (Dag.data pref).value with
+    (fun node ->
+      match (Dag.data node.state).value with
       | Block b -> b.height > 900
       (* more than 900 blocks in a sequence imply less than 10% orphans. *)
       | _ -> failwith "invalid dag")
-    node_state
+    nodes
 ;;

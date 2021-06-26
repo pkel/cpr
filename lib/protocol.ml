@@ -19,6 +19,14 @@ type ('env, 'pow) event =
   | Activate of 'pow
   | Deliver of 'env Dag.node
 
+(** Behaviour of a single network node. Functions can trigger side-effects via {context}. *)
+type ('env, 'state, 'pow) implementation =
+  { handler : 'state -> ('env, 'pow) event -> 'state
+  ; init : roots:'env Dag.node list -> 'state
+        (** The [roots] argument holds references to global versions of the {dag_roots} of
+            the {protocol}. The roots are visible to all nodes from the beginning. *)
+  }
+
 type ('env, 'data, 'state, 'pow) protocol =
   { dag_roots : 'data list (** Specify the roots of the global DAG. *)
   ; dag_invariant : pow:bool -> 'data list -> 'data -> bool
@@ -26,10 +34,6 @@ type ('env, 'data, 'state, 'pow) protocol =
             parents data] for each extension proposed by network nodes via
             {Context.extend_dag}. Extension validity can depend on the proof-of-work
             authorization, parent data, and extension data. *)
-  ; handler : ('env, 'data, 'pow) context -> 'state -> ('env, 'pow) event -> 'state
-        (** Behaviour of honest network nodes. Can trigger side-effects via context. *)
-  ; init : ('env, 'data, 'pow) context -> roots:'env Dag.node list -> 'state
-        (** Initialization of honest network nodes. The [roots] argument holds references
-            to global versions of the {dag_roots}. The roots are visible to all nodes from
-            the beginning. *)
+  ; spawn : ('env, 'data, 'pow) context -> ('env, 'state, 'pow) implementation
+        (** honest network nodes' behaviour *)
   }
