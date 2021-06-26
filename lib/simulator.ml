@@ -57,13 +57,12 @@ let init params protocol : _ sim_state =
   let time = { queue = OrderedQueue.init Float.compare; now = 0.; activations = 0 } in
   let () = schedule_activation params time in
   let global_view = Dag.view dag in
-  let node_state = Array.init params.n_nodes (fun _i -> protocol.init ~roots) in
   let node_ctx =
     Array.init params.n_nodes (fun i ->
         let read d = d.value in
         { view = Dag.filter (fun n -> n.visibility.(i)) global_view
         ; read
-        ; release =
+        ; share =
             (fun n ->
               for i' = 0 to params.n_nodes - 1 do
                 if i' <> i
@@ -79,18 +78,21 @@ let init params protocol : _ sim_state =
                 | Some ({ fresh = true } as x) ->
                   x.fresh <- false;
                   true
-                | Some { fresh = false } -> raise Protocol.Invalid_dag_extension
+                | Some { fresh = false } -> raise (Invalid_argument "pow was used before")
                 | None -> false
               in
               let () =
                 (* check dag invariant *)
                 let parents = List.map (fun n -> Dag.data n |> read) parents in
-                if not (protocol.dag_invariant ~pow ~parents ~child)
-                then raise Invalid_dag_extension
+                if not (protocol.dag_invariant ~pow parents child)
+                then raise (Invalid_argument "dag invariant violated")
               in
               let visibility = Array.init params.n_nodes (fun i' -> i' = i) in
               Dag.append dag parents { value = child; visibility })
         })
+  in
+  let node_state =
+    Array.init params.n_nodes (fun i -> protocol.init node_ctx.(i) ~roots)
   in
   { time; dag; global_view; node_ctx; node_state; protocol }
 ;;
@@ -105,10 +107,7 @@ let handle_event params state ev =
     | Deliver gnode -> (Dag.data gnode).visibility.(ev.node) <- true
   in
   state.node_state.(ev.node)
-    <- state.protocol.event_handler
-         state.node_ctx.(ev.node)
-         state.node_state.(ev.node)
-         ev.event
+    <- state.protocol.handler state.node_ctx.(ev.node) state.node_state.(ev.node) ev.event
 ;;
 
 let rec loop params state =

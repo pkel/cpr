@@ -5,13 +5,13 @@ type block = { height : int }
 
 let dag_roots = [ { height = 0 } ]
 
-let dag_invariant ~pow ~parents ~child =
+let dag_invariant ~pow parents child =
   match pow, parents with
   | true, [ p ] -> child.height = p.height + 1
   | _ -> false
 ;;
 
-let init ~roots =
+let init _ctx ~roots =
   match roots with
   | [ genesis ] -> genesis
   | _ -> failwith "invalid roots"
@@ -55,13 +55,13 @@ let leaves view gnode =
   h [] gnode
 ;;
 
-let event_handler ctx preferred =
+let handler ctx preferred =
   let data n = Dag.data n |> ctx.read in
   function
   | Activate pow ->
     let head = data preferred in
     let head' = ctx.extend_dag ~pow [ preferred ] { height = head.height + 1 } in
-    ctx.release head';
+    ctx.share head';
     head'
   | Deliver gnode ->
     (* Only consider gnode if its heritage is visible. *)
@@ -77,7 +77,7 @@ let event_handler ctx preferred =
     else preferred
 ;;
 
-let protocol : _ protocol = { init; dag_roots; dag_invariant; event_handler }
+let protocol : _ protocol = { init; dag_roots; dag_invariant; handler }
 
 let%test _ =
   let open Simulator in

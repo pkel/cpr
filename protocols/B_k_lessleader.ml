@@ -9,7 +9,7 @@ type node =
 
 let dag_roots = [ Block { height = 0 } ]
 
-let dag_invariant ~k ~pow ~parents ~child =
+let dag_invariant ~k ~pow parents child =
   match pow, parents, child with
   | true, [ Block _ ], Vote -> true
   | true, Block b :: votes, Block b' ->
@@ -23,7 +23,7 @@ let dag_invariant ~k ~pow ~parents ~child =
   | _ -> false
 ;;
 
-let init ~roots =
+let init _ctx ~roots =
   match roots with
   | [ genesis ] -> genesis
   | _ -> failwith "invalid roots"
@@ -58,7 +58,7 @@ let first n =
   h n []
 ;;
 
-let event_handler ~k ctx preferred =
+let handler ~k ctx preferred =
   let data n = Dag.data n |> ctx.read in
   function
   | Activate pow ->
@@ -72,11 +72,11 @@ let event_handler ~k ctx preferred =
           (preferred :: first (k - 1) votes)
           (Block { height = head.height + 1 })
       in
-      ctx.release head';
+      ctx.share head';
       head')
     else (
       let vote = ctx.extend_dag ~pow [ preferred ] Vote in
-      ctx.release vote;
+      ctx.share vote;
       preferred)
   | Deliver gnode ->
     (* TODO: Preference can break when order of messages is off. *)
@@ -104,7 +104,7 @@ let event_handler ~k ctx preferred =
 ;;
 
 let protocol ~k : _ protocol =
-  { init; dag_roots; dag_invariant = dag_invariant ~k; event_handler = event_handler ~k }
+  { init; dag_roots; dag_invariant = dag_invariant ~k; handler = handler ~k }
 ;;
 
 let%test _ =
