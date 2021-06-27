@@ -17,44 +17,6 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
-let have_common_ancestor ctx =
-  let data n = Dag.data n |> ctx.read in
-  let rec h a b =
-    if a == b
-    then true
-    else (
-      let a' = data a
-      and b' = data b in
-      if a'.height = b'.height
-      then (
-        match Dag.parents ctx.view a, Dag.parents ctx.view b with
-        | [ a ], [ b ] -> h a b
-        | [], _ | _, [] -> false
-        | _ -> failwith "invalid dag")
-      else if a'.height > b'.height
-      then (
-        match Dag.parents ctx.view a with
-        | [ a ] -> h a b
-        | [] -> false
-        | _ -> failwith "invalid dag")
-      else (
-        match Dag.parents ctx.view b with
-        | [ b ] -> h a b
-        | [] -> false
-        | _ -> failwith "invalid dag"))
-  in
-  h
-;;
-
-let leaves view gnode =
-  let rec h acc gnode =
-    match Dag.children view gnode with
-    | [] -> gnode :: acc
-    | l -> List.fold_left h acc l
-  in
-  h [] gnode
-;;
-
 let handler ctx preferred =
   let data n = Dag.data n |> ctx.read in
   function
@@ -65,7 +27,7 @@ let handler ctx preferred =
     head'
   | Deliver gnode ->
     (* Only consider gnode if its heritage is visible. *)
-    if have_common_ancestor ctx gnode preferred
+    if Dag.have_common_ancestor ctx.view gnode preferred
     then (
       let consider preferred gnode =
         let node = data gnode
@@ -73,7 +35,7 @@ let handler ctx preferred =
         if node.height > head.height then gnode else preferred
       in
       (* delayed gnode might connect nodes delivered previously *)
-      List.fold_left consider preferred (leaves ctx.view gnode))
+      List.fold_left consider preferred (Dag.leaves ctx.view gnode))
     else preferred
 ;;
 
@@ -89,10 +51,13 @@ let%test _ =
   in
   init params protocol
   |> loop params
-  |> fun { nodes; _ } ->
-  Array.for_all
-    (fun node ->
-      (Dag.data node.state).value.height > 900
-      (* more than 900 blocks in a sequence imply less than 10% orphans. *))
-    nodes
+  |> fun { nodes; global_view; _ } ->
+  Array.to_seq nodes
+  |> Seq.map (fun x -> x.state)
+  |> Dag.common_ancestor' global_view
+  |> function
+  | None -> false
+  | Some n -> (Dag.data n).value.height > 900
 ;;
+
+(* more than 900 blocks in a sequence imply less than 10% orphans. *)

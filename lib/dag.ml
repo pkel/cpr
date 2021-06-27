@@ -1,16 +1,25 @@
-type 'a t = unit
+type 'a t = { mutable size : int }
 
 type 'a node =
-  { parents : 'a node list
+  { serial : int
+  ; parents : 'a node list
   ; mutable children : 'a node list
   ; data : 'a
+  ; mutable depth : int
   }
 
-let roots data = (), List.map (fun data -> { parents = []; children = []; data }) data
+let roots data =
+  ( { size = List.length data }
+  , List.mapi
+      (fun serial data -> { serial; parents = []; children = []; data; depth = 0 })
+      data )
+;;
 
-let append () parents data =
-  let node' = { parents; children = []; data } in
+let append t parents data =
+  let depth = List.fold_left (fun acc el -> max acc el.depth) 0 parents + 1 in
+  let node' = { serial = t.size; parents; children = []; data; depth } in
   List.iter (fun node -> node.children <- node' :: node.children) parents;
+  t.size <- t.size + 1;
   node'
 ;;
 
@@ -18,7 +27,7 @@ let data n = n.data
 
 type 'a view = ('a -> bool) list
 
-let view () : 'a view = []
+let view _ : 'a view = []
 let filter a b = a :: b
 let visible view n = List.for_all (fun flt -> flt n.data) view
 let parents view n = List.filter (visible view) n.parents
@@ -80,4 +89,53 @@ let%expect_test _ =
     local:    |-- 2
     local:        |-- 4
     local:            |-- 6 |}]
+;;
+
+(* TODO test [leaves] *)
+let leaves view =
+  let rec h acc n =
+    match children view n with
+    | [] -> n :: acc
+    | l -> List.fold_left h acc l
+  in
+  h []
+;;
+
+let common_ancestor view =
+  let rec h a b =
+    if a == b
+    then Some a
+    else if a.depth = b.depth
+    then (
+      match parents view a, parents view b with
+      | [ a ], [ b ] -> h a b
+      | [], _ | _, [] -> None
+      | _ -> raise (Invalid_argument "DAG is not a tree"))
+    else if a.depth > b.depth
+    then (
+      match parents view a with
+      | [ a ] -> h a b
+      | [] -> None
+      | _ -> raise (Invalid_argument "DAG is not a tree"))
+    else (
+      match parents view b with
+      | [ b ] -> h a b
+      | [] -> None
+      | _ -> raise (Invalid_argument "DAG is not a tree"))
+  in
+  h
+;;
+
+let have_common_ancestor view a b = common_ancestor view a b |> Option.is_some
+
+let common_ancestor' view seq =
+  let open Seq in
+  match seq () with
+  | Nil -> None
+  | Cons (hd, tl) ->
+    let f = function
+      | Some a -> common_ancestor view a
+      | None -> fun _ -> None
+    in
+    Seq.fold_left f (Some hd) tl
 ;;
