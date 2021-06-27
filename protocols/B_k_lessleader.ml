@@ -136,10 +136,8 @@ let%test "convergence" =
   in
   List.for_all
     (fun (k, activation_delay, height) ->
-      test
-        k
-        { n_nodes = 32; n_activations = 1000 * k; message_delay = 1.; activation_delay }
-        height)
+      let network = Network.homogeneous ~delay:(Distributions.exponential ~ev:1.) 32 in
+      test k { network; n_activations = 1000 * k; activation_delay } height)
     [ 08, 10., 900 (* good condition, 10% orphans *)
     ; 08, 01., 800 (* bad conditions, 20% orphans *)
     ; 32, 01., 900 (* bad conditions, 10% orphans, high k *)
