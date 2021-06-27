@@ -6,7 +6,7 @@ let pow () = { fresh = true }
 (* data attached to each DAG node *)
 type 'a data =
   { value : 'a
-  ; visibility : bool array (* could be a bitfield *)
+  ; delivered_at : floatarray
   }
 
 type 'prot_data event =
@@ -50,16 +50,17 @@ let schedule_activation params state =
 ;;
 
 let propagate params clock node x =
-  (* TODO: speed up gossip broadcast simulation *)
-  (* We introduced a major slowdown here. We can speed up by queuing less. [visibility:
-     bool array] could be replaced by a "deliver_at: floatarray". Then enqueue only
-     earlier deliveries and update deliver_at. *)
   List.iter
     (fun link ->
       let open Network in
-      if not (Dag.data x).visibility.(link.dest)
+      let delivered_at = (Dag.data x).delivered_at in
+      let t = Float.Array.get delivered_at link.dest
+      and delay = link.delay () in
+      let t' = clock.now +. delay in
+      if t' < t
       then (
-        let delay = link.delay () in
+        (* only schedule event if it yields faster delivery *)
+        Float.Array.set delivered_at link.dest t';
         schedule clock delay { node = link.dest; event = Deliver x }))
     params.network.(node).links
 ;;
@@ -68,15 +69,18 @@ let init params protocol : _ state =
   let open Protocol in
   let n_nodes = Array.length params.network in
   let dag, roots =
-    let visibility = Array.make n_nodes true in
-    List.map (fun value -> { value; visibility }) protocol.dag_roots |> Dag.roots
+    let delivered_at = Float.Array.make n_nodes 0. in
+    List.map (fun value -> { value; delivered_at }) protocol.dag_roots |> Dag.roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; activations = 0 }
   and global_view = Dag.view dag in
   let nodes =
     Array.init n_nodes (fun node ->
         let read d = d.value
-        and view = Dag.filter (fun x -> x.visibility.(node)) global_view
+        and view =
+          Dag.filter
+            (fun x -> Float.Array.get x.delivered_at node <= clock.now)
+            global_view
         and share x = propagate params clock node x
         and extend_dag ?pow parents child =
           let pow =
@@ -94,8 +98,11 @@ let init params protocol : _ state =
             if not (protocol.dag_invariant ~pow parents child)
             then raise (Invalid_argument "dag invariant violated")
           in
-          let visibility = Array.init n_nodes (fun i -> i = node) in
-          Dag.append dag parents { value = child; visibility }
+          let delivered_at =
+            Float.Array.init n_nodes (fun i ->
+                if i = node then clock.now else Float.infinity)
+          in
+          Dag.append dag parents { value = child; delivered_at }
         in
         let implementation = protocol.spawn { view; read; share; extend_dag } in
         { handler = implementation.handler; state = implementation.init ~roots })
@@ -124,11 +131,9 @@ let handle_event params state ev =
     (* apply event handler *)
     apply ()
   | Deliver gnode ->
-    let visibility = (Dag.data gnode).visibility in
     (* deliver only once *)
-    if not visibility.(ev.node)
+    if state.clock.now >= Float.Array.get (Dag.data gnode).delivered_at ev.node
     then (
-      visibility.(ev.node) <- true;
       (* continue broadcast *)
       propagate params state.clock ev.node gnode;
       (* apply event handler *)
@@ -138,6 +143,7 @@ let handle_event params state ev =
 let rec loop params state =
   match OrderedQueue.dequeue state.clock.queue with
   | Some (now, ev, queue) ->
+    assert (now > state.clock.now);
     state.clock.now <- now;
     state.clock.queue <- queue;
     handle_event params state ev;
