@@ -116,22 +116,32 @@ let spawn ~k ctx =
 
 let protocol ~k = { spawn = spawn ~k; dag_invariant = dag_invariant ~k; dag_roots }
 
-let%test _ =
+let%test "convergence" =
   let open Simulator in
-  let params =
-    { n_nodes = 32; n_activations = 8000; activation_delay = 10.; message_delay = 1. }
+  let test k params height =
+    init params (protocol ~k)
+    |> loop params
+    |> fun { nodes; global_view; _ } ->
+    Array.to_seq nodes
+    |> Seq.map (fun x -> x.state)
+    |> Dag.common_ancestor' (Dag.filter (fun x -> is_block x.value) global_view)
+    |> function
+    | None -> false
+    | Some n ->
+      (match (Dag.data n).value with
+      | Block b ->
+        b.height > height
+        (* more than 900 blocks in a sequence imply less than 10% orphans. *)
+      | _ -> failwith "invalid dag")
   in
-  init params (protocol ~k:8)
-  |> loop params
-  |> fun { nodes; global_view; _ } ->
-  Array.to_seq nodes
-  |> Seq.map (fun x -> x.state)
-  |> Dag.common_ancestor' (Dag.filter (fun x -> is_block x.value) global_view)
-  |> function
-  | None -> false
-  | Some n ->
-    (match (Dag.data n).value with
-    | Block b ->
-      b.height > 900 (* more than 900 blocks in a sequence imply less than 10% orphans. *)
-    | _ -> failwith "invalid dag")
+  List.for_all
+    (fun (k, activation_delay, height) ->
+      test
+        k
+        { n_nodes = 32; n_activations = 1000 * k; message_delay = 1.; activation_delay }
+        height)
+    [ 08, 10., 900 (* good condition, 10% orphans *)
+    ; 08, 01., 800 (* bad conditions, 20% orphans *)
+    ; 32, 01., 900 (* bad conditions, 10% orphans, high k *)
+    ]
 ;;

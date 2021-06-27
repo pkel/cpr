@@ -44,20 +44,25 @@ let protocol : _ protocol =
   { dag_roots; dag_invariant; spawn }
 ;;
 
-let%test _ =
+let%test "convergence" =
   let open Simulator in
-  let params =
-    { n_nodes = 32; n_activations = 1000; activation_delay = 10.; message_delay = 1. }
+  let test params height =
+    init params protocol
+    |> loop params
+    |> fun { nodes; global_view; _ } ->
+    Array.to_seq nodes
+    |> Seq.map (fun x -> x.state)
+    |> Dag.common_ancestor' global_view
+    |> function
+    | None -> false
+    | Some n -> (Dag.data n).value.height > height
   in
-  init params protocol
-  |> loop params
-  |> fun { nodes; global_view; _ } ->
-  Array.to_seq nodes
-  |> Seq.map (fun x -> x.state)
-  |> Dag.common_ancestor' global_view
-  |> function
-  | None -> false
-  | Some n -> (Dag.data n).value.height > 900
+  List.for_all
+    (fun (activation_delay, height) ->
+      test
+        { n_nodes = 32; n_activations = 10000; message_delay = 1.; activation_delay }
+        height)
+    [ 10., 9000 (* good condition, 10% orphans *)
+    ; 01., 5000 (* bad conditions, 50% orphans *)
+    ]
 ;;
-
-(* more than 900 blocks in a sequence imply less than 10% orphans. *)
