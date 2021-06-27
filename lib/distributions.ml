@@ -1,5 +1,7 @@
 type 'a iid = unit -> 'a
 
+let constant a () = a
+let uniform ~lower ~upper () = Random.float (upper -. lower) +. lower
 let exponential ~ev () = -1. *. ev *. log (Random.float 1.)
 
 (* Voses Alias Method for efficient sampling of discrete random variables

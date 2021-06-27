@@ -130,16 +130,20 @@ let%test "convergence" =
     | Some n ->
       (match (Dag.data n).value with
       | Block b ->
-        b.height > height
-        (* more than 900 blocks in a sequence imply less than 10% orphans. *)
+        if b.height < height
+        then (
+          Printf.eprintf "k: %i\theight: %i\texpected: %i\n" k b.height height;
+          false)
+        else true (* more than 900 blocks in a sequence imply less than 10% orphans. *)
       | _ -> failwith "invalid dag")
   in
+  let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
   List.for_all
     (fun (k, activation_delay, height) ->
-      let network = Network.homogeneous ~delay:(Distributions.exponential ~ev:1.) 32 in
+      let network = Network.homogeneous ~delay 32 in
       test k { network; n_activations = 1000 * k; activation_delay } height)
     [ 08, 10., 900 (* good condition, 10% orphans *)
-    ; 08, 01., 800 (* bad conditions, 20% orphans *)
+    ; 08, 01., 700 (* bad conditions, 30% orphans *)
     ; 32, 01., 900 (* bad conditions, 10% orphans, high k *)
     ]
 ;;
