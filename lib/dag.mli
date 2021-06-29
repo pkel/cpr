@@ -5,10 +5,9 @@ type 'a node
 
 (** maintenance *)
 
-val roots : 'a list -> 'a t * 'a node list
+val create : unit -> 'a t
+val roots : 'a t -> 'a node list
 val append : 'a t -> 'a node list -> 'a -> 'a node
-
-(* TODO: what if parents are empty? *)
 
 (** data access *)
 val data : 'a node -> 'a

@@ -1,5 +1,3 @@
-type 'a t = { mutable size : int }
-
 type 'a node =
   { serial : int
   ; parents : 'a node list
@@ -8,16 +6,18 @@ type 'a node =
   ; mutable depth : int
   }
 
-let roots data =
-  ( { size = List.length data }
-  , List.mapi
-      (fun serial data -> { serial; parents = []; children = []; data; depth = 0 })
-      data )
-;;
+type 'a t =
+  { mutable size : int
+  ; mutable roots : 'a node list
+  }
+
+let create () = { size = 0; roots = [] }
+let roots t = t.roots
 
 let append t parents data =
   let depth = List.fold_left (fun acc el -> max acc el.depth) 0 parents + 1 in
   let node' = { serial = t.size; parents; children = []; data; depth } in
+  if parents = [] then t.roots <- node' :: t.roots;
   List.iter (fun node -> node.children <- node' :: node.children) parents;
   t.size <- t.size + 1;
   node'
@@ -55,16 +55,16 @@ let print ?(indent = "") v data_to_string b =
 ;;
 
 let%expect_test _ =
-  let append t r = append t [ r ] in
-  let t, rs = roots [ 0 ] in
-  let r = List.hd rs in
-  let ra = append t r 1
-  and rb = append t r 2 in
-  let _raa = append t ra 3
-  and rba = append t rb 4
-  and _rbb = append t rb 5 in
-  let rbaa = append t rba 6 in
-  let _rbaaa = append t rbaa 7 in
+  let t = create () in
+  let r = append t [] 0 in
+  let append r = append t [ r ] in
+  let ra = append r 1
+  and rb = append r 2 in
+  let _raa = append ra 3
+  and rba = append rb 4
+  and _rbb = append rb 5 in
+  let rbaa = append rba 6 in
+  let _rbaaa = append rbaa 7 in
   let global = view t in
   let local = filter (fun i -> i mod 2 = 0) global in
   print ~indent:"global:   " global string_of_int r;

@@ -68,9 +68,10 @@ let propagate params clock node x =
 let init params protocol : _ state =
   let open Protocol in
   let n_nodes = Array.length params.network in
-  let dag, roots =
+  let dag = Dag.create () in
+  let roots =
     let delivered_at = Float.Array.make n_nodes 0. in
-    List.map (fun value -> { value; delivered_at }) protocol.dag_roots |> Dag.roots
+    List.map (fun value -> Dag.append dag [] { value; delivered_at }) protocol.dag_roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; activations = 0 }
   and global_view = Dag.view dag in
