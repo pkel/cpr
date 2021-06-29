@@ -114,7 +114,9 @@ let spawn ~k ctx =
   { init; handler }
 ;;
 
-let protocol ~k = { spawn = spawn ~k; dag_invariant = dag_invariant ~k; dag_roots }
+let protocol ~k =
+  { spawn = spawn ~k; dag_invariant = dag_invariant ~k; dag_roots; head = (fun x -> x) }
+;;
 
 let%test "convergence" =
   let open Simulator in

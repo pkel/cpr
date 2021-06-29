@@ -41,7 +41,7 @@ let handler ctx preferred =
 
 let protocol : _ protocol =
   let spawn ctx = { handler = handler ctx; init } in
-  { dag_roots; dag_invariant; spawn }
+  { dag_roots; dag_invariant; spawn; head = (fun state -> state) }
 ;;
 
 let%test "convergence" =
@@ -65,4 +65,17 @@ let%test "convergence" =
     [ 10., 9000 (* good condition, 10% orphans *)
     ; 01., 5000 (* bad conditions, 50% orphans *)
     ]
+;;
+
+let constant_reward c : ('env, block) reward_function =
+ fun view _read miner head arr ->
+  let rec f gb =
+    let () =
+      match miner (Dag.data gb) with
+      | None -> ()
+      | Some miner -> Float.Array.get arr miner +. c |> Float.Array.set arr miner
+    in
+    List.iter f (Dag.parents view gb)
+  in
+  f head
 ;;

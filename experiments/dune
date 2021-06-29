@@ -1,0 +1,3 @@
+(executables
+ (names explore)
+ (libraries cpr_lib cpr_protocols))

@@ -7,6 +7,7 @@ let pow () = { fresh = true }
 type 'a data =
   { value : 'a
   ; delivered_at : floatarray
+  ; appended_by : int option
   }
 
 type 'prot_data event =
@@ -71,7 +72,9 @@ let init params protocol : _ state =
   let dag = Dag.create () in
   let roots =
     let delivered_at = Float.Array.make n_nodes 0. in
-    List.map (fun value -> Dag.append dag [] { value; delivered_at }) protocol.dag_roots
+    List.map
+      (fun value -> Dag.append dag [] { value; delivered_at; appended_by = None })
+      protocol.dag_roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; activations = 0 }
   and global_view = Dag.view dag in
@@ -103,7 +106,7 @@ let init params protocol : _ state =
             Float.Array.init n_nodes (fun i ->
                 if i = node then clock.now else Float.infinity)
           in
-          Dag.append dag parents { value = child; delivered_at }
+          Dag.append dag parents { value = child; delivered_at; appended_by = Some node }
         in
         let implementation = protocol.spawn { view; read; share; extend_dag } in
         { handler = implementation.handler; state = implementation.init ~roots })
