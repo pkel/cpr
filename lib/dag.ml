@@ -139,3 +139,15 @@ let common_ancestor' view seq =
     in
     Seq.fold_left f (Some hd) tl
 ;;
+
+let seq_history view node () =
+  let ptr = ref node in
+  let rec next () =
+    match parents view !ptr with
+    | [] -> Seq.Nil
+    | hd :: _ ->
+      ptr := hd;
+      Seq.Cons (hd, next)
+  in
+  Seq.Cons (node, next)
+;;

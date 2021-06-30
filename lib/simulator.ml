@@ -147,7 +147,7 @@ let handle_event params state ev =
 let rec loop params state =
   match OrderedQueue.dequeue state.clock.queue with
   | Some (now, ev, queue) ->
-    assert (now > state.clock.now);
+    assert (now >= state.clock.now);
     state.clock.now <- now;
     state.clock.queue <- queue;
     handle_event params state ev;

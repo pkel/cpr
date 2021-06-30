@@ -37,3 +37,7 @@ val have_common_ancestor : 'a view -> 'a node -> 'a node -> bool
 
 (* Currently works only on single ancestor DAGs, i.e. trees. *)
 val common_ancestor' : 'a view -> 'a node Seq.t -> 'a node option
+
+(* Iterate backwards in DAG from given node (inclusive) to root. If a node has multiple
+   parents, only the first parent is considered. *)
+val seq_history : 'a view -> 'a node -> 'a node Seq.t

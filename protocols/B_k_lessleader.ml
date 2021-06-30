@@ -150,3 +150,19 @@ let%test "convergence" =
       (* bad conditions, 10% orphans, high k *)
     ]
 ;;
+
+let constant_reward_per_pow c : ('env, node) reward_function =
+ fun view read miner head arr ->
+  let blocks = Dag.filter (fun x -> read x |> is_block) view
+  and votes = Dag.filter (fun x -> read x |> is_vote) view
+  and reward gb =
+    match miner (Dag.data gb) with
+    | None -> ()
+    | Some miner -> arr.(miner) +. c |> Array.set arr miner
+  in
+  Seq.iter
+    (fun b ->
+      reward b;
+      List.iter reward (Dag.children votes b))
+    (Dag.seq_history blocks head)
+;;

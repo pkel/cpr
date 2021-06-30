@@ -70,13 +70,10 @@ let%test "convergence" =
 
 let constant_reward c : ('env, block) reward_function =
  fun view _read miner head arr ->
-  let rec f gb =
-    let () =
-      match miner (Dag.data gb) with
-      | None -> ()
-      | Some miner -> Float.Array.get arr miner +. c |> Float.Array.set arr miner
-    in
-    List.iter f (Dag.parents view gb)
+  let reward gb =
+    match miner (Dag.data gb) with
+    | None -> ()
+    | Some miner -> arr.(miner) +. c |> Array.set arr miner
   in
-  f head
+  Seq.iter reward (Dag.seq_history view head)
 ;;

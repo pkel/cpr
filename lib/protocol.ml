@@ -48,5 +48,5 @@ type ('env, 'data) reward_function =
       -> int option)
   -> (* head of the DAG/chain. Rewards are calculated for the complete history. *)
      'env Dag.node
-  -> (* rewards will be added to the floats in this array *) floatarray
+  -> (* rewards will be added to the floats in this array *) float array
   -> unit
