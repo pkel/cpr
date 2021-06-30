@@ -39,7 +39,7 @@ let print_stats arr =
 let run params (protocol : _ Protocol.protocol) (rewardfn : _ Protocol.reward_function) =
   let open Simulator in
   (* opening stats *)
-  let compute = Array.map Network.(fun x -> x.compute) params.network in
+  let compute = Array.map Network.(fun x -> x.compute) params.network.nodes in
   let sumcomp = Stats.sum compute in
   print_endline "+++ relative compute";
   let relcomp = Array.map (fun x -> x /. sumcomp) compute in
@@ -76,7 +76,11 @@ let run params (protocol : _ Protocol.protocol) (rewardfn : _ Protocol.reward_fu
 let network =
   let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
   Network.homogeneous ~delay 10
-  |> Array.mapi Network.(fun i x -> { x with compute = float_of_int (i + 1) })
+  |> fun n ->
+  { n with
+    nodes =
+      Array.mapi Network.(fun i x -> { x with compute = float_of_int (i + 1) }) n.nodes
+  }
 ;;
 
 let () =

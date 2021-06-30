@@ -4,10 +4,17 @@ type link =
   }
 
 type node =
-  { links : link list
-  ; compute : float
+  { compute : float
+  ; links : link list
   }
 
-type t = node array
+type dissemination =
+  | Simple
+  | Flooding
+
+type t =
+  { nodes : node array
+  ; dissemination : dissemination
+  }
 
 val homogeneous : delay:float Distributions.iid -> int -> t

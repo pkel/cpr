@@ -50,7 +50,7 @@ let schedule_activation params state =
   schedule state.clock delay { node; event = Activate (pow ()) }
 ;;
 
-let propagate params clock node x =
+let disseminate params clock source x =
   List.iter
     (fun link ->
       let open Network in
@@ -63,12 +63,12 @@ let propagate params clock node x =
         (* only schedule event if it yields faster delivery *)
         Float.Array.set delivered_at link.dest t';
         schedule clock delay { node = link.dest; event = Deliver x }))
-    params.network.(node).links
+    params.network.nodes.(source).links
 ;;
 
 let init params protocol : _ state =
   let open Protocol in
-  let n_nodes = Array.length params.network in
+  let n_nodes = Array.length params.network.nodes in
   let dag = Dag.create () in
   let roots =
     let delivered_at = Float.Array.make n_nodes 0. in
@@ -85,7 +85,7 @@ let init params protocol : _ state =
           Dag.filter
             (fun x -> Float.Array.get x.delivered_at node <= clock.now)
             global_view
-        and share x = propagate params clock node x
+        and share x = disseminate params clock node x
         and extend_dag ?pow parents child =
           let pow =
             (* check pow *)
@@ -112,7 +112,7 @@ let init params protocol : _ state =
         { handler = implementation.handler; state = implementation.init ~roots })
   and assign_pow =
     let weights =
-      Array.map (fun x -> Network.(x.compute)) params.network |> Array.to_list
+      Array.map (fun x -> Network.(x.compute)) params.network.nodes |> Array.to_list
     in
     Distributions.discrete ~weights
   in
@@ -126,20 +126,21 @@ let handle_event params state ev =
     let node = state.nodes.(ev.node) in
     node.state <- node.handler node.state ev.event
   in
-  match ev.event with
-  | Activate _pow ->
+  match ev.event, params.network.dissemination with
+  | Activate _pow, _ ->
     state.clock.activations <- state.clock.activations + 1;
     (* check ending condition; schedule next activation *)
     if state.clock.activations < params.n_activations
     then schedule_activation params state;
     (* apply event handler *)
     apply ()
-  | Deliver gnode ->
+  | Deliver _, Simple -> apply ()
+  | Deliver gnode, Flooding ->
     (* deliver only once *)
     if state.clock.now >= Float.Array.get (Dag.data gnode).delivered_at ev.node
     then (
       (* continue broadcast *)
-      propagate params state.clock ev.node gnode;
+      disseminate params state.clock ev.node gnode;
       (* apply event handler *)
       apply ())
 ;;

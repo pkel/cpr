@@ -4,17 +4,27 @@ type link =
   }
 
 type node =
-  { links : link list
-  ; compute : float
+  { compute : float
+  ; links : link list
   }
 
-type t = node array
+type dissemination =
+  | Simple
+  | Flooding
 
-let homogeneous ~delay n =
+type t =
+  { nodes : node array
+  ; dissemination : dissemination
+  }
+
+let homogeneous ~delay n : t =
   let compute = 1. /. float_of_int n in
-  Array.init n (fun i ->
-      { links =
-          List.init (n - 1) (fun j -> { dest = (if j >= i then j + 1 else j); delay })
-      ; compute
-      })
+  { nodes =
+      Array.init n (fun i ->
+          { links =
+              List.init (n - 1) (fun j -> { dest = (if j >= i then j + 1 else j); delay })
+          ; compute
+          })
+  ; dissemination = Simple
+  }
 ;;

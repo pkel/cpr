@@ -143,7 +143,7 @@ let%test "convergence" =
         else true (* more than 900 blocks in a sequence imply less than 10% orphans. *)
       | _ -> failwith "invalid dag")
   in
-  let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
+  let delay = Distributions.exponential ~ev:1. in
   List.for_all
     (fun (k, activation_delay, height) ->
       let network = Network.homogeneous ~delay 32 in

@@ -57,7 +57,7 @@ let%test "convergence" =
     | None -> false
     | Some n -> (Dag.data n).value.height > height
   in
-  let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
+  let delay = Distributions.exponential ~ev:1. in
   List.for_all
     (fun (activation_delay, height) ->
       let network = Network.homogeneous ~delay 32 in
