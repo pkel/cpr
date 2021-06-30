@@ -42,9 +42,10 @@ type ('env, 'data, 'state, 'pow) protocol =
 (** Calculate and assign rewards to nodes from the roots of the DAG to the given node. *)
 type ('env, 'data) reward_function =
   (* see context.view *) 'env Dag.view
-  -> (* see context.read *) ('env -> 'data)
-  -> (* which node has attached the node? None if environmental node, e.g. root *)
-     ('env -> int option)
+  -> ((* see context.read *) 'env -> 'data)
+  -> ((* which node has attached the node? None if environmental node, e.g. root *)
+      'env
+      -> int option)
   -> (* head of the DAG/chain. Rewards are calculated for the complete history. *)
      'env Dag.node
   -> (* rewards will be added to the floats in this array *) floatarray

@@ -146,6 +146,7 @@ let%test "convergence" =
       test k { network; n_activations = 1000 * k; activation_delay } height)
     [ 08, 10., 900 (* good condition, 10% orphans *)
     ; 08, 01., 700 (* bad conditions, 30% orphans *)
-    ; 32, 01., 900 (* bad conditions, 10% orphans, high k *)
+    ; 32, 01., 900
+      (* bad conditions, 10% orphans, high k *)
     ]
 ;;
