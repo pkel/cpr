@@ -108,7 +108,11 @@ let spawn ~k ctx =
             else gpref
           in
           (* delayed block might connect nodes delivered previously *)
-          List.fold_left consider preferred (Dag.leaves blocks_only gblock))
+          let preferred =
+            List.fold_left consider preferred (Dag.leaves blocks_only gblock)
+          in
+          assert (is_block (Dag.data preferred |> ctx.read));
+          preferred)
         else preferred)
   in
   { init; handler }
@@ -163,6 +167,6 @@ let constant_reward_per_pow c : ('env, node) reward_function =
   Seq.iter
     (fun b ->
       reward b;
-      List.iter reward (Dag.children votes b))
+      List.iter reward (Dag.parents votes b))
     (Dag.seq_history blocks head)
 ;;
