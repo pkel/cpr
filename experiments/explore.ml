@@ -35,13 +35,19 @@ let print_stats arr =
   Printf.printf "ginicoef: %.4g\n%!" (gini arr)
 ;;
 
+type ('a, 'b, 'c, 'd) task =
+  { consensus : ('a, 'b, 'c, 'd) Protocol.protocol
+  ; incentives : (string * ('a, 'b) Protocol.reward_function) list
+  }
+
 (* execute protocol, return common ancestor of preferred heads *)
-let run params (protocol : _ Protocol.protocol) (rewardfn : _ Protocol.reward_function) =
+let run params (t : _ task) =
+  let protocol = t.consensus in
   let open Simulator in
-  (* opening stats *)
+  (* network stats *)
   let compute = Array.map Network.(fun x -> x.compute) params.network.nodes in
   let sumcomp = Stats.sum compute in
-  print_endline "+++ relative compute";
+  print_endline "~~~ relative compute";
   let relcomp = Array.map (fun x -> x /. sumcomp) compute in
   print_stats relcomp;
   (* simulate *)
@@ -54,23 +60,27 @@ let run params (protocol : _ Protocol.protocol) (rewardfn : _ Protocol.reward_fu
   |> function
   | None -> failwith "no common ancestor found"
   | Some common_chain ->
-    (* closing stats *)
-    print_endline "+++ absolute reward";
-    let reward = Array.make (Array.length sim.nodes) 0. in
-    rewardfn
-      sim.global_view
-      (fun x -> x.value)
-      (fun x -> x.appended_by)
-      common_chain
-      reward;
-    print_stats reward;
-    print_endline "+++ relative reward";
-    let sumrew = Stats.sum reward in
-    let relrew = Array.map (fun x -> x /. sumrew) reward in
-    print_stats relrew;
-    print_endline "+++ efficiency = relative reward / relative compute";
-    let efficiency = Array.map2 (fun rew comp -> rew /. comp) relrew relcomp in
-    print_stats efficiency
+    (* incentive stats *)
+    List.iter
+      (fun (head, rewardfn) ->
+        print_endline head;
+        print_endline "~~~ absolute reward";
+        let reward = Array.make (Array.length sim.nodes) 0. in
+        rewardfn
+          sim.global_view
+          (fun x -> x.value)
+          (fun x -> x.appended_by)
+          common_chain
+          reward;
+        print_stats reward;
+        print_endline "~~~ relative reward";
+        let sumrew = Stats.sum reward in
+        let relrew = Array.map (fun x -> x /. sumrew) reward in
+        print_stats relrew;
+        print_endline "~~~ efficiency = relative reward / relative compute";
+        let efficiency = Array.map2 (fun rew comp -> rew /. comp) relrew relcomp in
+        print_stats efficiency)
+      t.incentives
 ;;
 
 let network =
@@ -91,59 +101,87 @@ let () =
   print_endline "--- all nodes honest";
   print_endline "--- activation delay = 8 expected message delays";
   print_endline "--- 1 000 000 activations";
-  print_endline "--- reward: 1 per block confirmed";
-  run
-    { network; n_activations = 1000000; activation_delay = 8. }
-    Nakamoto.protocol
-    (Nakamoto.constant_reward 1.);
+  let nakamoto =
+    let open Nakamoto in
+    { consensus = protocol
+    ; incentives = [ "+++ reward: 1 per block confirmed", constant_reward 1. ]
+    }
+  in
+  run { network; n_activations = 1000000; activation_delay = 8. } nakamoto;
   print_endline "=== Bₖ with less leader modification, k=10";
   print_endline "--- fully connected network with homogeneous uniform delays";
   print_endline "--- all nodes honest";
   print_endline "--- activation delay = 8 expected message delays";
   print_endline "--- 1 000 000 activations";
-  print_endline "--- reward: 1 per pow confirmed";
-  run
-    { network; n_activations = 1000000; activation_delay = 8. }
-    (B_k_lessleader.protocol ~k:10)
-    (B_k_lessleader.constant_reward_per_pow 1.);
+  let bk ~k =
+    let open B_k_lessleader in
+    { consensus = protocol ~k
+    ; incentives =
+        [ "+++ reward: 1 per pow confirmed", constant_reward_per_pow (1. /. float_of_int k)
+        ]
+    }
+  in
+  run { network; n_activations = 1000000; activation_delay = 8. } (bk ~k:10);
   print_endline "=== Bₖ with less leader modification, k=100";
   print_endline "--- fully connected network with homogeneous uniform delays";
   print_endline "--- all nodes honest";
   print_endline "--- activation delay = 8 expected message delays";
   print_endline "--- 1 000 000 activations";
-  print_endline "--- reward: 1 per pow confirmed";
-  run
-    { network; n_activations = 1000000; activation_delay = 8. }
-    (B_k_lessleader.protocol ~k:100)
-    (B_k_lessleader.constant_reward_per_pow 1.);
+  run { network; n_activations = 1000000; activation_delay = 8. } (bk ~k:100);
+  print_endline "=== George with k=10";
+  print_endline "--- fully connected network with homogeneous uniform delays";
+  print_endline "--- all nodes honest";
+  print_endline "--- activation delay = 8 expected message delays";
+  print_endline "--- 1 000 000 activations";
+  let george ~k =
+    let open George in
+    { consensus = protocol ~k
+    ; incentives =
+        [ ( "+++ reward: 1 per block spread equally over pow"
+          , constant_reward_per_pow ~reward_per_block:1. ~k )
+        ; ( "+++ reward: max 1 per block spread equally over pow, discounted for vote \
+             depth"
+          , discount_vote_depth ~max_reward_per_block:1. ~k:10 )
+        ; ( "+++ reward: 1/k per (vote|block) on longest chain"
+          , punish_nonlinear ~max_reward_per_block:1. ~k )
+        ]
+    }
+  in
+  run { network; n_activations = 1000000; activation_delay = 8. } (george ~k:10);
+  print_endline "=== George with k=100";
+  print_endline "--- fully connected network with homogeneous uniform delays";
+  print_endline "--- all nodes honest";
+  print_endline "--- activation delay = 8 expected message delays";
+  print_endline "--- 1 000 000 activations";
+  run { network; n_activations = 1000000; activation_delay = 8. } (george ~k:100);
   print_endline "=== Nakamoto";
   print_endline "--- fully connected network with homogeneous uniform delays";
   print_endline "--- all nodes honest";
   print_endline "--- activation delay = 1 expected message delay";
   print_endline "--- 1 000 000 activations";
-  print_endline "--- reward: 1 per block confirmed";
-  run
-    { network; n_activations = 1000000; activation_delay = 1. }
-    Nakamoto.protocol
-    (Nakamoto.constant_reward 1.);
+  run { network; n_activations = 1000000; activation_delay = 1. } nakamoto;
   print_endline "=== Bₖ with less leader modification, k=10";
   print_endline "--- fully connected network with homogeneous uniform delays";
   print_endline "--- all nodes honest";
   print_endline "--- activation delay = 1 expected message delay";
   print_endline "--- 1 000 000 activations";
-  print_endline "--- reward: 1 per pow confirmed";
-  run
-    { network; n_activations = 1000000; activation_delay = 1. }
-    (B_k_lessleader.protocol ~k:10)
-    (B_k_lessleader.constant_reward_per_pow 1.);
+  run { network; n_activations = 1000000; activation_delay = 1. } (bk ~k:10);
   print_endline "=== Bₖ with less leader modification, k=100";
   print_endline "--- fully connected network with homogeneous uniform delays";
   print_endline "--- all nodes honest";
   print_endline "--- activation delay = 1 expected message delay";
   print_endline "--- 1 000 000 activations";
-  print_endline "--- reward: 1 per pow confirmed";
-  run
-    { network; n_activations = 1000000; activation_delay = 1. }
-    (B_k_lessleader.protocol ~k:100)
-    (B_k_lessleader.constant_reward_per_pow 1.)
+  run { network; n_activations = 1000000; activation_delay = 1. } (bk ~k:100);
+  print_endline "=== George with k=10";
+  print_endline "--- fully connected network with homogeneous uniform delays";
+  print_endline "--- all nodes honest";
+  print_endline "--- activation delay = 1 expected message delay";
+  print_endline "--- 1 000 000 activations";
+  run { network; n_activations = 1000000; activation_delay = 1. } (george ~k:10);
+  print_endline "=== George with k=100";
+  print_endline "--- fully connected network with homogeneous uniform delays";
+  print_endline "--- all nodes honest";
+  print_endline "--- activation delay = 1 expected message delay";
+  print_endline "--- 1 000 000 activations";
+  run { network; n_activations = 1000000; activation_delay = 1. } (george ~k:100)
 ;;
