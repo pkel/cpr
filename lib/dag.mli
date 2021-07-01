@@ -29,13 +29,13 @@ val children : 'a view -> 'a node -> 'a node list
 
 val leaves : 'a view -> 'a node -> 'a node list
 
-(* Currently works only on single ancestor DAGs, i.e. trees. *)
+(* Assumes that DAG is a tree and uses only the first parent *)
 val common_ancestor : 'a view -> 'a node -> 'a node -> 'a node option
 
-(* Currently works only on single ancestor DAGs, i.e. trees. *)
+(* Assumes that DAG is a tree and uses only the first parent *)
 val have_common_ancestor : 'a view -> 'a node -> 'a node -> bool
 
-(* Currently works only on single ancestor DAGs, i.e. trees. *)
+(* Assumes that DAG is a tree and uses only the first parent *)
 val common_ancestor' : 'a view -> 'a node Seq.t -> 'a node option
 
 (* Iterate backwards in DAG from given node (inclusive) to root. If a node has multiple

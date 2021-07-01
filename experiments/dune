@@ -1,3 +1,3 @@
 (executables
- (names explore)
+ (names honest_net)
  (libraries owl-base cpr_lib cpr_protocols))

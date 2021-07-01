@@ -178,7 +178,7 @@ let constant_reward_per_pow ?(reward_per_block = 1.) ~k : ('env, height) reward_
 
 let discount_vote_depth ?(max_reward_per_block = 1.) ~k : ('env, height) reward_function =
   let k = float_of_int k in
-  let c = max_reward_per_block /. k /. (k -. 1.) in
+  let c = max_reward_per_block /. k /. k in
   fun view read miner head arr ->
     let blocks = Dag.filter (fun x -> read x |> is_block) view
     and votes = Dag.filter (fun x -> read x |> is_vote) view
@@ -194,7 +194,7 @@ let discount_vote_depth ?(max_reward_per_block = 1.) ~k : ('env, height) reward_
           List.fold_left (fun acc v -> max acc (Dag.data v |> read).vote) 0 votes
           |> float_of_int
         in
-        let x = depth *. c in
+        let x = (depth +. 1.) *. c in
         reward x b;
         List.iter (reward x) votes)
       (Dag.seq_history blocks head)

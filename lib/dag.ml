@@ -108,20 +108,17 @@ let common_ancestor view =
     else if a.depth = b.depth
     then (
       match parents view a, parents view b with
-      | [ a ], [ b ] -> h a b
-      | [], _ | _, [] -> None
-      | _ -> raise (Invalid_argument "DAG is not a tree"))
+      | a :: _, b :: _ -> h a b
+      | [], _ | _, [] -> None)
     else if a.depth > b.depth
     then (
       match parents view a with
-      | [ a ] -> h a b
-      | [] -> None
-      | _ -> raise (Invalid_argument "DAG is not a tree"))
+      | a :: _ -> h a b
+      | [] -> None)
     else (
       match parents view b with
-      | [ b ] -> h a b
-      | [] -> None
-      | _ -> raise (Invalid_argument "DAG is not a tree"))
+      | b :: _ -> h a b
+      | [] -> None)
   in
   h
 ;;
