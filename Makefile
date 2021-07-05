@@ -1,4 +1,14 @@
-.PHONY: dependencies format setup
+.PHONY: build dependencies format simulate setup test
+
+build:
+	dune build
+
+test:
+	dune runtest
+
+simulate:
+	mkdir -p _data
+	dune exec experiments/honest_net.exe -- _data/honest_net.csv
 
 format:
 	dune build @fmt --auto-promote

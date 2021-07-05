@@ -14,6 +14,7 @@
  (depends
   (ocaml (>= 4.11))
   (owl-base (>= 1.0))
+  (cmdliner (>= 1.0))
   (ppx_sexp_conv (>= v0.14.1))
   ))
 

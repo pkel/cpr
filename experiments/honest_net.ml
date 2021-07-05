@@ -1,6 +1,5 @@
 open Cpr_lib
 open Cpr_protocols
-open Owl_base
 
 type 'a with_tag_and_description =
   { tag : string
@@ -11,7 +10,7 @@ type 'a with_tag_and_description =
 let networks =
   [ { tag = "simple10-uni"
     ; description =
-        "10 nodes; compute 1..10; simple dissemination; uniform delay 0.6..1.4"
+        "10 nodes, compute 1..10, simple dissemination, uniform delay 0.6..1.4"
     ; it =
         (let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
          Network.homogeneous ~delay 10
@@ -29,7 +28,7 @@ let networks =
 type protocol =
   | P :
       { consensus : ('a Simulator.data, 'a, 'b, Simulator.pow) Protocol.protocol
-      ; pow_per_block : int
+      ; k : int (* pow per block *)
       ; incentive_schemes :
           ('a Simulator.data, 'a) Protocol.reward_function with_tag_and_description list
       }
@@ -41,7 +40,7 @@ let nakamoto =
   ; it =
       P
         { consensus = Nakamoto.protocol
-        ; pow_per_block = 1
+        ; k = 1
         ; incentive_schemes =
             [ { tag = "constant"
               ; description = "1 per confirmed block"
@@ -53,12 +52,12 @@ let nakamoto =
 ;;
 
 let bk k =
-  { tag = "bk" ^ string_of_int k
+  { tag = "bk"
   ; description = "Bₖ with less leader modification and k=" ^ string_of_int k
   ; it =
       P
         { consensus = B_k_lessleader.protocol ~k
-        ; pow_per_block = k
+        ; k
         ; incentive_schemes =
             [ { tag = "constant"
               ; description =
@@ -71,12 +70,12 @@ let bk k =
 ;;
 
 let george k =
-  { tag = "george" ^ string_of_int k
+  { tag = "george"
   ; description = "George's protocol with k=" ^ string_of_int k
   ; it =
       P
         { consensus = George.protocol ~k
-        ; pow_per_block = k
+        ; k
         ; incentive_schemes =
             [ { tag = "constant"
               ; description =
@@ -105,8 +104,7 @@ let protocols =
   List.concat [ [ nakamoto ]; List.map bk k; List.map george k ]
 ;;
 
-let block_intervals = [ 30.; 60.; 300.; 600. ]
-let n_activations = 100 * 1000
+let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
 
 let simulations =
   List.concat_map
@@ -120,70 +118,70 @@ let simulations =
     networks
 ;;
 
-let print_farray arr =
-  let len = Array.length arr in
-  print_char '[';
-  for i = 0 to len - 2 do
-    Printf.printf "%.3g" arr.(i);
-    print_char ','
-  done;
-  Printf.printf "%.3g" arr.(len - 1);
-  print_char ']'
+let df =
+  Owl_dataframe.make
+    [| "network"
+     ; "network-description"
+     ; "compute"
+     ; "protocol"
+     ; "k"
+     ; "protocol-description"
+     ; "block-interval"
+     ; "activation-delay"
+     ; "n-activations"
+     ; "incentive-scheme"
+     ; "incentive-scheme-description"
+     ; "reward"
+    |]
 ;;
 
-let gini arr =
-  let n = Array.length arr in
-  let sum = ref 0. in
-  for i = 0 to n - 1 do
-    for j = 0 to n - 1 do
-      sum := Maths.abs (arr.(i) -. arr.(j)) +. !sum
-    done
-  done;
-  let denominator = 2. *. Maths.sqr (float_of_int n) *. Stats.mean arr in
-  !sum /. denominator
+let record ~params ~network ~compute ~protocol ~block_interval ~incentive_scheme ~reward =
+  let open Simulator in
+  let open Owl_dataframe in
+  let (P protocol') = protocol.it in
+  let array arr =
+    String (Array.to_list arr |> List.map string_of_float |> String.concat "|")
+  in
+  append_row
+    df
+    [| String network.tag
+     ; String network.description
+     ; array compute
+     ; String protocol.tag
+     ; Int protocol'.k
+     ; String protocol.description
+     ; Float block_interval
+     ; Float params.activation_delay
+     ; Int params.n_activations
+     ; String incentive_scheme.tag
+     ; String incentive_scheme.description
+     ; array reward
+    |]
 ;;
 
-let print_stats arr =
-  print_farray arr;
-  print_endline "";
-  Printf.printf "sum:      %.4g\n" (Stats.sum arr);
-  Printf.printf "median:   %.4g\n" (Stats.median arr);
-  Printf.printf "mean:     %.4g\n" (Stats.mean arr);
-  Printf.printf "std.dev.: %.4g\n" (Stats.std arr);
-  Printf.printf "ginicoef: %.4g\n%!" (gini arr)
-;;
-
-let run (network, protocol, block_interval) =
-  let () =
-    Printf.printf "### %s/%gs/%s\n" protocol.tag block_interval network.tag;
-    Printf.printf "Network: %s\n" network.description;
-    Printf.printf "Protocol: %s\n" protocol.description;
-    Printf.printf "Block interval: %g\n" block_interval
-  and network = network.it in
+let run n_activations (network, protocol, block_interval) =
   let (P p) = protocol.it in
+  let () =
+    Printf.eprintf "%s/k=%i/%gs/%s\n%!" protocol.tag p.k block_interval network.tag
+  in
   (* network stats *)
   let compute =
     let open Network in
-    Array.map (fun x -> x.compute) network.nodes
+    Array.map (fun x -> x.compute) network.it.nodes
   in
-  let sumcomp = Stats.sum compute in
-  print_endline "--- relative compute";
-  let relcomp = Array.map (fun x -> x /. sumcomp) compute in
-  print_stats relcomp;
   (* simulate *)
   let open Simulator in
-  let protocol = p.consensus
-  and params =
-    { network
+  let params =
+    { network = network.it
     ; n_activations
-    ; activation_delay = block_interval /. float_of_int p.pow_per_block
+    ; activation_delay = block_interval /. float_of_int p.k
     }
   in
-  init params protocol
+  init params p.consensus
   |> loop params
   |> fun sim ->
   Array.to_seq sim.nodes
-  |> Seq.map (fun x -> protocol.head x.state)
+  |> Seq.map (fun x -> p.consensus.head x.state)
   |> Dag.common_ancestor' sim.global_view
   |> function
   | None -> failwith "no common ancestor found"
@@ -191,8 +189,6 @@ let run (network, protocol, block_interval) =
     (* incentive stats *)
     List.iter
       (fun is ->
-        Printf.printf "+++ Reward: %s\n" is.description;
-        print_endline "--- absolute reward";
         let rewardfn = is.it in
         let reward = Array.make (Array.length sim.nodes) 0. in
         rewardfn
@@ -201,18 +197,41 @@ let run (network, protocol, block_interval) =
           (fun x -> x.appended_by)
           common_chain
           reward;
-        print_stats reward;
-        print_endline "--- relative reward";
-        let sumrew = Stats.sum reward in
-        let relrew = Array.map (fun x -> x /. sumrew) reward in
-        print_stats relrew;
-        print_endline "--- efficiency = relative reward / relative compute";
-        let efficiency = Array.map2 (fun rew comp -> rew /. comp) relrew relcomp in
-        print_stats efficiency)
+        record
+          ~params
+          ~compute
+          ~network
+          ~protocol
+          ~block_interval
+          ~incentive_scheme:is
+          ~reward)
       p.incentive_schemes
 ;;
 
-let () =
+let main n_activations filename =
   Printf.eprintf "Simulate %d configurations...\n%!" (List.length simulations);
-  List.iter run simulations
+  List.iter (run n_activations) simulations;
+  Owl_dataframe.to_csv ~sep:'\t' df filename
 ;;
+
+open Cmdliner
+
+let n_activations =
+  let doc = "Number of proof-of-work activations simulated per output row." in
+  let env = Arg.env_var "CPR_ACTIVATIONS" ~doc in
+  Arg.(value & opt int 10000 & info [ "n" ] ~env ~docv:"ACTIVATIONS" ~doc)
+;;
+
+let filename =
+  let doc = "Name of CSV output file." in
+  Arg.(required & pos 0 (some string) None & info [] ~docv:"OUTPUT" ~doc)
+;;
+
+let main_t = Term.(const main $ n_activations $ filename)
+
+let info =
+  let doc = "simulate various protocols in honest network" in
+  Term.info "honest_net" ~doc
+;;
+
+let () = Term.exit @@ Term.eval (main_t, info)
