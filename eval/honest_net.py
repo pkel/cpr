@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-df = pd.read_csv("_data/honest_net.tsv", sep="\t")
+df = pd.read_csv("data/honest_net.tsv", sep="\t")
 
 # C&P from https://stackoverflow.com/a/39513799
 def gini(x):

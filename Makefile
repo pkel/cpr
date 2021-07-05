@@ -7,8 +7,8 @@ test:
 	dune runtest
 
 simulate:
-	mkdir -p _data
-	dune exec experiments/honest_net.exe -- _data/honest_net.tsv
+	mkdir -p data
+	dune exec experiments/honest_net.exe -- data/honest_net.tsv
 
 format:
 	dune build @fmt --auto-promote
