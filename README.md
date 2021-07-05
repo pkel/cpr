@@ -2,6 +2,10 @@
 
 Get network spec (compute/latencies) from Patrick Loiseau's paper/code.
 
+# Performance
+
+Run N_CORES simulations in parallel.
+
 # Experiment all honest network
 
 Configure network with all nodes honest.
@@ -23,5 +27,5 @@ Then tabulate f(block time, protocol) where
     + gini index of confirmed pow - gini index of compute
 
 1. ✔ Run simulations for all combinations of block time and protocol.
-2. Write CSV
+2. ✔ Write CSV
 3. Create tables in R/Python

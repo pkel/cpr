@@ -223,7 +223,7 @@ let n_activations =
 ;;
 
 let filename =
-  let doc = "Name of CSV output file." in
+  let doc = "Name of CSV output file (tab-separated)." in
   Arg.(required & pos 0 (some string) None & info [] ~docv:"OUTPUT" ~doc)
 ;;
 

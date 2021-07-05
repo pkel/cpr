@@ -8,7 +8,7 @@ test:
 
 simulate:
 	mkdir -p _data
-	dune exec experiments/honest_net.exe -- _data/honest_net.csv
+	dune exec experiments/honest_net.exe -- _data/honest_net.tsv
 
 format:
 	dune build @fmt --auto-promote
