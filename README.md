@@ -1,12 +1,14 @@
-# Loiseau's network as reference
+# ToDo List
+
+## Simulate other networks
 
 Get network spec (compute/latencies) from Patrick Loiseau's paper/code.
 
-# Performance
+## Performance
 
 Run N_CORES simulations in parallel.
 
-# Experiment all honest network
+## Honest network experiment (WIP)
 
 Configure network with all nodes honest.
 Then tabulate f(block time, protocol) where
