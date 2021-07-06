@@ -61,7 +61,7 @@ let%test "convergence" =
   List.for_all
     (fun (activation_delay, height) ->
       let network = Network.homogeneous ~delay 32 in
-      test { network; n_activations = 10000; activation_delay } height)
+      test { network; activations = 10000; activation_delay } height)
     [ 10., 9000 (* good condition, 10% orphans *)
     ; 01., 5000
       (* bad conditions, 50% orphans *)

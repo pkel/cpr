@@ -121,45 +121,54 @@ let simulations =
 let df =
   Owl_dataframe.make
     [| "network"
-     ; "network-description"
+     ; "network_description"
      ; "compute"
      ; "protocol"
      ; "k"
-     ; "protocol-description"
-     ; "block-interval"
-     ; "activation-delay"
-     ; "n-activations"
-     ; "incentive-scheme"
-     ; "incentive-scheme-description"
+     ; "protocol_description"
+     ; "block_interval"
+     ; "activation_delay"
+     ; "number_activations"
+     ; "activations"
+     ; "incentive_scheme"
+     ; "incentive_scheme_description"
      ; "reward"
     |]
 ;;
 
-let record ~params ~network ~compute ~protocol ~block_interval ~incentive_scheme ~reward =
+let record
+    ~params
+    ~network
+    ~compute
+    ~protocol
+    ~block_interval
+    ~incentive_scheme
+    ~reward
+    ~activations
+  =
   let open Simulator in
   let open Owl_dataframe in
   let (P protocol') = protocol.it in
-  let array arr =
-    String (Array.to_list arr |> List.map string_of_float |> String.concat "|")
-  in
+  let array f arr = String (Array.to_list arr |> List.map f |> String.concat "|") in
   append_row
     df
     [| String network.tag
      ; String network.description
-     ; array compute
+     ; array string_of_float compute
      ; String protocol.tag
      ; Int protocol'.k
      ; String protocol.description
      ; Float block_interval
      ; Float params.activation_delay
-     ; Int params.n_activations
+     ; Int params.activations
+     ; array string_of_int activations
      ; String incentive_scheme.tag
      ; String incentive_scheme.description
-     ; array reward
+     ; array string_of_float reward
     |]
 ;;
 
-let run n_activations (network, protocol, block_interval) =
+let run activations (network, protocol, block_interval) =
   let (P p) = protocol.it in
   let () =
     Printf.eprintf "%s/k=%i/%gs/%s\n%!" protocol.tag p.k block_interval network.tag
@@ -173,13 +182,14 @@ let run n_activations (network, protocol, block_interval) =
   let open Simulator in
   let params =
     { network = network.it
-    ; n_activations
+    ; activations
     ; activation_delay = block_interval /. float_of_int p.k
     }
   in
   init params p.consensus
   |> loop params
   |> fun sim ->
+  let activations = Array.map (fun x -> x.n_activations) sim.nodes in
   Array.to_seq sim.nodes
   |> Seq.map (fun x -> p.consensus.head x.state)
   |> Dag.common_ancestor' sim.global_view
@@ -199,6 +209,7 @@ let run n_activations (network, protocol, block_interval) =
           reward;
         record
           ~params
+          ~activations
           ~compute
           ~network
           ~protocol
@@ -216,7 +227,7 @@ let main n_activations filename =
 
 open Cmdliner
 
-let n_activations =
+let activations =
   let doc = "Number of proof-of-work activations simulated per output row." in
   let env = Arg.env_var "CPR_ACTIVATIONS" ~doc in
   Arg.(value & opt int 10000 & info [ "n" ] ~env ~docv:"ACTIVATIONS" ~doc)
@@ -227,7 +238,7 @@ let filename =
   Arg.(required & pos 0 (some string) None & info [] ~docv:"OUTPUT" ~doc)
 ;;
 
-let main_t = Term.(const main $ n_activations $ filename)
+let main_t = Term.(const main $ activations $ filename)
 
 let info =
   let doc = "simulate various protocols in honest network" in

@@ -18,11 +18,12 @@ type 'prot_data event =
 type 'prot_data clock =
   { mutable now : float
   ; mutable queue : (float, 'prot_data event) OrderedQueue.t
-  ; mutable activations : int
+  ; mutable c_activations : int
   }
 
 type ('prot_data, 'node_state) node =
   { mutable state : 'node_state
+  ; mutable n_activations : int
   ; handler : 'node_state -> ('prot_data data, pow) Protocol.event -> 'node_state
   }
 
@@ -36,7 +37,7 @@ type ('prot_data, 'node_state) state =
 
 type params =
   { network : Network.t
-  ; n_activations : int
+  ; activations : int
   ; activation_delay : float
   }
 
@@ -76,7 +77,7 @@ let init params protocol : _ state =
       (fun value -> Dag.append dag [] { value; delivered_at; appended_by = None })
       protocol.dag_roots
   in
-  let clock = { queue = OrderedQueue.init Float.compare; now = 0.; activations = 0 }
+  let clock = { queue = OrderedQueue.init Float.compare; now = 0.; c_activations = 0 }
   and global_view = Dag.view dag in
   let nodes =
     Array.init n_nodes (fun node ->
@@ -109,7 +110,10 @@ let init params protocol : _ state =
           Dag.append dag parents { value = child; delivered_at; appended_by = Some node }
         in
         let implementation = protocol.spawn { view; read; share; extend_dag } in
-        { handler = implementation.handler; state = implementation.init ~roots })
+        { handler = implementation.handler
+        ; state = implementation.init ~roots
+        ; n_activations = 0
+        })
   and assign_pow =
     let weights =
       Array.map (fun x -> Network.(x.compute)) params.network.nodes |> Array.to_list
@@ -122,15 +126,14 @@ let init params protocol : _ state =
 ;;
 
 let handle_event params state ev =
-  let apply () =
-    let node = state.nodes.(ev.node) in
-    node.state <- node.handler node.state ev.event
-  in
+  let node = state.nodes.(ev.node) in
+  let apply () = node.state <- node.handler node.state ev.event in
   match ev.event, params.network.dissemination with
   | Activate _pow, _ ->
-    state.clock.activations <- state.clock.activations + 1;
+    state.clock.c_activations <- state.clock.c_activations + 1;
+    node.n_activations <- node.n_activations + 1;
     (* check ending condition; schedule next activation *)
-    if state.clock.activations < params.n_activations
+    if state.clock.c_activations < params.activations
     then schedule_activation params state;
     (* apply event handler *)
     apply ()

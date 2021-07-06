@@ -1,4 +1,4 @@
-.PHONY: build dependencies format simulate setup test
+.PHONY: build dependencies expand format simulate setup test
 
 build:
 	dune build
@@ -9,6 +9,9 @@ test:
 simulate:
 	mkdir -p data
 	dune exec experiments/honest_net.exe -- data/honest_net.tsv
+
+expand:
+	 pipenv run python eval/honest_net.py
 
 format:
 	dune build @fmt --auto-promote
