@@ -53,20 +53,24 @@ module Task = struct
     | Constant
     | Discount
     | Punish
+    | Hybrid
 
   let tag_incentive_scheme = function
     | Constant -> "constant"
     | Discount -> "discount"
     | Punish -> "punish"
+    | Hybrid -> "hybrid"
   ;;
 
   let describe_incentive_scheme = function
     | Constant -> "1 per confirmed block, divided equally among confirmed pow"
     | Discount ->
-      "max 1 per confirmed block, divided equally among confirmed pow, discount for \
-       non-linearity"
+      "max 1 per confirmed block, dk⁻² per pow solution (d ∊ 1..k = height since \
+       last block)"
     | Punish ->
-      "max 1 per confirmed block, 1/k per confirmed pow on the longest chain of votes"
+      "max 1 per confirmed block, k⁻¹ per pow solution on longest chain of votes"
+    | Hybrid ->
+      "max 1 per confirmed block, dk⁻² per pow solution on longest chain of votes"
   ;;
 
   type model =
@@ -103,7 +107,7 @@ module Task = struct
         ; reward_functions =
             List.map
               (function
-                | Constant -> B_k_lessleader.constant_reward_per_pow (1. /. float_of_int k)
+                | Constant -> B_k_lessleader.constant (1. /. float_of_int k)
                 | x -> fail x)
               incentive_schemes
         }
@@ -111,12 +115,14 @@ module Task = struct
       M
         { consensus = George.protocol ~k
         ; reward_functions =
-            List.map
-              (function
-                | Constant -> George.constant_reward_per_pow ~reward_per_block:1. ~k
-                | Discount -> George.discount_vote_depth ~max_reward_per_block:1. ~k
-                | Punish -> George.punish_nonlinear ~max_reward_per_block:1. ~k)
-              incentive_schemes
+            (let reward = George.reward ~max_reward_per_block:1. ~k in
+             List.map
+               (function
+                 | Constant -> reward ~punish:false ~discount:false
+                 | Discount -> reward ~punish:false ~discount:true
+                 | Punish -> reward ~punish:true ~discount:false
+                 | Hybrid -> reward ~punish:true ~discount:true)
+               incentive_schemes)
         }
   ;;
 
@@ -146,7 +152,7 @@ let protocols =
   List.concat
     [ [ Task.Nakamoto, [ Constant ] ]
     ; List.map (fun k -> Task.B_k_lessleadership { k }, [ Constant ]) k
-    ; List.map (fun k -> Task.George { k }, [ Constant; Punish; Discount ]) k
+    ; List.map (fun k -> Task.George { k }, [ Constant; Punish; Discount; Hybrid ]) k
     ]
 ;;
 

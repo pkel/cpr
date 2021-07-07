@@ -159,65 +159,24 @@ let%test "convergence" =
     ]
 ;;
 
-let constant_reward_per_pow ?(reward_per_block = 1.) ~k : ('env, height) reward_function =
-  let c = reward_per_block /. float_of_int k in
-  fun view read miner head arr ->
-    let blocks = Dag.filter (fun x -> read x |> is_block) view
-    and votes = Dag.filter (fun x -> read x |> is_vote) view
-    and reward gb =
-      match miner (Dag.data gb) with
-      | None -> ()
-      | Some miner -> arr.(miner) +. c |> Array.set arr miner
-    in
-    Seq.iter
-      (fun b ->
-        reward b;
-        List.iter reward (Dag.parents votes b))
-      (Dag.seq_history blocks head)
-;;
-
-let discount_vote_depth ?(max_reward_per_block = 1.) ~k : ('env, height) reward_function =
+let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_function =
   let k = float_of_int k in
-  let c = max_reward_per_block /. k /. k in
+  let c = max_reward_per_block /. k in
   fun view read miner head arr ->
-    let blocks = Dag.filter (fun x -> read x |> is_block) view
-    and votes = Dag.filter (fun x -> read x |> is_vote) view
-    and reward x gb =
+    let block_view = Dag.filter (fun x -> read x |> is_block) view
+    and vote_view = Dag.filter (fun x -> read x |> is_vote) view
+    and pay x gb =
       match miner (Dag.data gb) with
       | None -> ()
       | Some miner -> arr.(miner) +. x |> Array.set arr miner
     in
     Seq.iter
       (fun b ->
-        let votes = Dag.parents votes b in
-        let depth =
-          List.fold_left (fun acc v -> max acc (Dag.data v |> read).vote) 0 votes
-          |> float_of_int
-        in
-        let x = (depth +. 1.) *. c in
-        reward x b;
-        List.iter (reward x) votes)
-      (Dag.seq_history blocks head)
-;;
-
-let punish_nonlinear ?(max_reward_per_block = 1.) ~k : ('env, height) reward_function =
-  let c = max_reward_per_block /. float_of_int k in
-  fun view read miner head arr ->
-    let blocks = Dag.filter (fun x -> read x |> is_block) view
-    and votes = Dag.filter (fun x -> read x |> is_vote) view
-    and reward x gb =
-      match miner (Dag.data gb) with
-      | None -> ()
-      | Some miner -> arr.(miner) +. x |> Array.set arr miner
-    in
-    Seq.iter
-      (fun b ->
-        reward c b;
-        match Dag.parents votes b with
-        | [] -> ()
-        | hd :: tl ->
+        match Dag.parents vote_view b with
+        | [] -> (* Either genesis or k=1 *) pay c b
+        | hd :: tl as votes ->
           let get_vdepth v = (Dag.data v |> read).vote in
-          let longest, _ =
+          let longest, depth =
             List.fold_left
               (fun acc v ->
                 let depth = get_vdepth v in
@@ -225,8 +184,13 @@ let punish_nonlinear ?(max_reward_per_block = 1.) ~k : ('env, height) reward_fun
               (hd, get_vdepth hd)
               tl
           in
-          Dag.seq_history votes longest |> Seq.iter (reward c))
-      (Dag.seq_history blocks head)
+          let x = if discount then (float_of_int depth +. 1.) /. k *. c else c in
+          if punish
+          then Dag.seq_history vote_view longest |> Seq.iter (pay x)
+          else (
+            pay x b;
+            List.iter (pay x) votes))
+      (Dag.seq_history block_view head)
 ;;
 
 (* TODO: add tests for reward functions *)

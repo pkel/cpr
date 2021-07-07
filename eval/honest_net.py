@@ -49,6 +49,6 @@ df=df.join(df.apply(expand, axis=1, result_type='expand'))
 #  print(df.pivot(index='block_interval', columns=['protocol', 'k', 'incentive_scheme'], values='reward_gini'))
 print(df.pivot(index='block_interval', columns=['protocol', 'k', 'incentive_scheme'], values='efficiency_weakest'))
 #  print(df.pivot(index='block_interval', columns=['protocol', 'k', 'incentive_scheme'], values='activations_compute_gini_delta'))
-print(df.pivot(index='block_interval', columns=['protocol', 'k', 'incentive_scheme'], values='reward_activations_gini_delta'))
+print(df[df.protocol=="george"].pivot(index='block_interval', columns=['protocol', 'k', 'incentive_scheme'], values='reward_activations_gini_delta'))
 
 df.to_csv("data/honest_net_expanded.tsv", sep="\t")

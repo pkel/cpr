@@ -155,7 +155,7 @@ let%test "convergence" =
     ]
 ;;
 
-let constant_reward_per_pow c : ('env, node) reward_function =
+let constant c : ('env, node) reward_function =
  fun view read miner head arr ->
   let blocks = Dag.filter (fun x -> read x |> is_block) view
   and votes = Dag.filter (fun x -> read x |> is_vote) view
