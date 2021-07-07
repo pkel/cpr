@@ -275,21 +275,35 @@ let run task =
       m.reward_functions
 ;;
 
+let bar ~n_tasks =
+  let open Progress.Line in
+  list
+    [ brackets (elapsed ())
+    ; bar n_tasks
+    ; count_to n_tasks
+    ; parens (const "eta: " ++ eta n_tasks)
+    ]
+;;
+
 let main n_activations n_cores filename =
   let tasks = tasks n_activations in
-  Printf.eprintf "Simulate %d configurations...\n%!" (List.length tasks);
+  let n_tasks = List.length tasks in
   let queue = ref tasks in
   let acc = ref [] in
-  Parany.run
-    n_cores
-    ~demux:(fun () ->
-      match !queue with
-      | [] -> raise Parany.End_of_input
-      | hd :: tl ->
-        queue := tl;
-        hd)
-    ~work:(fun task -> run task)
-    ~mux:(fun l -> acc := l :: !acc);
+  Printf.eprintf "Run %d simulations in parallel\n" n_cores;
+  Progress.with_reporter (bar ~n_tasks) (fun progress ->
+      Parany.run
+        n_cores
+        ~demux:(fun () ->
+          match !queue with
+          | [] -> raise Parany.End_of_input
+          | hd :: tl ->
+            queue := tl;
+            hd)
+        ~work:(fun task -> run task (*TODO log start; catch and marshal error/trace *))
+        ~mux:(fun l ->
+          progress 1;
+          acc := l :: !acc (*TODO log error *)));
   let rows = List.concat (List.rev !acc) in
   save_rows_as_tsv filename rows
 ;;
