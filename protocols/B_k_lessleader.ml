@@ -163,3 +163,61 @@ let constant c : ('env, node) reward_function =
       List.iter (reward c) (Dag.parents votes b))
     (Dag.seq_history blocks head)
 ;;
+
+type 'a selfish_state =
+  { preferred : 'a Dag.node
+  ; withheld : 'a Dag.node list
+  }
+
+let selfish ~k ctx =
+  (* TODO: implement withholding *)
+  let votes_only = Dag.filter (fun n -> ctx.read n |> is_vote) ctx.view
+  and blocks_only = Dag.filter (fun n -> ctx.read n |> is_block) ctx.view
+  and data n = Dag.data n |> ctx.read in
+  let handler actions state = function
+    | Activate pow ->
+      let votes = Dag.children votes_only state.preferred in
+      if List.length votes >= k - 1
+      then (
+        let head = block_data_exn data state.preferred in
+        let head' =
+          actions.extend_dag
+            ~pow
+            (state.preferred :: first (k - 1) votes)
+            (Block { height = head.height + 1 })
+        in
+        actions.share head';
+        { state with preferred = head' })
+      else (
+        let vote = actions.extend_dag ~pow [ state.preferred ] Vote in
+        actions.share vote;
+        state)
+    | Deliver gnode ->
+      (* We only prefer blocks. For received votes, reconsider parent block. *)
+      (match last_block ctx gnode with
+      | None -> state
+      | Some gblock ->
+        (* Only consider block if its heritage is visible. *)
+        if Dag.have_common_ancestor blocks_only gblock state.preferred
+        then (
+          let consider gpref gblock =
+            let pref = block_data_exn data gpref
+            and block = block_data_exn data gblock in
+            if block.height > pref.height
+               || (block.height = pref.height
+                  && List.length (Dag.children votes_only gblock)
+                     > List.length (Dag.children votes_only gpref))
+            then gblock
+            else gpref
+          in
+          (* delayed block might connect nodes delivered previously *)
+          let preferred =
+            List.fold_left consider state.preferred (Dag.leaves blocks_only gblock)
+          in
+          assert (is_block (Dag.data preferred |> ctx.read));
+          { state with preferred })
+        else state)
+  and preferred x = x.preferred
+  and init ~roots = { preferred = init ~roots; withheld = [] } in
+  Node { init; handler; preferred }
+;;

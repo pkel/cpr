@@ -7,6 +7,9 @@ module Task = struct
     | M :
         { consensus : ('a Simulator.data, 'a, Simulator.pow) Protocol.protocol
         ; reward_functions : ('a Simulator.data, 'a) Protocol.reward_function list
+        ; attacker :
+            ('a Simulator.data, 'a) Protocol.context
+            -> ('a Simulator.data, 'a, Simulator.pow) Protocol.node
         }
         -> model
 
@@ -21,16 +24,7 @@ module Task = struct
       failwith msg
     in
     match protocol with
-    | Nakamoto ->
-      M
-        { consensus = Nakamoto.protocol
-        ; reward_functions =
-            List.map
-              (function
-                | Constant -> Nakamoto.constant 1.
-                | x -> fail x)
-              incentive_schemes
-        }
+    | Nakamoto -> failwith "protocol \"nakamoto\" does not support withholding"
     | B_k_lessleadership { k } ->
       M
         { consensus = B_k_lessleader.protocol ~k
@@ -40,20 +34,9 @@ module Task = struct
                 | Constant -> B_k_lessleader.constant (1. /. float_of_int k)
                 | x -> fail x)
               incentive_schemes
+        ; attacker = B_k_lessleader.selfish ~k
         }
-    | George { k } ->
-      M
-        { consensus = George.protocol ~k
-        ; reward_functions =
-            (let reward = George.reward ~max_reward_per_block:1. ~k in
-             List.map
-               (function
-                 | Constant -> reward ~punish:false ~discount:false
-                 | Discount -> reward ~punish:false ~discount:true
-                 | Punish -> reward ~punish:true ~discount:false
-                 | Hybrid -> reward ~punish:true ~discount:true)
-               incentive_schemes)
-        }
+    | George _ -> failwith "protocol \"george\" does not support withholding"
   ;;
 
   type t =
@@ -74,14 +57,15 @@ module Task = struct
   ;;
 end
 
-let networks = [ Simple10uniform ]
+let networks =
+  [ 0.1; 0.2; 0.3; 0.4; 0.5 ] |> List.map (fun alpha -> Simple2zero { alpha })
+;;
 
 let protocols =
   let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
   List.concat
-    [ [ Nakamoto, [ Constant ] ]
-    ; List.map (fun k -> B_k_lessleadership { k }, [ Constant ]) k
-    ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k
+    [ List.map (fun k -> B_k_lessleadership { k }, [ Constant ]) k
+      (* ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k *)
     ]
 ;;
 
@@ -165,7 +149,12 @@ let run task =
     { network; activations = task.activations; activation_delay = task.activation_delay }
   in
   let (M m) = model task.protocol task.incentive_schemes in
-  init params m.consensus
+  let deviations =
+    let a = Array.make (Array.length network.nodes) None in
+    a.(0) <- Some m.attacker;
+    a
+  in
+  init ~deviations params m.consensus
   |> loop params
   |> fun sim ->
   let activations = Array.map (fun (SNode x) -> x.n_activations) sim.nodes in
@@ -253,8 +242,8 @@ let filename =
 let main_t = Term.(const main $ activations $ cores $ filename)
 
 let info =
-  let doc = "simulate various protocols in honest network" in
-  Term.info "honest_net" ~doc
+  let doc = "simulate withholding attacks against various protocols" in
+  Term.info "withholding" ~doc
 ;;
 
 let () = Term.exit @@ Term.eval (main_t, info)

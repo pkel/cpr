@@ -9,6 +9,7 @@ test:
 simulate:
 	mkdir -p data
 	dune exec experiments/honest_net.exe -- data/honest_net.tsv
+	dune exec experiments/withholding.exe -- data/withholding.tsv
 
 expand:
 	 pipenv run python eval/honest_net.py

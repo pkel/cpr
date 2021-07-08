@@ -36,7 +36,7 @@ type ('env, 'data) context =
         (** Read the protocol data from simulator data attached to DAG nodes. *)
   }
 
-type ('env, 'data, 'state, 'pow) protocol =
+type ('env, 'data, 'pow) protocol =
   { dag_roots : 'data list (** Specify the roots of the global DAG. *)
   ; dag_invariant : pow:bool -> 'data list -> 'data -> bool
         (** Restrict the set of valid DAGs. The simulator checks [dag_invariant ~pow
