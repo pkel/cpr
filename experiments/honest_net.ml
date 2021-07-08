@@ -97,7 +97,7 @@ module Task = struct
         ; reward_functions =
             List.map
               (function
-                | Constant -> Nakamoto.constant_reward 1.
+                | Constant -> Nakamoto.constant 1.
                 | x -> fail x)
               incentive_schemes
         }
@@ -249,12 +249,7 @@ let run task =
     (* incentive stats *)
     List.map2
       (fun is rewardfn ->
-        let reward = Array.make (Array.length sim.nodes) 0. in
-        rewardfn
-          { Protocol.read = (fun x -> x.value); view = sim.global_view }
-          (fun x -> x.appended_by)
-          common_chain
-          reward;
+        let reward = apply_reward_function rewardfn common_chain sim in
         { network = tag_network task.network
         ; network_description = describe_network task.network
         ; protocol = protocol_family task.protocol

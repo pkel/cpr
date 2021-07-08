@@ -154,17 +154,12 @@ let%test "convergence" =
 ;;
 
 let constant c : ('env, node) reward_function =
- fun ctx miner head arr ->
+ fun ctx reward head ->
   let blocks = Dag.filter (fun x -> ctx.read x |> is_block) ctx.view
-  and votes = Dag.filter (fun x -> ctx.read x |> is_vote) ctx.view
-  and reward gb =
-    match miner (Dag.data gb) with
-    | None -> ()
-    | Some miner -> arr.(miner) +. c |> Array.set arr miner
-  in
+  and votes = Dag.filter (fun x -> ctx.read x |> is_vote) ctx.view in
   Seq.iter
     (fun b ->
-      reward b;
-      List.iter reward (Dag.parents votes b))
+      reward c b;
+      List.iter (reward c) (Dag.parents votes b))
     (Dag.seq_history blocks head)
 ;;

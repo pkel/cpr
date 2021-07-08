@@ -47,13 +47,12 @@ type ('env, 'data, 'state, 'pow) protocol =
   ; honest : ('env, 'data, 'state, 'pow) policy
   }
 
-(** Calculate and assign rewards to nodes from the roots of the DAG to the given node. *)
+(** Calculate and assign rewards to nodes from the roots of the DAG to the given node
+    (backwards). *)
 type ('env, 'data) reward_function =
   ('env, 'data) context
-  -> ((* which node has attached the node? None if environmental node, e.g. root *)
-      'env
-      -> int option)
+  -> ((* assign a reward to a DAG node *)
+      float -> 'env Dag.node -> unit)
   -> (* head of the DAG/chain. Rewards are calculated for the complete history. *)
      'env Dag.node
-  -> (* rewards will be added to the floats in this array *) float array
   -> unit

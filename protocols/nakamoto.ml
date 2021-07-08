@@ -69,12 +69,6 @@ let%test "convergence" =
     ]
 ;;
 
-let constant_reward c : ('env, block) reward_function =
- fun ctx miner head arr ->
-  let reward gb =
-    match miner (Dag.data gb) with
-    | None -> ()
-    | Some miner -> arr.(miner) +. c |> Array.set arr miner
-  in
-  Seq.iter reward (Dag.seq_history ctx.view head)
+let constant c : ('env, block) reward_function =
+ fun ctx reward head -> Seq.iter (reward c) (Dag.seq_history ctx.view head)
 ;;

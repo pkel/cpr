@@ -160,3 +160,14 @@ let rec loop params state =
     loop params state
   | None -> state
 ;;
+
+let apply_reward_function (fn : _ Protocol.reward_function) head state =
+  let arr = Array.make (Array.length state.nodes) 0. in
+  let reward x n =
+    match (Dag.data n).appended_by with
+    | Some i -> arr.(i) <- arr.(i) +. x
+    | None -> ()
+  and read n = n.value in
+  fn { Protocol.view = state.global_view; read } reward head;
+  arr
+;;
