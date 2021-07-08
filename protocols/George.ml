@@ -119,7 +119,7 @@ let honest ~k ctx =
           last_block ctx pv |> Option.get, pv)
         else lb, pv)
   in
-  { init; handler; preferred = fst }
+  Node { init; handler; preferred = fst }
 ;;
 
 let protocol ~k = { honest = honest ~k; dag_invariant = dag_invariant ~k; dag_roots }
@@ -132,7 +132,7 @@ let%test "convergence" =
     |> loop params
     |> fun { nodes; global_view; _ } ->
     Array.to_seq nodes
-    |> Seq.map (fun x -> x.preferred x.state)
+    |> Seq.map (fun (SNode x) -> x.preferred x.state)
     |> Dag.common_ancestor' (Dag.filter (fun x -> is_block x.value) global_view)
     |> function
     | None -> false

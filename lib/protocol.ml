@@ -14,17 +14,19 @@ type ('env, 'pow) event =
   | Activate of 'pow
   | Deliver of 'env Dag.node
 
-(** Behaviour of a single network node. *)
-type ('env, 'data, 'state, 'pow) participant =
-  { init : roots:'env Dag.node list -> 'state
-        (** Node initialization. The [roots] argument holds references to global versions
-            of {protocol.dag_roots}. The roots are visible to all nodes from the
-            beginning. *)
-  ; handler : ('env, 'data, 'pow) actions -> 'state -> ('env, 'pow) event -> 'state
-        (** Event handlers. May trigger side effects via [actions] argument. *)
-  ; preferred : 'state -> 'env Dag.node
-        (** Returns a node's preferred tip of the chain. *)
-  }
+(** Behaviour of a single network node. Type of node local state is packed. *)
+type ('env, 'data, 'pow) node =
+  | Node :
+      { init : roots:'env Dag.node list -> 'state
+            (** Node initialization. The [roots] argument holds references to global
+                versions of {protocol.dag_roots}. The roots are visible to all nodes from
+                the beginning. *)
+      ; handler : ('env, 'data, 'pow) actions -> 'state -> ('env, 'pow) event -> 'state
+            (** Event handlers. May trigger side effects via [actions] argument. *)
+      ; preferred : 'state -> 'env Dag.node
+            (** Returns a node's preferred tip of the chain. *)
+      }
+      -> ('env, 'data, 'pow) node
 
 type ('env, 'data) context =
   { view : 'env Dag.view
@@ -34,9 +36,6 @@ type ('env, 'data) context =
         (** Read the protocol data from simulator data attached to DAG nodes. *)
   }
 
-type ('env, 'data, 'state, 'pow) policy =
-  ('env, 'data) context -> ('env, 'data, 'state, 'pow) participant
-
 type ('env, 'data, 'state, 'pow) protocol =
   { dag_roots : 'data list (** Specify the roots of the global DAG. *)
   ; dag_invariant : pow:bool -> 'data list -> 'data -> bool
@@ -44,7 +43,7 @@ type ('env, 'data, 'state, 'pow) protocol =
             parents data] for each extension proposed by network nodes via
             {Context.extend_dag}. Extension validity can depend on the proof-of-work
             authorization, parent data, and extension data. *)
-  ; honest : ('env, 'data, 'state, 'pow) policy
+  ; honest : ('env, 'data) context -> ('env, 'data, 'pow) node
   }
 
 (** Calculate and assign rewards to nodes from the roots of the DAG to the given node

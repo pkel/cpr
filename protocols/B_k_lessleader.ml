@@ -115,7 +115,7 @@ let honest ~k ctx =
           preferred)
         else preferred)
   and preferred x = x in
-  { init; handler; preferred }
+  Node { init; handler; preferred }
 ;;
 
 let protocol ~k = { honest = honest ~k; dag_invariant = dag_invariant ~k; dag_roots }
@@ -127,7 +127,7 @@ let%test "convergence" =
     |> loop params
     |> fun { nodes; global_view; _ } ->
     Array.to_seq nodes
-    |> Seq.map (fun x -> x.state)
+    |> Seq.map (fun (SNode x) -> x.preferred x.state)
     |> Dag.common_ancestor' (Dag.filter (fun x -> is_block x.value) global_view)
     |> function
     | None -> false

@@ -41,7 +41,7 @@ let handler ctx actions preferred =
 
 let protocol : _ protocol =
   let preferred x = x in
-  let honest ctx = { handler = handler ctx; init; preferred } in
+  let honest ctx = Node { handler = handler ctx; init; preferred } in
   { dag_roots; dag_invariant; honest }
 ;;
 
@@ -52,7 +52,7 @@ let%test "convergence" =
     |> loop params
     |> fun { nodes; global_view; _ } ->
     Array.to_seq nodes
-    |> Seq.map (fun x -> x.state)
+    |> Seq.map (fun (SNode x) -> x.preferred x.state)
     |> Dag.common_ancestor' global_view
     |> function
     | None -> false

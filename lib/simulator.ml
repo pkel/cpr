@@ -21,18 +21,20 @@ type 'prot_data clock =
   ; mutable c_activations : int
   }
 
-type ('prot_data, 'node_state) node =
-  { mutable state : 'node_state
-  ; mutable n_activations : int
-  ; handler : 'node_state -> ('prot_data data, pow) Protocol.event -> 'node_state
-  ; preferred : 'node_state -> 'prot_data data Dag.node
-  }
+type 'prot_data node =
+  | SNode :
+      { mutable state : 'node_state
+      ; mutable n_activations : int
+      ; handler : 'node_state -> ('prot_data data, pow) Protocol.event -> 'node_state
+      ; preferred : 'node_state -> 'prot_data data Dag.node
+      }
+      -> 'prot_data node
 
 type ('prot_data, 'node_state) state =
   { clock : 'prot_data clock
   ; dag : 'prot_data data Dag.t
   ; global_view : 'prot_data data Dag.view
-  ; nodes : ('prot_data, 'node_state) node array
+  ; nodes : 'prot_data node array
   ; assign_pow : int Distributions.iid
   }
 
@@ -68,7 +70,12 @@ let disseminate params clock source x =
     params.network.nodes.(source).links
 ;;
 
-let init params protocol : _ state =
+let init
+    params
+    ?(deviations = Array.make (Array.length params.network.nodes) None)
+    protocol
+    : _ state
+  =
   let open Protocol in
   let n_nodes = Array.length params.network.nodes in
   let dag = Dag.create () in
@@ -110,12 +117,17 @@ let init params protocol : _ state =
           in
           Dag.append dag parents { value = child; delivered_at; appended_by = Some node }
         in
-        let participant = protocol.honest { view; read } in
-        { handler = participant.handler { share; extend_dag }
-        ; state = participant.init ~roots
-        ; preferred = participant.preferred
-        ; n_activations = 0
-        })
+        let (Node participant) =
+          match deviations.(node) with
+          | None -> protocol.honest { view; read }
+          | Some p -> p { view; read }
+        in
+        SNode
+          { handler = participant.handler { share; extend_dag }
+          ; state = participant.init ~roots
+          ; preferred = participant.preferred
+          ; n_activations = 0
+          })
   and assign_pow =
     let weights =
       Array.map (fun x -> Network.(x.compute)) params.network.nodes |> Array.to_list
@@ -128,7 +140,7 @@ let init params protocol : _ state =
 ;;
 
 let handle_event params state ev =
-  let node = state.nodes.(ev.node) in
+  let (SNode node) = state.nodes.(ev.node) in
   let apply () = node.state <- node.handler node.state ev.event in
   match ev.event, params.network.dissemination with
   | Activate _pow, _ ->
