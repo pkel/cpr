@@ -241,7 +241,7 @@ let run task =
   |> fun sim ->
   let activations = Array.map (fun x -> x.n_activations) sim.nodes in
   Array.to_seq sim.nodes
-  |> Seq.map (fun x -> m.consensus.head x.state)
+  |> Seq.map (fun x -> x.preferred x.state)
   |> Dag.common_ancestor' sim.global_view
   |> function
   | None -> failwith "no common ancestor found"
@@ -251,8 +251,7 @@ let run task =
       (fun is rewardfn ->
         let reward = Array.make (Array.length sim.nodes) 0. in
         rewardfn
-          sim.global_view
-          (fun x -> x.value)
+          { Protocol.read = (fun x -> x.value); view = sim.global_view }
           (fun x -> x.appended_by)
           common_chain
           reward;

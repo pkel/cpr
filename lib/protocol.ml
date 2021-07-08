@@ -1,10 +1,5 @@
-type ('env, 'data, 'pow) context =
-  { view : 'env Dag.view
-        (** View on the simulator's DAG. Partial visibility models the information set of
-            the network node. *)
-  ; read : 'env -> 'data
-        (** Read the protocol data from simulator data attached to DAG nodes. *)
-  ; share : 'env Dag.node -> unit
+type ('env, 'data, 'pow) actions =
+  { share : 'env Dag.node -> unit
         (** Instruct the simulator to make the DAG node visible to other network nodes.
             The simulator might apply network delays depending on its configuration. *)
   ; extend_dag : ?pow:'pow -> 'env Dag.node list -> 'data -> 'env Dag.node
@@ -19,13 +14,28 @@ type ('env, 'pow) event =
   | Activate of 'pow
   | Deliver of 'env Dag.node
 
-(** Behaviour of a single network node. Functions can trigger side-effects via {context}. *)
-type ('env, 'state, 'pow) implementation =
-  { handler : 'state -> ('env, 'pow) event -> 'state
-  ; init : roots:'env Dag.node list -> 'state
-        (** The [roots] argument holds references to global versions of the {dag_roots} of
-            the {protocol}. The roots are visible to all nodes from the beginning. *)
+(** Behaviour of a single network node. *)
+type ('env, 'data, 'state, 'pow) participant =
+  { init : roots:'env Dag.node list -> 'state
+        (** Node initialization. The [roots] argument holds references to global versions
+            of {protocol.dag_roots}. The roots are visible to all nodes from the
+            beginning. *)
+  ; handler : ('env, 'data, 'pow) actions -> 'state -> ('env, 'pow) event -> 'state
+        (** Event handlers. May trigger side effects via [actions] argument. *)
+  ; preferred : 'state -> 'env Dag.node
+        (** Returns a node's preferred tip of the chain. *)
   }
+
+type ('env, 'data) context =
+  { view : 'env Dag.view
+        (** View on the simulator's DAG. Partial visibility models the information set of
+            the network node. *)
+  ; read : 'env -> 'data
+        (** Read the protocol data from simulator data attached to DAG nodes. *)
+  }
+
+type ('env, 'data, 'state, 'pow) policy =
+  ('env, 'data) context -> ('env, 'data, 'state, 'pow) participant
 
 type ('env, 'data, 'state, 'pow) protocol =
   { dag_roots : 'data list (** Specify the roots of the global DAG. *)
@@ -34,15 +44,12 @@ type ('env, 'data, 'state, 'pow) protocol =
             parents data] for each extension proposed by network nodes via
             {Context.extend_dag}. Extension validity can depend on the proof-of-work
             authorization, parent data, and extension data. *)
-  ; spawn : ('env, 'data, 'pow) context -> ('env, 'state, 'pow) implementation
-        (** honest network nodes' behaviour *)
-  ; head : 'state -> 'env Dag.node (** Preferred DAG node. *)
+  ; honest : ('env, 'data, 'state, 'pow) policy
   }
 
 (** Calculate and assign rewards to nodes from the roots of the DAG to the given node. *)
 type ('env, 'data) reward_function =
-  (* see context.view *) 'env Dag.view
-  -> ((* see context.read *) 'env -> 'data)
+  ('env, 'data) context
   -> ((* which node has attached the node? None if environmental node, e.g. root *)
       'env
       -> int option)

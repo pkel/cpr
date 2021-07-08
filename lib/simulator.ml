@@ -25,6 +25,7 @@ type ('prot_data, 'node_state) node =
   { mutable state : 'node_state
   ; mutable n_activations : int
   ; handler : 'node_state -> ('prot_data data, pow) Protocol.event -> 'node_state
+  ; preferred : 'node_state -> 'prot_data data Dag.node
   }
 
 type ('prot_data, 'node_state) state =
@@ -109,9 +110,10 @@ let init params protocol : _ state =
           in
           Dag.append dag parents { value = child; delivered_at; appended_by = Some node }
         in
-        let implementation = protocol.spawn { view; read; share; extend_dag } in
-        { handler = implementation.handler
-        ; state = implementation.init ~roots
+        let participant = protocol.honest { view; read } in
+        { handler = participant.handler { share; extend_dag }
+        ; state = participant.init ~roots
+        ; preferred = participant.preferred
         ; n_activations = 0
         })
   and assign_pow =

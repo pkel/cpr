@@ -75,28 +75,28 @@ let offspring view node =
   !l
 ;;
 
-let spawn ~k ctx =
+let honest ~k ctx =
   let votes_only = Dag.filter (fun n -> ctx.read n |> is_vote) ctx.view
   and blocks_only = Dag.filter (fun n -> ctx.read n |> is_block) ctx.view
   and data n = Dag.data n |> ctx.read in
-  let handler (lb, pv) (* last block, preferred chain *) = function
+  let handler actions (lb, pv) (* last block, preferred chain *) = function
     | Activate pow ->
       let votes = offspring votes_only lb in
       if List.length votes >= k - 1
       then (
         let lb' = data lb in
         let b =
-          ctx.extend_dag
+          actions.extend_dag
             ~pow
             (lb :: first (k - 1) votes) (* TODO first should be first received *)
             { block = lb'.block + 1; vote = 0 }
         in
-        let () = ctx.share b in
+        let () = actions.share b in
         b, b)
       else (
         let pv' = data pv in
-        let v = ctx.extend_dag ~pow [ pv ] { pv' with vote = pv'.vote + 1 } in
-        let () = ctx.share v in
+        let v = actions.extend_dag ~pow [ pv ] { pv' with vote = pv'.vote + 1 } in
+        let () = actions.share v in
         lb, v)
     | Deliver gnode ->
       (* Prefer longest chain of votes after longest chain of blocks *)
@@ -119,12 +119,10 @@ let spawn ~k ctx =
           last_block ctx pv |> Option.get, pv)
         else lb, pv)
   in
-  { init; handler }
+  { init; handler; preferred = fst }
 ;;
 
-let protocol ~k =
-  { spawn = spawn ~k; dag_invariant = dag_invariant ~k; dag_roots; head = fst }
-;;
+let protocol ~k = { honest = honest ~k; dag_invariant = dag_invariant ~k; dag_roots }
 
 let%test "convergence" =
   let open Simulator in
@@ -134,7 +132,7 @@ let%test "convergence" =
     |> loop params
     |> fun { nodes; global_view; _ } ->
     Array.to_seq nodes
-    |> Seq.map (fun x -> protocol.head x.state)
+    |> Seq.map (fun x -> x.preferred x.state)
     |> Dag.common_ancestor' (Dag.filter (fun x -> is_block x.value) global_view)
     |> function
     | None -> false
@@ -162,9 +160,9 @@ let%test "convergence" =
 let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_function =
   let k = float_of_int k in
   let c = max_reward_per_block /. k in
-  fun view read miner head arr ->
-    let block_view = Dag.filter (fun x -> read x |> is_block) view
-    and vote_view = Dag.filter (fun x -> read x |> is_vote) view
+  fun ctx miner head arr ->
+    let block_view = Dag.filter (fun x -> ctx.read x |> is_block) ctx.view
+    and vote_view = Dag.filter (fun x -> ctx.read x |> is_vote) ctx.view
     and pay x gb =
       match miner (Dag.data gb) with
       | None -> ()
@@ -175,7 +173,7 @@ let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_fu
         match Dag.parents vote_view b with
         | [] -> (* Either genesis or k=1 *) pay c b
         | hd :: tl as votes ->
-          let get_vdepth v = (Dag.data v |> read).vote in
+          let get_vdepth v = (Dag.data v |> ctx.read).vote in
           let longest, depth =
             List.fold_left
               (fun acc v ->

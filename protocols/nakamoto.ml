@@ -17,13 +17,13 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
-let handler ctx preferred =
+let handler ctx actions preferred =
   let data n = Dag.data n |> ctx.read in
   function
   | Activate pow ->
     let head = data preferred in
-    let head' = ctx.extend_dag ~pow [ preferred ] { height = head.height + 1 } in
-    ctx.share head';
+    let head' = actions.extend_dag ~pow [ preferred ] { height = head.height + 1 } in
+    actions.share head';
     head'
   | Deliver gnode ->
     (* Only consider gnode if its heritage is visible. *)
@@ -40,8 +40,9 @@ let handler ctx preferred =
 ;;
 
 let protocol : _ protocol =
-  let spawn ctx = { handler = handler ctx; init } in
-  { dag_roots; dag_invariant; spawn; head = (fun state -> state) }
+  let preferred x = x in
+  let honest ctx = { handler = handler ctx; init; preferred } in
+  { dag_roots; dag_invariant; honest }
 ;;
 
 let%test "convergence" =
@@ -69,11 +70,11 @@ let%test "convergence" =
 ;;
 
 let constant_reward c : ('env, block) reward_function =
- fun view _read miner head arr ->
+ fun ctx miner head arr ->
   let reward gb =
     match miner (Dag.data gb) with
     | None -> ()
     | Some miner -> arr.(miner) +. c |> Array.set arr miner
   in
-  Seq.iter reward (Dag.seq_history view head)
+  Seq.iter reward (Dag.seq_history ctx.view head)
 ;;

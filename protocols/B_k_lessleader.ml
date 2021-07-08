@@ -67,27 +67,27 @@ let first n =
   h n []
 ;;
 
-let spawn ~k ctx =
+let honest ~k ctx =
   let votes_only = Dag.filter (fun n -> ctx.read n |> is_vote) ctx.view
   and blocks_only = Dag.filter (fun n -> ctx.read n |> is_block) ctx.view
   and data n = Dag.data n |> ctx.read in
-  let handler preferred = function
+  let handler actions preferred = function
     | Activate pow ->
       let votes = Dag.children votes_only preferred in
       if List.length votes >= k - 1
       then (
         let head = block_data_exn data preferred in
         let head' =
-          ctx.extend_dag
+          actions.extend_dag
             ~pow
             (preferred :: first (k - 1) votes)
             (Block { height = head.height + 1 })
         in
-        ctx.share head';
+        actions.share head';
         head')
       else (
-        let vote = ctx.extend_dag ~pow [ preferred ] Vote in
-        ctx.share vote;
+        let vote = actions.extend_dag ~pow [ preferred ] Vote in
+        actions.share vote;
         preferred)
     | Deliver gnode ->
       (* We only prefer blocks. For received votes, reconsider parent block. *)
@@ -114,13 +114,11 @@ let spawn ~k ctx =
           assert (is_block (Dag.data preferred |> ctx.read));
           preferred)
         else preferred)
-  in
-  { init; handler }
+  and preferred x = x in
+  { init; handler; preferred }
 ;;
 
-let protocol ~k =
-  { spawn = spawn ~k; dag_invariant = dag_invariant ~k; dag_roots; head = (fun x -> x) }
-;;
+let protocol ~k = { honest = honest ~k; dag_invariant = dag_invariant ~k; dag_roots }
 
 let%test "convergence" =
   let open Simulator in
@@ -156,9 +154,9 @@ let%test "convergence" =
 ;;
 
 let constant c : ('env, node) reward_function =
- fun view read miner head arr ->
-  let blocks = Dag.filter (fun x -> read x |> is_block) view
-  and votes = Dag.filter (fun x -> read x |> is_vote) view
+ fun ctx miner head arr ->
+  let blocks = Dag.filter (fun x -> ctx.read x |> is_block) ctx.view
+  and votes = Dag.filter (fun x -> ctx.read x |> is_vote) ctx.view
   and reward gb =
     match miner (Dag.data gb) with
     | None -> ()
