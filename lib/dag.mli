@@ -18,7 +18,7 @@ type 'a view
 val view : 'a t -> 'a view
 
 (** restrict visibility of nodes *)
-val filter : ('a -> bool) -> 'a view -> 'a view
+val filter : ('a node -> bool) -> 'a view -> 'a view
 
 (* local navigation *)
 

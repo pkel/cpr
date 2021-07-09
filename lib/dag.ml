@@ -25,11 +25,11 @@ let append t parents data =
 
 let data n = n.data
 
-type 'a view = ('a -> bool) list
+type 'a view = ('a node -> bool) list
 
 let view _ : 'a view = []
 let filter a b = a :: b
-let visible view n = List.for_all (fun flt -> flt n.data) view
+let visible view n = List.for_all (fun flt -> flt n) view
 let parents view n = List.filter (visible view) n.parents
 let children view b = List.filter (visible view) b.children
 
@@ -66,7 +66,7 @@ let%expect_test _ =
   let rbaa = append rba 6 in
   let _rbaaa = append rbaa 7 in
   let global = view t in
-  let local = filter (fun i -> i mod 2 = 0) global in
+  let local = filter (fun i -> i.data mod 2 = 0) global in
   print ~indent:"global:   " global string_of_int r;
   print ~indent:"subtree:  " global string_of_int rb;
   print ~indent:"local:    " local string_of_int r;

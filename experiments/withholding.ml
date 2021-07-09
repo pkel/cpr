@@ -158,8 +158,9 @@ let run task =
   |> loop params
   |> fun sim ->
   let activations = Array.map (fun (SNode x) -> x.n_activations) sim.nodes in
-  Array.to_seq sim.nodes
-  |> Seq.map (fun (SNode x) -> x.preferred x.state)
+  Array.to_seqi sim.nodes
+  |> Seq.filter_map (fun (i, SNode x) ->
+         if i > 0 then Some (x.preferred x.state) else None)
   |> Dag.common_ancestor' sim.global_view
   |> function
   | None -> failwith "no common ancestor found"

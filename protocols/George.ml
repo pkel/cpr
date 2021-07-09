@@ -76,9 +76,9 @@ let offspring view node =
 ;;
 
 let honest ~k ctx =
-  let votes_only = Dag.filter (fun n -> ctx.read n |> is_vote) ctx.view
-  and blocks_only = Dag.filter (fun n -> ctx.read n |> is_block) ctx.view
-  and data n = Dag.data n |> ctx.read in
+  let data n = Dag.data n |> ctx.read in
+  let votes_only = Dag.filter (fun n -> data n |> is_vote) ctx.view
+  and blocks_only = Dag.filter (fun n -> data n |> is_block) ctx.view in
   let handler actions (lb, pv) (* last block, preferred chain *) = function
     | Activate pow ->
       let votes = offspring votes_only lb in
@@ -133,7 +133,8 @@ let%test "convergence" =
     |> fun { nodes; global_view; _ } ->
     Array.to_seq nodes
     |> Seq.map (fun (SNode x) -> x.preferred x.state)
-    |> Dag.common_ancestor' (Dag.filter (fun x -> is_block x.value) global_view)
+    |> Dag.common_ancestor'
+         (Dag.filter (fun x -> is_block (Dag.data x).value) global_view)
     |> function
     | None -> false
     | Some n ->
@@ -161,8 +162,9 @@ let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_fu
   let k = float_of_int k in
   let c = max_reward_per_block /. k in
   fun ctx reward head ->
-    let block_view = Dag.filter (fun x -> ctx.read x |> is_block) ctx.view
-    and vote_view = Dag.filter (fun x -> ctx.read x |> is_vote) ctx.view in
+    let data n = Dag.data n |> ctx.read in
+    let block_view = Dag.filter (fun x -> data x |> is_block) ctx.view
+    and vote_view = Dag.filter (fun x -> data x |> is_vote) ctx.view in
     Seq.iter
       (fun b ->
         match Dag.parents vote_view b with

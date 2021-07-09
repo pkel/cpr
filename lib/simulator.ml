@@ -92,7 +92,7 @@ let init
         let read d = d.value
         and view =
           Dag.filter
-            (fun x -> Float.Array.get x.delivered_at node <= clock.now)
+            (fun x -> Float.Array.get (Dag.data x).delivered_at node <= clock.now)
             global_view
         and share x = disseminate params clock node x
         and extend_dag ?pow parents child =
