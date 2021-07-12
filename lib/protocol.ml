@@ -34,6 +34,8 @@ type ('env, 'data) context =
             the network node. *)
   ; read : 'env -> 'data
         (** Read the protocol data from simulator data attached to DAG nodes. *)
+  ; received_at : 'env -> float
+  ; mined_myself : 'env -> bool
   }
 
 type ('env, 'data, 'pow) protocol =
@@ -49,7 +51,8 @@ type ('env, 'data, 'pow) protocol =
 (** Calculate and assign rewards to nodes from the roots of the DAG to the given node
     (backwards). *)
 type ('env, 'data) reward_function =
-  ('env, 'data) context
+  'env Dag.view
+  -> ('env -> 'data)
   -> ((* assign a reward to a DAG node *)
       float -> 'env Dag.node -> unit)
   -> (* head of the DAG/chain. Rewards are calculated for the complete history. *)

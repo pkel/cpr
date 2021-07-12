@@ -96,6 +96,8 @@ let init
           Dag.filter
             (fun x -> Float.Array.get (Dag.data x).delivered_at node <= clock.now)
             global_view
+        and received_at x = Float.Array.get x.delivered_at node
+        and mined_myself x = x.appended_by = Some node
         and share x = disseminate params clock node x
         and extend_dag ?pow parents child =
           let pow =
@@ -127,9 +129,10 @@ let init
             }
         in
         let (Node participant) =
+          let ctx = { view; read; received_at; mined_myself } in
           match deviations.(node) with
-          | None -> protocol.honest { view; read }
-          | Some p -> p { view; read }
+          | None -> protocol.honest ctx
+          | Some p -> p ctx
         in
         SNode
           { handler = participant.handler { share; extend_dag }
@@ -189,6 +192,6 @@ let apply_reward_function (fn : _ Protocol.reward_function) head state =
     | Some i -> arr.(i) <- arr.(i) +. x
     | None -> ()
   and read n = n.value in
-  fn { Protocol.view = state.global_view; read } reward head;
+  fn state.global_view read reward head;
   arr
 ;;

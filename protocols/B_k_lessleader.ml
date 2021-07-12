@@ -55,16 +55,15 @@ let block_data_exn data node =
   | _ -> raise (Invalid_argument "not a block")
 ;;
 
-let first n =
-  let rec h n acc l =
-    if n <= 0
-    then List.rev acc
-    else (
-      match l with
-      | [] -> raise (Invalid_argument "list too short")
-      | hd :: tl -> h (n - 1) (hd :: acc) tl)
-  in
-  h n []
+let first by n l =
+  let a = Array.of_list l in
+  if Array.length a < n then raise (Invalid_argument "list too short");
+  let () = Array.sort (fun a b -> compare (by a) (by b)) a in
+  let l = ref [] in
+  for i = 0 to n - 1 do
+    l := a.(i) :: !l
+  done;
+  !l
 ;;
 
 let honest ~k ctx =
@@ -80,7 +79,7 @@ let honest ~k ctx =
         let head' =
           actions.extend_dag
             ~pow
-            (preferred :: first (k - 1) votes)
+            (preferred :: first (fun x -> Dag.data x |> ctx.received_at) (k - 1) votes)
             (Block { height = head.height + 1 })
         in
         actions.share head';
@@ -155,10 +154,10 @@ let%test "convergence" =
 ;;
 
 let constant c : ('env, node) reward_function =
- fun ctx reward head ->
-  let data n = Dag.data n |> ctx.read in
-  let blocks = Dag.filter (fun x -> data x |> is_block) ctx.view
-  and votes = Dag.filter (fun x -> data x |> is_vote) ctx.view in
+ fun view read reward head ->
+  let data n = Dag.data n |> read in
+  let blocks = Dag.filter (fun x -> data x |> is_block) view
+  and votes = Dag.filter (fun x -> data x |> is_vote) view in
   Seq.iter
     (fun b ->
       reward c b;
@@ -187,7 +186,13 @@ let selfish ~k ctx =
           let head' =
             actions.extend_dag
               ~pow
-              (state.private_head :: first (k - 1) votes)
+              (state.private_head
+              :: first
+                   (fun x ->
+                     let n = Dag.data x in
+                     not (ctx.mined_myself n), ctx.received_at n)
+                   (k - 1)
+                   votes)
               (Block { height = head.height + 1 })
           in
           { state with private_head = head'; withheld = head' :: state.withheld })

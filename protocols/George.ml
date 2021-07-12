@@ -161,16 +161,16 @@ let%test "convergence" =
 let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_function =
   let k = float_of_int k in
   let c = max_reward_per_block /. k in
-  fun ctx reward head ->
-    let data n = Dag.data n |> ctx.read in
-    let block_view = Dag.filter (fun x -> data x |> is_block) ctx.view
-    and vote_view = Dag.filter (fun x -> data x |> is_vote) ctx.view in
+  fun view read reward head ->
+    let data n = Dag.data n |> read in
+    let block_view = Dag.filter (fun x -> data x |> is_block) view
+    and vote_view = Dag.filter (fun x -> data x |> is_vote) view in
     Seq.iter
       (fun b ->
         match Dag.parents vote_view b with
         | [] -> (* Either genesis or k=1 *) reward c b
         | hd :: tl as votes ->
-          let get_vdepth v = (Dag.data v |> ctx.read).vote in
+          let get_vdepth v = (Dag.data v |> read).vote in
           let longest, depth =
             List.fold_left
               (fun acc v ->
