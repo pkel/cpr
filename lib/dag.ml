@@ -6,6 +6,9 @@ type 'a node =
   ; mutable depth : int
   }
 
+let node_eq a b = a.serial = b.serial
+let id a = a.serial
+
 type 'a t =
   { mutable size : int
   ; mutable roots : 'a node list
@@ -67,9 +70,11 @@ let%expect_test _ =
   let _rbaaa = append rbaa 7 in
   let global = view t in
   let local = filter (fun i -> i.data mod 2 = 0) global in
+  let local2 = filter (fun i -> i.data < 5) local in
   print ~indent:"global:   " global string_of_int r;
   print ~indent:"subtree:  " global string_of_int rb;
   print ~indent:"local:    " local string_of_int r;
+  print ~indent:"local2:   " local2 string_of_int r;
   [%expect
     {|
     global:   0
@@ -88,7 +93,10 @@ let%expect_test _ =
     local:    0
     local:    |-- 2
     local:        |-- 4
-    local:            |-- 6 |}]
+    local:            |-- 6
+    local2:   0
+    local2:   |-- 2
+    local2:       |-- 4 |}]
 ;;
 
 (* TODO test [leaves] *)

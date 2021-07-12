@@ -196,8 +196,9 @@ let selfish ~k ctx =
           { state with withheld = vote :: state.withheld })
       | Deliver gnode ->
         (* simulate honest node *)
-        let public n = List.mem n state.withheld in
-        let votes_only = Dag.filter public votes_only
+        let public n = List.exists (fun x -> not (Dag.node_eq x n)) state.withheld in
+        let ctx = { ctx with view = Dag.filter public ctx.view }
+        and votes_only = Dag.filter public votes_only
         and blocks_only = Dag.filter public blocks_only in
         (* We only prefer blocks. For received votes, reconsider parent block. *)
         (match last_block ctx gnode with
@@ -220,41 +221,20 @@ let selfish ~k ctx =
             let public_head =
               List.fold_left consider state.public_head (Dag.leaves blocks_only gblock)
             in
-            assert (is_block (Dag.data public_head |> ctx.read));
+            assert (is_block (data public_head));
             { state with public_head })
           else state)
     in
-    (* tactically release information *)
+    (* TODO: tactically release information *)
     let public = block_data_exn data state.public_head
     and privat = block_data_exn data state.private_head in
+    List.iter actions.share state.withheld;
+    let state = { state with withheld = [] } in
     if public.height > privat.height
-    then (* abort *)
-      { state with withheld = []; private_head = state.public_head }
-    else if public.height = privat.height
-            && state.public_head <> state.private_head
-            && List.length (Dag.children votes_only state.private_head)
-               > List.length (Dag.children votes_only state.public_head)
-    then (
-      (* release / overwrite public progress *)
-      let release state nodes =
-        let nodes = List.filter (fun x -> List.mem x state.withheld) nodes in
-        { state with
-          withheld =
-            List.fold_left
-              (fun withheld n ->
-                actions.share n;
-                List.filter (( <> ) n) withheld)
-              state.withheld
-              nodes
-        }
-      in
-      release
-        { state with public_head = state.private_head }
-        (Dag.parents votes_only state.private_head
-        @ [ state.private_head ]
-        @ first 1 (Dag.children votes_only state.private_head)))
-    else (* withhold / do nothing *)
-      state
+    then { state with private_head = state.public_head }
+    else if public.height < privat.height
+    then { state with public_head = state.private_head }
+    else state
   and preferred x = x.private_head
   and init ~roots =
     let genesis = init ~roots in

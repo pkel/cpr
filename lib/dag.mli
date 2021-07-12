@@ -12,6 +12,11 @@ val append : 'a t -> 'a node list -> 'a -> 'a node
 (** data access *)
 val data : 'a node -> 'a
 
+(** node equality *)
+val node_eq : 'a node -> 'a node -> bool
+
+val id : 'a node -> int
+
 (** views can restrict visibility of nodes; views cannot be edited *)
 type 'a view
 

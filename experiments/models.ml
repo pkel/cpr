@@ -14,9 +14,9 @@ let describe_network = function
     "10 nodes, compute 1..10, simple dissemination, uniform delay 0.6..1.4"
   | Simple2zero { alpha } ->
     Printf.sprintf
-      "2 nodes, compute [%g,1-%g], simple dissemination, zero delay"
+      "2 nodes, compute [%g,%g], simple dissemination, zero delay"
       alpha
-      alpha
+      (1. -. alpha)
 ;;
 
 let create_network = function
@@ -34,7 +34,7 @@ let create_network = function
       { dissemination = Simple
       ; nodes =
           [| { compute = alpha; links = [ { dest = 1; delay } ] }
-           ; { compute = alpha; links = [ { dest = 0; delay } ] }
+           ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
           |]
       }
 ;;

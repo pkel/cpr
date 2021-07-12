@@ -58,18 +58,18 @@ module Task = struct
 end
 
 let networks =
-  [ 0.1; 0.2; 0.3; 0.4; 0.5 ] |> List.map (fun alpha -> Simple2zero { alpha })
+  [ 0.1; 0.2; 0.25; 0.33; 0.5; 0.66 ] |> List.map (fun alpha -> Simple2zero { alpha })
 ;;
 
 let protocols =
-  let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
+  let k = [ 1; 2; 4; 8; 16; 32 ] in
   List.concat
     [ List.map (fun k -> B_k_lessleadership { k }, [ Constant ]) k
       (* ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k *)
     ]
 ;;
 
-let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
+let block_intervals = [ 600. ]
 
 let tasks activations =
   List.concat_map
@@ -205,18 +205,28 @@ let main n_activations n_cores filename =
   let acc = ref [] in
   Printf.eprintf "Run %d simulations in parallel\n" n_cores;
   Progress.with_reporter (bar ~n_tasks) (fun progress ->
-      Parany.run
-        n_cores
-        ~demux:(fun () ->
-          match !queue with
-          | [] -> raise Parany.End_of_input
-          | hd :: tl ->
-            queue := tl;
-            hd)
-        ~work:(fun task -> run task (*TODO log start; catch and marshal error/trace *))
-        ~mux:(fun l ->
-          progress 1;
-          acc := l :: !acc (*TODO log error *)));
+      if n_cores > 1
+      then
+        Parany.run
+          n_cores
+          ~demux:(fun () ->
+            match !queue with
+            | [] -> raise Parany.End_of_input
+            | hd :: tl ->
+              queue := tl;
+              hd)
+          ~work:(fun task -> run task (*TODO log start; catch and marshal error/trace *))
+          ~mux:(fun l ->
+            progress 1;
+            acc := l :: !acc (*TODO log error *))
+      else
+        acc
+          := List.rev_map
+               (fun task ->
+                 let l = run task in
+                 progress 1;
+                 l)
+               tasks);
   let rows = List.concat (List.rev !acc) in
   save_rows_as_tsv filename rows
 ;;
