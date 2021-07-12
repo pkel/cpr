@@ -156,3 +156,84 @@ let seq_history view node () =
   in
   Seq.Cons (node, next)
 ;;
+
+let dot fmt v label bl =
+  let edges = Hashtbl.create 42
+  and nodes = Hashtbl.create 42
+  and levels = Hashtbl.create 42 in
+  let mind = ref max_int
+  and maxd = ref min_int in
+  let rec f n =
+    if Hashtbl.mem nodes n.serial
+    then ()
+    else (
+      let cs = children v n in
+      let () =
+        mind := min !mind n.depth;
+        maxd := max !maxd n.depth;
+        Hashtbl.add levels n.depth n;
+        Hashtbl.add nodes n.serial ();
+        List.iter (fun c -> Hashtbl.replace edges (c, n) ()) cs
+      in
+      List.iter f cs)
+  in
+  List.iter f bl;
+  let open Printf in
+  fprintf fmt "digraph {\n";
+  for d = !mind to !maxd do
+    fprintf fmt "  { rank=same\n";
+    List.iter
+      (fun n ->
+        fprintf fmt "    n%d [shape=plaintext label=\"%s\"];\n" n.serial (label n.data))
+      (Hashtbl.find_all levels d);
+    fprintf fmt "  }\n"
+  done;
+  Seq.iter
+    (fun (c, n) -> fprintf fmt "  n%d -> n%d;\n" c.serial n.serial)
+    (Hashtbl.to_seq_keys edges);
+  fprintf fmt "}\n"
+;;
+
+let%expect_test "dot" =
+  let t = create () in
+  let r = append t [] 0 in
+  let append r = append t [ r ] in
+  let ra = append r 1
+  and rb = append r 2 in
+  let _raa = append ra 3
+  and rba = append rb 4
+  and _rbb = append rb 5 in
+  let rbaa = append rba 6 in
+  let _rbaaa = append rbaa 7 in
+  let global = view t in
+  dot stdout global string_of_int t.roots;
+  [%expect
+    {|
+    digraph {
+      { rank=same
+        n0 [shape=plaintext label="0"];
+      }
+      { rank=same
+        n1 [shape=plaintext label="1"];
+        n2 [shape=plaintext label="2"];
+      }
+      { rank=same
+        n3 [shape=plaintext label="3"];
+        n4 [shape=plaintext label="4"];
+        n5 [shape=plaintext label="5"];
+      }
+      { rank=same
+        n6 [shape=plaintext label="6"];
+      }
+      { rank=same
+        n7 [shape=plaintext label="7"];
+      }
+      n2 -> n0;
+      n7 -> n6;
+      n5 -> n2;
+      n6 -> n4;
+      n3 -> n1;
+      n1 -> n0;
+      n4 -> n2;
+    } |}]
+;;

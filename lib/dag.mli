@@ -46,3 +46,6 @@ val common_ancestor' : 'a view -> 'a node Seq.t -> 'a node option
 (* Iterate backwards in DAG from given node (inclusive) to root. If a node has multiple
    parents, only the first parent is considered. *)
 val seq_history : 'a view -> 'a node -> 'a node Seq.t
+
+(** Print nodes and all descendants in graphviz dot format *)
+val dot : out_channel -> 'a view -> ('a -> string) -> 'a node list -> unit
