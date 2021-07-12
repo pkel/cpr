@@ -196,7 +196,7 @@ let selfish ~k ctx =
           { state with withheld = vote :: state.withheld })
       | Deliver gnode ->
         (* simulate honest node *)
-        let public n = List.exists (fun x -> not (Dag.node_eq x n)) state.withheld in
+        let public n = List.exists (fun x -> Dag.node_eq x n) state.withheld |> not in
         let ctx = { ctx with view = Dag.filter public ctx.view }
         and votes_only = Dag.filter public votes_only
         and blocks_only = Dag.filter public blocks_only in
@@ -225,15 +225,17 @@ let selfish ~k ctx =
             { state with public_head })
           else state)
     in
-    (* TODO: tactically release information *)
+    (* tactically release information *)
     let public = block_data_exn data state.public_head
     and privat = block_data_exn data state.private_head in
-    List.iter actions.share state.withheld;
-    let state = { state with withheld = [] } in
+    let release state =
+      List.iter actions.share state.withheld;
+      { state with withheld = [] }
+    in
     if public.height > privat.height
-    then { state with private_head = state.public_head }
+    then release { state with private_head = state.public_head }
     else if public.height < privat.height
-    then { state with public_head = state.private_head }
+    then release { state with public_head = state.private_head }
     else state
   and preferred x = x.private_head
   and init ~roots =

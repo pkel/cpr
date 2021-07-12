@@ -8,6 +8,7 @@ type 'a data =
   { value : 'a
   ; delivered_at : floatarray
   ; appended_by : int option
+  ; appended_at : float
   }
 
 type 'prot_data event =
@@ -82,7 +83,8 @@ let init
   let roots =
     let delivered_at = Float.Array.make n_nodes 0. in
     List.map
-      (fun value -> Dag.append dag [] { value; delivered_at; appended_by = None })
+      (fun value ->
+        Dag.append dag [] { value; delivered_at; appended_by = None; appended_at = 0. })
       protocol.dag_roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; c_activations = 0 }
@@ -115,7 +117,14 @@ let init
             Float.Array.init n_nodes (fun i ->
                 if i = node then clock.now else Float.infinity)
           in
-          Dag.append dag parents { value = child; delivered_at; appended_by = Some node }
+          Dag.append
+            dag
+            parents
+            { value = child
+            ; delivered_at
+            ; appended_at = clock.now
+            ; appended_by = Some node
+            }
         in
         let (Node participant) =
           match deviations.(node) with
