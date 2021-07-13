@@ -1,65 +1,8 @@
-open Cpr_lib
-open Cpr_protocols
 open Models
-
-module Task = struct
-  type model =
-    | M :
-        { consensus : ('a Simulator.data, 'a, Simulator.pow) Protocol.protocol
-        ; reward_functions : ('a Simulator.data, 'a) Protocol.reward_function list
-        ; attacker :
-            ('a Simulator.data, 'a) Protocol.context
-            -> ('a Simulator.data, 'a, Simulator.pow) Protocol.node
-        }
-        -> model
-
-  let model protocol incentive_schemes =
-    let fail x =
-      let msg =
-        Printf.sprintf
-          "protocol \"%s\" does not support incentive scheme \"%s\""
-          (protocol_family protocol)
-          (tag_incentive_scheme x)
-      in
-      failwith msg
-    in
-    match protocol with
-    | Nakamoto -> failwith "protocol \"nakamoto\" does not support withholding"
-    | B_k_lessleadership { k } ->
-      M
-        { consensus = B_k_lessleader.protocol ~k
-        ; reward_functions =
-            List.map
-              (function
-                | Constant -> B_k_lessleader.constant (1. /. float_of_int k)
-                | x -> fail x)
-              incentive_schemes
-        ; attacker = B_k_lessleader.selfish ~k
-        }
-    | George _ -> failwith "protocol \"george\" does not support withholding"
-  ;;
-
-  type t =
-    { network : network
-    ; protocol : protocol
-    ; incentive_schemes : incentive_scheme list
-    ; activations : int
-    ; activation_delay : float
-    }
-
-  let to_string t =
-    Printf.sprintf
-      "%s/k=%i/%gs/%s"
-      (protocol_family t.protocol)
-      (pow_per_block t.protocol)
-      t.activation_delay
-      (tag_network t.network)
-  ;;
-end
 
 let networks =
   [ 0.1; 0.2; 0.25; 0.3; 0.33; 0.4; 0.45; 0.5; 0.55; 0.66; 0.75 ]
-  |> List.map (fun alpha -> Simple2zero { alpha })
+  |> List.map (fun alpha -> TwoAgentsZero { alpha })
 ;;
 
 let protocols =
@@ -72,18 +15,19 @@ let protocols =
 
 let block_intervals = [ 600. ]
 
-let tasks activations =
+let tasks ~n_activations =
   List.concat_map
     (fun network ->
       List.concat_map
         (fun (protocol, incentive_schemes) ->
           List.map
             (fun block_interval ->
-              let open Task in
               { network
               ; incentive_schemes
               ; protocol
-              ; activations
+              ; activations = n_activations
+              ; scenario = FirstSelfish
+              ; strategy = SelfishSimple
               ; activation_delay =
                   block_interval /. (pow_per_block protocol |> float_of_int)
               })
@@ -92,170 +36,4 @@ let tasks activations =
     networks
 ;;
 
-type row =
-  { network : string
-  ; network_description : string
-  ; compute : float array
-  ; protocol : string
-  ; k : int
-  ; protocol_description : string
-  ; block_interval : float
-  ; activation_delay : float
-  ; number_activations : int
-  ; activations : int array
-  ; incentive_scheme : string
-  ; incentive_scheme_description : string
-  ; reward : float array
-  }
-
-let df_spec =
-  let open Owl_dataframe in
-  let array f arr = String (Array.to_list arr |> List.map f |> String.concat "|") in
-  [| ("network", fun row -> String row.network)
-   ; ("network_description", fun row -> String row.network_description)
-   ; ("compute", fun row -> array string_of_float row.compute)
-   ; ("protocol", fun row -> String row.protocol)
-   ; ("k", fun row -> Int row.k)
-   ; ("protocol_description", fun row -> String row.protocol_description)
-   ; ("block_interval", fun row -> Float row.block_interval)
-   ; ("activation_delay", fun row -> Float row.activation_delay)
-   ; ("number_activations", fun row -> Int row.number_activations)
-   ; ("activations", fun row -> array string_of_int row.activations)
-   ; ("incentive_scheme", fun row -> String row.incentive_scheme)
-   ; ("incentive_scheme_description", fun row -> String row.incentive_scheme_description)
-   ; ("reward", fun row -> array string_of_float row.reward)
-  |]
-;;
-
-let save_rows_as_tsv filename l =
-  let df = Owl_dataframe.make (Array.map fst df_spec) in
-  let record (row : row) =
-    Array.map (fun (_, f) -> f row) df_spec |> Owl_dataframe.append_row df
-  in
-  List.iter record l;
-  Owl_dataframe.to_csv ~sep:'\t' df filename
-;;
-
-let run task =
-  let open Task in
-  (* network stats *)
-  let network = create_network task.network in
-  let compute =
-    let open Network in
-    Array.map (fun x -> x.compute) network.nodes
-  in
-  (* simulate *)
-  let open Simulator in
-  let params =
-    { network; activations = task.activations; activation_delay = task.activation_delay }
-  in
-  let (M m) = model task.protocol task.incentive_schemes in
-  let deviations =
-    let a = Array.make (Array.length network.nodes) None in
-    a.(0) <- Some m.attacker;
-    a
-  in
-  init ~deviations params m.consensus
-  |> loop params
-  |> fun sim ->
-  let activations = Array.map (fun (SNode x) -> x.n_activations) sim.nodes in
-  Array.to_seqi sim.nodes
-  |> Seq.filter_map (fun (i, SNode x) ->
-         if i > 0 then Some (x.preferred x.state) else None)
-  |> Dag.common_ancestor' sim.global_view
-  |> function
-  | None -> failwith "no common ancestor found"
-  | Some common_chain ->
-    (* incentive stats *)
-    List.map2
-      (fun is rewardfn ->
-        let reward = apply_reward_function rewardfn common_chain sim in
-        { network = tag_network task.network
-        ; network_description = describe_network task.network
-        ; protocol = protocol_family task.protocol
-        ; protocol_description = describe_protocol task.protocol
-        ; k = pow_per_block task.protocol
-        ; activation_delay = task.activation_delay
-        ; number_activations = task.activations
-        ; activations
-        ; compute
-        ; block_interval =
-            task.activation_delay *. (pow_per_block task.protocol |> float_of_int)
-        ; incentive_scheme = tag_incentive_scheme is
-        ; incentive_scheme_description = describe_incentive_scheme is
-        ; reward
-        })
-      task.incentive_schemes
-      m.reward_functions
-;;
-
-let bar ~n_tasks =
-  let open Progress.Line in
-  list
-    [ brackets (elapsed ())
-    ; bar n_tasks
-    ; count_to n_tasks
-    ; parens (const "eta: " ++ eta n_tasks)
-    ]
-;;
-
-let main n_activations n_cores filename =
-  let tasks = tasks n_activations in
-  let n_tasks = List.length tasks in
-  let queue = ref tasks in
-  let acc = ref [] in
-  Printf.eprintf "Run %d simulations in parallel\n" n_cores;
-  Progress.with_reporter (bar ~n_tasks) (fun progress ->
-      if n_cores > 1
-      then
-        Parany.run
-          n_cores
-          ~demux:(fun () ->
-            match !queue with
-            | [] -> raise Parany.End_of_input
-            | hd :: tl ->
-              queue := tl;
-              hd)
-          ~work:(fun task -> run task (*TODO log start; catch and marshal error/trace *))
-          ~mux:(fun l ->
-            progress 1;
-            acc := l :: !acc (*TODO log error *))
-      else
-        acc
-          := List.rev_map
-               (fun task ->
-                 let l = run task in
-                 progress 1;
-                 l)
-               tasks);
-  let rows = List.concat (List.rev !acc) in
-  save_rows_as_tsv filename rows
-;;
-
-open Cmdliner
-
-let activations =
-  let doc = "Number of proof-of-work activations simulated per output row." in
-  let env = Arg.env_var "CPR_ACTIVATIONS" ~doc in
-  Arg.(value & opt int 10000 & info [ "n"; "activations" ] ~env ~docv:"ACTIVATIONS" ~doc)
-;;
-
-let cores =
-  let doc = "Number of simulation tasks run in parallel" in
-  let env = Arg.env_var "CPR_CORES" ~doc in
-  Arg.(value & opt int (Cpu.numcores ()) & info [ "p"; "cores" ] ~env ~docv:"CORES" ~doc)
-;;
-
-let filename =
-  let doc = "Name of CSV output file (tab-separated)." in
-  Arg.(required & pos 0 (some string) None & info [] ~docv:"OUTPUT" ~doc)
-;;
-
-let main_t = Term.(const main $ activations $ cores $ filename)
-
-let info =
-  let doc = "simulate withholding attacks against various protocols" in
-  Term.info "withholding" ~doc
-;;
-
-let () = Term.exit @@ Term.eval (main_t, info)
+let () = Csv_runner.command tasks

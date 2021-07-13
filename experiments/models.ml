@@ -1,42 +1,19 @@
 open Cpr_lib
+open Cpr_protocols
 
 type network =
-  | Simple10uniform
-  | Simple2zero of { alpha : float }
+  | CliqueUniform10
+  | TwoAgentsZero of { alpha : float }
 
 let tag_network = function
-  | Simple10uniform -> "simple10-uni"
-  | Simple2zero _ -> "simple2-zero"
+  | CliqueUniform10 -> "clique-uniform-10"
+  | TwoAgentsZero _ -> "two-agents-zero"
 ;;
 
 let describe_network = function
-  | Simple10uniform ->
+  | CliqueUniform10 ->
     "10 nodes, compute 1..10, simple dissemination, uniform delay 0.6..1.4"
-  | Simple2zero { alpha } ->
-    Printf.sprintf
-      "2 nodes, compute [%g,%g], simple dissemination, zero delay"
-      alpha
-      (1. -. alpha)
-;;
-
-let create_network = function
-  | Simple10uniform ->
-    let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
-    Network.homogeneous ~delay 10
-    |> fun n ->
-    { n with
-      nodes =
-        Array.mapi Network.(fun i x -> { x with compute = float_of_int (i + 1) }) n.nodes
-    }
-  | Simple2zero { alpha } ->
-    let delay = Distributions.constant 0. in
-    Network.
-      { dissemination = Simple
-      ; nodes =
-          [| { compute = alpha; links = [ { dest = 1; delay } ] }
-           ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
-          |]
-      }
+  | TwoAgentsZero { alpha } -> Printf.sprintf "2 nodes, alpha=%g, zero delay" alpha
 ;;
 
 type protocol =
@@ -85,4 +62,179 @@ let describe_incentive_scheme = function
   | Hybrid ->
     "max 1 per confirmed block, dk⁻² per pow solution on longest chain of votes (d \
      ∊ 1..k = height since last block)"
+;;
+
+type scenario =
+  | AllHonest
+  | FirstSelfish
+
+let tag_scenario = function
+  | AllHonest -> "all-honest"
+  | FirstSelfish -> "first-selfish"
+;;
+
+let describe_scenario = function
+  | AllHonest -> "all nodes follow the protocol"
+  | FirstSelfish -> "first node acts selfishly, other nodes follow the protocol"
+;;
+
+type strategy =
+  | Honest
+  | SelfishSimple
+  | SelfishAdvanced
+
+let tag_strategy = function
+  | Honest -> "honest"
+  | SelfishSimple -> "selfish-simple"
+  | SelfishAdvanced -> "selfish-advanced"
+;;
+
+let describe_strategy = function
+  | Honest -> "honest"
+  | SelfishSimple -> "withhold until strong block is found"
+  | SelfishAdvanced -> "withhold until defender is about to find a strong block"
+;;
+
+type task =
+  { network : network
+  ; protocol : protocol
+  ; scenario : scenario
+  ; strategy : strategy
+  ; incentive_schemes : incentive_scheme list
+  ; activations : int
+  ; activation_delay : float
+  }
+
+type setup =
+  | S :
+      { task : task
+      ; params : Simulator.params
+      ; network : Network.t
+      ; protocol : ('a Simulator.data, 'a, Simulator.pow) Protocol.protocol
+      ; reward_functions : ('a Simulator.data, 'a) Protocol.reward_function list
+      ; deviations :
+          (('a Simulator.data, 'a) Protocol.context
+           -> ('a Simulator.data, 'a, Simulator.pow) Protocol.node)
+          option
+          array
+          option
+      }
+      -> setup
+
+let setup t =
+  let network =
+    match t.network with
+    | CliqueUniform10 ->
+      let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
+      Network.homogeneous ~delay 10
+      |> fun n ->
+      { n with
+        nodes =
+          Array.mapi
+            Network.(fun i x -> { x with compute = float_of_int (i + 1) })
+            n.nodes
+      }
+    | TwoAgentsZero { alpha } ->
+      let delay = Distributions.constant 0. in
+      Network.
+        { dissemination = Simple
+        ; nodes =
+            [| { compute = alpha; links = [ { dest = 1; delay } ] }
+             ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
+            |]
+        }
+  in
+  let params =
+    Simulator.
+      { network; activations = t.activations; activation_delay = t.activation_delay }
+  and deviations of_strategy =
+    match t.scenario with
+    | AllHonest -> None
+    | FirstSelfish ->
+      let a = Array.make (Array.length network.nodes) None in
+      a.(0) <- Some (of_strategy t.strategy);
+      Some a
+  in
+  match t.protocol with
+  | Nakamoto ->
+    let protocol = Nakamoto.protocol in
+    let deviations =
+      deviations (function
+          | Honest -> protocol.honest
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support attack strategy %s"
+                (protocol_family t.protocol)
+                (tag_strategy x)
+            in
+            raise (Invalid_argument m))
+    and reward_functions =
+      List.map
+        (function
+          | Constant -> Nakamoto.constant 1.
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support incentive scheme %s"
+                (protocol_family t.protocol)
+                (tag_incentive_scheme x)
+            in
+            raise (Invalid_argument m))
+        t.incentive_schemes
+    in
+    S { task = t; params; network; protocol; deviations; reward_functions }
+  | B_k_lessleadership { k } ->
+    let protocol = B_k_lessleader.protocol ~k in
+    let deviations =
+      deviations (function
+          | Honest -> protocol.honest
+          | SelfishSimple -> B_k_lessleader.selfish ~k
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support attack strategy %s"
+                (protocol_family t.protocol)
+                (tag_strategy x)
+            in
+            raise (Invalid_argument m))
+    and reward_functions =
+      List.map
+        (function
+          | Constant -> B_k_lessleader.constant (1. /. float_of_int k)
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support incentive scheme %s"
+                (protocol_family t.protocol)
+                (tag_incentive_scheme x)
+            in
+            raise (Invalid_argument m))
+        t.incentive_schemes
+    in
+    S { task = t; params; network; protocol; deviations; reward_functions }
+  | George { k } ->
+    let protocol = George.protocol ~k in
+    let deviations =
+      deviations (function
+          | Honest -> protocol.honest
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support attack strategy %s"
+                (protocol_family t.protocol)
+                (tag_strategy x)
+            in
+            raise (Invalid_argument m))
+    and reward_functions =
+      List.map
+        (let reward = George.reward ~max_reward_per_block:1. ~k in
+         function
+         | Constant -> reward ~punish:false ~discount:false
+         | Discount -> reward ~punish:false ~discount:true
+         | Punish -> reward ~punish:true ~discount:false
+         | Hybrid -> reward ~punish:true ~discount:true)
+        t.incentive_schemes
+    in
+    S { task = t; params; network; protocol; deviations; reward_functions }
 ;;
