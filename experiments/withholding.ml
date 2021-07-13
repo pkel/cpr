@@ -58,11 +58,12 @@ module Task = struct
 end
 
 let networks =
-  [ 0.1; 0.2; 0.25; 0.33; 0.5; 0.66 ] |> List.map (fun alpha -> Simple2zero { alpha })
+  [ 0.1; 0.2; 0.25; 0.3; 0.33; 0.4; 0.45; 0.5; 0.55; 0.66; 0.75 ]
+  |> List.map (fun alpha -> Simple2zero { alpha })
 ;;
 
 let protocols =
-  let k = [ 1; 2; 4; 8; 16; 32 ] in
+  let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
   List.concat
     [ List.map (fun k -> B_k_lessleadership { k }, [ Constant ]) k
       (* ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k *)

@@ -233,14 +233,32 @@ let selfish ~k ctx =
     (* tactically release information *)
     let public = block_data_exn data state.public_head
     and privat = block_data_exn data state.private_head in
-    let release state =
-      List.iter actions.share state.withheld;
-      { state with withheld = [] }
+    let release nodes state =
+      let ht = Hashtbl.create k in
+      List.iter (fun n -> Hashtbl.replace ht (Dag.id n) true) state.withheld;
+      List.iter
+        (fun n ->
+          let id = Dag.id n in
+          match Hashtbl.find_opt ht id with
+          | Some true ->
+            Hashtbl.replace ht id false;
+            actions.share n
+          | _ -> ())
+        nodes;
+      { state with
+        withheld =
+          List.filter
+            (fun n ->
+              match Hashtbl.find_opt ht (Dag.id n) with
+              | Some true -> true
+              | _ -> false)
+            state.withheld
+      }
     in
     if public.height > privat.height
-    then release { state with private_head = state.public_head }
+    then release state.withheld { state with private_head = state.public_head }
     else if public.height < privat.height
-    then release { state with public_head = state.private_head }
+    then release state.withheld { state with public_head = state.private_head }
     else state
   and preferred x = x.private_head
   and init ~roots =

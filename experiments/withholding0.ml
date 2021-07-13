@@ -61,8 +61,8 @@ let task =
   let open Task in
   { network = Simple2zero { alpha = 0.33 }
   ; incentive_schemes = [ Constant ]
-  ; protocol = B_k_lessleadership { k = 8 }
-  ; activations = 100
+  ; protocol = B_k_lessleadership { k = 16 }
+  ; activations = 200
   ; activation_delay = 1.
   }
 ;;
@@ -90,13 +90,17 @@ let run task =
     stdout
     sim.global_view
     (fun n ->
+      let d = Dag.data n in
       Printf.sprintf
-        "%s | %.2f"
-        (match n.appended_by with
+        "%s | %.2f%s"
+        (match d.appended_by with
         | None -> "root"
         | Some 0 -> "a"
         | Some _ -> "d")
-        n.appended_at)
+        d.appended_at
+        (match Dag.children sim.global_view n with
+        | [] -> " | o"
+        | _ -> ""))
     (Dag.roots sim.dag)
 ;;
 

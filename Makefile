@@ -13,6 +13,7 @@ simulate:
 
 expand:
 	 pipenv run python eval/honest_net.py
+	 pipenv run python eval/withholding.py
 
 format:
 	dune build @fmt --auto-promote

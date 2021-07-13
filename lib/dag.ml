@@ -184,7 +184,7 @@ let dot fmt v label bl =
     fprintf fmt "  { rank=same\n";
     List.iter
       (fun n ->
-        fprintf fmt "    n%d [shape=plaintext label=\"%s\"];\n" n.serial (label n.data))
+        fprintf fmt "    n%d [shape=plaintext label=\"%s\"];\n" n.serial (label n))
       (Hashtbl.find_all levels d);
     fprintf fmt "  }\n"
   done;
@@ -206,7 +206,7 @@ let%expect_test "dot" =
   let rbaa = append rba 6 in
   let _rbaaa = append rbaa 7 in
   let global = view t in
-  dot stdout global string_of_int t.roots;
+  dot stdout global (fun n -> data n |> string_of_int) t.roots;
   [%expect
     {|
     digraph {
