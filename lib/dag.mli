@@ -48,4 +48,9 @@ val common_ancestor' : 'a view -> 'a node Seq.t -> 'a node option
 val seq_history : 'a view -> 'a node -> 'a node Seq.t
 
 (** Print nodes and all descendants in graphviz dot format *)
-val dot : out_channel -> 'a view -> ('a node -> string) -> 'a node list -> unit
+val dot
+  :  out_channel
+  -> 'a view
+  -> node_attr:('a node -> (string * string) list)
+  -> 'a node list
+  -> unit

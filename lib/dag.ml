@@ -157,7 +157,11 @@ let seq_history view node () =
   Seq.Cons (node, next)
 ;;
 
-let dot fmt v label bl =
+let dot fmt v ~node_attr bl =
+  let attr l =
+    let f (k, v) = Printf.sprintf "%s=\"%s\"" k v in
+    List.map f l |> String.concat " "
+  in
   let edges = Hashtbl.create 42
   and nodes = Hashtbl.create 42
   and levels = Hashtbl.create 42 in
@@ -179,17 +183,16 @@ let dot fmt v label bl =
   in
   List.iter f bl;
   let open Printf in
-  fprintf fmt "digraph {\n";
+  fprintf fmt "digraph {\n  rankdir = LR;\n";
   for d = !mind to !maxd do
     fprintf fmt "  { rank=same\n";
     List.iter
-      (fun n ->
-        fprintf fmt "    n%d [shape=plaintext label=\"%s\"];\n" n.serial (label n))
+      (fun n -> fprintf fmt "    n%d [%s];\n" n.serial (node_attr n |> attr))
       (Hashtbl.find_all levels d);
     fprintf fmt "  }\n"
   done;
   Seq.iter
-    (fun (c, n) -> fprintf fmt "  n%d -> n%d;\n" c.serial n.serial)
+    (fun (c, n) -> fprintf fmt "  n%d -> n%d [dir=back];\n" n.serial c.serial)
     (Hashtbl.to_seq_keys edges);
   fprintf fmt "}\n"
 ;;
@@ -206,34 +209,35 @@ let%expect_test "dot" =
   let rbaa = append rba 6 in
   let _rbaaa = append rbaa 7 in
   let global = view t in
-  dot stdout global (fun n -> data n |> string_of_int) t.roots;
+  dot stdout global ~node_attr:(fun n -> [ "label", data n |> string_of_int ]) t.roots;
   [%expect
     {|
     digraph {
+      rankdir = LR;
       { rank=same
-        n0 [shape=plaintext label="0"];
+        n0 [label="0"];
       }
       { rank=same
-        n1 [shape=plaintext label="1"];
-        n2 [shape=plaintext label="2"];
+        n1 [label="1"];
+        n2 [label="2"];
       }
       { rank=same
-        n3 [shape=plaintext label="3"];
-        n4 [shape=plaintext label="4"];
-        n5 [shape=plaintext label="5"];
+        n3 [label="3"];
+        n4 [label="4"];
+        n5 [label="5"];
       }
       { rank=same
-        n6 [shape=plaintext label="6"];
+        n6 [label="6"];
       }
       { rank=same
-        n7 [shape=plaintext label="7"];
+        n7 [label="7"];
       }
-      n2 -> n0;
-      n7 -> n6;
-      n5 -> n2;
-      n6 -> n4;
-      n3 -> n1;
-      n1 -> n0;
-      n4 -> n2;
+      n0 -> n2 [dir=back];
+      n6 -> n7 [dir=back];
+      n2 -> n5 [dir=back];
+      n4 -> n6 [dir=back];
+      n1 -> n3 [dir=back];
+      n0 -> n1 [dir=back];
+      n2 -> n4 [dir=back];
     } |}]
 ;;
