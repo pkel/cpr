@@ -50,19 +50,20 @@ let tasks =
     [ 0.25; 0.33; 0.5 ]
 ;;
 
-let print_dag oc sim =
+let print_dag oc (sim, rewards) =
   let open Simulator in
   let node_attr n =
     let open Simulator in
     let d = Dag.data n in
     [ ( "label"
       , Printf.sprintf
-          "%s | t:%.2f"
+          "%s | t:%.1f | r:%.2g"
           (match d.appended_by with
           | None -> "genesis"
           | Some 0 -> "a"
           | Some _ -> "d")
-          d.appended_at )
+          d.appended_at
+          rewards.(Dag.id n) )
     ; ( "color"
       , match Dag.children sim.global_view n with
         | [] -> "red"
@@ -80,14 +81,23 @@ let run (fpaths, task) =
   |> loop s.params
   |> fun sim ->
   List.iter2
-    (fun path _rw ->
+    (fun path rw ->
+      let rewards = Array.make (Dag.size sim.dag) 0. in
+      let () =
+        rw
+          sim.global_view
+          (fun n -> n.value)
+          (fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
+          (let (SNode n) = sim.nodes.(0) in
+           n.preferred n.state)
+      in
       let path =
         let open Fpath in
         v "." / "fig" / "chains" // path
       in
       let open Bos.OS in
       let d = Dir.create ~path:true (Fpath.parent path) in
-      Result.bind d (fun _ -> File.with_oc path print_dag sim)
+      Result.bind d (fun _ -> File.with_oc path print_dag (sim, rewards))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
     fpaths

@@ -201,7 +201,7 @@ let setup t =
     and reward_functions =
       List.map
         (function
-          | Constant -> B_k_lessleader.constant (1. /. float_of_int k)
+          | Constant -> B_k_lessleader.constant 1.
           | x ->
             let m =
               Printf.sprintf
@@ -228,7 +228,7 @@ let setup t =
             raise (Invalid_argument m))
     and reward_functions =
       List.map
-        (let reward = George.reward ~max_reward_per_block:1. ~k in
+        (let reward = George.reward ~max_reward_per_block:(float_of_int k) ~k in
          function
          | Constant -> reward ~punish:false ~discount:false
          | Discount -> reward ~punish:false ~discount:true

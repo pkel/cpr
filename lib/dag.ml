@@ -16,6 +16,7 @@ type 'a t =
 
 let create () = { size = 0; roots = [] }
 let roots t = t.roots
+let size t = t.size
 
 let append t parents data =
   let depth = List.fold_left (fun acc el -> max acc el.depth) 0 parents + 1 in
@@ -183,7 +184,9 @@ let dot fmt v ~node_attr bl =
   in
   List.iter f bl;
   let open Printf in
-  fprintf fmt "digraph {\n  rankdir = LR;\n";
+  fprintf fmt "digraph {\n";
+  fprintf fmt "  rankdir = LR;\n";
+  fprintf fmt "  node [shape=box];\n";
   for d = !mind to !maxd do
     fprintf fmt "  { rank=same\n";
     List.iter
@@ -214,6 +217,7 @@ let%expect_test "dot" =
     {|
     digraph {
       rankdir = LR;
+      node [shape=box];
       { rank=same
         n0 [label="0"];
       }

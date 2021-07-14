@@ -9,12 +9,16 @@ val create : unit -> 'a t
 val roots : 'a t -> 'a node list
 val append : 'a t -> 'a node list -> 'a -> 'a node
 
+(** number of nodes *)
+val size : 'a t -> int
+
 (** data access *)
 val data : 'a node -> 'a
 
 (** node equality *)
 val node_eq : 'a node -> 'a node -> bool
 
+(** [id n] ranges from [0] to [size t - 1] *)
 val id : 'a node -> int
 
 (** views can restrict visibility of nodes; views cannot be edited *)
