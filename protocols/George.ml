@@ -180,11 +180,10 @@ let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_fu
               tl
           in
           let x = if discount then (float_of_int depth +. 1.) /. k *. c else c in
+          reward x b;
           if punish
           then Dag.seq_history vote_view longest |> Seq.iter (reward x)
-          else (
-            reward x b;
-            List.iter (reward x) votes))
+          else List.iter (reward x) votes)
       (Dag.seq_history block_view head)
 ;;
 
