@@ -188,9 +188,9 @@ let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_fu
           if punish
           then
             (* TODO BUG. longest can be ambiguous *)
-            Dag.seq_history vote_view longest |> Seq.iter (reward x)
+            Dag.iterate_ancestors vote_view [ longest ] |> Seq.iter (reward x)
           else List.iter (reward x) votes)
-      (Dag.seq_history block_view head)
+      (Dag.iterate_ancestors block_view [ head ])
 ;;
 
 (* TODO: add tests for reward functions *)

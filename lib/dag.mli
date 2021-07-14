@@ -38,6 +38,8 @@ val children : 'a view -> 'a node -> 'a node list
 
 val leaves : 'a view -> 'a node -> 'a node list
 
+(* TODO common_ancestor should support any DAG not only trees *)
+
 (* Assumes that DAG is a tree and uses only the first parent *)
 val common_ancestor : 'a view -> 'a node -> 'a node -> 'a node option
 
@@ -47,9 +49,13 @@ val have_common_ancestor : 'a view -> 'a node -> 'a node -> bool
 (* Assumes that DAG is a tree and uses only the first parent *)
 val common_ancestor' : 'a view -> 'a node Seq.t -> 'a node option
 
-(* Iterate backwards in DAG from given node (inclusive) to root. If a node has multiple
-   parents, only the first parent is considered. *)
-val seq_history : 'a view -> 'a node -> 'a node Seq.t
+(** [iterate_descendants v nodes] recursively expands the DAG in direction of {!children}
+    ordered by depth and id. The starting nodes are included in the resulting sequence. *)
+val iterate_descendants : 'a view -> 'a node list -> 'a node Seq.t
+
+(** [iterate_ancestors v nodes] recursively expands the DAG in direction of {!parents}
+    ordered by depth and id. The starting nodes are included in the resulting sequence. *)
+val iterate_ancestors : 'a view -> 'a node list -> 'a node Seq.t
 
 (** Print nodes and all descendants in graphviz dot format *)
 val dot

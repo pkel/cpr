@@ -146,19 +146,88 @@ let common_ancestor' view seq =
     Seq.fold_left f (Some hd) tl
 ;;
 
-let seq_history view node () =
-  let ptr = ref node in
-  let rec next () =
-    match parents view !ptr with
-    | [] -> Seq.Nil
-    | hd :: _ ->
-      ptr := hd;
-      Seq.Cons (hd, next)
+let iterate order view entry_nodes =
+  let expand, key =
+    match order with
+    | `Downward -> children view, fun n -> n.depth, n.serial
+    | `Upward -> parents view, fun n -> -n.depth, -n.serial
   in
-  Seq.Cons (node, next)
+  let queue = List.fold_left (fun q n -> OrderedQueue.queue (key n) n q) in
+  let init = -1, queue (OrderedQueue.init compare) entry_nodes in
+  Seq.unfold
+    (fun (last, q) ->
+      OrderedQueue.dequeue q
+      |> Option.map (fun (_depth, n, q) ->
+             (n.serial <> last, n), (n.serial, expand n |> queue q)))
+    init
+  |> Seq.filter_map (fun (keep, n) -> if keep then Some n else None)
 ;;
 
+let%expect_test "iterate" =
+  let t = create () in
+  let r = append t [] 0 in
+  let append r = append t [ r ] in
+  let ra = append r 1
+  and rb = append r 2 in
+  let raa = append ra 3
+  and rba = append rb 4
+  and rbb = append rb 5 in
+  let rbaa = append rba 6 in
+  let rbaaa = append rbaa 7 in
+  let global = view t in
+  print global string_of_int r;
+  let print n = data n |> string_of_int |> print_string in
+  print_endline "Upward";
+  Seq.iter print (iterate `Upward global [ rbaaa ]);
+  print_newline ();
+  Seq.iter print (iterate `Upward global [ rbb ]);
+  print_newline ();
+  Seq.iter print (iterate `Upward global [ raa ]);
+  print_newline ();
+  Seq.iter print (iterate `Upward global [ ra; rb ]);
+  print_newline ();
+  Seq.iter print (iterate `Upward global [ ra; rbb ]);
+  print_newline ();
+  Seq.iter print (iterate `Upward global [ raa; rbb; rbaaa ]);
+  print_newline ();
+  print_endline "Downward";
+  Seq.iter print (iterate `Downward global [ r ]);
+  print_newline ();
+  Seq.iter print (iterate `Downward global [ ra ]);
+  print_newline ();
+  Seq.iter print (iterate `Downward global [ rb ]);
+  print_newline ();
+  Seq.iter print (iterate `Downward global [ rbaa; raa ]);
+  print_newline ();
+  [%expect
+    {|
+    0
+    |-- 2
+    |   |-- 5
+    |   |-- 4
+    |       |-- 6
+    |           |-- 7
+    |-- 1
+        |-- 3
+    Upward
+    76420
+    520
+    310
+    210
+    5210
+    76543210
+    Downward
+    01234567
+    13
+    24567
+    367 |}]
+;;
+
+let iterate_descendants view = iterate `Downward view
+let iterate_ancestors view = iterate `Upward view
+
 let dot fmt ?(legend = []) v ~node_attr bl =
+  (* TODO: use iterators *)
   let attr l =
     let f (k, v) = Printf.sprintf "%s=\"%s\"" k v in
     List.map f l |> String.concat " "

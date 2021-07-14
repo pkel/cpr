@@ -162,7 +162,7 @@ let constant c : ('env, node) reward_function =
     (fun b ->
       reward c b;
       List.iter (reward c) (Dag.parents votes b))
-    (Dag.seq_history blocks head)
+    (Dag.iterate_ancestors blocks [ head ])
 ;;
 
 type 'a selfish_state =

@@ -70,5 +70,5 @@ let%test "convergence" =
 ;;
 
 let constant c : ('env, block) reward_function =
- fun view _read reward head -> Seq.iter (reward c) (Dag.seq_history view head)
+ fun view _read reward head -> Seq.iter (reward c) (Dag.iterate_ancestors view [ head ])
 ;;
