@@ -158,7 +158,9 @@ let iterate order view entry_nodes =
     (fun (last, q) ->
       OrderedQueue.dequeue q
       |> Option.map (fun (_depth, n, q) ->
-             (n.serial <> last, n), (n.serial, expand n |> queue q)))
+             let fresh = n.serial <> last in
+             let q = if fresh then expand n |> queue q else q in
+             (fresh, n), (n.serial, q)))
     init
   |> Seq.filter_map (fun (keep, n) -> if keep then Some n else None)
 ;;
