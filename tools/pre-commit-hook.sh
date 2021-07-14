@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 fail () {
   echo "ERROR: pre-commit test failed: $1"
   false

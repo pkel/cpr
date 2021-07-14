@@ -9,6 +9,7 @@ type height =
 let is_vote h = h.vote > 0
 let is_block h = h.vote = 0
 
+(* TODO BUG: more than k pows might be referenced. Check nested references. *)
 let dag_invariant ~k ~pow parents child =
   child.block >= 0
   && child.vote >= 0
@@ -88,7 +89,10 @@ let honest ~k ctx =
         let b =
           actions.extend_dag
             ~pow
-            (lb :: first (k - 1) votes) (* TODO first should be first received *)
+            (* TODO Bug: referencing the last k received leads to more than
+             * k proof-of-work per block *)
+            (lb :: first (k - 1) votes)
+            (* TODO first should be first received *)
             { block = lb'.block + 1; vote = 0 }
         in
         let () = actions.share b in
@@ -182,7 +186,9 @@ let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_fu
           let x = if discount then (float_of_int depth +. 1.) /. k *. c else c in
           reward x b;
           if punish
-          then Dag.seq_history vote_view longest |> Seq.iter (reward x)
+          then
+            (* TODO BUG. longest can be ambiguous *)
+            Dag.seq_history vote_view longest |> Seq.iter (reward x)
           else List.iter (reward x) votes)
       (Dag.seq_history block_view head)
 ;;

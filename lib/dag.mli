@@ -54,6 +54,7 @@ val seq_history : 'a view -> 'a node -> 'a node Seq.t
 (** Print nodes and all descendants in graphviz dot format *)
 val dot
   :  out_channel
+  -> ?legend:(string * string) list
   -> 'a view
   -> node_attr:('a node -> (string * string) list)
   -> 'a node list

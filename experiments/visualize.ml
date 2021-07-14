@@ -2,7 +2,7 @@ open Cpr_lib
 open Models
 
 let tasks0 =
-  let fpaths ~alpha task =
+  let fpaths_and_legends ~alpha task =
     let open Fpath in
     List.map
       (fun is ->
@@ -17,7 +17,15 @@ let tasks0 =
             (tag_incentive_scheme is)
             (tag_strategy task.strategy)
         in
-        v a)
+        ( v a
+        , [ "Network", describe_network task.network
+          ; "Scenario", describe_scenario task.scenario
+          ; "Attacker Compute (α)", string_of_float alpha
+          ; "Protocol", describe_protocol task.protocol
+          ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
+          ; "Incentive Scheme", describe_incentive_scheme is
+          ; "Attack Strategy", describe_strategy task.strategy
+          ] ))
       task.incentive_schemes
   and label_node = function
     | None -> "genesis"
@@ -38,7 +46,7 @@ let tasks0 =
             ; activation_delay = 1.
             }
           in
-          t, fpaths ~alpha t, label_node)
+          t, fpaths_and_legends ~alpha t, label_node)
         [ Nakamoto, [ Constant ], Honest, 10
         ; B_k_lessleadership { k = 16 }, [ Constant ], Honest, 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], Honest, 100
@@ -54,7 +62,7 @@ let tasks0 =
 ;;
 
 let tasks1 =
-  let fpaths ~activation_delay task =
+  let fpaths_and_legends ~activation_delay task =
     let open Fpath in
     List.map
       (fun is ->
@@ -68,7 +76,14 @@ let tasks1 =
             (pow_per_block task.protocol)
             (tag_incentive_scheme is)
         in
-        v a)
+        ( v a
+        , [ "Network", describe_network task.network
+          ; "Scenario", describe_scenario task.scenario
+          ; "Activation Delay", string_of_float activation_delay
+          ; "Protocol", describe_protocol task.protocol
+          ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
+          ; "Incentive Scheme", describe_incentive_scheme is
+          ] ))
       task.incentive_schemes
   and label_node = function
     | Some n -> "n:" ^ string_of_int n
@@ -88,7 +103,7 @@ let tasks1 =
             ; activation_delay
             }
           in
-          t, fpaths ~activation_delay t, label_node)
+          t, fpaths_and_legends ~activation_delay t, label_node)
         [ Nakamoto, [ Constant ], 10
         ; B_k_lessleadership { k = 16 }, [ Constant ], 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], 100
@@ -103,7 +118,7 @@ let tasks1 =
     [ 1.; 2.; 4. ]
 ;;
 
-let print_dag oc (sim, rewards, label_node) =
+let print_dag oc (sim, rewards, legend, label_node) =
   let open Simulator in
   let node_attr n =
     let open Simulator in
@@ -120,10 +135,10 @@ let print_dag oc (sim, rewards, label_node) =
         | _ -> "black" )
     ]
   in
-  Dag.dot oc sim.global_view ~node_attr (Dag.roots sim.dag) |> Result.ok
+  Dag.dot oc ~legend sim.global_view ~node_attr (Dag.roots sim.dag) |> Result.ok
 ;;
 
-let run (task, fpaths, label_node) =
+let run (task, fpaths_and_legends, label_node) =
   let (S s) = setup task in
   (* simulate *)
   let open Simulator in
@@ -137,7 +152,7 @@ let run (task, fpaths, label_node) =
     |> Option.get
   in
   List.iter2
-    (fun path rw ->
+    (fun (path, legend) rw ->
       let rewards = Array.make (Dag.size sim.dag) 0. in
       let () =
         rw
@@ -152,10 +167,11 @@ let run (task, fpaths, label_node) =
       in
       let open Bos.OS in
       let d = Dir.create ~path:true (Fpath.parent path) in
-      Result.bind d (fun _ -> File.with_oc path print_dag (sim, rewards, label_node))
+      Result.bind d (fun _ ->
+          File.with_oc path print_dag (sim, rewards, legend, label_node))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
-    fpaths
+    fpaths_and_legends
     s.reward_functions
 ;;
 

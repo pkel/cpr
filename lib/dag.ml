@@ -158,7 +158,7 @@ let seq_history view node () =
   Seq.Cons (node, next)
 ;;
 
-let dot fmt v ~node_attr bl =
+let dot fmt ?(legend = []) v ~node_attr bl =
   let attr l =
     let f (k, v) = Printf.sprintf "%s=\"%s\"" k v in
     List.map f l |> String.concat " "
@@ -187,6 +187,14 @@ let dot fmt v ~node_attr bl =
   fprintf fmt "digraph {\n";
   fprintf fmt "  rankdir = LR;\n";
   fprintf fmt "  node [shape=box];\n";
+  if legend <> []
+  then
+    Printf.fprintf
+      fmt
+      "  %s;\n"
+      (List.map (fun (k, v) -> Printf.sprintf "{%s|%s}" k v) legend
+      |> String.concat "|"
+      |> Printf.sprintf "legend [shape=Mrecord label=\"%s\"]");
   for d = !mind to !maxd do
     fprintf fmt "  { rank=same\n";
     List.iter
