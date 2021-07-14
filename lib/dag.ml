@@ -227,31 +227,21 @@ let iterate_descendants view = iterate `Downward view
 let iterate_ancestors view = iterate `Upward view
 
 let dot fmt ?(legend = []) v ~node_attr bl =
-  (* TODO: use iterators *)
   let attr l =
     let f (k, v) = Printf.sprintf "%s=\"%s\"" k v in
     List.map f l |> String.concat " "
+  and _, level, levels, edges =
+    Seq.fold_left
+      (fun (d, level, levels, edges) n ->
+        let edges = List.rev_map (fun c -> c, n) (children v n) :: edges in
+        if d <> n.depth && level <> []
+        then n.depth, [ n ], List.rev level :: levels, edges
+        else n.depth, n :: level, levels, edges)
+      (-1, [], [], [])
+      (iterate_descendants v bl)
   in
-  let edges = Hashtbl.create 42
-  and nodes = Hashtbl.create 42
-  and levels = Hashtbl.create 42 in
-  let mind = ref max_int
-  and maxd = ref min_int in
-  let rec f n =
-    if Hashtbl.mem nodes n.serial
-    then ()
-    else (
-      let cs = children v n in
-      let () =
-        mind := min !mind n.depth;
-        maxd := max !maxd n.depth;
-        Hashtbl.add levels n.depth n;
-        Hashtbl.add nodes n.serial ();
-        List.iter (fun c -> Hashtbl.replace edges (c, n) ()) cs
-      in
-      List.iter f cs)
-  in
-  List.iter f bl;
+  let levels = level :: levels |> List.rev
+  and edges = List.rev edges in
   let open Printf in
   fprintf fmt "digraph {\n";
   fprintf fmt "  rankdir = LR;\n";
@@ -264,16 +254,17 @@ let dot fmt ?(legend = []) v ~node_attr bl =
       (List.map (fun (k, v) -> Printf.sprintf "{%s|%s}" k v) legend
       |> String.concat "|"
       |> Printf.sprintf "legend [shape=Mrecord label=\"%s\"]");
-  for d = !mind to !maxd do
-    fprintf fmt "  { rank=same\n";
-    List.iter
-      (fun n -> fprintf fmt "    n%d [%s];\n" n.serial (node_attr n |> attr))
-      (Hashtbl.find_all levels d);
-    fprintf fmt "  }\n"
-  done;
-  Seq.iter
-    (fun (c, n) -> fprintf fmt "  n%d -> n%d [dir=back];\n" n.serial c.serial)
-    (Hashtbl.to_seq_keys edges);
+  List.iter
+    (fun level ->
+      fprintf fmt "  { rank=same\n";
+      List.iter
+        (fun n -> fprintf fmt "    n%d [%s];\n" n.serial (node_attr n |> attr))
+        level;
+      fprintf fmt "  }\n")
+    levels;
+  List.iter
+    (List.iter (fun (c, n) -> fprintf fmt "  n%d -> n%d [dir=back];\n" n.serial c.serial))
+    edges;
   fprintf fmt "}\n"
 ;;
 
@@ -313,12 +304,12 @@ let%expect_test "dot" =
       { rank=same
         n7 [label="7"];
       }
+      n0 -> n1 [dir=back];
       n0 -> n2 [dir=back];
-      n6 -> n7 [dir=back];
+      n1 -> n3 [dir=back];
+      n2 -> n4 [dir=back];
       n2 -> n5 [dir=back];
       n4 -> n6 [dir=back];
-      n1 -> n3 [dir=back];
-      n0 -> n1 [dir=back];
-      n2 -> n4 [dir=back];
+      n6 -> n7 [dir=back];
     } |}]
 ;;
