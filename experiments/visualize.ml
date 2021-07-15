@@ -111,14 +111,14 @@ let tasks1 =
         ; B_k_lessleadership { k = 16 }, [ Constant ], 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], 100
         ; B_k_lessleadership { k = 4 }, [ Constant ], 50
-        ; George { k = 16 }, [ Constant; Punish; Discount; Hybrid ], 48
-        ; George { k = 8 }, [ Constant; Punish; Discount; Hybrid ], 24
-        ; George { k = 4 }, [ Constant; Punish; Discount; Hybrid ], 12
+        ; George { k = 16 }, [ Constant; Punish; Discount; Hybrid ], 100
+        ; George { k = 8 }, [ Constant; Punish; Discount; Hybrid ], 50
+        ; George { k = 4 }, [ Constant; Punish; Discount; Hybrid ], 30
         ])
     [ 1.; 2.; 4. ]
 ;;
 
-let print_dag oc (sim, rewards, legend, label_node) =
+let print_dag oc (sim, confirmed, rewards, legend, label_node) =
   let open Simulator in
   let node_attr n =
     let open Simulator in
@@ -129,10 +129,7 @@ let print_dag oc (sim, rewards, legend, label_node) =
           (label_node d.appended_by)
           d.appended_at
           rewards.(Dag.id n) )
-    ; ( "color"
-      , match Dag.children sim.global_view n with
-        | [] -> "red"
-        | _ -> "black" )
+    ; ("color", if confirmed.(Dag.id n) then "black" else "red")
     ]
   in
   Dag.dot oc ~legend sim.global_view ~node_attr (Dag.roots sim.dag) |> Result.ok
@@ -151,15 +148,19 @@ let run (task, fpaths_and_legends, label_node) =
     |> Dag.common_ancestor' sim.global_view
     |> Option.get
   in
+  let confirmed = Array.make (Dag.size sim.dag) false
+  and rewards = Array.make (Dag.size sim.dag) 0. in
   List.iter2
     (fun (path, legend) rw ->
-      let rewards = Array.make (Dag.size sim.dag) 0. in
       let () =
         Seq.iter
-          (rw
-             ~view:sim.global_view
-             ~read:(fun n -> n.value)
-             ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x))
+          (fun n ->
+            confirmed.(Dag.id n) <- true;
+            rw
+              ~view:sim.global_view
+              ~read:(fun n -> n.value)
+              ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
+              n)
           (Dag.iterate_ancestors sim.global_view [ head ])
       in
       let path =
@@ -169,7 +170,7 @@ let run (task, fpaths_and_legends, label_node) =
       let open Bos.OS in
       let d = Dir.create ~path:true (Fpath.parent path) in
       Result.bind d (fun _ ->
-          File.with_oc path print_dag (sim, rewards, legend, label_node))
+          File.with_oc path print_dag (sim, confirmed, rewards, legend, label_node))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
     fpaths_and_legends
