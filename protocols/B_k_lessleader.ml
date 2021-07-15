@@ -17,6 +17,7 @@ let is_block = function
   | _ -> false
 ;;
 
+(* TODO verify vote uniqueness *)
 let dag_validity ~k ~pow ~view ~read n =
   let data n = Dag.data n |> read in
   match pow, data n, Dag.parents view n with

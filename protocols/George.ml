@@ -10,6 +10,7 @@ let is_vote h = h.vote > 0
 let is_block h = h.vote = 0
 
 (* TODO BUG: more than k pows might be referenced. Check nested references. *)
+(* TODO verify vote uniqueness *)
 let dag_validity ~k ~pow ~view ~read n =
   let child = Dag.data n |> read in
   child.block >= 0
