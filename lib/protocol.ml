@@ -40,11 +40,10 @@ type ('env, 'data) context =
 
 type ('env, 'data, 'pow) protocol =
   { dag_roots : 'data list (** Specify the roots of the global DAG. *)
-  ; dag_invariant : pow:bool -> 'data list -> 'data -> bool
-        (** Restrict the set of valid DAGs. The simulator checks [dag_invariant ~pow
-            parents data] for each extension proposed by network nodes via
-            {Context.extend_dag}. Extension validity can depend on the proof-of-work
-            authorization, parent data, and extension data. *)
+  ; dag_validity :
+      pow:bool -> view:'env Dag.view -> read:('env -> 'data) -> 'env Dag.node -> bool
+        (** Restrict DAG extensions. The simulator checks validity for each appended DAG
+            node. Invalid extensions are not delivered to other nodes. *)
   ; honest : ('env, 'data) context -> ('env, 'data, 'pow) node
   }
 

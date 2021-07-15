@@ -96,7 +96,8 @@ let init
           Dag.filter
             (fun x -> Float.Array.get (Dag.data x).delivered_at node <= clock.now)
             global_view
-        and received_at x = Float.Array.get x.delivered_at node
+        in
+        let received_at x = Float.Array.get x.delivered_at node
         and mined_myself x = x.appended_by = Some node
         and share x = disseminate params clock node x
         and extend_dag ?pow parents child =
@@ -109,24 +110,23 @@ let init
             | Some { fresh = false } -> raise (Invalid_argument "pow was used before")
             | None -> false
           in
-          let () =
-            (* check dag invariant *)
-            let parents = List.map (fun x -> (Dag.data x).value) parents in
-            if not (protocol.dag_invariant ~pow parents child)
-            then raise (Invalid_argument "dag invariant violated")
+          let node =
+            Dag.append
+              dag
+              parents
+              { value = child
+              ; delivered_at =
+                  Float.Array.init n_nodes (fun i ->
+                      if i = node then clock.now else Float.infinity)
+              ; appended_at = clock.now
+              ; appended_by = Some node
+              }
           in
-          let delivered_at =
-            Float.Array.init n_nodes (fun i ->
-                if i = node then clock.now else Float.infinity)
-          in
-          Dag.append
-            dag
-            parents
-            { value = child
-            ; delivered_at
-            ; appended_at = clock.now
-            ; appended_by = Some node
-            }
+          if not (protocol.dag_validity ~pow ~view ~read node)
+          then
+            (* We assume that invalid extensions are never delivered elsewhere *)
+            failwith "invalid DAG extension";
+          node
         in
         let (Node participant) =
           let ctx = { view; read; received_at; mined_myself } in

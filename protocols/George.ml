@@ -10,20 +10,23 @@ let is_vote h = h.vote > 0
 let is_block h = h.vote = 0
 
 (* TODO BUG: more than k pows might be referenced. Check nested references. *)
-let dag_invariant ~k ~pow parents child =
+let dag_validity ~k ~pow ~view ~read n =
+  let child = Dag.data n |> read in
   child.block >= 0
   && child.vote >= 0
   && child.vote < k
   && pow
   &&
-  match is_vote child, parents with
-  | true, [ parent ] ->
+  match Dag.data n |> read |> is_vote, Dag.parents view n with
+  | true, [ p ] ->
     (* child is vote *)
+    let parent = Dag.data p |> read in
     child.vote = parent.vote + 1
-  | false, parent :: votes ->
+  | false, p :: votes ->
+    let parent = Dag.data p |> read in
     (* child is block *)
     is_block parent
-    && List.for_all is_vote votes
+    && List.for_all (fun n -> Dag.data n |> read |> is_vote) votes
     && List.length votes = k - 1
     && child.block = parent.block + 1
     && child.vote = 0
@@ -126,7 +129,7 @@ let honest ~k ctx =
   Node { init; handler; preferred = fst }
 ;;
 
-let protocol ~k = { honest = honest ~k; dag_invariant = dag_invariant ~k; dag_roots }
+let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots }
 
 let%test "convergence" =
   let open Simulator in

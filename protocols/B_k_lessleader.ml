@@ -7,17 +7,28 @@ type node =
   | Vote
   | Block of block
 
-let dag_invariant ~k ~pow parents child =
-  match pow, parents, child with
-  | true, [ Block _ ], Vote -> true
-  | true, Block b :: votes, Block b' ->
-    List.for_all
-      (function
-        | Vote -> true
-        | _ -> false)
-      votes
-    && List.length votes = k - 1
-    && b.height + 1 = b'.height
+let is_vote = function
+  | Vote -> true
+  | _ -> false
+;;
+
+let is_block = function
+  | Block _ -> true
+  | _ -> false
+;;
+
+let dag_validity ~k ~pow ~view ~read n =
+  let data n = Dag.data n |> read in
+  match pow, data n, Dag.parents view n with
+  | false, _, _ -> false
+  | true, Vote, [ p ] -> data p |> is_block
+  | true, Block b', hd :: tl ->
+    (match data hd with
+    | Block b ->
+      List.for_all (fun n -> data n |> is_vote) tl
+      && List.length tl = k - 1
+      && b.height + 1 = b'.height
+    | _ -> false)
   | _ -> false
 ;;
 
@@ -27,16 +38,6 @@ let init ~roots =
   match roots with
   | [ genesis ] -> genesis
   | _ -> failwith "invalid roots"
-;;
-
-let is_vote = function
-  | Vote -> true
-  | _ -> false
-;;
-
-let is_block = function
-  | Block _ -> true
-  | _ -> false
 ;;
 
 let last_block ctx gnode =
@@ -117,7 +118,7 @@ let honest ~k ctx =
   Node { init; handler; preferred }
 ;;
 
-let protocol ~k = { honest = honest ~k; dag_invariant = dag_invariant ~k; dag_roots }
+let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots }
 
 let%test "convergence" =
   let open Simulator in

@@ -5,9 +5,13 @@ type block = { height : int }
 
 let dag_roots = [ { height = 0 } ]
 
-let dag_invariant ~pow parents child =
-  match pow, parents with
-  | true, [ p ] -> child.height = p.height + 1
+let dag_validity ~pow ~view ~read n =
+  let data n = Dag.data n |> read in
+  match pow, Dag.parents view n with
+  | true, [ p ] ->
+    let child = data n
+    and p = data p in
+    child.height = p.height + 1
   | _ -> false
 ;;
 
@@ -42,7 +46,7 @@ let handler ctx actions preferred =
 let protocol : _ protocol =
   let preferred x = x in
   let honest ctx = Node { handler = handler ctx; init; preferred } in
-  { dag_roots; dag_invariant; honest }
+  { dag_roots; dag_validity; honest }
 ;;
 
 let%test "convergence" =
