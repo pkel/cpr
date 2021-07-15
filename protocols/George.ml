@@ -49,21 +49,18 @@ let rec last_block ctx gnode =
     match Dag.parents ctx.view gnode with
     | [] -> None (* gnode not connected yet / visibility *)
     | [ gnode ] -> last_block ctx gnode
-    | _ -> failwith "invalid dag")
+    | _ -> failwith "invalid dag" (* votes have only one parent by dag_validity *))
 ;;
 
-(* votes have only one parent by dag_invariant *)
-
-let first n =
-  let rec h n acc l =
-    if n <= 0
-    then List.rev acc
-    else (
-      match l with
-      | [] -> raise (Invalid_argument "list too short")
-      | hd :: tl -> h (n - 1) (hd :: acc) tl)
-  in
-  h n []
+let first by n l =
+  let a = Array.of_list l in
+  if Array.length a < n then raise (Invalid_argument "list too short");
+  let () = Array.sort (fun a b -> compare (by a) (by b)) a in
+  let l = ref [] in
+  for i = 0 to n - 1 do
+    l := a.(i) :: !l
+  done;
+  !l
 ;;
 
 (* recursive version of children *)
@@ -92,10 +89,8 @@ let honest ~k ctx =
         let b =
           actions.extend_dag
             ~pow
-            (* TODO Bug: referencing the last k received leads to more than
-             * k proof-of-work per block *)
-            (lb :: first (k - 1) votes)
-            (* TODO first should be first received *)
+            (* TODO Bug: transitive closure of last k received votes can be bigger than k *)
+            (lb :: first (fun x -> Dag.data x |> ctx.received_at) (k - 1) votes)
             { block = lb'.block + 1; vote = 0 }
         in
         let () = actions.share b in
