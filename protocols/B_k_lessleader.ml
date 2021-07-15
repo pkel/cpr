@@ -153,17 +153,7 @@ let%test "convergence" =
     ]
 ;;
 
-let constant c : ('env, node) reward_function =
- fun view read reward head ->
-  let data n = Dag.data n |> read in
-  let blocks = Dag.filter (fun x -> data x |> is_block) view
-  and votes = Dag.filter (fun x -> data x |> is_vote) view in
-  Seq.iter
-    (fun b ->
-      reward c b;
-      List.iter (reward c) (Dag.parents votes b))
-    (Dag.iterate_ancestors blocks [ head ])
-;;
+let constant c : ('env, node) reward_function = fun ~view:_ ~read:_ ~assign -> assign c
 
 type 'a selfish_state =
   { public_head : 'a Dag.node

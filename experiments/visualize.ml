@@ -155,11 +155,12 @@ let run (task, fpaths_and_legends, label_node) =
     (fun (path, legend) rw ->
       let rewards = Array.make (Dag.size sim.dag) 0. in
       let () =
-        rw
-          sim.global_view
-          (fun n -> n.value)
-          (fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
-          head
+        Seq.iter
+          (rw
+             ~view:sim.global_view
+             ~read:(fun n -> n.value)
+             ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x))
+          (Dag.iterate_ancestors sim.global_view [ head ])
       in
       let path =
         let open Fpath in

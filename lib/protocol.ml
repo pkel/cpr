@@ -48,13 +48,11 @@ type ('env, 'data, 'pow) protocol =
   ; honest : ('env, 'data) context -> ('env, 'data, 'pow) node
   }
 
-(** Calculate and assign rewards to nodes from the roots of the DAG to the given node
-    (backwards). *)
+(** Calculate and assign rewards to a nodes and (potentially) its neighbours. Use this
+    together with {!Dag.iterate_ancestors}. *)
 type ('env, 'data) reward_function =
-  'env Dag.view
-  -> ('env -> 'data)
-  -> ((* assign a reward to a DAG node *)
-      float -> 'env Dag.node -> unit)
-  -> (* head of the DAG/chain. Rewards are calculated for the complete history. *)
-     'env Dag.node
+  view:'env Dag.view
+  -> read:('env -> 'data)
+  -> assign:(float -> 'env Dag.node -> unit)
+  -> 'env Dag.node
   -> unit
