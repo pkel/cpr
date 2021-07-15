@@ -8,6 +8,7 @@ homepage: "https://github.com/pkel/cpr"
 bug-reports: "https://github.com/pkel/cpr/issues"
 depends: [
   "dune" {>= "2.8"}
+  "bos" {>= "0.2.0"}
   "ocaml" {>= "4.11"}
   "owl-base" {>= "1.0"}
   "cmdliner" {>= "1.0"}

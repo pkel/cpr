@@ -12,6 +12,7 @@
  (name cpr)
  (synopsis "Simulating various DAG-based proof-of-work consensus protocols")
  (depends
+  (bos (>= 0.2.0))
   (ocaml (>= 4.11))
   (owl-base (>= 1.0))
   (cmdliner (>= 1.0))
