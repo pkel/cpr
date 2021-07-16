@@ -8,7 +8,12 @@ let networks =
 let protocols =
   let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
   List.concat
-    [ List.map (fun k -> B_k_lessleadership { k }, [ Constant ]) k
+    [ List.map
+        (fun k ->
+          ( B_k_lessleadership { k }
+          , [ Constant ]
+          , [ Honest; SelfishSimple; SelfishAdvanced ] ))
+        k
       (* ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k *)
     ]
 ;;
@@ -19,19 +24,22 @@ let tasks ~n_activations =
   List.concat_map
     (fun network ->
       List.concat_map
-        (fun (protocol, incentive_schemes) ->
-          List.map
-            (fun block_interval ->
-              { network
-              ; incentive_schemes
-              ; protocol
-              ; activations = n_activations
-              ; scenario = FirstSelfish
-              ; strategy = SelfishSimple
-              ; activation_delay =
-                  block_interval /. (pow_per_block protocol |> float_of_int)
-              })
-            block_intervals)
+        (fun (protocol, incentive_schemes, strategies) ->
+          List.concat_map
+            (fun strategy ->
+              List.map
+                (fun block_interval ->
+                  { network
+                  ; incentive_schemes
+                  ; protocol
+                  ; activations = n_activations
+                  ; scenario = FirstSelfish
+                  ; strategy
+                  ; activation_delay =
+                      block_interval /. (pow_per_block protocol |> float_of_int)
+                  })
+                block_intervals)
+            strategies)
         protocols)
     networks
 ;;

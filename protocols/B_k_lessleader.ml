@@ -41,8 +41,30 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
+type ('env, 'data) extended_context =
+  { view : 'env Dag.view
+  ; data : 'env Dag.node -> 'data
+  ; votes_only : 'env Dag.view
+  ; blocks_only : 'env Dag.view
+  ; received_at : 'env Dag.node -> float
+  ; mined_myself : 'env Dag.node -> bool
+  }
+
+let extend_ctx (x : _ Protocol.context) =
+  let data n = Dag.data n |> x.read
+  and mined_myself n = Dag.data n |> x.mined_myself
+  and received_at n = Dag.data n |> x.received_at in
+  { view = x.view
+  ; data
+  ; votes_only = Dag.filter (fun n -> data n |> is_vote) x.view
+  ; blocks_only = Dag.filter (fun n -> data n |> is_block) x.view
+  ; received_at
+  ; mined_myself
+  }
+;;
+
 let last_block ctx gnode =
-  match Dag.data gnode |> ctx.read with
+  match ctx.data gnode with
   | Block _ -> Some gnode
   | Vote ->
     (match Dag.parents ctx.view gnode with
@@ -69,19 +91,17 @@ let first by n l =
 ;;
 
 let honest ~k ctx =
-  let data n = Dag.data n |> ctx.read in
-  let votes_only = Dag.filter (fun n -> data n |> is_vote) ctx.view
-  and blocks_only = Dag.filter (fun n -> data n |> is_block) ctx.view in
+  let ctx = extend_ctx ctx in
   let handler actions preferred = function
     | Activate pow ->
-      let votes = Dag.children votes_only preferred in
+      let votes = Dag.children ctx.votes_only preferred in
       if List.length votes >= k - 1
       then (
-        let head = block_data_exn data preferred in
+        let head = block_data_exn ctx.data preferred in
         let head' =
           actions.extend_dag
             ~pow
-            (preferred :: first (fun x -> Dag.data x |> ctx.received_at) (k - 1) votes)
+            (preferred :: first ctx.received_at (k - 1) votes)
             (Block { height = head.height + 1 })
         in
         actions.share head';
@@ -96,23 +116,23 @@ let honest ~k ctx =
       | None -> preferred
       | Some gblock ->
         (* Only consider block if its heritage is visible. *)
-        if Dag.have_common_ancestor blocks_only gblock preferred
+        if Dag.have_common_ancestor ctx.blocks_only gblock preferred
         then (
           let consider gpref gblock =
-            let pref = block_data_exn data gpref
-            and block = block_data_exn data gblock in
+            let pref = block_data_exn ctx.data gpref
+            and block = block_data_exn ctx.data gblock in
             if block.height > pref.height
                || (block.height = pref.height
-                  && List.length (Dag.children votes_only gblock)
-                     > List.length (Dag.children votes_only gpref))
+                  && List.length (Dag.children ctx.votes_only gblock)
+                     > List.length (Dag.children ctx.votes_only gpref))
             then gblock
             else gpref
           in
           (* delayed block might connect nodes delivered previously *)
           let preferred =
-            List.fold_left consider preferred (Dag.leaves blocks_only gblock)
+            List.fold_left consider preferred (Dag.leaves ctx.blocks_only gblock)
           in
-          assert (is_block (Dag.data preferred |> ctx.read));
+          assert (ctx.data preferred |> is_block);
           preferred)
         else preferred)
   and preferred x = x in
@@ -163,26 +183,138 @@ type 'a selfish_state =
   ; withheld : 'a Dag.node list
   }
 
-let selfish ~k ctx =
-  let data n = Dag.data n |> ctx.read in
-  let votes_only = Dag.filter (fun n -> data n |> is_vote) ctx.view
-  and blocks_only = Dag.filter (fun n -> data n |> is_block) ctx.view in
+let preference ctx ~preferred:gpref ~consider:gblock =
+  let pref = block_data_exn ctx.data gpref
+  and block = block_data_exn ctx.data gblock in
+  if block.height > pref.height
+     || (block.height = pref.height
+        && List.length (Dag.children ctx.votes_only gblock)
+           > List.length (Dag.children ctx.votes_only gpref))
+  then gblock
+  else gpref
+;;
+
+let strategy tactic ~k ctx actions state =
+  let release nodes state =
+    let ht = Hashtbl.create k in
+    List.iter (fun n -> Hashtbl.replace ht (Dag.id n) true) state.withheld;
+    List.iter
+      (fun n ->
+        let id = Dag.id n in
+        match Hashtbl.find_opt ht id with
+        | Some true ->
+          Hashtbl.replace ht id false;
+          actions.share n
+        | _ -> ())
+      nodes;
+    { state with
+      withheld =
+        List.filter
+          (fun n ->
+            match Hashtbl.find_opt ht (Dag.id n) with
+            | Some true -> true
+            | _ -> false)
+          state.withheld
+    }
+  in
+  let public = block_data_exn ctx.data state.public_head
+  and privat = block_data_exn ctx.data state.private_head in
+  match tactic with
+  | `Honest ->
+    let state =
+      (* adopt freshly mined block, if any *)
+      if privat.height > public.height
+      then { state with public_head = state.private_head }
+      else state
+    in
+    release
+      state.withheld
+      { state with
+        private_head =
+          preference ctx ~preferred:state.private_head ~consider:state.public_head
+      }
+  | `Simple ->
+    (* withhold until I can propose block / George's proof-packing *)
+    if public.height > privat.height
+    then (* abort *)
+      release state.withheld { state with private_head = state.public_head }
+    else if public.height < privat.height
+    then
+      (* overwrite public chain *)
+      release state.withheld { state with public_head = state.private_head }
+    else (* continue withholding *) state
+  | `Advanced ->
+    (* withhold until defender can propose block / George's long-range *)
+    if Dag.node_eq state.public_head state.private_head
+    then (* continue *)
+      state
+    else if Dag.node_eq
+              state.public_head
+              (preference ctx ~preferred:state.private_head ~consider:state.public_head)
+    then
+      (* we are falling behind; abort *)
+      release state.withheld { state with private_head = state.public_head }
+    else (
+      (* overwrite public chain *)
+      let npubv = Dag.children ctx.votes_only state.public_head |> List.length in
+      let releasehead =
+        (* release least number of blocks *)
+        let rec f b =
+          if (block_data_exn ctx.data b).height > public.height
+          then (
+            match Dag.parents ctx.blocks_only b with
+            | [ p ] -> f p
+            | _ -> failwith "invalid DAG")
+          else b
+        in
+        f state.private_head
+      in
+      let privv = Dag.children ctx.votes_only releasehead in
+      if List.length privv > npubv
+      then (
+        (* overwrite feasible *)
+        let releaseheight = (block_data_exn ctx.data state.public_head).height in
+        assert ((block_data_exn ctx.data releasehead).height = releaseheight);
+        let blockdeps =
+          List.filter
+            (fun n ->
+              match ctx.data n with
+              | Block b -> b.height < releaseheight
+              | Vote -> false)
+            state.withheld
+        in
+        let releasenodes =
+          List.concat
+            [ [ releasehead ]
+            ; first
+                (fun n -> not (ctx.mined_myself n), ctx.received_at n)
+                (npubv + 1)
+                (Dag.children ctx.votes_only releasehead)
+            ; Dag.parents ctx.votes_only releasehead
+            ; blockdeps
+            ; List.concat_map (Dag.parents ctx.votes_only) blockdeps
+            ]
+        in
+        release releasenodes { state with public_head = releasehead })
+      else (* overwrite infeasible *) state)
+;;
+
+let strategic tactic ~k ctx =
+  let ctx = extend_ctx ctx in
   let handler actions state event =
     let state =
       match event with
       | Activate pow ->
-        let votes = Dag.children votes_only state.private_head in
+        let votes = Dag.children ctx.votes_only state.private_head in
         if List.length votes >= k - 1
         then (
-          let head = block_data_exn data state.private_head in
+          let head = block_data_exn ctx.data state.private_head in
           let head' =
             actions.extend_dag
               ~pow
               (state.private_head
               :: first
-                   (fun x ->
-                     let n = Dag.data x in
-                     not (ctx.mined_myself n), ctx.received_at n)
+                   (fun n -> not (ctx.mined_myself n), ctx.received_at n)
                    (k - 1)
                    votes)
               (Block { height = head.height + 1 })
@@ -194,64 +326,32 @@ let selfish ~k ctx =
       | Deliver gnode ->
         (* simulate honest node *)
         let public n = List.exists (fun x -> Dag.node_eq x n) state.withheld |> not in
-        let ctx = { ctx with view = Dag.filter public ctx.view }
-        and votes_only = Dag.filter public votes_only
-        and blocks_only = Dag.filter public blocks_only in
+        let ctx =
+          { ctx with
+            view = Dag.filter public ctx.view
+          ; votes_only = Dag.filter public ctx.votes_only
+          ; blocks_only = Dag.filter public ctx.blocks_only
+          }
+        in
         (* We only prefer blocks. For received votes, reconsider parent block. *)
         (match last_block ctx gnode with
         | None -> state
         | Some gblock ->
           (* Only consider block if its heritage is visible. *)
-          if Dag.have_common_ancestor blocks_only gblock state.public_head
+          if Dag.have_common_ancestor ctx.blocks_only gblock state.public_head
           then (
-            let consider gpref gblock =
-              let pref = block_data_exn data gpref
-              and block = block_data_exn data gblock in
-              if block.height > pref.height
-                 || (block.height = pref.height
-                    && List.length (Dag.children votes_only gblock)
-                       > List.length (Dag.children votes_only gpref))
-              then gblock
-              else gpref
-            in
             (* delayed block might connect nodes delivered previously *)
             let public_head =
-              List.fold_left consider state.public_head (Dag.leaves blocks_only gblock)
+              List.fold_left
+                (fun preferred consider -> preference ctx ~preferred ~consider)
+                state.public_head
+                (Dag.leaves ctx.blocks_only gblock)
             in
-            assert (is_block (data public_head));
+            assert (is_block (ctx.data public_head));
             { state with public_head })
           else state)
     in
-    (* tactically release information *)
-    let public = block_data_exn data state.public_head
-    and privat = block_data_exn data state.private_head in
-    let release nodes state =
-      let ht = Hashtbl.create k in
-      List.iter (fun n -> Hashtbl.replace ht (Dag.id n) true) state.withheld;
-      List.iter
-        (fun n ->
-          let id = Dag.id n in
-          match Hashtbl.find_opt ht id with
-          | Some true ->
-            Hashtbl.replace ht id false;
-            actions.share n
-          | _ -> ())
-        nodes;
-      { state with
-        withheld =
-          List.filter
-            (fun n ->
-              match Hashtbl.find_opt ht (Dag.id n) with
-              | Some true -> true
-              | _ -> false)
-            state.withheld
-      }
-    in
-    if public.height > privat.height
-    then release state.withheld { state with private_head = state.public_head }
-    else if public.height < privat.height
-    then release state.withheld { state with public_head = state.private_head }
-    else state
+    strategy ~k tactic ctx actions state
   and preferred x = x.private_head
   and init ~roots =
     let genesis = init ~roots in

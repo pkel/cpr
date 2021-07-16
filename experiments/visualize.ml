@@ -54,6 +54,9 @@ let tasks0 =
         ; B_k_lessleadership { k = 16 }, [ Constant ], SelfishSimple, 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], SelfishSimple, 100
         ; B_k_lessleadership { k = 4 }, [ Constant ], SelfishSimple, 50
+        ; B_k_lessleadership { k = 16 }, [ Constant ], SelfishAdvanced, 200
+        ; B_k_lessleadership { k = 8 }, [ Constant ], SelfishAdvanced, 100
+        ; B_k_lessleadership { k = 4 }, [ Constant ], SelfishAdvanced, 50
         ; George { k = 16 }, [ Constant ], Honest, 48
         ; George { k = 8 }, [ Constant ], Honest, 24
         ; George { k = 4 }, [ Constant ], Honest, 12
@@ -177,4 +180,7 @@ let run (task, fpaths_and_legends, label_node) =
     s.reward_functions
 ;;
 
-let () = List.iter run (tasks0 @ tasks1)
+let () =
+  Random.self_init ();
+  List.iter run (tasks0 @ tasks1)
+;;

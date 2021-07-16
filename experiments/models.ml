@@ -92,7 +92,7 @@ let tag_strategy = function
 let describe_strategy = function
   | Honest -> "honest"
   | SelfishSimple -> "withhold until strong block is found"
-  | SelfishAdvanced -> "withhold until defender is about to find a strong block"
+  | SelfishAdvanced -> "withhold until defender finds strong block"
 ;;
 
 type task =
@@ -188,16 +188,9 @@ let setup t =
     let protocol = B_k_lessleader.protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> protocol.honest
-          | SelfishSimple -> B_k_lessleader.selfish ~k
-          | x ->
-            let m =
-              Printf.sprintf
-                "protocol %s does not support attack strategy %s"
-                (protocol_family t.protocol)
-                (tag_strategy x)
-            in
-            raise (Invalid_argument m))
+          | Honest -> B_k_lessleader.strategic `Honest ~k
+          | SelfishSimple -> B_k_lessleader.strategic `Simple ~k
+          | SelfishAdvanced -> B_k_lessleader.strategic `Advanced ~k)
     and reward_functions =
       List.map
         (function
