@@ -1,5 +1,15 @@
 # ToDo List
 
+## Withholding Inefficiency
+
+Investigate why
+
+```
+CPR_ACTIVATIONS=1000000 dune exec experiments/withholding.exe -- data/withholding.tsv
+```
+
+takes ages. Maybe record time spent per run in `csv_runner`.
+
 ## Simulate other networks
 
 Get network spec (compute/latencies) from other papers
