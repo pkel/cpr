@@ -1,7 +1,7 @@
 open Models
 
 let networks =
-  [ 0.1; 0.2; 0.25; 0.3; 0.33; 0.4; 0.45; 0.5; 0.55; 0.66; 0.75 ]
+  [ 0.1; 0.2; 0.25; 0.3; 0.33; 0.4; 0.45; 0.5 ]
   |> List.map (fun alpha -> TwoAgentsZero { alpha })
 ;;
 

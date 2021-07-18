@@ -19,6 +19,7 @@ type row =
   ; strategy : string
   ; strategy_description : string
   ; reward : float array
+  ; machine_duration_s : float
   }
 
 let df_spec =
@@ -41,6 +42,7 @@ let df_spec =
    ; ("strategy", fun row -> String row.strategy)
    ; ("strategy_description", fun row -> String row.strategy_description)
    ; ("reward", fun row -> array string_of_float row.reward)
+   ; ("machine_duration_s", fun row -> Float row.machine_duration_s)
   |]
 ;;
 
@@ -54,6 +56,7 @@ let save_rows_as_tsv filename l =
 ;;
 
 let run task =
+  let clock = Mtime_clock.counter () in
   let (S s) = setup task in
   (* network stats *)
   let compute =
@@ -94,6 +97,7 @@ let run task =
         ; scenario = tag_scenario task.scenario
         ; scenario_description = describe_scenario task.scenario
         ; reward
+        ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
         })
       task.incentive_schemes
       s.reward_functions

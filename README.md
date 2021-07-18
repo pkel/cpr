@@ -2,13 +2,12 @@
 
 ## Withholding Inefficiency
 
-Investigate why
+Bk/lessleader Selfish Simple becomes really slow for strong attackers
+and high k.
 
-```
-CPR_ACTIVATIONS=1000000 dune exec experiments/withholding.exe -- data/withholding.tsv
-```
-
-takes ages. Maybe record time spent per run in `csv_runner`.
+I suspect that the number of withheld messages grows significantly.
+Also, I count the number of vote children for each attacker activations
+with List.length. Some caching might help.
 
 ## Simulate other networks
 

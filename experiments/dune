@@ -1,3 +1,11 @@
 (executables
  (names honest_net visualize withholding)
- (libraries bos cmdliner cpr_lib cpr_protocols owl-base parany progress))
+ (libraries
+  bos
+  cmdliner
+  cpr_lib
+  cpr_protocols
+  mtime
+  owl-base
+  parany
+  progress))
