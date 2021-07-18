@@ -135,7 +135,7 @@ let print_dag oc (sim, confirmed, rewards, legend, label_node) =
     ; ("color", if confirmed.(Dag.id n) then "black" else "red")
     ]
   in
-  Dag.dot oc ~legend sim.global_view ~node_attr (Dag.roots sim.dag) |> Result.ok
+  Dag.dot oc ~legend sim.global.view ~node_attr (Dag.roots sim.dag) |> Result.ok
 ;;
 
 let run (task, fpaths_and_legends, label_node) =
@@ -148,7 +148,7 @@ let run (task, fpaths_and_legends, label_node) =
   let head =
     Array.to_seq sim.nodes
     |> Seq.map (fun (SNode x) -> x.preferred x.state)
-    |> Dag.common_ancestor' sim.global_view
+    |> Dag.common_ancestor' sim.global.view
     |> Option.get
   in
   let confirmed = Array.make (Dag.size sim.dag) false
@@ -160,11 +160,10 @@ let run (task, fpaths_and_legends, label_node) =
           (fun n ->
             confirmed.(Dag.id n) <- true;
             rw
-              ~view:sim.global_view
-              ~read:(fun n -> n.value)
+              ~view:sim.global
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
-          (Dag.iterate_ancestors sim.global_view [ head ])
+          (Dag.iterate_ancestors sim.global.view [ head ])
       in
       let path =
         let open Fpath in

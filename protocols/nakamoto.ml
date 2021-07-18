@@ -5,12 +5,11 @@ type block = { height : int }
 
 let dag_roots = [ { height = 0 } ]
 
-let dag_validity ~pow ~view ~read n =
-  let data n = Dag.data n |> read in
-  match pow, Dag.parents view n with
-  | true, [ p ] ->
-    let child = data n
-    and p = data p in
+let dag_validity (v : _ global_view) n =
+  match v.pow_hash n, Dag.parents v.view n with
+  | Some _, [ p ] ->
+    let child = v.data n
+    and p = v.data p in
     child.height = p.height + 1
   | _ -> false
 ;;
@@ -21,31 +20,29 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
-let handler ctx actions preferred =
-  let data n = Dag.data n |> ctx.read in
-  function
+let handler v actions preferred = function
   | Activate pow ->
-    let head = data preferred in
+    let head = v.data preferred in
     let head' = actions.extend_dag ~pow [ preferred ] { height = head.height + 1 } in
     actions.share head';
     head'
   | Deliver gnode ->
     (* Only consider gnode if its heritage is visible. *)
-    if Dag.have_common_ancestor ctx.view gnode preferred
+    if Dag.have_common_ancestor v.view gnode preferred
     then (
       let consider preferred gnode =
-        let node = data gnode
-        and head = data preferred in
+        let node = v.data gnode
+        and head = v.data preferred in
         if node.height > head.height then gnode else preferred
       in
       (* delayed gnode might connect nodes delivered previously *)
-      List.fold_left consider preferred (Dag.leaves ctx.view gnode))
+      List.fold_left consider preferred (Dag.leaves v.view gnode))
     else preferred
 ;;
 
 let protocol : _ protocol =
   let preferred x = x in
-  let honest ctx = Node { handler = handler ctx; init; preferred } in
+  let honest v = Node { handler = handler v; init; preferred } in
   { dag_roots; dag_validity; honest }
 ;;
 
@@ -54,10 +51,10 @@ let%test "convergence" =
   let test params height =
     init params protocol
     |> loop params
-    |> fun { nodes; global_view; _ } ->
+    |> fun { nodes; global; _ } ->
     Array.to_seq nodes
     |> Seq.map (fun (SNode x) -> x.preferred x.state)
-    |> Dag.common_ancestor' global_view
+    |> Dag.common_ancestor' global.view
     |> function
     | None -> false
     | Some n -> (Dag.data n).value.height > height
@@ -73,6 +70,4 @@ let%test "convergence" =
     ]
 ;;
 
-let constant c : ('env, block) reward_function =
- fun ~view:_ ~read:_ ~assign n -> assign c n
-;;
+let constant c : ('env, block) reward_function = fun ~view:_ ~assign n -> assign c n

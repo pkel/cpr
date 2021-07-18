@@ -9,6 +9,8 @@ type 'a data =
   ; delivered_at : floatarray
   ; appended_by : int option
   ; appended_at : float
+  ; pow_hash : int option
+  ; signed_by : int option
   }
 
 type 'prot_data event =
@@ -34,7 +36,7 @@ type 'prot_data node =
 type ('prot_data, 'node_state) state =
   { clock : 'prot_data clock
   ; dag : 'prot_data data Dag.t
-  ; global_view : 'prot_data data Dag.view
+  ; global : ('prot_data data, 'prot_data) Protocol.global_view
   ; nodes : 'prot_data node array
   ; assign_pow : int Distributions.iid
   }
@@ -74,41 +76,52 @@ let disseminate params clock source x =
 let init
     params
     ?(deviations = Array.make (Array.length params.network.nodes) None)
-    protocol
+    (protocol : _ Protocol.protocol)
     : _ state
   =
-  let open Protocol in
   let n_nodes = Array.length params.network.nodes in
   let dag = Dag.create () in
   let roots =
     let delivered_at = Float.Array.make n_nodes 0. in
     List.map
       (fun value ->
-        Dag.append dag [] { value; delivered_at; appended_by = None; appended_at = 0. })
+        Dag.append
+          dag
+          []
+          { value
+          ; delivered_at
+          ; appended_by = None
+          ; appended_at = 0.
+          ; signed_by = None
+          ; pow_hash = None
+          })
       protocol.dag_roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; c_activations = 0 }
-  and global_view = Dag.view dag in
+  and global : _ Protocol.global_view =
+    let data n = (Dag.data n).value
+    and signed_by n = (Dag.data n).signed_by
+    and pow_hash n = (Dag.data n).pow_hash in
+    { view = Dag.view dag; data; signed_by; pow_hash }
+  in
   let nodes =
     Array.init n_nodes (fun node ->
-        let read d = d.value
-        and view =
+        let view =
           Dag.filter
             (fun x -> Float.Array.get (Dag.data x).delivered_at node <= clock.now)
-            global_view
-        in
-        let received_at x = Float.Array.get x.delivered_at node
-        and mined_myself x = x.appended_by = Some node
+            global.view
+        and received_at n = Float.Array.get (Dag.data n).delivered_at node
+        and appended_by_me n = (Dag.data n).appended_by = Some node
         and share x = disseminate params clock node x
-        and extend_dag ?pow parents child =
-          let pow =
+        and extend_dag ?pow ?(sign = false) parents child =
+          let pow_hash =
             (* check pow *)
             match pow with
-            | Some ({ fresh = true } as x) ->
+            | Some x when x.fresh ->
               x.fresh <- false;
-              true
-            | Some { fresh = false } -> raise (Invalid_argument "pow was used before")
-            | None -> false
+              Some (Random.bits ())
+            | Some _ -> raise (Invalid_argument "pow was used before")
+            | None -> None
           in
           let node =
             Dag.append
@@ -120,19 +133,30 @@ let init
                       if i = node then clock.now else Float.infinity)
               ; appended_at = clock.now
               ; appended_by = Some node
+              ; pow_hash
+              ; signed_by = (if sign then Some node else None)
               }
           in
-          if not (protocol.dag_validity ~pow ~view ~read node)
+          if not (protocol.dag_validity global node)
           then
             (* We assume that invalid extensions are never delivered elsewhere *)
             failwith "invalid DAG extension";
           node
         in
         let (Node participant) =
-          let ctx = { view; read; received_at; mined_myself } in
+          let view : _ Protocol.local_view =
+            { my_id = node
+            ; view
+            ; data = global.data
+            ; signed_by = global.signed_by
+            ; pow_hash = global.pow_hash
+            ; received_at
+            ; appended_by_me
+            }
+          in
           match deviations.(node) with
-          | None -> protocol.honest ctx
-          | Some p -> p ctx
+          | None -> protocol.honest view
+          | Some p -> p view
         in
         SNode
           { handler = participant.handler { share; extend_dag }
@@ -146,7 +170,7 @@ let init
     in
     Distributions.discrete ~weights
   in
-  let state = { clock; dag; global_view; nodes; assign_pow } in
+  let state = { clock; dag; global; nodes; assign_pow } in
   schedule_activation params state;
   state
 ;;
@@ -191,8 +215,7 @@ let apply_reward_function (fn : _ Protocol.reward_function) head state =
     match (Dag.data n).appended_by with
     | Some i -> arr.(i) <- arr.(i) +. x
     | None -> ()
-  and view = state.global_view
-  and read n = n.value in
-  Seq.iter (fn ~view ~read ~assign) (Dag.iterate_ancestors view [ head ]);
+  and view = state.global in
+  Seq.iter (fn ~view ~assign) (Dag.iterate_ancestors view.view [ head ]);
   arr
 ;;

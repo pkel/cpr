@@ -2,11 +2,11 @@ type ('env, 'data, 'pow) actions =
   { share : 'env Dag.node -> unit
         (** Instruct the simulator to make the DAG node visible to other network nodes.
             The simulator might apply network delays depending on its configuration. *)
-  ; extend_dag : ?pow:'pow -> 'env Dag.node list -> 'data -> 'env Dag.node
-        (** [extend_dag ~pow parents data] adds a node with [data] to the simulator's DAG.
-            Initially, only the extending network node can see the new node. The simulator
-            raises {Invalid_argument} if the proposed extension does not satisfy the DAG
-            invariant specified by the simulated protocol. *)
+  ; extend_dag : ?pow:'pow -> ?sign:bool -> 'env Dag.node list -> 'data -> 'env Dag.node
+        (** [extend_dag ~pow ~sign parents data] adds a node with [data] to the
+            simulator's DAG. Initially, only the extending network node can see the new
+            node. The simulator raises {Invalid_argument} if the proposed extension does
+            not satisfy the DAG invariant specified by the simulated protocol. *)
   }
 
 (** Simulator events as they are applied to single network nodes *)
@@ -28,30 +28,41 @@ type ('env, 'data, 'pow) node =
       }
       -> ('env, 'data, 'pow) node
 
-type ('env, 'data) context =
+type ('env, 'data) global_view =
+  { view : 'env Dag.view (** View on the simulator's DAG. *)
+  ; data : 'env Dag.node -> 'data (** Read the protocol data attached to DAG node. *)
+  ; signed_by : 'env Dag.node -> int option
+        (** Return id of signer if DAG node was signed. *)
+  ; pow_hash : 'env Dag.node -> int option
+        (** Return PoW hash of node, if node was attached with PoW authorization. *)
+  }
+
+type ('env, 'data) local_view =
   { view : 'env Dag.view
-        (** View on the simulator's DAG. Partial visibility models the information set of
-            the network node. *)
-  ; read : 'env -> 'data
-        (** Read the protocol data from simulator data attached to DAG nodes. *)
-  ; received_at : 'env -> float
-  ; mined_myself : 'env -> bool
+        (** Restricted view on the simulator's DAG models the information set of network
+            nodes. *)
+  ; data : 'env Dag.node -> 'data (** Read the protocol data attached to DAG node. *)
+  ; signed_by : 'env Dag.node -> int option
+        (** Return id of signer if DAG node was signed. *)
+  ; my_id : int
+  ; pow_hash : 'env Dag.node -> int option
+        (** Return PoW hash of node, if node was attached with PoW authorization. *)
+  ; received_at : 'env Dag.node -> float (** Get time of delivery of DAG nodes. *)
+  ; appended_by_me : 'env Dag.node -> bool (** Recognize own DAG nodes. *)
   }
 
 type ('env, 'data, 'pow) protocol =
   { dag_roots : 'data list (** Specify the roots of the global DAG. *)
-  ; dag_validity :
-      pow:bool -> view:'env Dag.view -> read:('env -> 'data) -> 'env Dag.node -> bool
+  ; dag_validity : ('env, 'data) global_view -> 'env Dag.node -> bool
         (** Restrict DAG extensions. The simulator checks validity for each appended DAG
             node. Invalid extensions are not delivered to other nodes. *)
-  ; honest : ('env, 'data) context -> ('env, 'data, 'pow) node
+  ; honest : ('env, 'data) local_view -> ('env, 'data, 'pow) node
   }
 
 (** Calculate and assign rewards to a nodes and (potentially) its neighbours. Use this
     together with {!Dag.iterate_ancestors}. *)
 type ('env, 'data) reward_function =
-  view:'env Dag.view
-  -> read:('env -> 'data)
+  view:('env, 'data) global_view
   -> assign:(float -> 'env Dag.node -> unit)
   -> 'env Dag.node
   -> unit

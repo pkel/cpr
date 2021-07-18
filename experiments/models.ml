@@ -113,7 +113,7 @@ type setup =
       ; protocol : ('a Simulator.data, 'a, Simulator.pow) Protocol.protocol
       ; reward_functions : ('a Simulator.data, 'a) Protocol.reward_function list
       ; deviations :
-          (('a Simulator.data, 'a) Protocol.context
+          (('a Simulator.data, 'a) Protocol.local_view
            -> ('a Simulator.data, 'a, Simulator.pow) Protocol.node)
           option
           array

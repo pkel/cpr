@@ -71,7 +71,7 @@ let run task =
   let activations = Array.map (fun (SNode x) -> x.n_activations) sim.nodes in
   Array.to_seq sim.nodes
   |> Seq.map (fun (SNode x) -> x.preferred x.state)
-  |> Dag.common_ancestor' sim.global_view
+  |> Dag.common_ancestor' sim.global.view
   |> function
   | None -> failwith "no common ancestor found"
   | Some common_chain ->
