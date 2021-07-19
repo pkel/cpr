@@ -71,16 +71,6 @@ let extend_view (x : _ Protocol.local_view) =
   }
 ;;
 
-let last_block v gnode =
-  match v.data gnode with
-  | Block _ -> Some gnode
-  | Vote _ ->
-    (match Dag.parents v.view gnode with
-    | [] -> None
-    | [ gnode ] -> Some gnode
-    | _ -> failwith "invalid dag")
-;;
-
 let block_data_exn data node =
   match data node with
   | Block b -> b
@@ -120,39 +110,44 @@ let preference v ~preferred:gpref ~consider:gblock =
 
 let honest ~k v =
   let v = extend_view v in
-  let handler actions preferred action =
-    let modified =
-      match action with
-      | Activate pow ->
-        let vote = actions.extend_dag ~pow [ preferred ] (Vote v.my_id) in
-        actions.share vote;
-        [ preferred ]
-      | Deliver gnode ->
-        (match last_block v gnode with
-        | None -> []
-        | Some gblock ->
-          if Dag.have_common_ancestor v.blocks_only gblock preferred
-          then Dag.leaves v.blocks_only gblock
-          else [])
+  let height n = (block_data_exn v.data n).height in
+  let handler actions preferred =
+    let propose b =
+      first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
+      |> Option.map (fun q ->
+             let preferred =
+               actions.extend_dag ~sign:true (b :: q) (Block { height = height b + 1 })
+             in
+             actions.share preferred;
+             preferred)
     in
-    let height n = (block_data_exn v.data n).height in
-    List.fold_left
-      (fun preferred b ->
-        if height preferred <= height b
+    function
+    | Activate pow ->
+      let vote = actions.extend_dag ~pow [ preferred ] (Vote v.my_id) in
+      actions.share vote;
+      Option.value ~default:preferred (propose preferred)
+    | Deliver n ->
+      let affected_blocks =
+        if Dag.have_common_ancestor v.blocks_only preferred n
         then (
-          match
-            first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
-          with
-          | None -> preference v ~preferred ~consider:b
-          | Some q ->
-            let preferred =
-              actions.extend_dag ~sign:true (b :: q) (Block { height = height b + 1 })
+          match v.data n with
+          | Block _ -> Dag.leaves v.blocks_only n
+          | Vote _ ->
+            let n =
+              match Dag.parents v.view n with
+              | [ n ] -> n
+              | _ -> failwith "invalid DAG"
             in
-            actions.share preferred;
-            preferred)
-        else preference v ~preferred ~consider:b)
-      preferred
-      modified
+            Dag.leaves v.blocks_only n)
+        else []
+      in
+      List.fold_left
+        (fun preferred b ->
+          match propose b with
+          | Some replacement -> preference v ~preferred ~consider:replacement
+          | None -> preference v ~preferred ~consider:b)
+        preferred
+        affected_blocks
   and preferred x = x in
   Node { init; handler; preferred }
 ;;
