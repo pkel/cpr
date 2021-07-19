@@ -48,6 +48,7 @@ type ('env, 'data) local_view =
   ; pow_hash : 'env Dag.node -> int option
         (** Return PoW hash of node, if node was attached with PoW authorization. *)
   ; received_at : 'env Dag.node -> float (** Get time of delivery of DAG nodes. *)
+  ; released : 'env Dag.node -> bool (** Was this node already shared? *)
   ; appended_by_me : 'env Dag.node -> bool (** Recognize own DAG nodes. *)
   }
 

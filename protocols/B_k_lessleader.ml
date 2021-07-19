@@ -47,6 +47,7 @@ type ('env, 'data) extended_view =
   ; blocks_only : 'env Dag.view
   ; received_at : 'env Dag.node -> float
   ; appended_by_me : 'env Dag.node -> bool
+  ; released : 'env Dag.node -> bool
   ; my_id : int
   }
 
@@ -57,6 +58,7 @@ let extend_view (x : _ Protocol.local_view) =
   ; blocks_only = Dag.filter (fun n -> x.data n |> is_block) x.view
   ; received_at = x.received_at
   ; appended_by_me = x.appended_by_me
+  ; released = x.released
   ; my_id = x.my_id
   }
 ;;
@@ -321,12 +323,11 @@ let strategic tactic ~k v =
           { state with withheld = vote :: state.withheld })
       | Deliver gnode ->
         (* simulate honest node *)
-        let public n = List.exists (fun x -> Dag.node_eq x n) state.withheld |> not in
         let v =
           { v with
-            view = Dag.filter public v.view
-          ; votes_only = Dag.filter public v.votes_only
-          ; blocks_only = Dag.filter public v.blocks_only
+            view = Dag.filter v.released v.view
+          ; votes_only = Dag.filter v.released v.votes_only
+          ; blocks_only = Dag.filter v.released v.blocks_only
           }
         in
         (* We only prefer blocks. For received votes, reconsider parent block. *)

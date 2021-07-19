@@ -48,15 +48,22 @@ let tasks0 =
           in
           t, fpaths_and_legends ~alpha t, label_node)
         [ Nakamoto, [ Constant ], Honest, 10
+        ; B_k { k = 16 }, [ Constant ], Honest, 200
+        ; B_k { k = 8 }, [ Constant ], Honest, 100
+        ; B_k { k = 4 }, [ Constant ], Honest, 50
+        ; B_k { k = 1 }, [ Constant ], Honest, 20
         ; B_k_lessleadership { k = 16 }, [ Constant ], Honest, 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], Honest, 100
         ; B_k_lessleadership { k = 4 }, [ Constant ], Honest, 50
+        ; B_k_lessleadership { k = 1 }, [ Constant ], Honest, 20
         ; B_k_lessleadership { k = 16 }, [ Constant ], SelfishSimple, 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], SelfishSimple, 100
         ; B_k_lessleadership { k = 4 }, [ Constant ], SelfishSimple, 50
+        ; B_k_lessleadership { k = 1 }, [ Constant ], SelfishSimple, 20
         ; B_k_lessleadership { k = 16 }, [ Constant ], SelfishAdvanced, 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], SelfishAdvanced, 100
         ; B_k_lessleadership { k = 4 }, [ Constant ], SelfishAdvanced, 50
+        ; B_k_lessleadership { k = 1 }, [ Constant ], SelfishAdvanced, 20
         ; George { k = 16 }, [ Constant ], Honest, 48
         ; George { k = 8 }, [ Constant ], Honest, 24
         ; George { k = 4 }, [ Constant ], Honest, 12

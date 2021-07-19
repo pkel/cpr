@@ -9,6 +9,7 @@ type 'a data =
   ; delivered_at : floatarray
   ; appended_by : int option
   ; appended_at : float
+  ; mutable released_at : float
   ; pow_hash : int option
   ; signed_by : int option
   }
@@ -92,6 +93,7 @@ let init
           ; delivered_at
           ; appended_by = None
           ; appended_at = 0.
+          ; released_at = 0.
           ; signed_by = None
           ; pow_hash = None
           })
@@ -112,7 +114,11 @@ let init
             global.view
         and received_at n = Float.Array.get (Dag.data n).delivered_at node
         and appended_by_me n = (Dag.data n).appended_by = Some node
-        and share x = disseminate params clock node x
+        and share n =
+          let d = Dag.data n in
+          d.released_at <- min d.released_at clock.now;
+          disseminate params clock node n
+        and released n = (Dag.data n).released_at <= clock.now
         and extend_dag ?pow ?(sign = false) parents child =
           let pow_hash =
             (* check pow *)
@@ -135,6 +141,7 @@ let init
               ; appended_by = Some node
               ; pow_hash
               ; signed_by = (if sign then Some node else None)
+              ; released_at = Float.infinity
               }
           in
           if not (protocol.dag_validity global node)
@@ -151,6 +158,7 @@ let init
             ; signed_by = global.signed_by
             ; pow_hash = global.pow_hash
             ; received_at
+            ; released
             ; appended_by_me
             }
           in

@@ -122,13 +122,13 @@ let run task =
     let bt = Printexc.get_backtrace () in
     let () =
       Printf.eprintf
-        "RUN:\tnet:%s\tscenario:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
+        "\nRUN:\tnet:%s\tscenario:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
         (tag_network task.network)
         (tag_scenario task.scenario)
         (protocol_family task.protocol)
         (pow_per_block task.protocol)
         (tag_strategy task.strategy);
-      Printf.eprintf "ERROR:\t%s\n%s\n" (Printexc.to_string e) bt;
+      Printf.eprintf "ERROR:\t%s\n%s" (Printexc.to_string e) bt;
       flush stderr
     in
     [ { row with
