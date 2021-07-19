@@ -1,14 +1,5 @@
 # ToDo List
 
-## Withholding Inefficiency
-
-Bk/lessleader Selfish Simple becomes really slow for strong attackers
-and high k.
-
-I suspect that the number of withheld messages grows significantly.
-Also, I count the number of vote children for each attacker activations
-with List.length. Some caching might help.
-
 ## Simulate other networks
 
 Get network spec (compute/latencies) from other papers
@@ -18,12 +9,12 @@ Get network spec (compute/latencies) from other papers
 
 ## Implement other protocols
 
-1. Patrik's B_k with PoW hash-ordering based leader selection.
+1. ✓ Patrik's B_k with PoW hash-ordering based leader selection.
 2. BU's protocol after George gave me the specifics.
 
 ## Implement more attacks
 
-1. SelfishAdvanced on B_k_lessleader: Attacker could mines more votes on
+1. ✓ SelfishAdvanced on B_k_lessleader: Attacker could mines more votes on
 the next private block, while the defender cannot yet produce an block
 themselves.
 
