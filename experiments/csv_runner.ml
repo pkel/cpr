@@ -20,6 +20,7 @@ type row =
   ; strategy_description : string
   ; reward : float array
   ; machine_duration_s : float
+  ; error : string
   }
 
 let df_spec =
@@ -43,6 +44,7 @@ let df_spec =
    ; ("strategy_description", fun row -> String row.strategy_description)
    ; ("reward", fun row -> array string_of_float row.reward)
    ; ("machine_duration_s", fun row -> Float row.machine_duration_s)
+   ; ("error", fun row -> String row.error)
   |]
 ;;
 
@@ -55,52 +57,85 @@ let save_rows_as_tsv filename l =
   Owl_dataframe.to_csv ~sep:'\t' df filename
 ;;
 
+let prepare_row task =
+  let open Models in
+  { network = tag_network task.network
+  ; network_description = describe_network task.network
+  ; protocol = protocol_family task.protocol
+  ; protocol_description = describe_protocol task.protocol
+  ; k = pow_per_block task.protocol
+  ; activation_delay = task.activation_delay
+  ; number_activations = task.activations
+  ; activations = [||]
+  ; compute = [||]
+  ; block_interval = task.activation_delay *. (pow_per_block task.protocol |> float_of_int)
+  ; incentive_scheme = "na"
+  ; incentive_scheme_description = ""
+  ; strategy = tag_strategy task.strategy
+  ; strategy_description = describe_strategy task.strategy
+  ; scenario = tag_scenario task.scenario
+  ; scenario_description = describe_scenario task.scenario
+  ; reward = [||]
+  ; machine_duration_s = Float.nan
+  ; error = ""
+  }
+;;
+
 let run task =
+  let row = prepare_row task in
   let clock = Mtime_clock.counter () in
-  let (S s) = setup task in
-  (* network stats *)
-  let compute =
-    let open Network in
-    Array.map (fun x -> x.compute) s.network.nodes
-  in
-  (* simulate *)
-  let open Simulator in
-  init ?deviations:s.deviations s.params s.protocol
-  |> loop s.params
-  |> fun sim ->
-  let activations = Array.map (fun (SNode x) -> x.n_activations) sim.nodes in
-  Array.to_seq sim.nodes
-  |> Seq.map (fun (SNode x) -> x.preferred x.state)
-  |> Dag.common_ancestor' sim.global.view
-  |> function
-  | None -> failwith "no common ancestor found"
-  | Some common_chain ->
-    (* incentive stats *)
-    List.map2
-      (fun is rewardfn ->
-        let reward = apply_reward_function rewardfn common_chain sim in
-        { network = tag_network task.network
-        ; network_description = describe_network task.network
-        ; protocol = protocol_family task.protocol
-        ; protocol_description = describe_protocol task.protocol
-        ; k = pow_per_block task.protocol
-        ; activation_delay = task.activation_delay
-        ; number_activations = task.activations
-        ; activations
-        ; compute
-        ; block_interval =
-            task.activation_delay *. (pow_per_block task.protocol |> float_of_int)
-        ; incentive_scheme = tag_incentive_scheme is
-        ; incentive_scheme_description = describe_incentive_scheme is
-        ; strategy = tag_strategy task.strategy
-        ; strategy_description = describe_strategy task.strategy
-        ; scenario = tag_scenario task.scenario
-        ; scenario_description = describe_scenario task.scenario
-        ; reward
-        ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
-        })
-      task.incentive_schemes
-      s.reward_functions
+  try
+    let (S s) = setup task in
+    let compute =
+      let open Network in
+      Array.map (fun x -> x.compute) s.network.nodes
+    in
+    (* simulate *)
+    let open Simulator in
+    init ?deviations:s.deviations s.params s.protocol
+    |> loop s.params
+    |> fun sim ->
+    let activations = Array.map (fun (SNode x) -> x.n_activations) sim.nodes in
+    Array.to_seq sim.nodes
+    |> Seq.map (fun (SNode x) -> x.preferred x.state)
+    |> Dag.common_ancestor' sim.global.view
+    |> function
+    | None -> failwith "no common ancestor found"
+    | Some common_chain ->
+      (* incentive stats *)
+      List.map2
+        (fun is rewardfn ->
+          let reward = apply_reward_function rewardfn common_chain sim in
+          { row with
+            activations
+          ; compute
+          ; incentive_scheme = tag_incentive_scheme is
+          ; incentive_scheme_description = describe_incentive_scheme is
+          ; reward
+          ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
+          ; error = ""
+          })
+        task.incentive_schemes
+        s.reward_functions
+  with
+  | e ->
+    let bt = Printexc.get_backtrace () in
+    let () =
+      Printf.eprintf
+        "RUN:\tnet:%s\tscenario:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
+        (tag_network task.network)
+        (tag_scenario task.scenario)
+        (protocol_family task.protocol)
+        (pow_per_block task.protocol)
+        (tag_strategy task.strategy);
+      Printf.eprintf "ERROR:\t%s\n%s\n" (Printexc.to_string e) bt;
+      flush stderr
+    in
+    [ { row with
+        error = Printexc.to_string e
+      ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
+      }
+    ]
 ;;
 
 let bar ~n_tasks =
@@ -130,10 +165,10 @@ let main tasks n_activations n_cores filename =
             | hd :: tl ->
               queue := tl;
               hd)
-          ~work:(fun task -> run task (*TODO log start; catch and marshal error/trace *))
+          ~work:(fun task -> run task)
           ~mux:(fun l ->
             progress 1;
-            acc := l :: !acc (*TODO log error *))
+            acc := l :: !acc)
       else
         acc
           := List.rev_map

@@ -108,6 +108,12 @@ let tasks1 =
           in
           t, fpaths_and_legends ~activation_delay t, label_node)
         [ Nakamoto, [ Constant ], 10
+        ; B_k { k = 16 }, [ Constant ], 200
+        ; B_k { k = 8 }, [ Constant ], 100
+        ; B_k { k = 4 }, [ Constant ], 50
+        ; B_k { k = 16 }, [ Constant ], 200
+        ; B_k { k = 8 }, [ Constant ], 100
+        ; B_k { k = 4 }, [ Constant ], 50
         ; B_k_lessleadership { k = 16 }, [ Constant ], 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], 100
         ; B_k_lessleadership { k = 4 }, [ Constant ], 50

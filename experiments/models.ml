@@ -18,22 +18,25 @@ let describe_network = function
 
 type protocol =
   | Nakamoto
+  | B_k of { k : int }
   | B_k_lessleadership of { k : int }
   | George of { k : int }
 
 let protocol_family = function
   | Nakamoto -> "nakamoto"
-  | B_k_lessleadership _ -> "bk"
+  | B_k _ -> "bk"
+  | B_k_lessleadership _ -> "bk+ll"
   | George _ -> "george"
 ;;
 
 let pow_per_block = function
   | Nakamoto -> 1
-  | B_k_lessleadership { k } | George { k } -> k
+  | B_k { k } | B_k_lessleadership { k } | George { k } -> k
 ;;
 
 let describe_protocol = function
   | Nakamoto -> "Nakamoto consensus"
+  | B_k { k } -> "Bₖ with k=" ^ string_of_int k
   | B_k_lessleadership { k } ->
     "Bₖ with less leader modification and k=" ^ string_of_int k
   | George { k } -> "George's protocol with k=" ^ string_of_int k
@@ -53,15 +56,14 @@ let tag_incentive_scheme = function
 ;;
 
 let describe_incentive_scheme = function
-  | Constant -> "1 per confirmed block, divided equally among confirmed pow"
+  | Constant -> "1 per confirmed pow solution"
   | Discount ->
-    "max 1 per confirmed block, dk⁻² per pow solution (d ∊ 1..k = height since last \
+    "max k per confirmed block, d/k per pow solution (d ∊ 1..k = height since last \
      block)"
-  | Punish ->
-    "max 1 per confirmed block, k⁻¹ per pow solution on longest chain of votes"
+  | Punish -> "max k per confirmed block, 1 per pow solution on longest chain of votes"
   | Hybrid ->
-    "max 1 per confirmed block, dk⁻² per pow solution on longest chain of votes (d \
-     ∊ 1..k = height since last block)"
+    "max k per confirmed block, d/k per pow solution on longest chain of votes (d ∊ \
+     1..k = height since last block)"
 ;;
 
 type scenario =
@@ -173,6 +175,34 @@ let setup t =
       List.map
         (function
           | Constant -> Nakamoto.constant 1.
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support incentive scheme %s"
+                (protocol_family t.protocol)
+                (tag_incentive_scheme x)
+            in
+            raise (Invalid_argument m))
+        t.incentive_schemes
+    in
+    S { task = t; params; network; protocol; deviations; reward_functions }
+  | B_k { k } ->
+    let protocol = B_k.protocol ~k in
+    let deviations =
+      deviations (function
+          | Honest -> protocol.honest
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support attack strategy %s"
+                (protocol_family t.protocol)
+                (tag_strategy x)
+            in
+            raise (Invalid_argument m))
+    and reward_functions =
+      List.map
+        (function
+          | Constant -> B_k.constant 1.
           | x ->
             let m =
               Printf.sprintf

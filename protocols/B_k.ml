@@ -94,7 +94,7 @@ let first ?(skip_to = fun _ -> true) by n l =
   else (
     let () = Array.sort (fun a b -> compare (by a) (by b)) a in
     let i = ref 0 in
-    while (not (skip_to a.(!i))) && !i + 1 < Array.length a do
+    while !i < Array.length a && not (skip_to a.(!i)) do
       incr i
     done;
     if Array.length a - !i < n
@@ -193,4 +193,9 @@ let%test "convergence" =
     ]
 ;;
 
-let constant c : ('env, node) reward_function = fun ~view:_ ~assign -> assign c
+let constant c : ('env, node) reward_function =
+ fun ~view:v ~assign n ->
+  match v.pow_hash n with
+  | Some _ -> assign c n
+  | None -> ()
+;;
