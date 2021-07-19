@@ -219,7 +219,7 @@ let strategy tactic ~k v actions state =
   in
   let public = block_data_exn v.data state.public_head
   and privat = block_data_exn v.data state.private_head in
-  match tactic with
+  match if k < 2 then `Honest else tactic with
   | `Honest ->
     let state =
       (* adopt freshly mined block, if any *)
