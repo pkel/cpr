@@ -57,6 +57,10 @@ val iterate_descendants : 'a view -> 'a node list -> 'a node Seq.t
     ordered by depth and id. The starting nodes are included in the resulting sequence. *)
 val iterate_ancestors : 'a view -> 'a node list -> 'a node Seq.t
 
+type 'a pp = Format.formatter -> 'a -> unit
+
+val debug_pp : ?meta:'a node pp -> 'a view -> 'a node pp
+
 (** Print nodes and all descendants in graphviz dot format *)
 val dot
   :  out_channel

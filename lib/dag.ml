@@ -6,6 +6,19 @@ type 'a node =
   ; mutable depth : int
   }
 
+type 'a pp = Format.formatter -> 'a -> unit
+
+let debug_pp ?meta _v fmt n =
+  match meta with
+  | Some pp -> Format.fprintf fmt "@[id: %i@ meta: %a@]" n.serial pp n
+  | None -> Format.fprintf fmt "@[id: %i@]" n.serial
+;;
+
+let debug_pp ?meta v fmt n =
+  (* TODO Print number of parents/children; visibility & subset of parents/children *)
+  Format.fprintf fmt "this: %a" (debug_pp ?meta v) n
+;;
+
 let node_eq a b = a.serial = b.serial
 let id a = a.serial
 

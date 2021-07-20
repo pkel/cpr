@@ -18,7 +18,8 @@ let is_block = function
 ;;
 
 let dag_validity ~k (v : _ global_view) n =
-  let has_pow n = v.pow_hash n |> Option.is_some in
+  let has_pow n = v.pow_hash n |> Option.is_some
+  and pow_hash n = v.pow_hash n |> Option.get in
   match v.data n, Dag.parents v.view n with
   | Vote _, [ p ] -> has_pow n && v.data p |> is_block
   | Block b, pblock :: vote0 :: votes ->
@@ -27,9 +28,9 @@ let dag_validity ~k (v : _ global_view) n =
       let ordered_votes, _, nvotes =
         List.fold_left
           (fun (ok, h, i) n ->
-            let h' = v.pow_hash n in
+            let h' = pow_hash n in
             v.data n |> is_vote && h' > h && ok, h', i + 1)
-          (true, v.pow_hash vote0, 1)
+          (true, pow_hash vote0, 1)
           votes
       in
       p.height + 1 = b.height
@@ -73,10 +74,39 @@ let extend_view (x : _ Protocol.local_view) =
   }
 ;;
 
-let block_height_exn v node =
-  match v.data node with
+type exn += Invalid_DAG of string lazy_t
+
+let () =
+  Printexc.register_printer (function
+      | Invalid_DAG (lazy m) -> Some m
+      | _ -> None)
+;;
+
+let invalid_dag v n msg (type a) : a =
+  let msg = lazy (Format.asprintf "Invalid_DAG: %s: %a" msg (Dag.debug_pp v.view) n) in
+  raise (Invalid_DAG msg)
+;;
+
+let block_height_exn v n =
+  match v.data n with
   | Block b -> b.height
-  | _ -> raise (Invalid_argument "not a block")
+  | _ -> invalid_dag v n "not a block"
+;;
+
+let parent_block v n =
+  match Dag.parents v.view n with
+  | hd :: _ when v.data hd |> is_block -> Some hd
+  | _ -> None
+;;
+
+let leader_hash_exn v n =
+  if not (is_block (v.data n)) then raise (Invalid_argument "not a block");
+  match Dag.parents v.view n with
+  | _b :: v0 :: _ ->
+    (match v.pow_hash v0 with
+    | Some x -> x
+    | None -> raise (Invalid_argument "invalid dag / vote"))
+  | _ -> raise (Invalid_argument "invalid dag / block")
 ;;
 
 let first ?(skip_to = fun _ -> true) by n l =
@@ -100,28 +130,46 @@ let first ?(skip_to = fun _ -> true) by n l =
 ;;
 
 let preference v ~preferred ~consider =
-  let pheight = block_height_exn v preferred
-  and cheight = block_height_exn v consider in
-  if cheight > pheight
-     || (cheight = pheight
-        && List.length (Dag.children v.votes_only consider)
-           > List.length (Dag.children v.votes_only preferred))
-  then consider
-  else preferred
+  if Dag.node_eq preferred consider
+  then preferred
+  else (
+    let pheight = block_height_exn v preferred
+    and cheight = block_height_exn v consider in
+    if cheight > pheight
+    then consider
+    else if cheight = pheight
+    then (
+      let cvotes = List.length (Dag.children v.votes_only consider)
+      and pvotes = List.length (Dag.children v.votes_only preferred) in
+      if cvotes > pvotes
+      then consider
+      else if cvotes = pvotes && leader_hash_exn v consider < leader_hash_exn v preferred
+      then consider
+      else preferred)
+    else preferred)
 ;;
 
 let honest ~k v actions =
-  let propose b =
+  let propose ?replace b =
     first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
     |> Option.map (fun q ->
-           let preferred =
-             actions.extend_dag
-               ~sign:true
-               (b :: q)
-               (Block { height = block_height_exn v b + 1 })
+           let better =
+             match replace with
+             | Some b -> List.hd q |> v.pow_hash |> Option.get < leader_hash_exn v b
+             | None -> true
            in
-           actions.share preferred;
-           preferred)
+           if better
+           then (
+             let preferred =
+               actions.extend_dag
+                 ~sign:true
+                 (b :: q)
+                 (Block { height = block_height_exn v b + 1 })
+             in
+             actions.share preferred;
+             Some preferred)
+           else None)
+    |> Option.join
   in
   fun preferred -> function
     | Activate pow ->
@@ -143,13 +191,24 @@ let honest ~k v actions =
             Dag.leaves v.blocks_only n)
         else []
       in
-      List.fold_left
-        (fun preferred b ->
-          match propose b with
-          | Some replacement -> preference v ~preferred ~consider:replacement
-          | None -> preference v ~preferred ~consider:b)
-        preferred
-        affected_blocks
+      let preferred =
+        List.fold_left
+          (fun preferred b ->
+            let preferred =
+              propose b
+              |> Option.map (fun consider -> preference v ~preferred ~consider)
+              |> Option.value ~default:preferred
+            in
+            preference v ~preferred ~consider:b)
+          preferred
+          affected_blocks
+      in
+      if not (v.appended_by_me preferred)
+      then
+        Option.bind (parent_block v preferred) (propose ~replace:preferred)
+        |> Option.map (fun consider -> preference v ~preferred ~consider)
+        |> Option.value ~default:preferred
+      else preferred
 ;;
 
 let protocol ~k =
@@ -257,7 +316,7 @@ let strategic tactic ~k (v : _ local_view) =
       | Deliver _ ->
         { state with public = honest ~k public_view withhold state.public event }
     in
-    let withheld = !withheld in
+    let withheld = List.rev !withheld in
     { state with private_ = tactic actions state withheld }
   and preferred x = x.private_
   and init ~roots =
