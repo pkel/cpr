@@ -190,7 +190,7 @@ let setup t =
     let protocol = B_k.protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> protocol.honest
+          | Honest -> B_k.strategic ~k `Honest
           | x ->
             let m =
               Printf.sprintf

@@ -56,6 +56,7 @@ type ('env, 'data) extended_view =
   ; received_at : 'env Dag.node -> float
   ; pow_hash : 'env Dag.node -> int option
   ; appended_by_me : 'env Dag.node -> bool
+  ; released : 'env Dag.node -> bool
   ; my_id : int
   }
 
@@ -67,6 +68,7 @@ let extend_view (x : _ Protocol.local_view) =
   ; received_at = x.received_at
   ; appended_by_me = x.appended_by_me
   ; pow_hash = x.pow_hash
+  ; released = x.released
   ; my_id = x.my_id
   }
 ;;
@@ -108,20 +110,18 @@ let preference v ~preferred:gpref ~consider:gblock =
   else gpref
 ;;
 
-let honest ~k v =
-  let v = extend_view v in
+let honest ~k v actions =
   let height n = (block_data_exn v.data n).height in
-  let handler actions preferred =
-    let propose b =
-      first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
-      |> Option.map (fun q ->
-             let preferred =
-               actions.extend_dag ~sign:true (b :: q) (Block { height = height b + 1 })
-             in
-             actions.share preferred;
-             preferred)
-    in
-    function
+  let propose b =
+    first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
+    |> Option.map (fun q ->
+           let preferred =
+             actions.extend_dag ~sign:true (b :: q) (Block { height = height b + 1 })
+           in
+           actions.share preferred;
+           preferred)
+  in
+  fun preferred -> function
     | Activate pow ->
       let vote = actions.extend_dag ~pow [ preferred ] (Vote v.my_id) in
       actions.share vote;
@@ -148,11 +148,16 @@ let honest ~k v =
           | None -> preference v ~preferred ~consider:b)
         preferred
         affected_blocks
-  and preferred x = x in
-  Node { init; handler; preferred }
 ;;
 
-let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots }
+let protocol ~k =
+  let honest v =
+    let handler = honest ~k (extend_view v)
+    and preferred x = x in
+    Node { init; handler; preferred }
+  in
+  { honest; dag_validity = dag_validity ~k; dag_roots }
+;;
 
 let%test "convergence" =
   let open Simulator in
@@ -193,4 +198,41 @@ let constant c : ('env, node) reward_function =
   match v.pow_hash n with
   | Some _ -> assign c n
   | None -> ()
+;;
+
+type 'env strategic_state =
+  { public : 'env Dag.node
+  ; private_ : 'env Dag.node
+  }
+
+let honest_tactic v actions state withheld =
+  List.iter actions.share withheld;
+  preference v ~preferred:state.private_ ~consider:state.public
+;;
+
+let strategic tactic ~k (v : _ local_view) =
+  let public_view = extend_view { v with view = Dag.filter v.released v.view }
+  and private_view = extend_view v in
+  let tactic =
+    match tactic with
+    | `Honest -> honest_tactic private_view
+  in
+  let handler actions state event =
+    let withheld = ref [] in
+    let withhold = { actions with share = (fun n -> withheld := n :: !withheld) } in
+    let state =
+      match event with
+      | Activate _ ->
+        { state with private_ = honest ~k private_view withhold state.private_ event }
+      | Deliver _ ->
+        { state with public = honest ~k public_view withhold state.public event }
+    in
+    let withheld = !withheld in
+    { state with private_ = tactic actions state withheld }
+  and preferred x = x.private_
+  and init ~roots =
+    let s = init ~roots in
+    { public = s; private_ = s }
+  in
+  Node { init; handler; preferred }
 ;;
