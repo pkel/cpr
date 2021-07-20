@@ -191,6 +191,7 @@ let setup t =
     let deviations =
       deviations (function
           | Honest -> B_k.strategic ~k `Honest
+          | SelfishSimple -> B_k.strategic ~k `Simple
           | x ->
             let m =
               Printf.sprintf

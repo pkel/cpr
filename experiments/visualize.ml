@@ -34,39 +34,46 @@ let tasks0 =
   in
   List.concat_map
     (fun alpha ->
-      List.map
-        (fun (protocol, incentive_schemes, strategy, activations) ->
-          let t =
-            { network = TwoAgentsZero { alpha }
-            ; incentive_schemes
-            ; protocol
-            ; scenario = FirstSelfish
-            ; strategy
-            ; activations
-            ; activation_delay = 1.
-            }
-          in
-          t, fpaths_and_legends ~alpha t, label_node)
-        [ Nakamoto, [ Constant ], Honest, 10
-        ; B_k { k = 16 }, [ Constant ], Honest, 200
-        ; B_k { k = 8 }, [ Constant ], Honest, 100
-        ; B_k { k = 4 }, [ Constant ], Honest, 50
-        ; B_k { k = 1 }, [ Constant ], Honest, 20
-        ; B_k_lessleadership { k = 16 }, [ Constant ], Honest, 200
-        ; B_k_lessleadership { k = 8 }, [ Constant ], Honest, 100
-        ; B_k_lessleadership { k = 4 }, [ Constant ], Honest, 50
-        ; B_k_lessleadership { k = 1 }, [ Constant ], Honest, 20
-        ; B_k_lessleadership { k = 16 }, [ Constant ], SelfishSimple, 200
-        ; B_k_lessleadership { k = 8 }, [ Constant ], SelfishSimple, 100
-        ; B_k_lessleadership { k = 4 }, [ Constant ], SelfishSimple, 50
-        ; B_k_lessleadership { k = 1 }, [ Constant ], SelfishSimple, 20
-        ; B_k_lessleadership { k = 16 }, [ Constant ], SelfishAdvanced, 200
-        ; B_k_lessleadership { k = 8 }, [ Constant ], SelfishAdvanced, 100
-        ; B_k_lessleadership { k = 4 }, [ Constant ], SelfishAdvanced, 50
-        ; B_k_lessleadership { k = 1 }, [ Constant ], SelfishAdvanced, 20
-        ; George { k = 16 }, [ Constant ], Honest, 48
-        ; George { k = 8 }, [ Constant ], Honest, 24
-        ; George { k = 4 }, [ Constant ], Honest, 12
+      List.concat_map
+        (fun (protocol, incentive_schemes, strategies, activations) ->
+          List.map
+            (fun strategy ->
+              let t =
+                { network = TwoAgentsZero { alpha }
+                ; incentive_schemes
+                ; protocol
+                ; scenario = FirstSelfish
+                ; strategy
+                ; activations
+                ; activation_delay = 1.
+                }
+              in
+              t, fpaths_and_legends ~alpha t, label_node)
+            strategies)
+        [ Nakamoto, [ Constant ], [ Honest ], 10
+        ; B_k { k = 16 }, [ Constant ], [ Honest; SelfishSimple ], 200
+        ; B_k { k = 8 }, [ Constant ], [ Honest; SelfishSimple ], 100
+        ; B_k { k = 4 }, [ Constant ], [ Honest; SelfishSimple ], 50
+        ; B_k { k = 1 }, [ Constant ], [ Honest; SelfishSimple ], 20
+        ; ( B_k_lessleadership { k = 16 }
+          , [ Constant ]
+          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , 200 )
+        ; ( B_k_lessleadership { k = 8 }
+          , [ Constant ]
+          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , 100 )
+        ; ( B_k_lessleadership { k = 4 }
+          , [ Constant ]
+          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , 50 )
+        ; ( B_k_lessleadership { k = 1 }
+          , [ Constant ]
+          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , 20 )
+        ; George { k = 16 }, [ Constant ], [ Honest ], 48
+        ; George { k = 8 }, [ Constant ], [ Honest ], 24
+        ; George { k = 4 }, [ Constant ], [ Honest ], 12
         ])
     [ 0.25; 0.33; 0.5 ]
 ;;
@@ -118,12 +125,6 @@ let tasks1 =
         ; B_k { k = 16 }, [ Constant ], 200
         ; B_k { k = 8 }, [ Constant ], 100
         ; B_k { k = 4 }, [ Constant ], 50
-        ; B_k { k = 16 }, [ Constant ], 200
-        ; B_k { k = 8 }, [ Constant ], 100
-        ; B_k { k = 4 }, [ Constant ], 50
-        ; B_k_lessleadership { k = 16 }, [ Constant ], 200
-        ; B_k_lessleadership { k = 8 }, [ Constant ], 100
-        ; B_k_lessleadership { k = 4 }, [ Constant ], 50
         ; B_k_lessleadership { k = 16 }, [ Constant ], 200
         ; B_k_lessleadership { k = 8 }, [ Constant ], 100
         ; B_k_lessleadership { k = 4 }, [ Constant ], 50

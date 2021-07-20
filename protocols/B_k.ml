@@ -73,9 +73,9 @@ let extend_view (x : _ Protocol.local_view) =
   }
 ;;
 
-let block_data_exn data node =
-  match data node with
-  | Block b -> b
+let block_height_exn v node =
+  match v.data node with
+  | Block b -> b.height
   | _ -> raise (Invalid_argument "not a block")
 ;;
 
@@ -99,24 +99,26 @@ let first ?(skip_to = fun _ -> true) by n l =
       Some !l))
 ;;
 
-let preference v ~preferred:gpref ~consider:gblock =
-  let pref = block_data_exn v.data gpref
-  and block = block_data_exn v.data gblock in
-  if block.height > pref.height
-     || (block.height = pref.height
-        && List.length (Dag.children v.votes_only gblock)
-           > List.length (Dag.children v.votes_only gpref))
-  then gblock
-  else gpref
+let preference v ~preferred ~consider =
+  let pheight = block_height_exn v preferred
+  and cheight = block_height_exn v consider in
+  if cheight > pheight
+     || (cheight = pheight
+        && List.length (Dag.children v.votes_only consider)
+           > List.length (Dag.children v.votes_only preferred))
+  then consider
+  else preferred
 ;;
 
 let honest ~k v actions =
-  let height n = (block_data_exn v.data n).height in
   let propose b =
     first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
     |> Option.map (fun q ->
            let preferred =
-             actions.extend_dag ~sign:true (b :: q) (Block { height = height b + 1 })
+             actions.extend_dag
+               ~sign:true
+               (b :: q)
+               (Block { height = block_height_exn v b + 1 })
            in
            actions.share preferred;
            preferred)
@@ -210,12 +212,40 @@ let honest_tactic v actions state withheld =
   preference v ~preferred:state.private_ ~consider:state.public
 ;;
 
+(* Withhold until I can propose a block. George calls this proof-packing. *)
+let simple_tactic v actions state _withheld =
+  let privh = block_height_exn v state.private_
+  and publh = block_height_exn v state.public
+  and release n = if not (v.released n) then actions.share n in
+  if publh > privh
+  then (* abort withholding *)
+    state.public
+  else if privh > publh
+  then (
+    (* overwrite public chain *)
+    let () =
+      Dag.iterate_ancestors v.blocks_only [ state.private_ ]
+      |> Seq.flat_map (fun n ->
+             if v.released n
+             then (* stop iteration of first released block *)
+               Seq.empty
+             else
+               (* release all referenced votes *)
+               Dag.iterate_ancestors v.votes_only [ n ])
+      |> Seq.iter release
+    in
+    state.private_)
+  else (* continue withholding *)
+    state.private_
+;;
+
 let strategic tactic ~k (v : _ local_view) =
   let public_view = extend_view { v with view = Dag.filter v.released v.view }
   and private_view = extend_view v in
   let tactic =
     match tactic with
     | `Honest -> honest_tactic private_view
+    | `Simple -> simple_tactic private_view
   in
   let handler actions state event =
     let withheld = ref [] in
