@@ -63,13 +63,12 @@ let extend_view (x : _ Protocol.local_view) =
   }
 ;;
 
-let last_block v gnode =
-  match v.data gnode with
-  | Block _ -> Some gnode
+let last_block v n =
+  match v.data n with
+  | Block _ -> n
   | Vote ->
-    (match Dag.parents v.view gnode with
-    | [] -> None
-    | [ gnode ] -> Some gnode
+    (match Dag.parents v.view n with
+    | [ n ] -> n
     | _ -> failwith "invalid dag")
 ;;
 
@@ -112,17 +111,15 @@ let honest ~k v =
         preferred)
     | Deliver n ->
       (* We only prefer blocks. For received votes, reconsider parent block. *)
-      (match last_block v n with
-      | None -> preferred
-      | Some consider ->
-        let p = block_data_exn v.data preferred
-        and c = block_data_exn v.data consider in
-        if c.height > p.height
-           || (c.height = p.height
-              && List.length (Dag.children v.votes_only consider)
-                 > List.length (Dag.children v.votes_only preferred))
-        then consider
-        else preferred)
+      let consider = last_block v n in
+      let p = block_data_exn v.data preferred
+      and c = block_data_exn v.data consider in
+      if c.height > p.height
+         || (c.height = p.height
+            && List.length (Dag.children v.votes_only consider)
+               > List.length (Dag.children v.votes_only preferred))
+      then consider
+      else preferred
   and preferred x = x in
   Node { init; handler; preferred }
 ;;
@@ -319,22 +316,20 @@ let strategic tactic ~k v =
           }
         in
         (* We only prefer blocks. For received votes, reconsider parent block. *)
-        (match last_block v gnode with
-        | None -> state
-        | Some gblock ->
-          (* Only consider block if its heritage is visible. *)
-          if Dag.have_common_ancestor v.blocks_only gblock state.public_head
-          then (
-            (* delayed block might connect nodes delivered previously *)
-            let public_head =
-              List.fold_left
-                (fun preferred consider -> preference v ~preferred ~consider)
-                state.public_head
-                (Dag.leaves v.blocks_only gblock)
-            in
-            assert (is_block (v.data public_head));
-            { state with public_head })
-          else state)
+        let gblock = last_block v gnode in
+        (* Only consider block if its heritage is visible. *)
+        if Dag.have_common_ancestor v.blocks_only gblock state.public_head
+        then (
+          (* delayed block might connect nodes delivered previously *)
+          let public_head =
+            List.fold_left
+              (fun preferred consider -> preference v ~preferred ~consider)
+              state.public_head
+              (Dag.leaves v.blocks_only gblock)
+          in
+          assert (is_block (v.data public_head));
+          { state with public_head })
+        else state
     in
     strategy ~k tactic v actions state
   and preferred x = x.private_head

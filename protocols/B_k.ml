@@ -99,6 +99,15 @@ let parent_block v n =
   | _ -> None
 ;;
 
+let last_block v n =
+  match v.data n with
+  | Block _ -> n
+  | Vote _ ->
+    (match Dag.parents v.view n with
+    | [ n ] -> n
+    | _ -> failwith "invalid dag")
+;;
+
 let leader_hash_exn v n =
   if not (is_block (v.data n)) then raise (Invalid_argument "not a block");
   match Dag.parents v.view n with
@@ -150,25 +159,17 @@ let preference v ~preferred ~consider =
 ;;
 
 let honest ~k v actions =
-  let propose ?replace b =
+  let propose b =
     first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
     |> Option.map (fun q ->
-           let better =
-             match replace with
-             | Some b -> List.hd q |> v.pow_hash |> Option.get < leader_hash_exn v b
-             | None -> true
+           let preferred =
+             actions.extend_dag
+               ~sign:true
+               (b :: q)
+               (Block { height = block_height_exn v b + 1 })
            in
-           if better
-           then (
-             let preferred =
-               actions.extend_dag
-                 ~sign:true
-                 (b :: q)
-                 (Block { height = block_height_exn v b + 1 })
-             in
-             actions.share preferred;
-             Some preferred)
-           else None)
+           actions.share preferred;
+           Some preferred)
     |> Option.join
   in
   fun preferred -> function
@@ -177,38 +178,11 @@ let honest ~k v actions =
       actions.share vote;
       Option.value ~default:preferred (propose preferred)
     | Deliver n ->
-      let affected_blocks =
-        if Dag.have_common_ancestor v.blocks_only preferred n
-        then (
-          match v.data n with
-          | Block _ -> Dag.leaves v.blocks_only n
-          | Vote _ ->
-            let n =
-              match Dag.parents v.view n with
-              | [ n ] -> n
-              | _ -> failwith "invalid DAG"
-            in
-            Dag.leaves v.blocks_only n)
-        else []
-      in
-      let preferred =
-        List.fold_left
-          (fun preferred b ->
-            let preferred =
-              propose b
-              |> Option.map (fun consider -> preference v ~preferred ~consider)
-              |> Option.value ~default:preferred
-            in
-            preference v ~preferred ~consider:b)
-          preferred
-          affected_blocks
-      in
-      if not (v.appended_by_me preferred)
-      then
-        Option.bind (parent_block v preferred) (propose ~replace:preferred)
-        |> Option.map (fun consider -> preference v ~preferred ~consider)
-        |> Option.value ~default:preferred
-      else preferred
+      (* We only prefer blocks. For received votes, reconsider parent block. *)
+      let consider = last_block v n in
+      (match propose consider with
+      | None -> preference v ~preferred ~consider
+      | Some consider -> preference v ~preferred ~consider)
 ;;
 
 let protocol ~k =
@@ -243,8 +217,6 @@ let%test "convergence" =
       | _ -> failwith "invalid dag")
   in
   let delay = Distributions.exponential ~ev:1. in
-  true
-  || (* TODO: re-enable after fixing infinite loop in leader replacement code *)
   List.for_all
     (fun (k, activation_delay, height) ->
       let network = Network.homogeneous ~delay 32 in
