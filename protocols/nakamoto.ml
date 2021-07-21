@@ -27,17 +27,9 @@ let handler v actions preferred = function
     actions.share head';
     head'
   | Deliver gnode ->
-    (* Only consider gnode if its heritage is visible. *)
-    if Dag.have_common_ancestor v.view gnode preferred
-    then (
-      let consider preferred gnode =
-        let node = v.data gnode
-        and head = v.data preferred in
-        if node.height > head.height then gnode else preferred
-      in
-      (* delayed gnode might connect nodes delivered previously *)
-      List.fold_left consider preferred (Dag.leaves v.view gnode))
-    else preferred
+    let node = v.data gnode
+    and head = v.data preferred in
+    if node.height > head.height then gnode else preferred
 ;;
 
 let protocol : _ protocol =

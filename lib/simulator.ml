@@ -6,7 +6,9 @@ let pow () = { fresh = true }
 (* data attached to each DAG node *)
 type 'a data =
   { value : 'a
+  ; received_at : floatarray
   ; delivered_at : floatarray
+        (* delivery happens when all dependencies in the DAG are fulfilled *)
   ; appended_by : int option
   ; appended_at : float
   ; mutable released_at : float
@@ -62,14 +64,14 @@ let disseminate params clock source x =
   List.iter
     (fun link ->
       let open Network in
-      let delivered_at = (Dag.data x).delivered_at in
-      let t = Float.Array.get delivered_at link.dest
+      let received_at = (Dag.data x).received_at in
+      let t = Float.Array.get received_at link.dest
       and delay = link.delay () in
       let t' = clock.now +. delay in
       if t' < t
       then (
-        (* only schedule event if it yields faster delivery *)
-        Float.Array.set delivered_at link.dest t';
+        (* only schedule event if it enables faster delivery *)
+        Float.Array.set received_at link.dest t';
         schedule clock delay { node = link.dest; event = Deliver x }))
     params.network.nodes.(source).links
 ;;
@@ -83,7 +85,8 @@ let init
   let n_nodes = Array.length params.network.nodes in
   let dag = Dag.create () in
   let roots =
-    let delivered_at = Float.Array.make n_nodes 0. in
+    let delivered_at = Float.Array.make n_nodes 0.
+    and received_at = Float.Array.make n_nodes 0. in
     List.map
       (fun value ->
         Dag.append
@@ -91,6 +94,7 @@ let init
           []
           { value
           ; delivered_at
+          ; received_at
           ; appended_by = None
           ; appended_at = 0.
           ; released_at = 0.
@@ -112,7 +116,7 @@ let init
           Dag.filter
             (fun x -> Float.Array.get (Dag.data x).delivered_at node <= clock.now)
             global.view
-        and received_at n = Float.Array.get (Dag.data n).delivered_at node
+        and delivered_at n = Float.Array.get (Dag.data n).delivered_at node
         and appended_by_me n = (Dag.data n).appended_by = Some node
         and share n =
           let d = Dag.data n in
@@ -134,6 +138,9 @@ let init
               dag
               parents
               { value = child
+              ; received_at =
+                  Float.Array.init n_nodes (fun i ->
+                      if i = node then clock.now else Float.infinity)
               ; delivered_at =
                   Float.Array.init n_nodes (fun i ->
                       if i = node then clock.now else Float.infinity)
@@ -157,7 +164,7 @@ let init
             ; data = global.data
             ; signed_by = global.signed_by
             ; pow_hash = global.pow_hash
-            ; received_at
+            ; delivered_at
             ; released
             ; appended_by_me
             }
@@ -185,25 +192,43 @@ let init
 
 let handle_event params state ev =
   let (SNode node) = state.nodes.(ev.node) in
-  let apply () = node.state <- node.handler node.state ev.event in
-  match ev.event, params.network.dissemination with
-  | Activate _pow, _ ->
+  let was_delivered n =
+    Float.Array.get (Dag.data n).delivered_at ev.node <= state.clock.now
+  and was_received n = Float.Array.get (Dag.data n).received_at ev.node <= state.clock.now
+  and disseminate =
+    match params.network.dissemination with
+    | Flooding -> disseminate params state.clock ev.node
+    | Simple -> fun _n -> ()
+  in
+  match ev.event with
+  | Activate _pow ->
     state.clock.c_activations <- state.clock.c_activations + 1;
     node.n_activations <- node.n_activations + 1;
     (* check ending condition; schedule next activation *)
     if state.clock.c_activations < params.activations
     then schedule_activation params state;
     (* apply event handler *)
-    apply ()
-  | Deliver _, Simple -> apply ()
-  | Deliver gnode, Flooding ->
-    (* deliver only once *)
-    if state.clock.now >= Float.Array.get (Dag.data gnode).delivered_at ev.node
-    then (
-      (* continue broadcast *)
-      disseminate params state.clock ev.node gnode;
-      (* apply event handler *)
-      apply ())
+    node.state <- node.handler node.state ev.event
+  | Deliver n ->
+    (* deliver dag node exactly once to each network node as soon as all parent dag nodes
+       have been delivered *)
+    if was_delivered n
+    then (* n was delivered before *) ()
+    else if List.exists
+              (fun n -> was_delivered n |> not)
+              (Dag.parents state.global.view n)
+    then (* dependencies are not yet fulfilled *) ()
+    else (
+      (* deliver; continue broadcast; recurse *)
+      Float.Array.set (Dag.data n).delivered_at ev.node state.clock.now;
+      node.state <- node.handler node.state ev.event;
+      disseminate n;
+      (* recursive delivery of now unlocked dependent DAG nodes *)
+      List.iter
+        (fun n ->
+          if was_received n && not (was_delivered n)
+          then schedule state.clock 0. { node = ev.node; event = Deliver n })
+        (Dag.children state.global.view n))
 ;;
 
 let rec loop params state =

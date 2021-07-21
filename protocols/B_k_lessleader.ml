@@ -45,7 +45,7 @@ type ('env, 'data) extended_view =
   ; data : 'env Dag.node -> 'data
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
-  ; received_at : 'env Dag.node -> float
+  ; delivered_at : 'env Dag.node -> float
   ; appended_by_me : 'env Dag.node -> bool
   ; released : 'env Dag.node -> bool
   ; my_id : int
@@ -56,7 +56,7 @@ let extend_view (x : _ Protocol.local_view) =
   ; data = x.data
   ; votes_only = Dag.filter (fun n -> x.data n |> is_vote) x.view
   ; blocks_only = Dag.filter (fun n -> x.data n |> is_block) x.view
-  ; received_at = x.received_at
+  ; delivered_at = x.delivered_at
   ; appended_by_me = x.appended_by_me
   ; released = x.released
   ; my_id = x.my_id
@@ -101,7 +101,7 @@ let honest ~k v =
         let head' =
           actions.extend_dag
             ~pow
-            (preferred :: first v.received_at (k - 1) votes)
+            (preferred :: first v.delivered_at (k - 1) votes)
             (Block { height = head.height + 1 })
         in
         actions.share head';
@@ -110,30 +110,18 @@ let honest ~k v =
         let vote = actions.extend_dag ~pow [ preferred ] Vote in
         actions.share vote;
         preferred)
-    | Deliver gnode ->
+    | Deliver n ->
       (* We only prefer blocks. For received votes, reconsider parent block. *)
-      (match last_block v gnode with
+      (match last_block v n with
       | None -> preferred
-      | Some gblock ->
-        (* Only consider block if its heritage is visible. *)
-        if Dag.have_common_ancestor v.blocks_only gblock preferred
-        then (
-          let consider gpref gblock =
-            let pref = block_data_exn v.data gpref
-            and block = block_data_exn v.data gblock in
-            if block.height > pref.height
-               || (block.height = pref.height
-                  && List.length (Dag.children v.votes_only gblock)
-                     > List.length (Dag.children v.votes_only gpref))
-            then gblock
-            else gpref
-          in
-          (* delayed block might connect nodes delivered previously *)
-          let preferred =
-            List.fold_left consider preferred (Dag.leaves v.blocks_only gblock)
-          in
-          assert (v.data preferred |> is_block);
-          preferred)
+      | Some consider ->
+        let p = block_data_exn v.data preferred
+        and c = block_data_exn v.data consider in
+        if c.height > p.height
+           || (c.height = p.height
+              && List.length (Dag.children v.votes_only consider)
+                 > List.length (Dag.children v.votes_only preferred))
+        then consider
         else preferred)
   and preferred x = x in
   Node { init; handler; preferred }
@@ -287,7 +275,7 @@ let strategy tactic ~k v actions state =
           List.concat
             [ [ releasehead ]
             ; first
-                (fun n -> not (v.appended_by_me n), v.received_at n)
+                (fun n -> not (v.appended_by_me n), v.delivered_at n)
                 (npubv + 1)
                 (Dag.children v.votes_only releasehead)
             ; Dag.parents v.votes_only releasehead
@@ -313,7 +301,7 @@ let strategic tactic ~k v =
             actions.extend_dag
               ~pow
               (state.private_head
-              :: first (fun n -> not (v.appended_by_me n), v.received_at n) (k - 1) votes
+              :: first (fun n -> not (v.appended_by_me n), v.delivered_at n) (k - 1) votes
               )
               (Block { height = head.height + 1 })
           in

@@ -38,7 +38,7 @@ let dag_roots = [ { block = 0; vote = 0 } ]
 
 let init ~roots =
   match roots with
-  | [ genesis ] -> genesis, genesis
+  | [ genesis ] -> genesis
   | _ -> failwith "invalid roots"
 ;;
 
@@ -47,7 +47,7 @@ type ('env, 'data) extended_view =
   ; data : 'env Dag.node -> 'data
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
-  ; received_at : 'env Dag.node -> float
+  ; delivered_at : 'env Dag.node -> float
   ; appended_by_me : 'env Dag.node -> bool
   ; my_id : int
   }
@@ -57,19 +57,17 @@ let extend_view (x : _ Protocol.local_view) =
   ; data = x.data
   ; votes_only = Dag.filter (fun n -> x.data n |> is_vote) x.view
   ; blocks_only = Dag.filter (fun n -> x.data n |> is_block) x.view
-  ; received_at = x.received_at
+  ; delivered_at = x.delivered_at
   ; appended_by_me = x.appended_by_me
   ; my_id = x.my_id
   }
 ;;
 
-let rec last_block v gnode =
-  let node = v.data gnode in
-  if is_block node
-  then Some gnode
+let rec last_block v n =
+  if v.data n |> is_block
+  then n
   else (
-    match Dag.parents v.view gnode with
-    | [] -> None (* gnode not connected yet / visibility *)
+    match Dag.parents v.view n with
     | [ gnode ] -> last_block v gnode
     | _ -> failwith "invalid dag" (* votes have only one parent by dag_validity *))
 ;;
@@ -100,48 +98,35 @@ let offspring view node =
 
 let honest ~k v =
   let v = extend_view v in
-  let handler actions (lb, pv) (* last block, preferred chain *) = function
+  let handler actions preferred = function
     | Activate pow ->
-      let votes = offspring v.votes_only lb in
+      let b = last_block v preferred in
+      let votes = offspring v.votes_only b in
       if List.length votes >= k - 1
       then (
-        let lb' = v.data lb in
         let b =
           actions.extend_dag
             ~pow
             (* TODO Bug: transitive closure of last k received votes can be bigger than k *)
-            (lb :: first v.received_at (k - 1) votes)
-            { block = lb'.block + 1; vote = 0 }
+            (b :: first v.delivered_at (k - 1) votes)
+            { block = (v.data b).block + 1; vote = 0 }
         in
         let () = actions.share b in
-        b, b)
+        b)
       else (
-        let pv' = v.data pv in
-        let v = actions.extend_dag ~pow [ pv ] { pv' with vote = pv'.vote + 1 } in
+        let vd = v.data preferred in
+        let v = actions.extend_dag ~pow [ preferred ] { vd with vote = vd.vote + 1 } in
         let () = actions.share v in
-        lb, v)
-    | Deliver gnode ->
+        v)
+    | Deliver consider ->
       (* Prefer longest chain of votes after longest chain of blocks *)
-      (match last_block v gnode with
-      | None -> lb, pv (* vote not yet connected to last block *)
-      | Some gblock ->
-        (* Only consider block if its heritage is visible. *)
-        if Dag.have_common_ancestor v.blocks_only gblock lb
-        then (
-          let consider gpref gcand =
-            let pref = v.data gpref
-            and cand = v.data gcand in
-            if cand.block > pref.block
-               || (cand.block = pref.block && cand.vote > pref.vote)
-            then gcand
-            else gpref
-          in
-          (* delayed nodes might connect nodes delivered previously *)
-          let pv = List.fold_left consider pv (Dag.leaves v.view gblock) in
-          last_block v pv |> Option.get, pv)
-        else lb, pv)
+      let p = v.data preferred
+      and c = v.data consider in
+      if c.block > p.block || (c.block = p.block && c.vote > p.vote)
+      then consider
+      else preferred
   in
-  Node { init; handler; preferred = fst }
+  Node { init; handler; preferred = (fun x -> x) }
 ;;
 
 let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots }
