@@ -160,16 +160,24 @@ let preference v ~preferred ~consider =
 
 let honest ~k v actions =
   let propose b =
-    first ~skip_to:v.appended_by_me v.pow_hash k (Dag.children v.votes_only b)
+    let pow_hash_exn n = v.pow_hash n |> Option.get in
+    first ~skip_to:v.appended_by_me pow_hash_exn k (Dag.children v.votes_only b)
     |> Option.map (fun q ->
-           let preferred =
-             actions.extend_dag
-               ~sign:true
-               (b :: q)
-               (Block { height = block_height_exn v b + 1 })
-           in
-           actions.share preferred;
-           Some preferred)
+           (* only propose if there is no better proposal *)
+           let this = List.hd q |> pow_hash_exn in
+           if List.for_all
+                (fun n -> leader_hash_exn v n > this)
+                (Dag.children v.blocks_only b)
+           then (
+             let block =
+               actions.extend_dag
+                 ~sign:true
+                 (b :: q)
+                 (Block { height = block_height_exn v b + 1 })
+             in
+             actions.share block;
+             Some block)
+           else None)
     |> Option.join
   in
   fun preferred -> function
