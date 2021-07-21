@@ -248,6 +248,13 @@ type 'env strategic_state =
   ; private_ : 'env Dag.node
   }
 
+(* release a given node and all it's dependencies recursively *)
+let release v actions n =
+  (* TODO make recursive and stop iteration of first released block *)
+  Dag.iterate_ancestors v.view [ n ]
+  |> Seq.iter (fun n -> if not (v.released n) then actions.share n)
+;;
+
 let honest_tactic v actions state withheld =
   List.iter actions.share withheld;
   preference v ~preferred:state.private_ ~consider:state.public
@@ -256,25 +263,14 @@ let honest_tactic v actions state withheld =
 (* Withhold until I can propose a block. George calls this proof-packing. *)
 let simple_tactic v actions state _withheld =
   let privh = block_height_exn v state.private_
-  and publh = block_height_exn v state.public
-  and release n = if not (v.released n) then actions.share n in
+  and publh = block_height_exn v state.public in
   if publh > privh
   then (* abort withholding *)
     state.public
   else if privh > publh
   then (
     (* overwrite public chain *)
-    let () =
-      Dag.iterate_ancestors v.blocks_only [ state.private_ ]
-      |> Seq.flat_map (fun n ->
-             if v.released n
-             then (* stop iteration of first released block *)
-               Seq.empty
-             else
-               (* release all referenced votes *)
-               Dag.iterate_ancestors v.votes_only [ n ])
-      |> Seq.iter release
-    in
+    release v actions state.private_;
     state.private_)
   else (* continue withholding *)
     state.private_

@@ -72,11 +72,13 @@ let last_block v n =
     | _ -> failwith "invalid dag")
 ;;
 
-let block_data_exn data node =
-  match data node with
+let block_data_exn v node =
+  match v.data node with
   | Block b -> b
   | _ -> raise (Invalid_argument "not a block")
 ;;
+
+let block_height_exn v n = (block_data_exn v n).height
 
 let first by n l =
   let a = Array.of_list l in
@@ -89,42 +91,49 @@ let first by n l =
   !l
 ;;
 
-let honest ~k v =
-  let v = extend_view v in
-  let handler actions preferred = function
-    | Activate pow ->
-      let votes = Dag.children v.votes_only preferred in
-      if List.length votes >= k - 1
-      then (
-        let head = block_data_exn v.data preferred in
-        let head' =
-          actions.extend_dag
-            ~pow
-            (preferred :: first v.delivered_at (k - 1) votes)
-            (Block { height = head.height + 1 })
-        in
-        actions.share head';
-        head')
-      else (
-        let vote = actions.extend_dag ~pow [ preferred ] Vote in
-        actions.share vote;
-        preferred)
-    | Deliver n ->
-      (* We only prefer blocks. For received votes, reconsider parent block. *)
-      let consider = last_block v n in
-      let p = block_data_exn v.data preferred
-      and c = block_data_exn v.data consider in
-      if c.height > p.height
-         || (c.height = p.height
-            && List.length (Dag.children v.votes_only consider)
-               > List.length (Dag.children v.votes_only preferred))
-      then consider
-      else preferred
-  and preferred x = x in
-  Node { init; handler; preferred }
+let preference v ~preferred ~consider =
+  let p = block_data_exn v preferred
+  and c = block_data_exn v consider in
+  if c.height > p.height
+     || (c.height = p.height
+        && List.length (Dag.children v.votes_only consider)
+           > List.length (Dag.children v.votes_only preferred))
+  then consider
+  else preferred
 ;;
 
-let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots }
+let honest ~k v actions preferred = function
+  | Activate pow ->
+    let votes = Dag.children v.votes_only preferred in
+    if List.length votes >= k - 1
+    then (
+      let head = block_data_exn v preferred in
+      let head' =
+        actions.extend_dag
+          ~pow
+          (preferred :: first v.delivered_at (k - 1) votes)
+          (Block { height = head.height + 1 })
+      in
+      actions.share head';
+      head')
+    else (
+      let vote = actions.extend_dag ~pow [ preferred ] Vote in
+      actions.share vote;
+      preferred)
+  | Deliver n ->
+    (* We only prefer blocks. For received votes, reconsider parent block. *)
+    let consider = last_block v n in
+    preference v ~preferred ~consider
+;;
+
+let protocol ~k =
+  let honest v =
+    let handler = honest ~k (extend_view v)
+    and preferred x = x in
+    Node { init; handler; preferred }
+  in
+  { honest; dag_validity = dag_validity ~k; dag_roots }
+;;
 
 let%test "convergence" =
   let open Simulator in
@@ -162,180 +171,100 @@ let%test "convergence" =
 
 let constant c : ('env, node) reward_function = fun ~view:_ ~assign -> assign c
 
-type 'a selfish_state =
-  { public_head : 'a Dag.node
-  ; private_head : 'a Dag.node
-  ; withheld : 'a Dag.node list
+type 'a strategic_state =
+  { public : 'a Dag.node
+  ; private_ : 'a Dag.node
   }
 
-let preference v ~preferred:gpref ~consider:gblock =
-  let pref = block_data_exn v.data gpref
-  and block = block_data_exn v.data gblock in
-  if block.height > pref.height
-     || (block.height = pref.height
-        && List.length (Dag.children v.votes_only gblock)
-           > List.length (Dag.children v.votes_only gpref))
-  then gblock
-  else gpref
+(* release a given node and all it's dependencies recursively *)
+let release v actions ns =
+  (* TODO make recursive and stop iteration of first released block *)
+  Dag.iterate_ancestors v.view ns
+  |> Seq.iter (fun n -> if not (v.released n) then actions.share n)
 ;;
 
-let strategy tactic ~k v actions state =
-  let release nodes state =
-    let ht = Hashtbl.create k in
-    List.iter (fun n -> Hashtbl.replace ht (Dag.id n) true) state.withheld;
-    List.iter
-      (fun n ->
-        let id = Dag.id n in
-        match Hashtbl.find_opt ht id with
-        | Some true ->
-          Hashtbl.replace ht id false;
-          actions.share n
-        | _ -> ())
-      nodes;
-    { state with
-      withheld =
-        List.filter
-          (fun n ->
-            match Hashtbl.find_opt ht (Dag.id n) with
-            | Some true -> true
-            | _ -> false)
-          state.withheld
-    }
-  in
-  let public = block_data_exn v.data state.public_head
-  and privat = block_data_exn v.data state.private_head in
-  match if k < 2 then `Honest else tactic with
-  | `Honest ->
-    let state =
-      (* adopt freshly mined block, if any *)
-      if privat.height > public.height
-      then { state with public_head = state.private_head }
-      else state
-    in
-    release
-      state.withheld
-      { state with
-        private_head =
-          preference v ~preferred:state.private_head ~consider:state.public_head
-      }
-  | `Simple ->
-    (* withhold until I can propose block / George's proof-packing *)
-    if public.height > privat.height
-    then (* abort *)
-      release state.withheld { state with private_head = state.public_head }
-    else if public.height < privat.height
-    then
-      (* overwrite public chain *)
-      release state.withheld { state with public_head = state.private_head }
-    else (* continue withholding *) state
-  | `Advanced ->
-    (* withhold until defender can propose block / George's long-range *)
-    if Dag.node_eq state.public_head state.private_head
-    then (* continue *)
-      state
-    else if Dag.node_eq
-              state.public_head
-              (preference v ~preferred:state.private_head ~consider:state.public_head)
-    then
-      (* we are falling behind; abort *)
-      release state.withheld { state with private_head = state.public_head }
-    else (
-      (* overwrite public chain *)
-      let npubv = Dag.children v.votes_only state.public_head |> List.length in
-      let releasehead =
-        (* release least number of blocks *)
-        let rec f b =
-          if (block_data_exn v.data b).height > public.height
-          then (
-            match Dag.parents v.blocks_only b with
-            | [ p ] -> f p
-            | _ -> failwith "invalid DAG")
-          else b
-        in
-        f state.private_head
+let honest_tactic v actions state withheld =
+  List.iter actions.share withheld;
+  preference v ~preferred:state.private_ ~consider:state.public
+;;
+
+(* Withhold until I can propose a block. George calls this proof-packing. *)
+let simple_tactic v actions state _withheld =
+  let privh = block_height_exn v state.private_
+  and publh = block_height_exn v state.public in
+  if publh > privh
+  then (* abort withholding *)
+    state.public
+  else if privh > publh
+  then (
+    (* overwrite public chain *)
+    release v actions [ state.private_ ];
+    state.private_)
+  else (* continue withholding *)
+    state.private_
+;;
+
+(* Withhold until defender proposes a block then overwrite. George calls this long-range. *)
+(* TODO fix for k=1 *)
+let advanced_tactic v actions state _withheld =
+  if Dag.node_eq state.private_ state.public
+  then state.private_
+  else if preference v ~preferred:state.private_ ~consider:state.public
+          |> Dag.node_eq state.public
+  then (* Falling behind. Abort withholding *)
+    state.public
+  else if preference v ~preferred:state.public ~consider:state.private_
+          |> Dag.node_eq state.private_
+  then (
+    (* Overwrite feasible. *)
+    let npubv = Dag.children v.votes_only state.public |> List.length in
+    let releasehead =
+      (* TODO it may be easier to find common ancestor and release downwards until the
+         preference of the defender changes *)
+      (* release least number of blocks ... *)
+      let rec f b =
+        if block_height_exn v b > block_height_exn v state.public
+        then (
+          match Dag.parents v.blocks_only b with
+          | [ p ] -> f p
+          | _ -> failwith "invalid DAG")
+        else b
       in
-      let privv = Dag.children v.votes_only releasehead in
-      if List.length privv > npubv
-      then (
-        (* overwrite feasible *)
-        let releaseheight = (block_data_exn v.data state.public_head).height in
-        assert ((block_data_exn v.data releasehead).height = releaseheight);
-        let blockdeps =
-          List.filter
-            (fun n ->
-              match v.data n with
-              | Block b -> b.height < releaseheight
-              | Vote -> false)
-            state.withheld
-        in
-        let releasenodes =
-          List.concat
-            [ [ releasehead ]
-            ; first
-                (fun n -> not (v.appended_by_me n), v.delivered_at n)
-                (npubv + 1)
-                (Dag.children v.votes_only releasehead)
-            ; Dag.parents v.votes_only releasehead
-            ; blockdeps
-            ; List.concat_map (Dag.parents v.votes_only) blockdeps
-            ]
-        in
-        release releasenodes { state with public_head = releasehead })
-      else (* overwrite infeasible *) state)
+      f state.private_
+    in
+    (* ... and least number of votes *)
+    let privv = Dag.children v.votes_only releasehead in
+    if List.length privv > npubv
+    then release v actions (releasehead :: first v.delivered_at (npubv + 1) privv);
+    state.private_)
+  else state.private_
 ;;
 
-let strategic tactic ~k v =
-  let v = extend_view v in
+let strategic tactic ~k (v : _ local_view) =
+  let public_view = extend_view { v with view = Dag.filter v.released v.view }
+  and private_view = extend_view v in
+  let tactic =
+    match tactic with
+    | `Honest -> honest_tactic private_view
+    | `Simple -> simple_tactic private_view
+    | `Advanced -> advanced_tactic private_view
+  in
   let handler actions state event =
+    let withheld = ref [] in
+    let withhold = { actions with share = (fun n -> withheld := n :: !withheld) } in
     let state =
       match event with
-      | Activate pow ->
-        let votes = Dag.children v.votes_only state.private_head in
-        if List.length votes >= k - 1
-        then (
-          let head = block_data_exn v.data state.private_head in
-          let head' =
-            actions.extend_dag
-              ~pow
-              (state.private_head
-              :: first (fun n -> not (v.appended_by_me n), v.delivered_at n) (k - 1) votes
-              )
-              (Block { height = head.height + 1 })
-          in
-          { state with private_head = head'; withheld = head' :: state.withheld })
-        else (
-          let vote = actions.extend_dag ~pow [ state.private_head ] Vote in
-          { state with withheld = vote :: state.withheld })
-      | Deliver gnode ->
-        (* simulate honest node *)
-        let v =
-          { v with
-            view = Dag.filter v.released v.view
-          ; votes_only = Dag.filter v.released v.votes_only
-          ; blocks_only = Dag.filter v.released v.blocks_only
-          }
-        in
-        (* We only prefer blocks. For received votes, reconsider parent block. *)
-        let gblock = last_block v gnode in
-        (* Only consider block if its heritage is visible. *)
-        if Dag.have_common_ancestor v.blocks_only gblock state.public_head
-        then (
-          (* delayed block might connect nodes delivered previously *)
-          let public_head =
-            List.fold_left
-              (fun preferred consider -> preference v ~preferred ~consider)
-              state.public_head
-              (Dag.leaves v.blocks_only gblock)
-          in
-          assert (is_block (v.data public_head));
-          { state with public_head })
-        else state
+      | Activate _ ->
+        { state with private_ = honest ~k private_view withhold state.private_ event }
+      | Deliver _ ->
+        { state with public = honest ~k public_view withhold state.public event }
     in
-    strategy ~k tactic v actions state
-  and preferred x = x.private_head
+    let withheld = List.rev !withheld in
+    { state with private_ = tactic actions state withheld }
+  and preferred x = x.private_
   and init ~roots =
-    let genesis = init ~roots in
-    { public_head = genesis; private_head = genesis; withheld = [] }
+    let s = init ~roots in
+    { public = s; private_ = s }
   in
   Node { init; handler; preferred }
 ;;
