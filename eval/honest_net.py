@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-df = pd.read_csv("data/honest_net.tsv", sep="\t").dropna(axis=1, how='all')
+df = pd.read_csv("data/honest_net.tsv", sep="\t")
+df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 
 # C&P from https://stackoverflow.com/a/39513799
 def gini(x):
@@ -18,7 +19,10 @@ def gini(x):
     return g
 
 def parse_array(s):
-    return np.fromstring(s, dtype=float, sep="|")
+    try:
+        return np.fromstring(s, dtype=float, sep="|")
+    except:
+        return np.array([float('nan')])
 
 def expand(row):
     compute = parse_array(row.compute)
@@ -32,7 +36,7 @@ def expand(row):
     rcompute = compute / np.sum(compute)
     wsg('compute', rcompute)
     activations = parse_array(row.activations)
-    assert(np.sum(activations) == row.number_activations)
+    assert(np.sum(activations) == row.number_activations or row.error)
     ractivations = activations / np.sum(activations)
     wsg('activations', ractivations)
     reward = parse_array(row.reward)
