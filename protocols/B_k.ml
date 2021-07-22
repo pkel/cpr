@@ -115,7 +115,9 @@ let leader_hash_exn v n =
     (match v.pow_hash v0 with
     | Some x -> x
     | None -> raise (Invalid_argument "invalid dag / vote"))
-  | _ -> raise (Invalid_argument "invalid dag / block")
+  | _ ->
+    (* happens for genesis node *)
+    max_int
 ;;
 
 let first ?(skip_to = fun _ -> true) by n l =
@@ -138,24 +140,17 @@ let first ?(skip_to = fun _ -> true) by n l =
       Some !l))
 ;;
 
-let preference v ~preferred ~consider =
-  if Dag.node_eq preferred consider
-  then preferred
-  else (
-    let pheight = block_height_exn v preferred
-    and cheight = block_height_exn v consider in
-    if cheight > pheight
-    then consider
-    else if cheight = pheight
-    then (
-      let cvotes = List.length (Dag.children v.votes_only consider)
-      and pvotes = List.length (Dag.children v.votes_only preferred) in
-      if cvotes > pvotes
-      then consider
-      else if cvotes = pvotes && leader_hash_exn v consider < leader_hash_exn v preferred
-      then consider
-      else preferred)
-    else preferred)
+let compare_blocks v =
+  let open Compare_by in
+  int (block_height_exn v)
+  $ int (fun n -> List.length (Dag.children v.votes_only n))
+  $ int (fun n -> -leader_hash_exn v n)
+  $ float (fun n -> Float.neg (v.delivered_at n))
+  $ int (fun n -> -Dag.id n)
+;;
+
+let update_head v ~preferred ~consider =
+  if compare_blocks v consider preferred > 0 then consider else preferred
 ;;
 
 let honest ~k v actions =
@@ -187,10 +182,18 @@ let honest ~k v actions =
       Option.value ~default:preferred (propose preferred)
     | Deliver n ->
       (* We only prefer blocks. For received votes, reconsider parent block. *)
-      let consider = last_block v n in
-      (match propose consider with
-      | None -> preference v ~preferred ~consider
-      | Some consider -> preference v ~preferred ~consider)
+      let b = last_block v n in
+      let consider =
+        (* propose if possible *)
+        match propose b with
+        | Some b' -> [ b; b' ]
+        | None -> [ b ]
+      in
+      (* prefer best block of all blocks involved *)
+      List.fold_left
+        (fun preferred consider -> update_head v ~preferred ~consider)
+        preferred
+        consider
 ;;
 
 let protocol ~k =
@@ -257,7 +260,7 @@ let release v actions n =
 
 let honest_tactic v actions state withheld =
   List.iter actions.share withheld;
-  preference v ~preferred:state.private_ ~consider:state.public
+  update_head v ~preferred:state.private_ ~consider:state.public
 ;;
 
 (* Withhold until I can propose a block. George calls this proof-packing. *)
