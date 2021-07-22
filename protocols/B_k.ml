@@ -253,10 +253,14 @@ type 'env strategic_state =
   }
 
 (* release a given node and all it's dependencies recursively *)
-let release v actions ns =
-  (* TODO make recursive and stop iteration of first released block *)
-  Dag.iterate_ancestors v.view ns
-  |> Seq.iter (fun n -> if not (v.released n) then actions.share n)
+let rec release v actions ns =
+  List.iter
+    (fun n ->
+      if not (v.released n)
+      then (
+        actions.share n;
+        release v actions (Dag.parents v.view n)))
+    ns
 ;;
 
 let honest_tactic v actions state withheld =
