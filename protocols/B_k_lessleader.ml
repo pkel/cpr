@@ -169,7 +169,11 @@ let%test "convergence" =
     ]
 ;;
 
-let constant c : ('env, node) reward_function = fun ~view:_ ~assign -> assign c
+let constant_pow c : ('env, node) reward_function = fun ~view:_ ~assign -> assign c
+
+let constant_block c : ('env, node) reward_function =
+ fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
+;;
 
 type 'a strategic_state =
   { public : 'a Dag.node
@@ -245,12 +249,7 @@ let advanced_tactic v actions state _withheld =
 let strategic tactic ~k (v : _ local_view) =
   let public_view = extend_view { v with view = Dag.filter v.released v.view }
   and private_view = extend_view v in
-  let tactic =
-    match tactic with
-    | `Honest -> honest_tactic private_view
-    | `Simple -> simple_tactic private_view
-    | `Advanced -> advanced_tactic private_view
-  in
+  let tactic = tactic private_view in
   let handler actions state event =
     let withheld = ref [] in
     let withhold = { actions with share = (fun n -> withheld := n :: !withheld) } in

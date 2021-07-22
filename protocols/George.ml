@@ -165,6 +165,10 @@ let%test "convergence" =
     ]
 ;;
 
+let constant_block c : _ reward_function =
+ fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
+;;
+
 let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_function =
   let k = float_of_int k in
   let c = max_reward_per_block /. k in

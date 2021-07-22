@@ -6,9 +6,9 @@ let protocols =
   let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
   List.concat
     [ [ Nakamoto, [ Constant ] ]
-    ; List.map (fun k -> B_k { k }, [ Constant ]) k
-    ; List.map (fun k -> B_k_lessleadership { k }, [ Constant ]) k
-    ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k
+    ; List.map (fun k -> B_k { k }, [ Constant; Block ]) k
+    ; List.map (fun k -> B_k_lessleadership { k }, [ Constant; Block ]) k
+    ; List.map (fun k -> George { k }, [ Constant; Block; Punish; Discount; Hybrid ]) k
     ]
 ;;
 

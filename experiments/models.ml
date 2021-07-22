@@ -43,12 +43,14 @@ let describe_protocol = function
 ;;
 
 type incentive_scheme =
+  | Block
   | Constant
   | Discount
   | Punish
   | Hybrid
 
 let tag_incentive_scheme = function
+  | Block -> "block"
   | Constant -> "constant"
   | Discount -> "discount"
   | Punish -> "punish"
@@ -56,6 +58,7 @@ let tag_incentive_scheme = function
 ;;
 
 let describe_incentive_scheme = function
+  | Block -> "1 per confirmed block"
   | Constant -> "1 per confirmed pow solution"
   | Discount ->
     "max k per confirmed block, d/k per pow solution (d ∊ 1..k = height since last \
@@ -187,16 +190,18 @@ let setup t =
     in
     S { task = t; params; network; protocol; deviations; reward_functions }
   | B_k { k } ->
-    let protocol = B_k.protocol ~k in
+    let open B_k in
+    let protocol = protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> B_k.strategic ~k `Honest
-          | SelfishSimple -> B_k.strategic ~k `Simple
-          | SelfishAdvanced -> B_k.strategic ~k `Advanced)
+          | Honest -> strategic honest_tactic ~k
+          | SelfishSimple -> strategic simple_tactic ~k
+          | SelfishAdvanced -> strategic advanced_tactic ~k)
     and reward_functions =
       List.map
         (function
-          | Constant -> B_k.constant 1.
+          | Constant -> constant_pow 1.
+          | Block -> constant_block 1.
           | x ->
             let m =
               Printf.sprintf
@@ -209,16 +214,18 @@ let setup t =
     in
     S { task = t; params; network; protocol; deviations; reward_functions }
   | B_k_lessleadership { k } ->
-    let protocol = B_k_lessleader.protocol ~k in
+    let open B_k_lessleader in
+    let protocol = protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> B_k_lessleader.strategic `Honest ~k
-          | SelfishSimple -> B_k_lessleader.strategic `Simple ~k
-          | SelfishAdvanced -> B_k_lessleader.strategic `Advanced ~k)
+          | Honest -> strategic honest_tactic ~k
+          | SelfishSimple -> strategic simple_tactic ~k
+          | SelfishAdvanced -> strategic advanced_tactic ~k)
     and reward_functions =
       List.map
         (function
-          | Constant -> B_k_lessleader.constant 1.
+          | Constant -> constant_pow 1.
+          | Block -> constant_block 1.
           | x ->
             let m =
               Printf.sprintf
@@ -250,7 +257,8 @@ let setup t =
          | Constant -> reward ~punish:false ~discount:false
          | Discount -> reward ~punish:false ~discount:true
          | Punish -> reward ~punish:true ~discount:false
-         | Hybrid -> reward ~punish:true ~discount:true)
+         | Hybrid -> reward ~punish:true ~discount:true
+         | Block -> George.constant_block 1.)
         t.incentive_schemes
     in
     S { task = t; params; network; protocol; deviations; reward_functions }

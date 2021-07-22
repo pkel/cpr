@@ -11,9 +11,9 @@ let protocols =
     [ List.concat_map
         (fun k ->
           [ ( B_k_lessleadership { k }
-            , [ Constant ]
+            , [ Constant; Block ]
             , [ Honest; SelfishSimple; SelfishAdvanced ] )
-          ; B_k { k }, [ Constant ], [ Honest; SelfishSimple; SelfishAdvanced ]
+          ; B_k { k }, [ Constant; Block ], [ Honest; SelfishSimple; SelfishAdvanced ]
           ])
         k
       (* ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k *)
