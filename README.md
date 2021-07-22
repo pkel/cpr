@@ -11,6 +11,8 @@ Get network spec (compute/latencies) from other papers
 
 1. ✓ Patrik's B_k with PoW hash-ordering based leader selection.
 2. BU's protocol after George gave me the specifics.
+3. Bobtail
+4. Ethereum
 
 ## Implement more attacks
 
@@ -18,7 +20,7 @@ Get network spec (compute/latencies) from other papers
 the next private block, while the defender cannot yet produce an block
 themselves.
 
-2. SelfishSimple/Advanced on unmodified B_k.
+2. ✓ SelfishSimple/Advanced on unmodified B_k.
 
 3. SelfishSimple/Advanced on George's protocol.
 
