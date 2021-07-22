@@ -207,14 +207,12 @@ let simple_tactic v actions state _withheld =
 (* Withhold until defender proposes a block then overwrite. George calls this long-range. *)
 (* TODO fix for k=1 *)
 let advanced_tactic v actions state _withheld =
-  if Dag.node_eq state.private_ state.public
+  if state.private_ $== state.public
   then state.private_
-  else if preference v ~preferred:state.private_ ~consider:state.public
-          |> Dag.node_eq state.public
+  else if preference v ~preferred:state.private_ ~consider:state.public $== state.public
   then (* Falling behind. Abort withholding *)
     state.public
-  else if preference v ~preferred:state.public ~consider:state.private_
-          |> Dag.node_eq state.private_
+  else if preference v ~preferred:state.public ~consider:state.private_ $== state.private_
   then (
     (* Overwrite feasible. *)
     let npubv = Dag.children v.votes_only state.public |> List.length in

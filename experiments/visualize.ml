@@ -51,10 +51,10 @@ let tasks0 =
               t, fpaths_and_legends ~alpha t, label_node)
             strategies)
         [ Nakamoto, [ Constant ], [ Honest ], 10
-        ; B_k { k = 16 }, [ Constant ], [ Honest; SelfishSimple ], 200
-        ; B_k { k = 8 }, [ Constant ], [ Honest; SelfishSimple ], 100
-        ; B_k { k = 4 }, [ Constant ], [ Honest; SelfishSimple ], 50
-        ; B_k { k = 1 }, [ Constant ], [ Honest; SelfishSimple ], 20
+        ; B_k { k = 16 }, [ Constant ], [ Honest; SelfishSimple; SelfishAdvanced ], 200
+        ; B_k { k = 8 }, [ Constant ], [ Honest; SelfishSimple; SelfishAdvanced ], 100
+        ; B_k { k = 4 }, [ Constant ], [ Honest; SelfishSimple; SelfishAdvanced ], 50
+        ; B_k { k = 1 }, [ Constant ], [ Honest; SelfishSimple; SelfishAdvanced ], 20
         ; ( B_k_lessleadership { k = 16 }
           , [ Constant ]
           , [ Honest; SelfishSimple; SelfishAdvanced ]

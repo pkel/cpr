@@ -192,14 +192,7 @@ let setup t =
       deviations (function
           | Honest -> B_k.strategic ~k `Honest
           | SelfishSimple -> B_k.strategic ~k `Simple
-          | x ->
-            let m =
-              Printf.sprintf
-                "protocol %s does not support attack strategy %s"
-                (protocol_family t.protocol)
-                (tag_strategy x)
-            in
-            raise (Invalid_argument m))
+          | SelfishAdvanced -> B_k.strategic ~k `Advanced)
     and reward_functions =
       List.map
         (function

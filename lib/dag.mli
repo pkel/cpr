@@ -18,6 +18,8 @@ val data : 'a node -> 'a
 (** node equality *)
 val node_eq : 'a node -> 'a node -> bool
 
+val node_neq : 'a node -> 'a node -> bool
+
 (** [id n] ranges from [0] to [size t - 1] *)
 val id : 'a node -> int
 

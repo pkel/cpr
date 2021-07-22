@@ -20,6 +20,7 @@ let debug_pp ?meta v fmt n =
 ;;
 
 let node_eq a b = a.serial = b.serial
+let node_neq a b = a.serial <> b.serial
 let id a = a.serial
 
 type 'a t =

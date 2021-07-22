@@ -156,6 +156,7 @@ let update_head v ~preferred ~consider =
 let honest ~k v actions =
   let propose b =
     let pow_hash_exn n = v.pow_hash n |> Option.get in
+    (* TODO: prefer own votes over low hash votes *)
     first ~skip_to:v.appended_by_me pow_hash_exn k (Dag.children v.votes_only b)
     |> Option.map (fun q ->
            (* only propose if there is no better proposal *)
@@ -252,9 +253,9 @@ type 'env strategic_state =
   }
 
 (* release a given node and all it's dependencies recursively *)
-let release v actions n =
+let release v actions ns =
   (* TODO make recursive and stop iteration of first released block *)
-  Dag.iterate_ancestors v.view [ n ]
+  Dag.iterate_ancestors v.view ns
   |> Seq.iter (fun n -> if not (v.released n) then actions.share n)
 ;;
 
@@ -273,10 +274,48 @@ let simple_tactic v actions state _withheld =
   else if privh > publh
   then (
     (* overwrite public chain *)
-    release v actions state.private_;
+    release v actions [ state.private_ ];
     state.private_)
   else (* continue withholding *)
     state.private_
+;;
+
+let advanced_tactic v actions state _withheld =
+  if state.private_ $== state.public
+  then state.private_
+  else (
+    let d = compare_blocks v state.private_ state.public in
+    if d < 0
+    then (* Falling behind. Abort withholding *)
+      state.public
+    else if d > 0
+    then (
+      (* Overwrite feasible. *)
+      let npubv = Dag.children v.votes_only state.public |> List.length in
+      let releasehead =
+        (* TODO it may be easier to find common ancestor and release downwards until the
+           preference of the defender changes *)
+        (* release least number of blocks ... *)
+        let rec f b =
+          if block_height_exn v b > block_height_exn v state.public
+          then (
+            match Dag.parents v.blocks_only b with
+            | [ p ] -> f p
+            | _ -> failwith "invalid DAG")
+          else b
+        in
+        f state.private_
+      in
+      (* ... and least number of votes *)
+      let privv = Dag.children v.votes_only releasehead in
+      if List.length privv > npubv
+      then
+        release
+          v
+          actions
+          (releasehead :: (first v.delivered_at (npubv + 1) privv |> Option.get));
+      state.private_)
+    else state.private_)
 ;;
 
 let strategic tactic ~k (v : _ local_view) =
@@ -286,6 +325,7 @@ let strategic tactic ~k (v : _ local_view) =
     match tactic with
     | `Honest -> honest_tactic private_view
     | `Simple -> simple_tactic private_view
+    | `Advanced -> advanced_tactic private_view
   in
   let handler actions state event =
     let withheld = ref [] in

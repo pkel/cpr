@@ -4,6 +4,9 @@ module Network = Network
 module Protocol = Protocol
 module Simulator = Simulator
 
+let ( $== ) = Dag.node_eq
+let ( $!= ) = Dag.node_neq
+
 module Compare_by : sig
   type 'a cmp = 'a -> 'a -> int
 
