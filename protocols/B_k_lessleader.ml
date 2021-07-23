@@ -111,7 +111,11 @@ let honest ~k v actions preferred = function
       let head' =
         actions.extend_dag
           ~pow
-          (preferred :: first v.delivered_at (k - 1) votes)
+          (preferred
+          :: first
+               (fun n -> (if v.appended_by_me n then 0 else 1), v.delivered_at n)
+               (k - 1)
+               votes)
           (Block { height = head.height + 1 })
       in
       actions.share head';
