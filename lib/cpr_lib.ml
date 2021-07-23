@@ -7,11 +7,14 @@ module Simulator = Simulator
 let ( $== ) = Dag.node_eq
 let ( $!= ) = Dag.node_neq
 
-module Compare_by : sig
+module Compare : sig
   type 'a cmp = 'a -> 'a -> int
 
-  val int : ('a -> int) -> 'a cmp
-  val float : ('a -> float) -> 'a cmp
+  val int : int cmp
+  val float : float cmp
+  val inv : 'a cmp -> 'a cmp
+  val tuple : 'a cmp -> 'b cmp -> ('a * 'b) cmp
+  val by : 'a cmp -> ('b -> 'a) -> 'b cmp
 
   (** [disambiguate cmp0 cmp1] disambiguates [cmp0 a b = 0] using [cmp1]. The latter is
       evaluated lazily. *)
@@ -22,8 +25,17 @@ module Compare_by : sig
 end = struct
   type 'a cmp = 'a -> 'a -> int
 
-  let int p a b = Int.compare (p a) (p b)
-  let float p a b = Float.compare (p a) (p b)
+  let int = Int.compare
+  let float = Float.compare
+  let inv cmp a b = cmp b a
+
+  let tuple cmp0 cmp1 a b =
+    match cmp0 (fst a) (fst b) with
+    | 0 -> cmp1 (snd a) (snd b)
+    | x -> x
+  ;;
+
+  let by cmp p a b = cmp (p a) (p b)
 
   let disambiguate cmp0 cmp1 a b =
     match cmp0 a b with
@@ -35,10 +47,10 @@ end = struct
 end
 
 let%expect_test _ =
-  let open Compare_by in
-  let cmp = int fst $ float snd in
+  let open Compare in
+  let cmp = tuple int float in
   let shuffle a =
-    List.map (fun e -> Random.bits (), e) a |> List.sort (int fst) |> List.map snd
+    List.map (fun e -> Random.bits (), e) a |> List.sort (by int fst) |> List.map snd
   in
   shuffle [ 1, 1.; 2, 1.; 0, 1.; 2, 0.; 2, 2.; 1, 0.; 0, 2.; 0, 0.; 1, 2. ]
   |> List.sort cmp

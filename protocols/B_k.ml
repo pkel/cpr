@@ -55,11 +55,13 @@ type ('env, 'data) extended_view =
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
   ; delivered_at : 'env Dag.node -> float
-  ; pow_hash : 'env Dag.node -> int option
+  ; pow_hash : 'env Dag.node -> (int * int) option
   ; appended_by_me : 'env Dag.node -> bool
   ; released : 'env Dag.node -> bool
   ; my_id : int
   }
+
+let max_pow_hash = max_int, max_int
 
 let extend_view (x : _ Protocol.local_view) =
   { view = x.view
@@ -117,7 +119,7 @@ let leader_hash_exn v n =
     | None -> raise (Invalid_argument "invalid dag / vote"))
   | _ ->
     (* happens for genesis node *)
-    max_int
+    max_pow_hash
 ;;
 
 let first ?(skip_to = fun _ -> true) by n l =
@@ -141,12 +143,11 @@ let first ?(skip_to = fun _ -> true) by n l =
 ;;
 
 let compare_blocks v =
-  let open Compare_by in
-  int (block_height_exn v)
-  $ int (fun n -> List.length (Dag.children v.votes_only n))
-  $ int (fun n -> -leader_hash_exn v n)
-  (* overruled by leader hash comparison: {fun n -> if v.appended_by_me n then 1 else 0} *)
-  $ float (fun n -> Float.neg (v.delivered_at n))
+  let open Compare in
+  by int (block_height_exn v)
+  $ by int (fun n -> List.length (Dag.children v.votes_only n))
+  $ by (tuple int int |> inv) (leader_hash_exn v)
+  $ by (inv float) v.delivered_at
 ;;
 
 let update_head v ~preferred ~consider =
@@ -171,7 +172,7 @@ let quorum ~k v b =
           else my_hash, replace_hash, mine, nmine, n :: theirs, ntheirs + 1
         | Block _ ->
           my_hash, min replace_hash (leader_hash_exn v n), mine, nmine, theirs, ntheirs)
-      (max_int, max_int, [], 0, [], 0)
+      (max_pow_hash, max_pow_hash, [], 0, [], 0)
       (Dag.children v.view b)
   in
   if replace_hash <= my_hash || nmine + ntheirs < k

@@ -33,7 +33,7 @@ type ('env, 'data) global_view =
   ; data : 'env Dag.node -> 'data (** Read the protocol data attached to DAG node. *)
   ; signed_by : 'env Dag.node -> int option
         (** Return id of signer if DAG node was signed. *)
-  ; pow_hash : 'env Dag.node -> int option
+  ; pow_hash : 'env Dag.node -> (int * int) option
         (** Return PoW hash of node, if node was attached with PoW authorization. *)
   }
 
@@ -45,7 +45,7 @@ type ('env, 'data) local_view =
   ; signed_by : 'env Dag.node -> int option
         (** Return id of signer if DAG node was signed. *)
   ; my_id : int
-  ; pow_hash : 'env Dag.node -> int option
+  ; pow_hash : 'env Dag.node -> (int * int) option
         (** Return PoW hash of node, if node was attached with PoW authorization. *)
   ; delivered_at : 'env Dag.node -> float (** Get time of delivery of DAG nodes. *)
   ; released : 'env Dag.node -> bool (** Was this node already shared? *)

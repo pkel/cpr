@@ -12,7 +12,7 @@ type 'a data =
   ; appended_by : int option
   ; appended_at : float
   ; mutable released_at : float
-  ; pow_hash : int option
+  ; pow_hash : (int * int) option
   ; signed_by : int option
   }
 
@@ -129,7 +129,8 @@ let init
             match pow with
             | Some x when x.fresh ->
               x.fresh <- false;
-              Some (Random.bits ())
+              (* ensure uniqueness of pow hashes *)
+              Some (Random.bits (), Dag.size dag)
             | Some _ -> raise (Invalid_argument "pow was used before")
             | None -> None
           in
