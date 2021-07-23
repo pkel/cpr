@@ -8,6 +8,8 @@ pandas = "*"
 numpy = "*"
 
 [dev-packages]
+jupyter = "*"
+matplotlib = "*"
 
 [requires]
 python_version = "3.9"
