@@ -145,8 +145,8 @@ let compare_blocks v =
   int (block_height_exn v)
   $ int (fun n -> List.length (Dag.children v.votes_only n))
   $ int (fun n -> -leader_hash_exn v n)
+  (* overruled by leader hash comparison: {fun n -> if v.appended_by_me n then 1 else 0} *)
   $ float (fun n -> Float.neg (v.delivered_at n))
-  $ int (fun n -> -Dag.id n)
 ;;
 
 let update_head v ~preferred ~consider =

@@ -91,15 +91,16 @@ let first by n l =
   !l
 ;;
 
-let preference v ~preferred ~consider =
-  let p = block_data_exn v preferred
-  and c = block_data_exn v consider in
-  if c.height > p.height
-     || (c.height = p.height
-        && List.length (Dag.children v.votes_only consider)
-           > List.length (Dag.children v.votes_only preferred))
-  then consider
-  else preferred
+let compare_blocks v =
+  let open Compare_by in
+  int (block_height_exn v)
+  $ int (fun n -> List.length (Dag.children v.votes_only n))
+  $ int (fun n -> if v.appended_by_me n then 1 else 0)
+  $ float (fun n -> Float.neg (v.delivered_at n))
+;;
+
+let update_head v ~preferred ~consider =
+  if compare_blocks v consider preferred > 0 then consider else preferred
 ;;
 
 let honest ~k v actions preferred = function
@@ -127,7 +128,7 @@ let honest ~k v actions preferred = function
   | Deliver n ->
     (* We only prefer blocks. For received votes, reconsider parent block. *)
     let consider = last_block v n in
-    preference v ~preferred ~consider
+    update_head v ~preferred ~consider
 ;;
 
 let protocol ~k =
@@ -197,7 +198,7 @@ let rec release v actions ns =
 
 let honest_tactic v actions state withheld =
   List.iter actions.share withheld;
-  preference v ~preferred:state.private_ ~consider:state.public
+  update_head v ~preferred:state.private_ ~consider:state.public
 ;;
 
 (* Withhold until I can propose a block. George calls this proof-packing. *)
@@ -221,33 +222,35 @@ let simple_tactic v actions state _withheld =
 let advanced_tactic v actions state _withheld =
   if state.private_ $== state.public
   then state.private_
-  else if preference v ~preferred:state.private_ ~consider:state.public $== state.public
-  then (* Falling behind. Abort withholding *)
-    state.public
-  else if preference v ~preferred:state.public ~consider:state.private_ $== state.private_
-  then (
-    (* Overwrite feasible. *)
-    let npubv = Dag.children v.votes_only state.public |> List.length in
-    let releasehead =
-      (* TODO it may be easier to find common ancestor and release downwards until the
-         preference of the defender changes *)
-      (* release least number of blocks ... *)
-      let rec f b =
-        if block_height_exn v b > block_height_exn v state.public
-        then (
-          match Dag.parents v.blocks_only b with
-          | [ p ] -> f p
-          | _ -> failwith "invalid DAG")
-        else b
+  else (
+    let d = compare_blocks v state.private_ state.public in
+    if d < 0
+    then (* Falling behind. Abort withholding *)
+      state.public
+    else if d > 0
+    then (
+      (* Overwrite feasible. *)
+      let npubv = Dag.children v.votes_only state.public |> List.length in
+      let releasehead =
+        (* TODO it may be easier to find common ancestor and release downwards until the
+           preference of the defender changes *)
+        (* release least number of blocks ... *)
+        let rec f b =
+          if block_height_exn v b > block_height_exn v state.public
+          then (
+            match Dag.parents v.blocks_only b with
+            | [ p ] -> f p
+            | _ -> failwith "invalid DAG")
+          else b
+        in
+        f state.private_
       in
-      f state.private_
-    in
-    (* ... and least number of votes *)
-    let privv = Dag.children v.votes_only releasehead in
-    if List.length privv > npubv
-    then release v actions (releasehead :: first v.delivered_at (npubv + 1) privv);
-    state.private_)
-  else state.private_
+      (* ... and least number of votes *)
+      let privv = Dag.children v.votes_only releasehead in
+      if List.length privv > npubv
+      then release v actions (releasehead :: first v.delivered_at (npubv + 1) privv);
+      state.private_)
+    else state.private_)
 ;;
 
 let strategic tactic ~k (v : _ local_view) =
