@@ -153,28 +153,62 @@ let update_head v ~preferred ~consider =
   if compare_blocks v consider preferred > 0 then consider else preferred
 ;;
 
+let quorum ~k v b =
+  let pow_hash_exn n = v.pow_hash n |> Option.get in
+  let my_hash, replace_hash, mine, nmine, theirs, ntheirs =
+    List.fold_left
+      (fun (my_hash, replace_hash, mine, nmine, theirs, ntheirs) n ->
+        match v.data n with
+        | Vote _ ->
+          if v.appended_by_me n
+          then
+            ( min my_hash (pow_hash_exn n)
+            , replace_hash
+            , n :: mine
+            , nmine + 1
+            , theirs
+            , ntheirs )
+          else my_hash, replace_hash, mine, nmine, n :: theirs, ntheirs + 1
+        | Block _ ->
+          my_hash, min replace_hash (leader_hash_exn v n), mine, nmine, theirs, ntheirs)
+      (max_int, max_int, [], 0, [], 0)
+      (Dag.children v.view b)
+  in
+  if replace_hash <= my_hash || nmine + ntheirs < k
+  then (* fast path *) None
+  else if nmine >= k
+  then first pow_hash_exn k mine
+  else (
+    let theirs, ntheirs =
+      List.fold_left
+        (fun (theirs, ntheirs) vote ->
+          if pow_hash_exn vote > my_hash
+          then vote :: theirs, ntheirs + 1
+          else theirs, ntheirs)
+        ([], 0)
+        theirs
+    in
+    if ntheirs < k - nmine
+    then (* fast path *) None
+    else (
+      let theirs = first v.delivered_at (k - nmine) theirs |> Option.get in
+      mine @ theirs
+      |> List.sort (fun a b -> compare (pow_hash_exn a) (pow_hash_exn b))
+      |> Option.some))
+;;
+
 let honest ~k v actions =
   let propose b =
-    let pow_hash_exn n = v.pow_hash n |> Option.get in
-    (* TODO: prefer own votes over low hash votes *)
-    first ~skip_to:v.appended_by_me pow_hash_exn k (Dag.children v.votes_only b)
+    quorum ~k v b
     |> Option.map (fun q ->
-           (* only propose if there is no better proposal *)
-           let this = List.hd q |> pow_hash_exn in
-           if List.for_all
-                (fun n -> leader_hash_exn v n > this)
-                (Dag.children v.blocks_only b)
-           then (
-             let block =
-               actions.extend_dag
-                 ~sign:true
-                 (b :: q)
-                 (Block { height = block_height_exn v b + 1 })
-             in
-             actions.share block;
-             Some block)
-           else None)
-    |> Option.join
+           let block =
+             actions.extend_dag
+               ~sign:true
+               (b :: q)
+               (Block { height = block_height_exn v b + 1 })
+           in
+           actions.share block;
+           block)
   in
   fun preferred -> function
     | Activate pow ->
