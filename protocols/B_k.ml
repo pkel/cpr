@@ -95,12 +95,6 @@ let block_height_exn v n =
   | _ -> invalid_dag v n "not a block"
 ;;
 
-let parent_block v n =
-  match Dag.parents v.view n with
-  | hd :: _ when v.data hd |> is_block -> Some hd
-  | _ -> None
-;;
-
 let last_block v n =
   match v.data n with
   | Block _ -> n
@@ -144,10 +138,13 @@ let first ?(skip_to = fun _ -> true) by n l =
 
 let compare_blocks v =
   let open Compare in
-  by int (block_height_exn v)
-  $ by int (fun n -> List.length (Dag.children v.votes_only n))
-  $ by (tuple int int |> inv) (leader_hash_exn v)
-  $ by (inv float) v.delivered_at
+  let cmp =
+    by int (block_height_exn v)
+    $ by int (fun n -> List.length (Dag.children v.votes_only n))
+    $ by (tuple int int |> inv) (leader_hash_exn v)
+    $ by (inv float) v.delivered_at
+  in
+  skip_eq Dag.node_eq cmp
 ;;
 
 let update_head v ~preferred ~consider =
@@ -302,69 +299,82 @@ let rec release v actions ns =
     ns
 ;;
 
-let honest_tactic v actions state withheld =
-  List.iter actions.share withheld;
-  update_head v ~preferred:state.private_ ~consider:state.public
-;;
+type action =
+  | Adopt (** Abort withholding, adopt defender's chain. Always possible. *)
+  | Override
+      (** Publish just enough information to make the defender adopt the chain just
+          released.
 
-(* Withhold until I can propose a block. George calls this proof-packing. *)
-let simple_tactic v actions state _withheld =
-  let privh = block_height_exn v state.private_
-  and publh = block_height_exn v state.public in
-  if publh > privh
-  then (* abort withholding *)
-    state.public
-  else if privh > publh
-  then (
-    (* overwrite public chain *)
-    release v actions [ state.private_ ];
-    state.private_)
-  else (* continue withholding *)
-    state.private_
-;;
+          If override is impossible, this results in a release of withheld information and
+          attacker adopting the defender's chain. *)
+  | Match
+      (** Publish just enough information such that the defender observes a tie between
+          two chains.
 
-let advanced_tactic v actions state _withheld =
+          If match is impossible, this results in a release of withheld information and
+          attacker adopting the defender's chain. *)
+  | Wait (** Continue withholding. Always possible. *)
+
+let selfish_tactic v state =
   if state.private_ $== state.public
-  then state.private_
+  then Wait
   else (
     let d = compare_blocks v state.private_ state.public in
     if d < 0
-    then (* Falling behind. Abort withholding *)
-      state.public
-    else if d > 0
-    then (
-      (* Overwrite feasible. *)
-      let npubv = Dag.children v.votes_only state.public |> List.length in
-      let releasehead =
-        (* TODO it may be easier to find common ancestor and release downwards until the
-           preference of the defender changes *)
-        (* release least number of blocks ... *)
-        let rec f b =
-          if block_height_exn v b > block_height_exn v state.public
-          then (
-            match Dag.parents v.blocks_only b with
-            | [ p ] -> f p
-            | _ -> failwith "invalid DAG")
-          else b
-        in
-        f state.private_
+    then Adopt
+    else (
+      let ca = Dag.common_ancestor v.view state.private_ state.public |> Option.get in
+      if ca $== state.public then Wait else Override))
+;;
+
+let parent_block v n =
+  match Dag.parents v.view n with
+  | hd :: _ when v.data hd |> is_block -> Some hd
+  | _ -> None
+;;
+
+let apply_action ~k ~private_view ~public_view actions state =
+  let match_ ~and_override () =
+    let height, nvotes =
+      let target =
+        (block_height_exn public_view state.public * k)
+        + List.length (Dag.children public_view.votes_only state.public)
+        + if and_override then 1 else 0
       in
-      (* ... and least number of votes *)
-      let privv = Dag.children v.votes_only releasehead in
-      if List.length privv > npubv
-      then
-        release
-          v
-          actions
-          (releasehead :: (first v.delivered_at (npubv + 1) privv |> Option.get));
-      state.private_)
-    else state.private_)
+      target / k, target mod k
+    in
+    let block =
+      (* find block to be released backwards from private head *)
+      let rec h b =
+        if block_height_exn private_view b <= height
+        then b
+        else parent_block private_view b |> Option.get |> h
+      in
+      h state.private_
+      (* NOTE: if private height is smaller public height, then private head is marked for
+         release. *)
+    in
+    let () =
+      let v = private_view in
+      let votes = Dag.children v.votes_only block in
+      match first v.delivered_at nvotes votes with
+      | Some subset -> release v actions subset
+      | None ->
+        (* not enough votes, release all *)
+        release v actions votes
+    in
+    update_head private_view ~preferred:state.private_ ~consider:state.public
+  in
+  function
+  | Adopt -> state.public
+  | Wait -> state.private_
+  | Match -> match_ ~and_override:false ()
+  | Override -> match_ ~and_override:true ()
 ;;
 
 let strategic tactic ~k (v : _ local_view) =
   let public_view = extend_view { v with view = Dag.filter v.released v.view }
   and private_view = extend_view v in
-  let tactic = tactic private_view in
   let handler actions state event =
     let withheld = ref [] in
     let withhold = { actions with share = (fun n -> withheld := n :: !withheld) } in
@@ -375,8 +385,11 @@ let strategic tactic ~k (v : _ local_view) =
       | Deliver _ ->
         { state with public = honest ~k public_view withhold state.public event }
     in
-    let withheld = List.rev !withheld in
-    { state with private_ = tactic actions state withheld }
+    { state with
+      private_ =
+        tactic private_view state
+        |> apply_action ~k ~private_view ~public_view actions state
+    }
   and preferred x = x.private_
   and init ~roots =
     let s = init ~roots in

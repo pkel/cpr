@@ -22,6 +22,9 @@ module Compare : sig
 
   (** infix operator for {!disambiguate} *)
   val ( $ ) : 'a cmp -> 'a cmp -> 'a cmp
+
+  (** Avoid expensive comparison if nodes are equal *)
+  val skip_eq : ('a -> 'a -> bool) -> 'a cmp -> 'a cmp
 end = struct
   type 'a cmp = 'a -> 'a -> int
 
@@ -44,6 +47,7 @@ end = struct
   ;;
 
   let ( $ ) = disambiguate
+  let skip_eq eq cmp a b = if eq a b then 0 else cmp a b
 end
 
 let%expect_test _ =

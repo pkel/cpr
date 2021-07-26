@@ -93,10 +93,13 @@ let first by n l =
 
 let compare_blocks v =
   let open Compare in
-  by int (block_height_exn v)
-  $ by int (fun n -> List.length (Dag.children v.votes_only n))
-  $ by int (fun n -> if v.appended_by_me n then 1 else 0)
-  $ by (inv float) v.delivered_at
+  let cmp =
+    by int (block_height_exn v)
+    $ by int (fun n -> List.length (Dag.children v.votes_only n))
+    $ by int (fun n -> if v.appended_by_me n then 1 else 0)
+    $ by (inv float) v.delivered_at
+  in
+  skip_eq Dag.node_eq cmp
 ;;
 
 let update_head v ~preferred ~consider =
