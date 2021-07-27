@@ -142,9 +142,12 @@ let print_dag oc (sim, confirmed, rewards, legend, label_node) =
     let d = Dag.data n in
     [ ( "label"
       , Printf.sprintf
-          "%s | t:%.1f | r:%.2g"
+          "%s | t:%.1f%s | r:%.2g"
           (label_node d.appended_by)
           d.appended_at
+          (if d.released_at <> d.appended_at
+          then Printf.sprintf "-%.1f" d.released_at
+          else "")
           rewards.(Dag.id n) )
     ; ("color", if confirmed.(Dag.id n) then "black" else "red")
     ]

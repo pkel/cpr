@@ -323,7 +323,9 @@ let selfish_tactic v state =
     if d < 0
     then Adopt
     else (
-      let ca = Dag.common_ancestor v.view state.private_ state.public |> Option.get in
+      let ca =
+        Dag.common_ancestor v.blocks_only state.private_ state.public |> Option.get
+      in
       if ca $== state.public then Wait else Override))
 ;;
 
@@ -358,10 +360,10 @@ let apply_action ~k ~private_view ~public_view actions state =
       let v = private_view in
       let votes = Dag.children v.votes_only block in
       match first v.delivered_at nvotes votes with
-      | Some subset -> release v actions subset
+      | Some subset -> release v actions (block :: subset)
       | None ->
         (* not enough votes, release all *)
-        release v actions votes
+        release v actions (block :: votes)
     in
     update_head private_view ~preferred:state.private_ ~consider:state.public
   in
