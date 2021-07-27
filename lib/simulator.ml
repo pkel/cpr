@@ -36,7 +36,7 @@ type 'prot_data node =
       }
       -> 'prot_data node
 
-type ('prot_data, 'node_state) state =
+type 'prot_data state =
   { clock : 'prot_data clock
   ; dag : 'prot_data data Dag.t
   ; global : ('prot_data data, 'prot_data) Protocol.global_view
@@ -206,7 +206,7 @@ let handle_event params state ev =
     state.clock.c_activations <- state.clock.c_activations + 1;
     node.n_activations <- node.n_activations + 1;
     (* check ending condition; schedule next activation *)
-    if state.clock.c_activations < params.activations
+    if state.clock.c_activations < params.activations || params.activations < 0
     then schedule_activation params state;
     (* apply event handler *)
     node.state <- node.handler node.state ev.event
@@ -232,15 +232,21 @@ let handle_event params state ev =
         (Dag.children state.global.view n))
 ;;
 
-let rec loop params state =
+let step params state =
   match OrderedQueue.dequeue state.clock.queue with
   | Some (now, ev, queue) ->
     assert (now >= state.clock.now);
     state.clock.now <- now;
     state.clock.queue <- queue;
     handle_event params state ev;
-    loop params state
-  | None -> state
+    Some ev
+  | None -> None
+;;
+
+let loop params state =
+  while step params state |> Option.is_some do
+    ()
+  done
 ;;
 
 let apply_reward_function (fn : _ Protocol.reward_function) head state =

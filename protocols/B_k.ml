@@ -241,13 +241,12 @@ let protocol ~k =
 let%test "convergence" =
   let open Simulator in
   let test k params height =
-    init params (protocol ~k)
-    |> loop params
-    |> fun { nodes; global; _ } ->
-    Array.to_seq nodes
+    let env = init params (protocol ~k) in
+    loop params env;
+    Array.to_seq env.nodes
     |> Seq.map (fun (SNode x) -> x.preferred x.state)
     |> Dag.common_ancestor'
-         (Dag.filter (fun x -> is_block (Dag.data x).value) global.view)
+         (Dag.filter (fun x -> is_block (Dag.data x).value) env.global.view)
     |> function
     | None -> false
     | Some n ->
@@ -288,6 +287,17 @@ type 'env strategic_state =
   ; private_ : 'env Dag.node
   }
 
+type ('env, 'data) strategic_view =
+  { public_view : ('env, 'data) extended_view
+  ; private_view : ('env, 'data) extended_view
+  }
+
+let strategic_view (v : _ local_view) =
+  { public_view = extend_view { v with view = Dag.filter v.released v.view }
+  ; private_view = extend_view v
+  }
+;;
+
 (* release a given node and all it's dependencies recursively *)
 let rec release v actions ns =
   List.iter
@@ -315,16 +325,19 @@ type action =
           attacker adopting the defender's chain. *)
   | Wait (** Continue withholding. Always possible. *)
 
+let actions = [ Adopt; Override; Match; Wait ]
+
 let selfish_tactic v state =
   if state.private_ $== state.public
   then Wait
   else (
-    let d = compare_blocks v state.private_ state.public in
+    let d = compare_blocks v.private_view state.private_ state.public in
     if d < 0
     then Adopt
     else (
       let ca =
-        Dag.common_ancestor v.blocks_only state.private_ state.public |> Option.get
+        Dag.common_ancestor v.private_view.blocks_only state.private_ state.public
+        |> Option.get
       in
       if ca $== state.public then Wait else Override))
 ;;
@@ -335,12 +348,12 @@ let parent_block v n =
   | _ -> None
 ;;
 
-let apply_action ~k ~private_view ~public_view actions state =
+let apply_action ~k v actions state action =
   let match_ ~and_override () =
     let height, nvotes =
       let target =
-        (block_height_exn public_view state.public * k)
-        + List.length (Dag.children public_view.votes_only state.public)
+        (block_height_exn v.public_view state.public * k)
+        + List.length (Dag.children v.public_view.votes_only state.public)
         + if and_override then 1 else 0
       in
       target / k, target mod k
@@ -348,16 +361,16 @@ let apply_action ~k ~private_view ~public_view actions state =
     let block =
       (* find block to be released backwards from private head *)
       let rec h b =
-        if block_height_exn private_view b <= height
+        if block_height_exn v.private_view b <= height
         then b
-        else parent_block private_view b |> Option.get |> h
+        else parent_block v.private_view b |> Option.get |> h
       in
       h state.private_
       (* NOTE: if private height is smaller public height, then private head is marked for
          release. *)
     in
     let () =
-      let v = private_view in
+      let v = v.private_view in
       let votes = Dag.children v.votes_only block in
       match first v.delivered_at nvotes votes with
       | Some subset -> release v actions (block :: subset)
@@ -365,33 +378,32 @@ let apply_action ~k ~private_view ~public_view actions state =
         (* not enough votes, release all *)
         release v actions (block :: votes)
     in
-    update_head private_view ~preferred:state.private_ ~consider:state.public
+    update_head v.private_view ~preferred:state.private_ ~consider:state.public
   in
-  function
-  | Adopt -> state.public
-  | Wait -> state.private_
-  | Match -> match_ ~and_override:false ()
-  | Override -> match_ ~and_override:true ()
+  let private_ =
+    match action with
+    | Adopt -> state.public
+    | Wait -> state.private_
+    | Match -> match_ ~and_override:false ()
+    | Override -> match_ ~and_override:true ()
+  in
+  { state with private_ }
 ;;
 
+let noop_tactic _ _ = Wait
+
 let strategic tactic ~k (v : _ local_view) =
-  let public_view = extend_view { v with view = Dag.filter v.released v.view }
-  and private_view = extend_view v in
+  let v = strategic_view v in
   let handler actions state event =
-    let withheld = ref [] in
-    let withhold = { actions with share = (fun n -> withheld := n :: !withheld) } in
     let state =
+      let withhold = { actions with share = (fun _n -> ()) } in
       match event with
       | Activate _ ->
-        { state with private_ = honest ~k private_view withhold state.private_ event }
+        { state with private_ = honest ~k v.private_view withhold state.private_ event }
       | Deliver _ ->
-        { state with public = honest ~k public_view withhold state.public event }
+        { state with public = honest ~k v.public_view withhold state.public event }
     in
-    { state with
-      private_ =
-        tactic private_view state
-        |> apply_action ~k ~private_view ~public_view actions state
-    }
+    tactic v state |> apply_action ~k v actions state
   and preferred x = x.private_
   and init ~roots =
     let s = init ~roots in

@@ -146,13 +146,12 @@ let protocol ~k =
 let%test "convergence" =
   let open Simulator in
   let test k params height =
-    init params (protocol ~k)
-    |> loop params
-    |> fun { nodes; global; _ } ->
-    Array.to_seq nodes
+    let env = init params (protocol ~k) in
+    loop params env;
+    Array.to_seq env.nodes
     |> Seq.map (fun (SNode x) -> x.preferred x.state)
     |> Dag.common_ancestor'
-         (Dag.filter (fun x -> is_block (Dag.data x).value) global.view)
+         (Dag.filter (fun x -> is_block (Dag.data x).value) env.global.view)
     |> function
     | None -> false
     | Some n ->

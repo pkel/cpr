@@ -92,20 +92,19 @@ let run task =
     in
     (* simulate *)
     let open Simulator in
-    init ?deviations:s.deviations s.params s.protocol
-    |> loop s.params
-    |> fun sim ->
-    let activations = Array.map (fun (SNode x) -> x.n_activations) sim.nodes in
-    Array.to_seq sim.nodes
+    let env = init ?deviations:s.deviations s.params s.protocol in
+    loop s.params env;
+    let activations = Array.map (fun (SNode x) -> x.n_activations) env.nodes in
+    Array.to_seq env.nodes
     |> Seq.map (fun (SNode x) -> x.preferred x.state)
-    |> Dag.common_ancestor' sim.global.view
+    |> Dag.common_ancestor' env.global.view
     |> function
     | None -> failwith "no common ancestor found"
     | Some common_chain ->
       (* incentive stats *)
       List.map2
         (fun is rewardfn ->
-          let reward = apply_reward_function rewardfn common_chain sim in
+          let reward = apply_reward_function rewardfn common_chain env in
           { row with
             activations
           ; compute

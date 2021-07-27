@@ -1,0 +1,9 @@
+(executable
+ (name definitions)
+ (promote)
+ (libraries cpr_lib cpr_protocols pythonlib)
+ (preprocess
+  (pps ppx_let ppx_sexp_conv ppx_python))
+ (modes
+  (native shared_object))
+ (flags :standard -linkall))

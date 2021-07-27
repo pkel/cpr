@@ -159,17 +159,16 @@ let run (task, fpaths_and_legends, label_node) =
   let (S s) = setup task in
   (* simulate *)
   let open Simulator in
-  init ?deviations:s.deviations s.params s.protocol
-  |> loop s.params
-  |> fun sim ->
+  let env = init ?deviations:s.deviations s.params s.protocol in
+  loop s.params env;
   let head =
-    Array.to_seq sim.nodes
+    Array.to_seq env.nodes
     |> Seq.map (fun (SNode x) -> x.preferred x.state)
-    |> Dag.common_ancestor' sim.global.view
+    |> Dag.common_ancestor' env.global.view
     |> Option.get
   in
-  let confirmed = Array.make (Dag.size sim.dag) false
-  and rewards = Array.make (Dag.size sim.dag) 0. in
+  let confirmed = Array.make (Dag.size env.dag) false
+  and rewards = Array.make (Dag.size env.dag) 0. in
   List.iter2
     (fun (path, legend) rw ->
       let () =
@@ -177,10 +176,10 @@ let run (task, fpaths_and_legends, label_node) =
           (fun n ->
             confirmed.(Dag.id n) <- true;
             rw
-              ~view:sim.global
+              ~view:env.global
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
-          (Dag.iterate_ancestors sim.global.view [ head ])
+          (Dag.iterate_ancestors env.global.view [ head ])
       in
       let path =
         let open Fpath in
@@ -189,7 +188,7 @@ let run (task, fpaths_and_legends, label_node) =
       let open Bos.OS in
       let d = Dir.create ~path:true (Fpath.parent path) in
       Result.bind d (fun _ ->
-          File.with_oc path print_dag (sim, confirmed, rewards, legend, label_node))
+          File.with_oc path print_dag (env, confirmed, rewards, legend, label_node))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
     fpaths_and_legends
