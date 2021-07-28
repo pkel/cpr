@@ -110,19 +110,20 @@ type task =
   ; activation_delay : float
   }
 
+type 'a deviation =
+  | Deviation :
+      (('a Simulator.data, 'a) Protocol.local_view
+       -> ('a Simulator.data, 'a, Simulator.pow, 'state) Protocol.node)
+      -> 'a deviation
+
 type setup =
   | S :
       { task : task
       ; params : Simulator.params
       ; network : Network.t
-      ; protocol : ('a Simulator.data, 'a, Simulator.pow) Protocol.protocol
+      ; protocol : ('a Simulator.data, 'a, Simulator.pow, 'state) Protocol.protocol
       ; reward_functions : ('a Simulator.data, 'a) Protocol.reward_function list
-      ; deviations :
-          (('a Simulator.data, 'a) Protocol.local_view
-           -> ('a Simulator.data, 'a, Simulator.pow) Protocol.node)
-          option
-          array
-          option
+      ; deviations : (int * 'a deviation) list
       }
       -> setup
 
@@ -154,18 +155,15 @@ let setup t =
       { network; activations = t.activations; activation_delay = t.activation_delay }
   and deviations of_strategy =
     match t.scenario with
-    | AllHonest -> None
-    | FirstSelfish ->
-      let a = Array.make (Array.length network.nodes) None in
-      a.(0) <- Some (of_strategy t.strategy);
-      Some a
+    | AllHonest -> []
+    | FirstSelfish -> [ 0, of_strategy t.strategy ]
   in
   match t.protocol with
   | Nakamoto ->
     let protocol = Nakamoto.protocol in
     let deviations =
       deviations (function
-          | Honest -> protocol.honest
+          | Honest -> Deviation protocol.honest
           | x ->
             let m =
               Printf.sprintf
@@ -194,8 +192,8 @@ let setup t =
     let protocol = protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> protocol.honest
-          | SelfishAdvanced -> strategic selfish_tactic ~k
+          | Honest -> Deviation protocol.honest
+          | SelfishAdvanced -> Deviation (strategic selfish_tactic ~k)
           | x ->
             let m =
               Printf.sprintf
@@ -225,9 +223,9 @@ let setup t =
     let protocol = protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> strategic honest_tactic ~k
-          | SelfishSimple -> strategic simple_tactic ~k
-          | SelfishAdvanced -> strategic advanced_tactic ~k)
+          | Honest -> Deviation (strategic honest_tactic ~k)
+          | SelfishSimple -> Deviation (strategic simple_tactic ~k)
+          | SelfishAdvanced -> Deviation (strategic advanced_tactic ~k))
     and reward_functions =
       List.map
         (function
@@ -248,7 +246,7 @@ let setup t =
     let protocol = George.protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> protocol.honest
+          | Honest -> Deviation protocol.honest
           | x ->
             let m =
               Printf.sprintf

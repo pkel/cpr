@@ -126,7 +126,7 @@ let honest ~k v =
       then consider
       else preferred
   in
-  Node { init; handler; preferred = (fun x -> x) }
+  { init; handler; preferred = (fun x -> x) }
 ;;
 
 let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots }
@@ -134,10 +134,10 @@ let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_root
 let%test "convergence" =
   let open Simulator in
   let test k params height =
-    let env = init params (protocol ~k) in
+    let env = all_honest params (protocol ~k) |> init in
     loop params env;
     Array.to_seq env.nodes
-    |> Seq.map (fun (SNode x) -> x.preferred x.state)
+    |> Seq.map (fun (Node x) -> x.preferred x.state)
     |> Dag.common_ancestor'
          (Dag.filter (fun x -> is_block (Dag.data x).value) env.global.view)
     |> function

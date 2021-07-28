@@ -92,11 +92,15 @@ let run task =
     in
     (* simulate *)
     let open Simulator in
-    let env = init ?deviations:s.deviations s.params s.protocol in
+    let env =
+      let x = all_honest s.params s.protocol in
+      List.iter (fun (node, Deviation d) -> patch ~node d x |> ignore) s.deviations;
+      init x
+    in
     loop s.params env;
-    let activations = Array.map (fun (SNode x) -> x.n_activations) env.nodes in
+    let activations = Array.map (fun (Node x) -> x.n_activations) env.nodes in
     Array.to_seq env.nodes
-    |> Seq.map (fun (SNode x) -> x.preferred x.state)
+    |> Seq.map (fun (Node x) -> x.preferred x.state)
     |> Dag.common_ancestor' env.global.view
     |> function
     | None -> failwith "no common ancestor found"

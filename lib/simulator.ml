@@ -27,14 +27,14 @@ type 'prot_data clock =
   ; mutable c_activations : int
   }
 
-type 'prot_data node =
-  | SNode :
-      { mutable state : 'node_state
-      ; mutable n_activations : int
-      ; handler : 'node_state -> ('prot_data data, pow) Protocol.event -> 'node_state
-      ; preferred : 'node_state -> 'prot_data data Dag.node
-      }
-      -> 'prot_data node
+type ('prot_data, 'node_state) node' =
+  { mutable state : 'node_state
+  ; mutable n_activations : int
+  ; handler : 'node_state -> ('prot_data data, pow) Protocol.event -> 'node_state
+  ; preferred : 'node_state -> 'prot_data data Dag.node
+  }
+
+type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
 
 type 'prot_data state =
   { clock : 'prot_data clock
@@ -76,11 +76,16 @@ let disseminate params clock source x =
     params.network.nodes.(source).links
 ;;
 
-let init
-    params
-    ?(deviations = Array.make (Array.length params.network.nodes) None)
-    (protocol : _ Protocol.protocol)
-    : _ state
+let spawn (n : _ Protocol.node) ~roots actions =
+  { handler = n.handler actions
+  ; state = n.init ~roots
+  ; preferred = n.preferred
+  ; n_activations = 0
+  }
+;;
+
+let all_honest params (protocol : _ Protocol.protocol)
+    : _ state * _ Dag.node list * (_ Protocol.local_view * _ Protocol.actions) array
   =
   let n_nodes = Array.length params.network.nodes in
   let dag = Dag.create () in
@@ -110,7 +115,7 @@ let init
     and pow_hash n = (Dag.data n).pow_hash in
     { view = Dag.view dag; data; signed_by; pow_hash }
   in
-  let nodes =
+  let views_actions =
     Array.init n_nodes (fun node ->
         let view =
           Dag.filter
@@ -158,41 +163,49 @@ let init
             failwith "invalid DAG extension";
           node
         in
-        let (Node participant) =
-          let view : _ Protocol.local_view =
-            { my_id = node
-            ; view
-            ; data = global.data
-            ; signed_by = global.signed_by
-            ; pow_hash = global.pow_hash
-            ; delivered_at
-            ; released
-            ; appended_by_me
-            }
-          in
-          match deviations.(node) with
-          | None -> protocol.honest view
-          | Some p -> p view
-        in
-        SNode
-          { handler = participant.handler { share; extend_dag }
-          ; state = participant.init ~roots
-          ; preferred = participant.preferred
-          ; n_activations = 0
-          })
+        (* TODO breakout and reuse for RL gyms *)
+        let view : _ Protocol.local_view =
+          { my_id = node
+          ; view
+          ; data = global.data
+          ; signed_by = global.signed_by
+          ; pow_hash = global.pow_hash
+          ; delivered_at
+          ; released
+          ; appended_by_me
+          }
+        and actions : _ Protocol.actions = { share; extend_dag } in
+        view, actions)
   and assign_pow =
     let weights =
       Array.map (fun x -> Network.(x.compute)) params.network.nodes |> Array.to_list
     in
     Distributions.discrete ~weights
   in
+  let nodes =
+    Array.map
+      (fun (view, actions) -> Node (spawn (protocol.honest view) ~roots actions))
+      views_actions
+  in
   let state = { clock; dag; global; nodes; assign_pow } in
   schedule_activation params state;
-  state
+  state, roots, views_actions
 ;;
 
+let patch ~node impl (state, roots, views_actions) =
+  let (view : _ Protocol.local_view), (actions : _ Protocol.actions) =
+    views_actions.(node)
+  in
+  let n = spawn (impl view) ~roots actions in
+  state.nodes.(node) <- Node n;
+  view, actions, n
+;;
+
+(* TODO hide second and third element *)
+let init (state, _roots, _views_actions) = state
+
 let handle_event params state ev =
-  let (SNode node) = state.nodes.(ev.node) in
+  let (Node node) = state.nodes.(ev.node) in
   let was_delivered n =
     Float.Array.get (Dag.data n).delivered_at ev.node <= state.clock.now
   and was_received n = Float.Array.get (Dag.data n).received_at ev.node <= state.clock.now
@@ -232,21 +245,21 @@ let handle_event params state ev =
         (Dag.children state.global.view n))
 ;;
 
-let step params state =
-  match OrderedQueue.dequeue state.clock.queue with
-  | Some (now, ev, queue) ->
-    assert (now >= state.clock.now);
-    state.clock.now <- now;
-    state.clock.queue <- queue;
-    handle_event params state ev;
-    Some ev
-  | None -> None
+let dequeue state =
+  OrderedQueue.dequeue state.clock.queue
+  |> Option.map (fun (now, ev, queue) ->
+         assert (now >= state.clock.now);
+         state.clock.now <- now;
+         state.clock.queue <- queue;
+         ev)
 ;;
 
-let loop params state =
-  while step params state |> Option.is_some do
-    ()
-  done
+let rec loop params state =
+  match dequeue state with
+  | None -> ()
+  | Some ev ->
+    handle_event params state ev;
+    loop params state
 ;;
 
 let apply_reward_function (fn : _ Protocol.reward_function) head state =

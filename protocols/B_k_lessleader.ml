@@ -138,7 +138,7 @@ let protocol ~k =
   let honest v =
     let handler = honest ~k (extend_view v)
     and preferred x = x in
-    Node { init; handler; preferred }
+    { init; handler; preferred }
   in
   { honest; dag_validity = dag_validity ~k; dag_roots }
 ;;
@@ -146,10 +146,10 @@ let protocol ~k =
 let%test "convergence" =
   let open Simulator in
   let test k params height =
-    let env = init params (protocol ~k) in
+    let env = all_honest params (protocol ~k) |> init in
     loop params env;
     Array.to_seq env.nodes
-    |> Seq.map (fun (SNode x) -> x.preferred x.state)
+    |> Seq.map (fun (Node x) -> x.preferred x.state)
     |> Dag.common_ancestor'
          (Dag.filter (fun x -> is_block (Dag.data x).value) env.global.view)
     |> function
@@ -276,5 +276,5 @@ let strategic tactic ~k (v : _ local_view) =
     let s = init ~roots in
     { public = s; private_ = s }
   in
-  Node { init; handler; preferred }
+  { init; handler; preferred }
 ;;

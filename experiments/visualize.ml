@@ -159,11 +159,15 @@ let run (task, fpaths_and_legends, label_node) =
   let (S s) = setup task in
   (* simulate *)
   let open Simulator in
-  let env = init ?deviations:s.deviations s.params s.protocol in
+  let env =
+    let x = all_honest s.params s.protocol in
+    List.iter (fun (node, Deviation d) -> patch ~node d x |> ignore) s.deviations;
+    init x
+  in
   loop s.params env;
   let head =
     Array.to_seq env.nodes
-    |> Seq.map (fun (SNode x) -> x.preferred x.state)
+    |> Seq.map (fun (Node x) -> x.preferred x.state)
     |> Dag.common_ancestor' env.global.view
     |> Option.get
   in

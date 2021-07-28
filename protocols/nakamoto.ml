@@ -34,17 +34,17 @@ let handler v actions preferred = function
 
 let protocol : _ protocol =
   let preferred x = x in
-  let honest v = Node { handler = handler v; init; preferred } in
+  let honest v = { handler = handler v; init; preferred } in
   { dag_roots; dag_validity; honest }
 ;;
 
 let%test "convergence" =
   let open Simulator in
   let test params height =
-    let env = init params protocol in
+    let env = all_honest params protocol |> init in
     loop params env;
     Array.to_seq env.nodes
-    |> Seq.map (fun (SNode x) -> x.preferred x.state)
+    |> Seq.map (fun (Node x) -> x.preferred x.state)
     |> Dag.common_ancestor' env.global.view
     |> function
     | None -> false

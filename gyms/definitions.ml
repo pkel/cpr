@@ -2,56 +2,55 @@ open Cpr_lib
 open Cpr_protocols
 open Intf
 
-(* TODO: This approach will not work. See todo note below. I think I'll have to
-
-   1. split/rewrite Simulator.handle_event to make it work on a single, not encapsulated
-   Simulator.(SNode node)
-
-   2. maintain attacker state w/o hiding its type in SNode
-
-   3. adapt Simulator.step for the new use case *)
-
 let test : _ env =
+  let k = 51
+  and alpha = 1. /. 3. in
   let actions = Array.of_list B_k.actions in
-  let params : Simulator.params = assert false in
-  let k = 51 in
-  let init () =
-    let deviations = Array.make (Array.length params.network.nodes) None in
-    let observation = ref None in
-    deviations.(0)
-      <- Some
-           B_k.(
-             strategic ~k (fun v st ->
-                 observation := Some (v, st);
-                 noop_tactic v st));
-    let state = Simulator.init ~deviations params (B_k.protocol ~k) in
-    state, observation
+  let params : Simulator.params =
+    let delay = Distributions.constant 0. in
+    { activations = -1
+    ; network =
+        Network.
+          { dissemination = Simple
+          ; nodes =
+              [| { compute = alpha; links = [ { dest = 1; delay } ] }
+               ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
+              |]
+          }
+    ; activation_delay = 1.
+    }
   in
-  let rec loop state =
-    match Simulator.step params state with
-    | Some ev -> if ev.node = 0 then () else loop state
+  let init () =
+    let open Simulator in
+    let setup = all_honest params (B_k.protocol ~k) in
+    let v, a, n = patch ~node:0 B_k.(strategic ~k noop_tactic) setup in
+    init setup, (B_k.strategic_view v, a, n)
+  in
+  let rec skip_to_interaction state =
+    let open Simulator in
+    match dequeue state with
+    | Some ev ->
+      handle_event params state ev;
+      if ev.node = 0 then () else skip_to_interaction state
     | None -> failwith "simulation should continue forever"
   in
   let create () =
-    let state, args = init () in
-    loop state;
-    ref state, args
+    let state, attacker = init () in
+    skip_to_interaction state;
+    ref (state, attacker)
+  and reset t =
+    let state, attacker = init () in
+    let _v, _a, (n : _ Simulator.node') = attacker in
+    skip_to_interaction state;
+    t := state, attacker;
+    n.state
   in
-  let reset (state, obs) =
-    let state', obs' = init () in
-    state := state';
-    obs := !obs';
-    loop !state;
-    Option.get !obs
-  in
-  let step (state, obs) ~action:i =
-    let v, st = Option.get !obs in
-    let pa = assert false in
-    let st' = B_k.apply_action ~k v pa st actions.(i) in
-    ignore st';
-    ignore state;
-    (* TODO I cannot feed back st' into state.nodes.(0) *)
-    assert false
+  let step t ~action:i =
+    let state, (v, a, (n : _ Simulator.node')) = !t in
+    n.state <- B_k.apply_action ~k v a n.state actions.(i);
+    skip_to_interaction state;
+    (* TODO reward *)
+    n.state, 0., true
   in
   Env { n_actions = Array.length actions; create; reset; step }
 ;;

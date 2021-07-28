@@ -15,18 +15,16 @@ type ('env, 'pow) event =
   | Deliver of 'env Dag.node
 
 (** Behaviour of a single network node. Type of node local state is packed. *)
-type ('env, 'data, 'pow) node =
-  | Node :
-      { init : roots:'env Dag.node list -> 'state
-            (** Node initialization. The [roots] argument holds references to global
-                versions of {protocol.dag_roots}. The roots are visible to all nodes from
-                the beginning. *)
-      ; handler : ('env, 'data, 'pow) actions -> 'state -> ('env, 'pow) event -> 'state
-            (** Event handlers. May trigger side effects via [actions] argument. *)
-      ; preferred : 'state -> 'env Dag.node
-            (** Returns a node's preferred tip of the chain. *)
-      }
-      -> ('env, 'data, 'pow) node
+type ('env, 'data, 'pow, 'state) node =
+  { init : roots:'env Dag.node list -> 'state
+        (** Node initialization. The [roots] argument holds references to global versions
+            of {protocol.dag_roots}. The roots are visible to all nodes from the
+            beginning. *)
+  ; handler : ('env, 'data, 'pow) actions -> 'state -> ('env, 'pow) event -> 'state
+        (** Event handlers. May trigger side effects via [actions] argument. *)
+  ; preferred : 'state -> 'env Dag.node
+        (** Returns a node's preferred tip of the chain. *)
+  }
 
 type ('env, 'data) global_view =
   { view : 'env Dag.view (** View on the simulator's DAG. *)
@@ -52,12 +50,12 @@ type ('env, 'data) local_view =
   ; appended_by_me : 'env Dag.node -> bool (** Recognize own DAG nodes. *)
   }
 
-type ('env, 'data, 'pow) protocol =
+type ('env, 'data, 'pow, 'state) protocol =
   { dag_roots : 'data list (** Specify the roots of the global DAG. *)
   ; dag_validity : ('env, 'data) global_view -> 'env Dag.node -> bool
         (** Restrict DAG extensions. The simulator checks validity for each appended DAG
             node. Invalid extensions are not delivered to other nodes. *)
-  ; honest : ('env, 'data) local_view -> ('env, 'data, 'pow) node
+  ; honest : ('env, 'data) local_view -> ('env, 'data, 'pow, 'state) node
   }
 
 (** Calculate and assign rewards to a nodes and (potentially) its neighbours. Use this
