@@ -51,6 +51,8 @@ let test : _ env =
     skip_to_interaction state;
     (* TODO reward *)
     n.state, 0., true
-  in
-  Env { n_actions = Array.length actions; create; reset; step }
+  and numpy _ = Float.Array.of_list [ 42. ]
+  and low = Float.Array.of_list [ 0. ]
+  and high = Float.Array.of_list [ 100. ] in
+  { n_actions = Array.length actions; create; reset; step; numpy; low; high }
 ;;
