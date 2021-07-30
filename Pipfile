@@ -6,6 +6,10 @@ name = "pypi"
 [packages]
 pandas = "*"
 numpy = "*"
+iniconfig = {editable = true, path = "./gym"}
+tox = "*"
+flake8 = "*"
+pytest = "*"
 
 [dev-packages]
 jupyter = "*"

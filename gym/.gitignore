@@ -1,0 +1,6 @@
+!__init__.py
+*.egg-info
+*.so
+.tox
+.eggs
+pyproject.toml

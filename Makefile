@@ -3,8 +3,9 @@
 build:
 	dune build
 
-test:
+test: build
 	dune runtest
+	cd gym && tox
 
 simulate:
 	mkdir -p data

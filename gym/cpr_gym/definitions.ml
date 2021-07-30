@@ -50,7 +50,7 @@ let test : _ env =
     n.state <- B_k.apply_action ~k v a n.state actions.(i);
     skip_to_interaction state;
     (* TODO reward *)
-    n.state, 0., true
+    n.state, 0., false
   and numpy _ = Float.Array.of_list [ 42. ]
   and low = Float.Array.of_list [ 0. ]
   and high = Float.Array.of_list [ 100. ] in
