@@ -2,9 +2,7 @@ open Cpr_lib
 open Cpr_protocols
 open Intf
 
-let test : _ env =
-  let k = 51
-  and alpha = 1. /. 3. in
+let bk ~alpha ~k : _ env =
   let actions = Array.of_list B_k.actions in
   let params : Simulator.params =
     let delay = Distributions.constant 0. in
@@ -53,6 +51,9 @@ let test : _ env =
     n.state, 0., false
   and numpy _ = Float.Array.of_list [ 42. ]
   and low = Float.Array.of_list [ 0. ]
-  and high = Float.Array.of_list [ 100. ] in
-  { n_actions = Array.length actions; create; reset; step; numpy; low; high }
+  and high = Float.Array.of_list [ 100. ]
+  and to_string _ = Printf.sprintf "Bₖ with k=%d and α=%.2f" k alpha in
+  { n_actions = Array.length actions; create; reset; step; numpy; low; high; to_string }
 ;;
+
+let default = bk ~k:51 ~alpha:0.25

@@ -3,6 +3,7 @@ type ('instance, 'observation) env =
   ; create : unit -> 'instance
   ; reset : 'instance -> 'observation
   ; step : 'instance -> action:int -> 'observation * float * bool
+  ; to_string : 'instance -> string
   ; numpy : 'observation -> floatarray
   ; low : floatarray
   ; high : floatarray

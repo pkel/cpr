@@ -51,6 +51,12 @@ let () =
        [| t.numpy v |> Py.Array.numpy; Py.Float.of_float r; Py.Bool.of_bool d |]);
   Py_module.set
     m
+    "to_string"
+    (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance" in
+     let (IEnv (t, i)) = ienv in
+     t.to_string i |> python_of_string);
+  Py_module.set
+    m
     "n_actions"
     (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance" in
      let (IEnv (t, _)) = ienv in
@@ -70,9 +76,13 @@ let () =
 ;;
 
 let () =
-  let envs_module = Py_module.create "environments" in
-  let register ~name env =
-    Py_module.set_value envs_module name (PEnv env |> python_of_penv)
-  in
-  register ~name:"test" Definitions.test
+  let open Definitions in
+  let m = Py_module.create "specs" in
+  Py_module.set_value m "default" (PEnv default |> python_of_penv);
+  Py_module.set
+    m
+    "bk"
+    (let%map k = keyword "k" int ~docstring:"number of votes per block"
+     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute" in
+     PEnv (bk ~k ~alpha) |> python_of_penv)
 ;;

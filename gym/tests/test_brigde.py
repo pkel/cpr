@@ -1,8 +1,8 @@
-from cpr_gym import engine, environments
+from cpr_gym import engine, specs
 
 
 def test_engine():
-    env = engine.create(environments.test)
+    env = engine.create(specs.default)
     obs = engine.reset(env)
     obs, rew, done = engine.step(env, 0)
     assert not done
