@@ -1,11 +1,10 @@
-type ('instance, 'observation) env =
+type 'instance env =
   { n_actions : int
   ; create : unit -> 'instance
-  ; reset : 'instance -> 'observation
+  ; reset : 'instance -> floatarray
   ; step :
-      'instance -> action:int -> 'observation * float * bool * (string * Py.Object.t) list
+      'instance -> action:int -> floatarray * float * bool * (string * Py.Object.t) list
   ; to_string : 'instance -> string
-  ; numpy : 'observation -> floatarray
   ; low : floatarray
   ; high : floatarray
   }

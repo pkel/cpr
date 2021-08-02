@@ -10,7 +10,7 @@ type ('a, 'b) instance =
   }
 
 let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
-  let actions = Array.of_list B_k.actions in
+  let actions = Array.of_list B_k.PrivateAttack.all_of_action in
   let params : Simulator.params =
     let delay = Distributions.constant 0. in
     { activations = -1
@@ -27,10 +27,12 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
   in
   let init () =
     let open Simulator in
-    let setup = all_honest params (B_k.protocol ~k) in
-    let v, a, n = patch ~node:0 B_k.(strategic ~k noop_tactic) setup in
-    { sim = init setup
-    ; attacker = B_k.strategic_view v, a, n
+    let open B_k in
+    let open PrivateAttack in
+    let setup = all_honest params (protocol ~k) in
+    let v, a, n = patch ~node:0 (strategic ~k noop_tactic) setup in
+    { sim = Simulator.init setup
+    ; attacker = strategic_view v, a, n
     ; reward_applied_to = None
     ; last_time = 0.
     }
@@ -42,6 +44,9 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
       handle_event params sim ev;
       if ev.node = 0 then () else skip_to_interaction sim
     | None -> failwith "simulation should continue forever"
+  and observe t =
+    let v, _a, (n : _ Simulator.node') = t.attacker in
+    B_k.PrivateAttack.Observation.observe v n.state
   in
   let create () =
     let t = init () in
@@ -51,14 +56,19 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
     let t = init () in
     skip_to_interaction t.sim;
     ref_t := t;
-    let _, _, (n : _ Simulator.node') = t.attacker in
-    n.state
+    observe t
+  and actions_hum =
+    let open B_k.PrivateAttack in
+    List.mapi
+      (fun i a -> Printf.sprintf "(%d) %s" i (Variants_of_action.to_name a))
+      all_of_action
+    |> String.concat " | "
   in
   let step ref_t ~action:i =
     let t = !ref_t in
     let v, a, (n : _ Simulator.node') = t.attacker in
     (* apply action *)
-    n.state <- B_k.apply_action ~k v a n.state actions.(i);
+    n.state <- B_k.PrivateAttack.apply_action ~k v a n.state actions.(i);
     (* continue simulation *)
     skip_to_interaction t.sim;
     (* reward *)
@@ -107,7 +117,7 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
     let step_time = t.sim.clock.now -. t.last_time in
     t.last_time <- t.sim.clock.now;
     (* return *)
-    ( n.state
+    ( observe t
     , cf.(0)
     , false
     , [ "attacker_reward", Py.Float.of_float cf.(0)
@@ -116,11 +126,18 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
       ; "timedelta_step", Py.Float.of_float step_time
       ; "time", Py.Float.of_float t.sim.clock.now
       ] )
-  and numpy _ = Float.Array.of_list [ 42. ]
-  and low = Float.Array.of_list [ 0. ]
-  and high = Float.Array.of_list [ 100. ]
-  and to_string _ = Printf.sprintf "Bₖ with k=%d and α=%.2f" k alpha in
-  { n_actions = Array.length actions; create; reset; step; numpy; low; high; to_string }
+  and low = Float.Array.make B_k.PrivateAttack.Observation.n (-100.)
+  (* TODO read actual numbers from Attack module *)
+  and high = Float.Array.make B_k.PrivateAttack.Observation.n 100.
+  and to_string t =
+    Printf.sprintf
+      "Bₖ with k=%d and α=%.2f\n%s\nActions: %s"
+      k
+      alpha
+      (B_k.PrivateAttack.Observation.to_string_hum (observe !t))
+      actions_hum
+  in
+  { n_actions = Array.length actions; create; reset; step; low; high; to_string }
 ;;
 
 let default = bk ~k:51 ~alpha:0.25 ~reward:(B_k.constant_pow 1.)

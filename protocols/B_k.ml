@@ -282,132 +282,198 @@ let constant_block c : ('env, node) reward_function =
  fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
 ;;
 
-type 'env strategic_state =
-  { public : 'env Dag.node
-  ; private_ : 'env Dag.node
-  }
+module PrivateAttack = struct
+  type 'env state =
+    { public : 'env Dag.node
+    ; private_ : 'env Dag.node
+    }
 
-type ('env, 'data) strategic_view =
-  { public_view : ('env, 'data) extended_view
-  ; private_view : ('env, 'data) extended_view
-  }
+  type ('env, 'data) strategic_view =
+    { public_view : ('env, 'data) extended_view
+    ; private_view : ('env, 'data) extended_view
+    }
 
-let strategic_view (v : _ local_view) =
-  { public_view = extend_view { v with view = Dag.filter v.released v.view }
-  ; private_view = extend_view v
-  }
-;;
+  let strategic_view (v : _ local_view) =
+    { public_view = extend_view { v with view = Dag.filter v.released v.view }
+    ; private_view = extend_view v
+    }
+  ;;
 
-(* release a given node and all it's dependencies recursively *)
-let rec release v actions ns =
-  List.iter
-    (fun n ->
-      if not (v.released n)
-      then (
-        actions.share n;
-        release v actions (Dag.parents v.view n)))
-    ns
-;;
+  module Observation = struct
+    type t =
+      | PublicBlocks (* number of blocks after common ancestor *)
+      | PublicVotes (* number of votes confirming the leading block *)
+      | PrivateBlocks (* number of blocks after common ancestor *)
+      | PrivateVotes (* number of votes confirming the leading block *)
+      | DiffBlocks (* PrivateBlocks - PublicBlocks *)
+      | DiffVotes (* PrivateVotes - PublicVotes *)
+      | Lead (* 1 if attacker is truthful leader on leading public block, -1 otherwise *)
+    [@@deriving enumerate, variants]
 
-type action =
-  | Adopt (** Abort withholding, adopt defender's chain. Always possible. *)
-  | Override
-      (** Publish just enough information to make the defender adopt the chain just
-          released.
+    let n = List.length all
 
-          If override is impossible, this results in a release of withheld information and
-          attacker adopting the defender's chain. *)
-  | Match
-      (** Publish just enough information such that the defender observes a tie between
-          two chains.
-
-          If match is impossible, this results in a release of withheld information and
-          attacker adopting the defender's chain. *)
-  | Wait (** Continue withholding. Always possible. *)
-
-let actions = [ Adopt; Override; Match; Wait ]
-
-let selfish_tactic v state =
-  if state.private_ $== state.public
-  then Wait
-  else (
-    let d = compare_blocks v.private_view state.private_ state.public in
-    if d < 0
-    then Adopt
-    else (
-      let ca =
-        Dag.common_ancestor v.private_view.blocks_only state.private_ state.public
-        |> Option.get
-      in
-      if ca $== state.public then Wait else Override))
-;;
-
-let parent_block v n =
-  match Dag.parents v.view n with
-  | hd :: _ when v.data hd |> is_block -> Some hd
-  | _ -> None
-;;
-
-let apply_action ~k v actions state action =
-  let match_ ~and_override () =
-    let height, nvotes =
-      let target =
-        (block_height_exn v.public_view state.public * k)
-        + List.length (Dag.children v.public_view.votes_only state.public)
-        + if and_override then 1 else 0
-      in
-      target / k, target mod k
-    in
-    let block =
-      (* find block to be released backwards from private head *)
-      let rec h b =
-        if block_height_exn v.private_view b <= height
-        then b
-        else parent_block v.private_view b |> Option.get |> h
-      in
-      h state.private_
-      (* NOTE: if private height is smaller public height, then private head is marked for
-         release. *)
-    in
-    let () =
+    let observe_field v s =
+      let private_votes = Dag.children v.private_view.votes_only s.private_ |> List.length
+      and public_votes = Dag.children v.public_view.votes_only s.public |> List.length in
       let v = v.private_view in
-      let votes = Dag.children v.votes_only block in
-      match first v.delivered_at nvotes votes with
-      | Some subset -> release v actions (block :: subset)
-      | None ->
-        (* not enough votes, release all *)
-        release v actions (block :: votes)
-    in
-    update_head v.private_view ~preferred:state.private_ ~consider:state.public
-  in
-  let private_ =
-    match action with
-    | Adopt -> state.public
-    | Wait -> state.private_
-    | Match -> match_ ~and_override:false ()
-    | Override -> match_ ~and_override:true ()
-  in
-  { state with private_ }
-;;
+      let lead =
+        match Dag.children v.votes_only s.public with
+        | [] -> false
+        | votes ->
+          let leader =
+            first (fun n -> v.pow_hash n |> Option.get) 1 votes |> Option.get |> List.hd
+          in
+          v.appended_by_me leader
+      and ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
+      let ca_height = block_height_exn v ca
+      and private_height = block_height_exn v s.private_
+      and public_height = block_height_exn v s.public in
+      function
+      | PublicBlocks -> public_height - ca_height
+      | PrivateBlocks -> private_height - ca_height
+      | DiffBlocks -> private_height - public_height
+      | PublicVotes -> public_votes
+      | PrivateVotes -> private_votes
+      | DiffVotes -> private_votes - public_votes
+      | Lead -> if lead then 1 else -1
+    ;;
 
-let noop_tactic _ _ = Wait
+    let read a t =
+      let i = Variants.to_rank t in
+      Float.Array.get a i |> int_of_float
+    ;;
 
-let strategic tactic ~k (v : _ local_view) =
-  let v = strategic_view v in
-  let handler actions state event =
-    let state =
-      let withhold = { actions with share = (fun _n -> ()) } in
-      match event with
-      | Activate _ ->
-        { state with private_ = honest ~k v.private_view withhold state.private_ event }
-      | Deliver _ ->
-        { state with public = honest ~k v.public_view withhold state.public event }
+    let observe_into v s a =
+      let observe_field = observe_field v s in
+      List.iteri
+        (fun i t ->
+          let x = observe_field t |> float_of_int in
+          Float.Array.set a i x)
+        all
+    ;;
+
+    let observe v s =
+      let a = Float.Array.make n Float.nan in
+      observe_into v s a;
+      a
+    ;;
+
+    let to_string_hum a =
+      List.map (fun t -> Printf.sprintf "%s: %d" (Variants.to_name t) (read a t)) all
+      |> String.concat "\n"
+    ;;
+  end
+
+  (* release a given node and all it's dependencies recursively *)
+  let rec release v actions ns =
+    List.iter
+      (fun n ->
+        if not (v.released n)
+        then (
+          actions.share n;
+          release v actions (Dag.parents v.view n)))
+      ns
+  ;;
+
+  type action =
+    | Adopt (** Abort withholding, adopt defender's chain. Always possible. *)
+    | Override
+        (** Publish just enough information to make the defender adopt the chain just
+            released.
+
+            If override is impossible, this results in a release of withheld information
+            and attacker adopting the defender's chain. *)
+    | Match
+        (** Publish just enough information such that the defender observes a tie between
+            two chains.
+
+            If match is impossible, this results in a release of withheld information and
+            attacker adopting the defender's chain. *)
+    | Wait (** Continue withholding. Always possible. *)
+  [@@deriving enumerate, variants]
+
+  let selfish_tactic v state =
+    if state.private_ $== state.public
+    then Wait
+    else (
+      let d = compare_blocks v.private_view state.private_ state.public in
+      if d < 0
+      then Adopt
+      else (
+        let ca =
+          Dag.common_ancestor v.private_view.blocks_only state.private_ state.public
+          |> Option.get
+        in
+        if ca $== state.public then Wait else Override))
+  ;;
+
+  let parent_block v n =
+    match Dag.parents v.view n with
+    | hd :: _ when v.data hd |> is_block -> Some hd
+    | _ -> None
+  ;;
+
+  let apply_action ~k v actions state action =
+    let match_ ~and_override () =
+      let height, nvotes =
+        let target =
+          (block_height_exn v.public_view state.public * k)
+          + List.length (Dag.children v.public_view.votes_only state.public)
+          + if and_override then 1 else 0
+        in
+        target / k, target mod k
+      in
+      let block =
+        (* find block to be released backwards from private head *)
+        let rec h b =
+          if block_height_exn v.private_view b <= height
+          then b
+          else parent_block v.private_view b |> Option.get |> h
+        in
+        h state.private_
+        (* NOTE: if private height is smaller public height, then private head is marked
+           for release. *)
+      in
+      let () =
+        let v = v.private_view in
+        let votes = Dag.children v.votes_only block in
+        match first v.delivered_at nvotes votes with
+        | Some subset -> release v actions (block :: subset)
+        | None ->
+          (* not enough votes, release all *)
+          release v actions (block :: votes)
+      in
+      update_head v.private_view ~preferred:state.private_ ~consider:state.public
     in
-    tactic v state |> apply_action ~k v actions state
-  and preferred x = x.private_
-  and init ~roots =
-    let s = init ~roots in
-    { public = s; private_ = s }
-  in
-  { init; handler; preferred }
-;;
+    let private_ =
+      match action with
+      | Adopt -> state.public
+      | Wait -> state.private_
+      | Match -> match_ ~and_override:false ()
+      | Override -> match_ ~and_override:true ()
+    in
+    { state with private_ }
+  ;;
+
+  let noop_tactic _ _ = Wait
+
+  let strategic tactic ~k (v : _ local_view) =
+    let v = strategic_view v in
+    let handler actions state event =
+      let state =
+        let withhold = { actions with share = (fun _n -> ()) } in
+        match event with
+        | Activate _ ->
+          { state with private_ = honest ~k v.private_view withhold state.private_ event }
+        | Deliver _ ->
+          { state with public = honest ~k v.public_view withhold state.public event }
+      in
+      tactic v state |> apply_action ~k v actions state
+    and preferred x = x.private_
+    and init ~roots =
+      let s = init ~roots in
+      { public = s; private_ = s }
+    in
+    { init; handler; preferred }
+  ;;
+end

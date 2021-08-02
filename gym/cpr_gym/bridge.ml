@@ -11,10 +11,8 @@ let encapsulate : type a. string -> a capsule =
   a, b, c
 ;;
 
-type packed_env = PEnv : ('instance, 'observation) env -> packed_env
-
-type instantiated_env =
-  | IEnv : ('instance, 'observation) env * 'instance -> instantiated_env
+type packed_env = PEnv : 'instance env -> packed_env
+type instantiated_env = IEnv : 'instance env * 'instance -> instantiated_env
 
 let (ienv, python_of_ienv, _python_to_ienv) =
   (encapsulate "ocaml.instantiated_env" : instantiated_env capsule)
@@ -39,16 +37,16 @@ let () =
     "reset"
     (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance" in
      let (IEnv (t, i)) = ienv in
-     t.reset i |> t.numpy |> Py.Array.numpy);
+     t.reset i |> Py.Array.numpy);
   Py_module.set
     m
     "step"
     (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance"
      and action = positional "action" int ~docstring:"OCaml action" in
      let (IEnv (t, i)) = ienv in
-     let v, r, d, info = t.step i ~action in
+     let obs, r, d, info = t.step i ~action in
      Py.Tuple.of_array
-       [| t.numpy v |> Py.Array.numpy
+       [| Py.Array.numpy obs
         ; Py.Float.of_float r
         ; Py.Bool.of_bool d
         ; Py.Dict.of_bindings_string info
