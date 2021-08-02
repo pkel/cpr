@@ -2,7 +2,8 @@ type ('instance, 'observation) env =
   { n_actions : int
   ; create : unit -> 'instance
   ; reset : 'instance -> 'observation
-  ; step : 'instance -> action:int -> 'observation * float * bool
+  ; step :
+      'instance -> action:int -> 'observation * float * bool * (string * Py.Object.t) list
   ; to_string : 'instance -> string
   ; numpy : 'observation -> floatarray
   ; low : floatarray

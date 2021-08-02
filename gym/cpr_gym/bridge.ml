@@ -46,9 +46,13 @@ let () =
     (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance"
      and action = positional "action" int ~docstring:"OCaml action" in
      let (IEnv (t, i)) = ienv in
-     let v, r, d = t.step i ~action in
+     let v, r, d, info = t.step i ~action in
      Py.Tuple.of_array
-       [| t.numpy v |> Py.Array.numpy; Py.Float.of_float r; Py.Bool.of_bool d |]);
+       [| t.numpy v |> Py.Array.numpy
+        ; Py.Float.of_float r
+        ; Py.Bool.of_bool d
+        ; Py.Dict.of_bindings_string info
+       |]);
   Py_module.set
     m
     "to_string"
@@ -83,6 +87,24 @@ let () =
     m
     "bk"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute" in
-     PEnv (bk ~k ~alpha) |> python_of_penv)
+     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+     and reward =
+       keyword
+         "reward"
+         string
+         ~default:"pow"
+         ~docstring:
+           "Select reward function.\n\
+            'pow': for 1 per confirmed proof-of-work vote\n\
+            'block': for 1 per confirmed block"
+     in
+     let reward =
+       match reward with
+       | "pow" -> Cpr_protocols.B_k.constant_pow 1.
+       | "block" -> Cpr_protocols.B_k.constant_block 1.
+       | _ ->
+         let msg = "unknown reward function '" ^ reward ^ "'" in
+         failwith msg
+     in
+     PEnv (bk ~k ~alpha ~reward) |> python_of_penv)
 ;;

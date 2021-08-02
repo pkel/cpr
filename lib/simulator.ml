@@ -262,13 +262,17 @@ let rec loop params state =
     loop params state
 ;;
 
-let apply_reward_function (fn : _ Protocol.reward_function) head state =
+let apply_reward_function' (fn : _ Protocol.reward_function) seq state =
   let arr = Array.make (Array.length state.nodes) 0. in
   let assign x n =
     match (Dag.data n).appended_by with
     | Some i -> arr.(i) <- arr.(i) +. x
     | None -> ()
   and view = state.global in
-  Seq.iter (fn ~view ~assign) (Dag.iterate_ancestors view.view [ head ]);
+  Seq.iter (fn ~view ~assign) seq;
   arr
+;;
+
+let apply_reward_function (fn : _ Protocol.reward_function) head state =
+  apply_reward_function' fn (Dag.iterate_ancestors state.global.view [ head ]) state
 ;;
