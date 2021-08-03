@@ -33,8 +33,10 @@ format:
 
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
-	opam switch create . "4.11.1+flambda" --deps-only
+	opam switch create . 4.11.1+flambda --deps-only
+	opam switch create 4.11.1+musl+flambda
 
 dependencies:
 	dune build cpr.opam cpr-dev.opam
 	opam install . --deps-only --working-dir
+	opam install . --switch=4.11.1+musl+flambda --deps-only --working-dir

@@ -1,0 +1,5 @@
+(lang dune 2.8)
+(context (default))
+(context (opam (switch 4.11.1+musl+flambda)
+               (name static)
+               (env (_ (flags (:standard -ccopt -Wl,-static))))))
