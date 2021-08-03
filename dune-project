@@ -17,9 +17,12 @@
   (owl-base (>= 1.0))
   (cmdliner (>= 1.0))
   (parany (>= 12.0))
-  (ppx_expect (>= v0.14.0))
-  (ppx_sexp_conv (>= v0.14.1))
+  (ppx_expect (>= v0.14))
+  (ppx_let (>= v0.14))
+  (ppx_sexp_conv (>= v0.14))
+  (ppx_variants_conv (>= v0.14))
   (progress (>= 0.2))
+  (pythonlib (>= v0.14))
   ))
 
 (package

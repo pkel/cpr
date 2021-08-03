@@ -3,7 +3,7 @@
  (promote)
  (libraries cpr_lib cpr_protocols pythonlib)
  (preprocess
-  (pps ppx_let ppx_sexp_conv ppx_python))
+  (pps ppx_let ppx_sexp_conv))
  (modes
   (native shared_object))
  (flags :standard -linkall))
