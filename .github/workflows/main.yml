@@ -5,7 +5,7 @@ on:
   - push
 
 jobs:
-  build:
+  ocaml:
     strategy:
       fail-fast: false
       matrix:
@@ -35,5 +35,27 @@ jobs:
       - name: Upload the gym shared object
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}-${{ matrix.ocaml-compiler }}-gym.so
+          name: ${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
           path: python/gym/cpr_gym/bridge.so
+
+  publish:
+    runs-on: ubuntu-latest
+
+    needs: ocaml
+
+    if: ${{ github.ref == 'refs/heads/master' }}
+
+    steps:
+      - name: Download gym shared object
+        uses: actions/download-artifact@v2
+        with:
+          name: ubuntu-18.04-ocaml-4.11.1
+          path: .
+
+      - name: Deploy to GitHub Pages
+        uses: crazy-max/ghaction-github-pages@v2
+        with:
+          target_branch: gh-pages
+          build_dir: .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
