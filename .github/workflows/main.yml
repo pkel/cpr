@@ -1,4 +1,4 @@
-name: Main workflow
+name: main
 
 on:
   - pull_request
@@ -37,6 +37,45 @@ jobs:
         with:
           name: ${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
           path: python/gym/cpr_gym/bridge.so
+
+  python:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-18.04
+          - ubuntu-20.04
+        python-version:
+          - 3.6
+          - 3.9
+
+    needs: ocaml
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download gym shared object
+        uses: actions/download-artifact@v2
+        with:
+          name: ubuntu-18.04-ocaml-4.11.1
+          path: python/gym/cpr_gym
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox tox-gh-actions
+
+      - name: Test with tox
+        run: tox
+        working-directory: python/gym
+
 
   publish:
     runs-on: ubuntu-latest
