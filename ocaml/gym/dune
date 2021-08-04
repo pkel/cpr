@@ -1,6 +1,7 @@
 (executable
  (name bridge)
- (promote)
+ (promote
+  (into ../../python/gym/cpr_gym/))
  (libraries cpr_lib cpr_protocols pythonlib)
  (preprocess
   (pps ppx_let ppx_sexp_conv))

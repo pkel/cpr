@@ -5,17 +5,17 @@ build:
 
 test: build
 	dune runtest
-	cd gym && tox
+	pytest python
 
 simulate:
 	mkdir -p data
-	dune exec experiments/honest_net.exe -- data/honest_net.tsv
-	dune exec experiments/withholding.exe -- data/withholding.tsv
+	dune exec ocaml/experiments/honest_net.exe -- data/honest_net.tsv
+	dune exec ocaml/experiments/withholding.exe -- data/withholding.tsv
 
 visualize:
 	mkdir -p fig/chains/
 	rm -rf fig/chains/*
-	dune exec experiments/visualize.exe
+	dune exec ocaml/experiments/visualize.exe
 	make -j $(shell nproc) visualize.render
 
 .SECONDEXPANSION:
@@ -25,8 +25,8 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 	dot -Tpng < $^ > $@
 
 expand:
-	 pipenv run python eval/honest_net.py
-	 pipenv run python eval/withholding.py
+	python python/eval/honest_net.py
+	python python/eval/withholding.py
 
 format:
 	dune build @fmt --auto-promote
@@ -34,7 +34,8 @@ format:
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
 	opam switch create . "4.11.1+flambda" --deps-only
+	opam install dune
 
 dependencies:
-	dune build cpr.opam cpr-dev.opam
-	opam install . --deps-only --working-dir
+	dune build ocaml/{cpr,cpr-dev}.opam
+	opam install ./ocaml --deps-only --working-dir

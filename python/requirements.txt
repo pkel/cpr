@@ -1,0 +1,7 @@
+pandas
+numpy
+tox
+flake8
+pytest
+jupyter
+matplotlib
