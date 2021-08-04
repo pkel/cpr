@@ -14,18 +14,18 @@ try:
     argv_t = c_char_p * 2
     argv = argv_t(dll_basename.encode('utf-8'), None)
     dll.caml_startup(argv)
-except OSError as e:
+except OSError:
     if not os.path.exists(dll_name):
-        print(f"""
-        {dll_name} not found, please download {dll_basename} from {dll_url} and place into {curdir}:
-
-        curl {dll_url} -o {dll_name}
-
-        you can later update the library with
-
-        {sys.executable} -m {__name__} --update
-        """)
-        raise ImportError(f"{dll_name} not found, please download {dll_basename} from {dll_url} and place into {curdir}")
+        print(
+                '\n',
+                f'{dll_name} not found, please download {dll_basename} ',
+                f'from {dll_url} and place into {curdir}: \n\n',
+                f'curl {dll_url} -o {dll_name}\n\n',
+                'you can later update the library with\n\n',
+                f'{sys.executable} -m {__name__} --update\n')
+        raise ImportError(
+                f'{dll_name} not found, please download {dll_basename} ',
+                f'from {dll_url} and place into {curdir}')
     raise
 
 import engine, specs # noqa
