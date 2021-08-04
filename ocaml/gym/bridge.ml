@@ -29,7 +29,7 @@ let () =
   Py_module.set
     m
     "create"
-    (let%map penv = positional "env" penv ~docstring:"OCaml gym environment" in
+    (let%map penv = positional "env" penv ~docstring:"OCaml gym environment spec" in
      let (PEnv t) = penv in
      IEnv (t, t.create ()) |> python_of_ienv);
   Py_module.set
@@ -51,6 +51,31 @@ let () =
         ; Py.Bool.of_bool d
         ; Py.Dict.of_bindings_string info
        |]);
+  Py_module.set
+    m
+    "policies"
+    (let%map (IEnv (t, _)) =
+       positional "ienv" ienv ~docstring:"OCaml gym environment instance"
+     in
+     List.map
+       (fun (name, f) ->
+         let defunc =
+           let%map obj =
+             positional "view" pyobject ~docstring:"observation numpy array"
+           in
+           let ba = Numpy.to_bigarray Bigarray.Float64 Bigarray.C_layout obj in
+           if Bigarray.Genarray.dims ba <> [| t.observation_length |]
+           then failwith "invalid dimensions";
+           let arr =
+             Float.Array.init t.observation_length (fun i ->
+                 Bigarray.Genarray.get ba [| i |])
+           in
+           f arr |> python_of_int
+         in
+         let pyfn args = Defunc.apply defunc args (Base.Map.empty (module Base.String)) in
+         name, Py.Callable.of_function pyfn)
+       t.policies
+     |> Py.Dict.of_bindings_string);
   Py_module.set
     m
     "to_string"

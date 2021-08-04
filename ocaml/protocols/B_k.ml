@@ -392,6 +392,16 @@ module PrivateAttack = struct
     | Wait (** Continue withholding. Always possible. *)
   [@@deriving enumerate, variants]
 
+  let selfish_policy obs =
+    let open Observation in
+    let v = read obs in
+    if v PrivateBlocks = 0 && v PublicBlocks = 0
+    then Wait
+    else (
+      let d = compare (v PrivateBlocks, v PrivateVotes) (v PublicBlocks, v PublicVotes) in
+      if d < 0 then Adopt else if v PublicBlocks = 0 then Wait else Override)
+  ;;
+
   let selfish_tactic v state =
     if state.private_ $== state.public
     then Wait

@@ -1,5 +1,6 @@
 type 'instance env =
   { n_actions : int
+  ; observation_length : int
   ; create : unit -> 'instance
   ; reset : 'instance -> floatarray
   ; step :
@@ -7,6 +8,5 @@ type 'instance env =
   ; to_string : 'instance -> string
   ; low : floatarray
   ; high : floatarray
+  ; policies : (string * (floatarray -> int)) list
   }
-
-(* TODO: provide code for registering a gym in a python environment *)

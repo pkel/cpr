@@ -136,8 +136,23 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
       alpha
       (B_k.PrivateAttack.Observation.to_string_hum (observe !t))
       actions_hum
+  and policies =
+    [ ( "selfish"
+      , fun obs ->
+          B_k.PrivateAttack.selfish_policy obs
+          |> B_k.PrivateAttack.Variants_of_action.to_rank )
+    ]
   in
-  { n_actions = Array.length actions; create; reset; step; low; high; to_string }
+  { n_actions = Array.length actions
+  ; observation_length = B_k.PrivateAttack.Observation.n
+  ; create
+  ; reset
+  ; step
+  ; low
+  ; high
+  ; to_string
+  ; policies
+  }
 ;;
 
 let default = bk ~k:51 ~alpha:0.25 ~reward:(B_k.constant_pow 1.)

@@ -22,3 +22,6 @@ class Core(gym.Env):
 
     def render(self, mode='ascii'):
         print(engine.to_string(self.env))
+
+    def policies(self):
+        return engine.policies(self.env)
