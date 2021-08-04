@@ -1,15 +1,32 @@
 import gym
 import os
 from ctypes import PyDLL, RTLD_GLOBAL, c_char_p
-
-
+import sys
 # Link Python/OCaml bridge
 
-curdir = dir_path = os.path.dirname(os.path.realpath(__file__))
-dll = PyDLL(f"{curdir}/bridge.so", RTLD_GLOBAL)
-argv_t = c_char_p * 2
-argv = argv_t("bridge.so".encode('utf-8'), None)
-dll.caml_startup(argv)
+
+try:
+    curdir = dir_path = os.path.dirname(os.path.realpath(__file__))
+    dll_basename = "bridge.so"
+    dll_name = f"{curdir}/{dll_basename}"
+    dll_url = "https://pkel.github.io/cpr/bridge.so"
+    dll = PyDLL(dll_name, RTLD_GLOBAL)
+    argv_t = c_char_p * 2
+    argv = argv_t(dll_basename.encode('utf-8'), None)
+    dll.caml_startup(argv)
+except OSError as e:
+    if not os.path.exists(dll_name):
+        print(f"""
+        {dll_name} not found, please download {dll_basename} from {dll_url} and place into {curdir}:
+
+        curl {dll_url} -o {dll_name}
+
+        you can later update the library with
+
+        {sys.executable} -m {__name__} --update
+        """)
+        raise ImportError(f"{dll_name} not found, please download {dll_basename} from {dll_url} and place into {curdir}")
+    raise
 
 import engine, specs # noqa
 
