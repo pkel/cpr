@@ -1,4 +1,5 @@
 import gym
+import numpy as np
 from cpr_gym import specs
 
 
@@ -21,4 +22,4 @@ def test_policies():
     p = env.policies()['selfish']
     obs = env.reset()
     for x in range(100):
-        obs, _, _, _ = env.step(p(obs))
+        obs, _, _, _ = env.step(p(np.array(obs)))
