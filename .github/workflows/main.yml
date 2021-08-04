@@ -36,4 +36,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}-${{ matrix.ocaml-compiler }}-gym.so
-          path: ocaml/gym/cpr_gym/bridge.so
+          path: python/gym/cpr_gym/bridge.so
