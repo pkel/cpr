@@ -392,6 +392,20 @@ module PrivateAttack = struct
     | Wait (** Continue withholding. Always possible. *)
   [@@deriving enumerate, variants]
 
+  let honest_policy obs =
+    let open Observation in
+    let v = read obs in
+    let d = compare (v PrivateBlocks, v PrivateVotes) (v PublicBlocks, v PublicVotes) in
+    if d < 0
+    then Adopt
+    else if d > 0
+    then Override
+    else if (* d = 0 *)
+            v Lead > 0
+    then Override
+    else Adopt
+  ;;
+
   let selfish_policy obs =
     let open Observation in
     let v = read obs in
@@ -400,6 +414,12 @@ module PrivateAttack = struct
     else (
       let d = compare (v PrivateBlocks, v PrivateVotes) (v PublicBlocks, v PublicVotes) in
       if d < 0 then Adopt else if v PublicBlocks = 0 then Wait else Override)
+  ;;
+
+  let policies =
+    (* TODO test/evaluate these policies *)
+    let lift f obs = f obs |> Variants_of_action.to_rank in
+    [ "honest", lift honest_policy; "selfish", lift selfish_policy ]
   ;;
 
   let selfish_tactic v state =
