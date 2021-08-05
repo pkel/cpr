@@ -17,14 +17,14 @@ try:
 except OSError:
     if not os.path.exists(dll_name):
         print(
-                '\n',
-                f'{dll_name} not found, please download {dll_basename} ',
-                f'from {dll_url} and place into {curdir}: \n\n',
-                f'curl {dll_url} -o {dll_name}\n\n',
-                'you can later update the library with\n\n',
+                '\n'
+                f'{dll_name} not found, please download {dll_basename} '
+                f'from {dll_url} and place into {curdir}:\n\n'
+                f'curl {dll_url} -o {dll_name}\n\n'
+                'you can later update the library with\n\n'
                 f'{sys.executable} -m {__name__} --update\n')
         raise ImportError(
-                f'{dll_name} not found, please download {dll_basename} ',
+                f'{dll_name} not found, please download {dll_basename} '
                 f'from {dll_url} and place into {curdir}')
     raise
 
