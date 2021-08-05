@@ -1,6 +1,6 @@
 pandas
 numpy
-tox
+black
 flake8
 pytest
 jupyter

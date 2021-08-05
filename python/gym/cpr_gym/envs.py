@@ -5,7 +5,7 @@ import specs
 
 
 class Core(gym.Env):
-    metadata = {'render.modes': ['ascii']}
+    metadata = {"render.modes": ["ascii"]}
 
     def __init__(self, spec=specs.default):
         self.env = engine.create(spec)
@@ -20,7 +20,7 @@ class Core(gym.Env):
     def step(self, a):
         return engine.step(self.env, a)
 
-    def render(self, mode='ascii'):
+    def render(self, mode="ascii"):
         print(engine.to_string(self.env))
 
     def policies(self):

@@ -1,11 +1,20 @@
-.PHONY: build dependencies expand format simulate setup test visualize visualize.render
-
 build:
 	dune build
 
 test: build
 	dune runtest
 	pytest python
+
+check-format:
+	dune build @fmt
+	black --check python
+	cd python && flake8
+
+format:
+	dune build @fmt --auto-promote
+	black python
+
+pre-commit: check-format test
 
 simulate:
 	mkdir -p data
@@ -27,9 +36,6 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 expand:
 	python python/eval/honest_net.py
 	python python/eval/withholding.py
-
-format:
-	dune build @fmt --auto-promote
 
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit

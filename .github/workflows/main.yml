@@ -24,13 +24,16 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
-          opam-local-packages: ocaml/cpr.opam
+          opam-local-packages: ocaml/*.opam
 
-      - run: opam install cpr --deps-only --with-test
+      - name: Install dependencies
+        run: opam install cpr cpr-dev --deps-only --with-test
 
-      - run: opam exec -- dune build
-
-      - run: opam exec -- dune runtest
+      - name: Run tests
+        run: |
+          opam exec -- dune build @fmt
+          opam exec -- dune build
+          opam exec -- dune runtest
 
       - name: Upload the gym shared object
         uses: actions/upload-artifact@v2
@@ -68,13 +71,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        working-directory: python
         run: |
           python -m pip install --upgrade pip
-          pip install tox tox-gh-actions
+          pip install -r requirements.txt
+          pip install ./gym
 
-      - name: Test with tox
-        run: tox
-        working-directory: python/gym
+      - name: Run tests
+        working-directory: python
+        run: |
+          black --check .
+          flake8
+          pytest
 
 
   publish:
