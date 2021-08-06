@@ -193,7 +193,7 @@ let setup t =
     let deviations =
       deviations (function
           | Honest -> Deviation protocol.honest
-          | SelfishAdvanced -> Deviation PrivateAttack.(strategic selfish_tactic ~k)
+          | SelfishAdvanced -> Deviation PrivateAttack.(attack selfish_policy' ~k)
           | x ->
             let m =
               Printf.sprintf

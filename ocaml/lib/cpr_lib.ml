@@ -2,6 +2,7 @@ module Dag = Dag
 module Distributions = Distributions
 module Network = Network
 module Protocol = Protocol
+module PrivateAttack = PrivateAttack
 module Simulator = Simulator
 
 let ( $== ) = Dag.node_eq

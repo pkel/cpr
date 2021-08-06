@@ -10,7 +10,7 @@ type ('a, 'b) instance =
   }
 
 let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
-  let actions = Array.of_list B_k.PrivateAttack.all_of_action in
+  let actions = Array.of_list B_k.PrivateAttack.Action.all in
   let params : Simulator.params =
     let delay = Distributions.constant 0. in
     { activations = -1
@@ -27,12 +27,11 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
   in
   let init () =
     let open Simulator in
-    let open B_k in
-    let open PrivateAttack in
-    let setup = all_honest params (protocol ~k) in
-    let v, a, n = patch ~node:0 (strategic ~k noop_tactic) setup in
+    let protocol = B_k.protocol ~k in
+    let setup = all_honest params protocol in
+    let v, a, n = patch ~node:0 (PrivateAttack.withhold protocol.honest) setup in
     { sim = Simulator.init setup
-    ; attacker = strategic_view v, a, n
+    ; attacker = v, a, n
     ; reward_applied_to = None
     ; last_time = 0.
     }
@@ -60,15 +59,17 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
   and actions_hum =
     let open B_k.PrivateAttack in
     List.mapi
-      (fun i a -> Printf.sprintf "(%d) %s" i (Variants_of_action.to_name a))
-      all_of_action
+      (fun i a -> Printf.sprintf "(%d) %s" i (Action.Variants.to_name a))
+      Action.all
     |> String.concat " | "
   in
   let step ref_t ~action:i =
     let t = !ref_t in
     let v, a, (n : _ Simulator.node') = t.attacker in
     (* apply action *)
-    n.state <- B_k.PrivateAttack.apply_action ~k v a n.state actions.(i);
+    let policy _ _ = actions.(i) in
+    let tactic = B_k.PrivateAttack.tactic_of_policy ~k policy in
+    n.state <- PrivateAttack.apply_tactic tactic v a n.state;
     (* continue simulation *)
     skip_to_interaction t.sim;
     (* reward *)
