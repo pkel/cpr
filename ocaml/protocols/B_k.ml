@@ -287,18 +287,19 @@ module PrivateAttack = struct
 
   module Observation = struct
     type t =
-      | PublicBlocks (* number of blocks after common ancestor *)
-      | PublicVotes (* number of votes confirming the leading block *)
-      | PrivateBlocks (* number of blocks after common ancestor *)
-      | PrivateVotes (* number of votes confirming the leading block *)
-      | DiffBlocks (* PrivateBlocks - PublicBlocks *)
-      | DiffVotes (* PrivateVotes - PublicVotes *)
-      | Lead (* 1 if attacker is truthful leader on leading public block, -1 otherwise *)
-    [@@deriving enumerate, variants]
+      { public_blocks : int (** number of blocks after common ancestor *)
+      ; public_votes : int (** number of votes confirming the leading block *)
+      ; private_blocks : int (** number of blocks after common ancestor *)
+      ; private_votes : int (** number of votes confirming the leading block *)
+      ; diff_blocks : int (** private_blocks - public_blocks *)
+      ; diff_votes : int (** private_votes - public_votes *)
+      ; lead : bool (** attacker is truthful leader on leading public block *)
+      }
+    [@@deriving fields]
 
-    let n = List.length all
+    let n_fields = List.length Fields.names
 
-    let observe_field v s =
+    let observe v s =
       let private_view = extend_view v
       and public_view = extend_view (public_view v) in
       let private_votes = Dag.children private_view.votes_only s.private_ |> List.length
@@ -316,39 +317,94 @@ module PrivateAttack = struct
       let ca_height = block_height_exn v ca
       and private_height = block_height_exn v s.private_
       and public_height = block_height_exn v s.public in
-      function
-      | PublicBlocks -> public_height - ca_height
-      | PrivateBlocks -> private_height - ca_height
-      | DiffBlocks -> private_height - public_height
-      | PublicVotes -> public_votes
-      | PrivateVotes -> private_votes
-      | DiffVotes -> private_votes - public_votes
-      | Lead -> if lead then 1 else -1
+      { private_blocks = private_height - ca_height
+      ; public_blocks = public_height - ca_height
+      ; diff_blocks = private_height - public_height
+      ; private_votes
+      ; public_votes
+      ; diff_votes = private_votes - public_votes
+      ; lead
+      }
     ;;
 
-    let read a t =
-      let i = Variants.to_rank t in
-      Float.Array.get a i |> int_of_float
-    ;;
-
-    let observe_into v s a =
-      let observe_field = observe_field v s in
-      List.iteri
-        (fun i t ->
-          let x = observe_field t |> float_of_int in
-          Float.Array.set a i x)
-        all
-    ;;
-
-    let observe v s =
-      let a = Float.Array.make n Float.nan in
-      observe_into v s a;
+    let to_floatarray t =
+      let a = Float.Array.make n_fields Float.nan in
+      let set conv i field =
+        Float.Array.set a i (Fieldslib.Field.get field t |> conv);
+        i + 1
+      in
+      let int = set float_of_int
+      and bool = set (fun x -> if x then 1. else 0.) in
+      let _ =
+        Fields.fold
+          ~init:0
+          ~public_blocks:int
+          ~public_votes:int
+          ~private_blocks:int
+          ~private_votes:int
+          ~diff_blocks:int
+          ~diff_votes:int
+          ~lead:bool
+      in
       a
     ;;
 
-    let to_string_hum a =
-      List.map (fun t -> Printf.sprintf "%s: %d" (Variants.to_name t) (read a t)) all
+    let of_floatarray =
+      let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
+      let int = get int_of_float
+      and bool =
+        get (fun f ->
+            match int_of_float f with
+            | 0 -> false
+            | _ -> true)
+      in
+      fst
+        (Fields.make_creator
+           0
+           ~public_blocks:int
+           ~public_votes:int
+           ~private_blocks:int
+           ~private_votes:int
+           ~diff_blocks:int
+           ~diff_votes:int
+           ~lead:bool)
+    ;;
+
+    let to_string t =
+      let conv to_s field =
+        Printf.sprintf
+          "%s: %s"
+          (Fieldslib.Field.name field)
+          (to_s (Fieldslib.Field.get field t))
+      in
+      let int = conv string_of_int
+      and bool = conv string_of_bool in
+      Fields.to_list
+        ~public_blocks:int
+        ~public_votes:int
+        ~private_blocks:int
+        ~private_votes:int
+        ~diff_blocks:int
+        ~diff_votes:int
+        ~lead:bool
       |> String.concat "\n"
+    ;;
+
+    let%test _ =
+      let run _i =
+        let t =
+          { public_blocks = Random.bits ()
+          ; public_votes = Random.bits ()
+          ; private_blocks = Random.bits ()
+          ; private_votes = Random.bits ()
+          ; diff_blocks = Random.bits ()
+          ; diff_votes = Random.bits ()
+          ; lead = Random.bool ()
+          }
+        in
+        t = (to_floatarray t |> of_floatarray)
+      in
+      List.init 50 run |> List.for_all (fun x -> x)
     ;;
   end
 
@@ -371,34 +427,36 @@ module PrivateAttack = struct
     [@@deriving enumerate, variants]
   end
 
-  let honest_policy obs =
+  let honest_policy o =
     let open Observation in
     let open Action in
-    let v = read obs in
-    let d = compare (v PrivateBlocks, v PrivateVotes) (v PublicBlocks, v PublicVotes) in
+    let d =
+      compare (o.private_blocks, o.private_votes) (o.public_blocks, o.public_votes)
+    in
     if d < 0
     then Adopt
     else if d > 0
     then Override
-    else if v Lead > 0 (* && d = 0 *)
+    else if o.lead (* && d = 0 *)
     then Override
     else Adopt
   ;;
 
-  let selfish_policy obs =
+  let selfish_policy o =
     let open Observation in
     let open Action in
-    let v = read obs in
-    if v PrivateBlocks = 0 && v PublicBlocks = 0
+    if o.private_blocks = 0 && o.public_blocks = 0
     then Wait
     else (
-      let d = compare (v PrivateBlocks, v PrivateVotes) (v PublicBlocks, v PublicVotes) in
-      if d < 0 then Adopt else if v PublicBlocks = 0 then Wait else Override)
+      let d =
+        compare (o.private_blocks, o.private_votes) (o.public_blocks, o.public_votes)
+      in
+      if d < 0 then Adopt else if o.public_blocks = 0 then Wait else Override)
   ;;
 
   let policies =
     (* TODO test/evaluate these policies *)
-    let lift f obs = f obs |> Action.Variants.to_rank in
+    let lift f a = Observation.of_floatarray a |> f |> Action.Variants.to_rank in
     [ "honest", lift honest_policy; "selfish", lift selfish_policy ]
   ;;
 

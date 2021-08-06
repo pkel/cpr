@@ -45,7 +45,8 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
     | None -> failwith "simulation should continue forever"
   and observe t =
     let v, _a, (n : _ Simulator.node') = t.attacker in
-    B_k.PrivateAttack.Observation.observe v n.state
+    let open B_k.PrivateAttack.Observation in
+    observe v n.state |> to_floatarray
   in
   let create () =
     let t = init () in
@@ -127,19 +128,20 @@ let bk ~alpha ~k ~(reward : _ Protocol.reward_function) : _ env =
       ; "timedelta_step", Py.Float.of_float step_time
       ; "time", Py.Float.of_float t.sim.clock.now
       ] )
-  and low = Float.Array.make B_k.PrivateAttack.Observation.n (-100.)
+  and low = Float.Array.make B_k.PrivateAttack.Observation.n_fields (-100.)
   (* TODO read actual numbers from Attack module *)
-  and high = Float.Array.make B_k.PrivateAttack.Observation.n 100.
+  and high = Float.Array.make B_k.PrivateAttack.Observation.n_fields 100.
   and to_string t =
     Printf.sprintf
       "Bₖ with k=%d and α=%.2f\n%s\nActions: %s"
       k
       alpha
-      (B_k.PrivateAttack.Observation.to_string_hum (observe !t))
+      (B_k.PrivateAttack.Observation.to_string
+         (observe !t |> B_k.PrivateAttack.Observation.of_floatarray))
       actions_hum
   and policies = B_k.PrivateAttack.policies in
   { n_actions = Array.length actions
-  ; observation_length = B_k.PrivateAttack.Observation.n
+  ; observation_length = B_k.PrivateAttack.Observation.n_fields
   ; create
   ; reset
   ; step
