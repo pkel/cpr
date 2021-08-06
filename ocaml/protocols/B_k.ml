@@ -297,7 +297,7 @@ module PrivateAttack = struct
       }
     [@@deriving fields]
 
-    let n_fields = List.length Fields.names
+    let length = List.length Fields.names
 
     let observe v s =
       let private_view = extend_view v
@@ -327,8 +327,30 @@ module PrivateAttack = struct
       }
     ;;
 
+    let low =
+      { public_blocks = 0
+      ; public_votes = 0
+      ; private_blocks = 0
+      ; private_votes = 0
+      ; diff_blocks = min_int
+      ; diff_votes = min_int
+      ; lead = false
+      }
+    ;;
+
+    let high =
+      { public_blocks = max_int
+      ; public_votes = max_int
+      ; private_blocks = max_int
+      ; private_votes = max_int
+      ; diff_blocks = max_int
+      ; diff_votes = max_int
+      ; lead = true
+      }
+    ;;
+
     let to_floatarray t =
-      let a = Float.Array.make n_fields Float.nan in
+      let a = Float.Array.make length Float.nan in
       let set conv i field =
         Float.Array.set a i (Fieldslib.Field.get field t |> conv);
         i + 1
@@ -424,7 +446,20 @@ module PrivateAttack = struct
               If override is impossible, this still results in a release of withheld
               information. *)
       | Wait (** Continue withholding. Always possible. *)
-    [@@deriving enumerate, variants]
+    [@@deriving variants]
+
+    let to_string = Variants.to_name
+    let to_int = Variants.to_rank
+
+    let table =
+      let add acc var = var.Variantslib.Variant.constructor :: acc in
+      Variants.fold ~init:[] ~adopt:add ~override:add ~match_:add ~wait:add
+      |> List.rev
+      |> Array.of_list
+    ;;
+
+    let of_int i = table.(i)
+    let n = Array.length table
   end
 
   let honest_policy o =
@@ -456,8 +491,7 @@ module PrivateAttack = struct
 
   let policies =
     (* TODO test/evaluate these policies *)
-    let lift f a = Observation.of_floatarray a |> f |> Action.Variants.to_rank in
-    [ "honest", lift honest_policy; "selfish", lift selfish_policy ]
+    [ "honest", honest_policy; "selfish", selfish_policy ]
   ;;
 
   let selfish_policy' v state =
@@ -476,7 +510,7 @@ module PrivateAttack = struct
         if ca $== state.public then Wait else Override))
   ;;
 
-  let tactic_of_policy ~k p v ~release state =
+  let apply_action ~k v ~release state =
     let parent_block v n =
       match Dag.parents v.view n with
       | hd :: _ when v.data hd |> is_block -> Some hd
@@ -511,15 +545,20 @@ module PrivateAttack = struct
         (* not enough votes, release all *)
         release_recursive v release (block :: votes)
     in
-    match (p v state : Action.t) with
-    | Adopt -> `Abort
-    | Wait -> `Continue
-    | Match ->
-      match_ ~and_override:false ();
-      `Continue
-    | Override ->
-      match_ ~and_override:true ();
-      `Continue
+    fun a ->
+      match (a : Action.t) with
+      | Adopt -> `Abort
+      | Wait -> `Continue
+      | Match ->
+        match_ ~and_override:false ();
+        `Continue
+      | Override ->
+        match_ ~and_override:true ();
+        `Continue
+  ;;
+
+  let tactic_of_policy ~k p v ~release state =
+    p v state |> apply_action ~k v ~release state
   ;;
 
   let attack ~k p = attack (protocol ~k).honest (tactic_of_policy ~k p)

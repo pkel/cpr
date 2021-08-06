@@ -1,3 +1,4 @@
+(* TODO consider using ocaml class for gym env interface *)
 type 'instance env =
   { n_actions : int
   ; observation_length : int

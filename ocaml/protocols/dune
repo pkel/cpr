@@ -3,4 +3,4 @@
  (libraries cpr_lib)
  (inline_tests)
  (preprocess
-  (pps ppx_enumerate ppx_expect ppx_fields_conv ppx_variants_conv)))
+  (pps ppx_expect ppx_fields_conv ppx_variants_conv)))
