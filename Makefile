@@ -1,25 +1,49 @@
 build:
-	dune build
+	cd ocaml && dune build
 
-test: build
-	dune runtest
-	pytest python
+test: build bridge
+	cd ocaml && dune runtest
+	cd python && pytest
 
 check-format:
-	dune build @fmt
-	black --check python
+	cd ocaml && dune build @fmt
+	cd python && black --check .
 	cd python && flake8
 
 format:
-	dune build @fmt --auto-promote
-	black python
+	cd ocaml && dune build @fmt --auto-promote
+	cd python && black .
 
 pre-commit: check-format test
+
+setup:
+	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
+	opam switch create . "4.11.1+flambda" --deps-only
+	opam install dune
+
+dependencies:
+	dune build ocaml/{cpr,cpr-dev}.opam
+	opam install ./ocaml --deps-only --working-dir
+
+# bridge OCaml and Python
+
+bridge: python/gym/cpr_gym/bridge.so
+
+python/gym/cpr_gym/bridge.so: ocaml/_build/default/gym/bridge.so
+	cp $< $@
+
+# long-running simulations
 
 simulate:
 	mkdir -p data
 	dune exec ocaml/experiments/honest_net.exe -- data/honest_net.tsv
 	dune exec ocaml/experiments/withholding.exe -- data/withholding.tsv
+
+expand:
+	python python/eval/honest_net.py
+	python python/eval/withholding.py
+
+# visualizations from short simulations
 
 visualize:
 	mkdir -p fig/chains/
@@ -32,16 +56,3 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 
 %.png: %.dot
 	dot -Tpng < $^ > $@
-
-expand:
-	python python/eval/honest_net.py
-	python python/eval/withholding.py
-
-setup:
-	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
-	opam switch create . "4.11.1+flambda" --deps-only
-	opam install dune
-
-dependencies:
-	dune build ocaml/{cpr,cpr-dev}.opam
-	opam install ./ocaml --deps-only --working-dir
