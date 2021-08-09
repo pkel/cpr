@@ -169,7 +169,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     t.last_time <- t.sim.clock.now;
     (* return *)
     ( observe t |> M.Observation.to_floatarray
-    , cf.(0)
+    , cf.(0) /. reward_time
     , false
     , [ "attacker_reward", Py.Float.of_float cf.(0)
       ; "defender_reward", Py.Float.of_float cf.(1)
