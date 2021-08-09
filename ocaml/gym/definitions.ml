@@ -220,8 +220,7 @@ let bk ~alpha ~k ~reward =
       let node = PrivateAttack.withhold protocol.honest
 
       let apply_action v a state action =
-        let policy _ _ = action in
-        let tactic = B_k.PrivateAttack.tactic_of_policy ~k policy in
+        let tactic = tactic_of_policy ~k (fun _ -> action) in
         PrivateAttack.apply_tactic tactic v a state
       ;;
     end)

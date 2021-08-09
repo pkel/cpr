@@ -13,7 +13,9 @@ let protocols =
           [ ( B_k_lessleadership { k }
             , [ Constant; Block ]
             , [ Honest; SelfishSimple; SelfishAdvanced ] )
-          ; B_k { k }, [ Constant; Block ], [ Honest; SelfishAdvanced ]
+          ; ( B_k { k }
+            , [ Constant; Block ]
+            , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] )
           ])
         k
       (* ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k *)

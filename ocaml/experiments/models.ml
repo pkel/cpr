@@ -87,17 +87,26 @@ type strategy =
   | Honest
   | SelfishSimple
   | SelfishAdvanced
+  | NumHonest
+  | NumSelfishSimple
+  | NumSelfishAdvanced
 
 let tag_strategy = function
   | Honest -> "honest"
   | SelfishSimple -> "selfish-simple"
   | SelfishAdvanced -> "selfish-advanced"
+  | NumHonest -> "numeric-honest"
+  | NumSelfishSimple -> "numeric-selfish-simple"
+  | NumSelfishAdvanced -> "numeric-selfish-advanced"
 ;;
 
 let describe_strategy = function
   | Honest -> "honest"
   | SelfishSimple -> "withhold until strong block is found"
   | SelfishAdvanced -> "withhold until defender finds strong block"
+  | NumHonest -> "honest strategy implemented on RL/Gym view"
+  | NumSelfishSimple -> "selfish-simple strategy implemented on RL/Gym view"
+  | NumSelfishAdvanced -> "selfish-advanced strategy implemented on RL/Gym view"
 ;;
 
 type task =
@@ -193,7 +202,9 @@ let setup t =
     let deviations =
       deviations (function
           | Honest -> Deviation protocol.honest
-          | SelfishAdvanced -> Deviation PrivateAttack.(attack selfish_policy' ~k)
+          | SelfishAdvanced -> Deviation PrivateAttack.(attack' selfish_policy' ~k)
+          | NumHonest -> Deviation PrivateAttack.(attack honest_policy ~k)
+          | NumSelfishAdvanced -> Deviation PrivateAttack.(attack selfish_policy ~k)
           | x ->
             let m =
               Printf.sprintf
@@ -225,7 +236,15 @@ let setup t =
       deviations (function
           | Honest -> Deviation (strategic honest_tactic ~k)
           | SelfishSimple -> Deviation (strategic simple_tactic ~k)
-          | SelfishAdvanced -> Deviation (strategic advanced_tactic ~k))
+          | SelfishAdvanced -> Deviation (strategic advanced_tactic ~k)
+          | x ->
+            let m =
+              Printf.sprintf
+                "protocol %s does not support attack strategy %s"
+                (protocol_family t.protocol)
+                (tag_strategy x)
+            in
+            raise (Invalid_argument m))
     and reward_functions =
       List.map
         (function

@@ -431,7 +431,6 @@ module PrivateAttack = struct
 
   module Action = struct
     type t =
-      | Adopt (** Abort withholding, adopt defender's chain. Always possible. *)
       | Override
           (** Publish just enough information to make the defender adopt the chain just
               released. The attacker continues mining the private chain.
@@ -445,6 +444,9 @@ module PrivateAttack = struct
               If override is impossible, this still results in a release of withheld
               information. *)
       | Wait (** Continue withholding. Always possible. *)
+      | Release
+          (** Release up to preferred private block and all withheld votes for this block.
+              Used to model honest strategy. *)
     [@@deriving variants]
 
     let to_string = Variants.to_name
@@ -452,7 +454,7 @@ module PrivateAttack = struct
 
     let table =
       let add acc var = var.Variantslib.Variant.constructor :: acc in
-      Variants.fold ~init:[] ~adopt:add ~override:add ~match_:add ~wait:add
+      Variants.fold ~init:[] ~override:add ~match_:add ~wait:add ~release:add
       |> List.rev
       |> Array.of_list
     ;;
@@ -461,37 +463,19 @@ module PrivateAttack = struct
     let n = Array.length table
   end
 
-  let honest_policy o =
-    let open Observation in
-    let open Action in
-    let d =
-      compare (o.private_blocks, o.private_votes) (o.public_blocks, o.public_votes)
-    in
-    if d < 0
-    then Adopt
-    else if d > 0
-    then Override
-    else if o.lead (* && d = 0 *)
-    then Override
-    else Adopt
-  ;;
+  let honest_policy _o = Action.Release
 
   let selfish_policy o =
     let open Observation in
     let open Action in
     if o.private_blocks = 0 && o.public_blocks = 0
     then Wait
-    else (
-      let d =
-        compare (o.private_blocks, o.private_votes) (o.public_blocks, o.public_votes)
-      in
-      if d < 0 then Adopt else if o.public_blocks = 0 then Wait else Override)
+    else if o.public_blocks = 0
+    then Wait
+    else Override
   ;;
 
-  let policies =
-    (* TODO test/evaluate these policies *)
-    [ "honest", honest_policy; "selfish", selfish_policy ]
-  ;;
+  let policies = [ "honest", honest_policy; "selfish", selfish_policy ]
 
   let selfish_policy' v state =
     let v = extend_view v in
@@ -499,14 +483,10 @@ module PrivateAttack = struct
     if state.private_ $== state.public
     then Wait
     else (
-      let d = compare_blocks v state.private_ state.public in
-      if d < 0
-      then Adopt
-      else (
-        let ca =
-          Dag.common_ancestor v.blocks_only state.private_ state.public |> Option.get
-        in
-        if ca $== state.public then Wait else Override))
+      let ca =
+        Dag.common_ancestor v.blocks_only state.private_ state.public |> Option.get
+      in
+      if ca $== state.public then Wait else Override)
   ;;
 
   let apply_action ~k v ~release state =
@@ -546,19 +526,29 @@ module PrivateAttack = struct
     in
     fun a ->
       match (a : Action.t) with
-      | Adopt -> `Abort
-      | Wait -> `Continue
+      | Wait -> `PreferPrivate
       | Match ->
         match_ ~and_override:false ();
-        `Continue
+        `PreferPrivate
       | Override ->
         match_ ~and_override:true ();
-        `Continue
+        `PreferPrivate
+      | Release ->
+        release_recursive v release [ state.private_ ];
+        Dag.children v.view state.private_ |> List.iter release;
+        `PreferPrivate
   ;;
 
+  let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
+
   let tactic_of_policy ~k p v ~release state =
+    (lift_policy p) v state |> apply_action ~k v ~release state
+  ;;
+
+  let tactic_of_policy' ~k p v ~release state =
     p v state |> apply_action ~k v ~release state
   ;;
 
   let attack ~k p = attack (protocol ~k).honest (tactic_of_policy ~k p)
+  and attack' ~k p = attack (protocol ~k).honest (tactic_of_policy' ~k p)
 end

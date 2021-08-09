@@ -1,6 +1,13 @@
 open Intf
 
-let public_view (v : _ local_view) = { v with view = Dag.filter v.released v.view }
+let public_view (v : _ local_view) =
+  { v with
+    view = Dag.filter v.released v.view
+  ; appended_by_me =
+      (* avoid simulated public node appending Bₖ blocks in the name of the attacker *)
+      (fun _ -> false)
+  }
+;;
 
 (* release a given node and all it's dependencies recursively *)
 let rec release_recursive v release ns =
@@ -30,10 +37,13 @@ let withhold
     | Activate _ ->
       (* work on private chain *)
       { state with private_ = private_.handler withhold state.private_ event }
-      (* NOTE: private_ sees private and public DAG nodes *)
     | Deliver _ ->
       (* simulate defender *)
-      { state with public = public.handler withhold state.public event }
+      (* NOTE: This logic implies that the attacker adopts the longest public chain if it
+         is better. Consider adding a third tip of chain that ignores public information. *)
+      { public = public.handler withhold state.public event
+      ; private_ = private_.handler withhold state.private_ event
+      }
   and preferred x = x.private_
   and init ~roots = { public = public.init ~roots; private_ = private_.init ~roots } in
   { init; handler; preferred }
@@ -43,13 +53,13 @@ type ('env, 'dag_data) tactic =
   ('env, 'dag_data) local_view
   -> release:('env Dag.node -> unit)
   -> 'env state
-  -> [ `Abort | `Continue ]
+  -> [ `PreferPublic | `PreferPrivate ]
 
 let apply_tactic (tactic : ('env, 'dag_data) tactic) (v : _ local_view) actions state =
   tactic v ~release:actions.share state
   |> function
-  | `Continue -> state
-  | `Abort -> { state with private_ = state.public }
+  | `PreferPrivate -> state
+  | `PreferPublic -> { state with private_ = state.public }
 ;;
 
 let attack
