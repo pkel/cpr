@@ -1,6 +1,6 @@
 open Cpr_lib
 
-type block = { height : int }
+type dag_data = { height : int }
 
 let dag_roots = [ { height = 0 } ]
 
@@ -60,4 +60,4 @@ let%test "convergence" =
     ]
 ;;
 
-let constant c : ('env, block) reward_function = fun ~view:_ ~assign n -> assign c n
+let constant c : ('env, dag_data) reward_function = fun ~view:_ ~assign n -> assign c n

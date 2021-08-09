@@ -19,7 +19,7 @@ type 'env state =
   }
 
 let withhold
-    (honest : ('env, 'data) local_view -> ('env, 'data, 'pow, 'state) node)
+    (honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node)
     (v : _ local_view)
   =
   let public = honest (public_view v)
@@ -39,13 +39,13 @@ let withhold
   { init; handler; preferred }
 ;;
 
-type ('env, 'data) tactic =
-  ('env, 'data) local_view
+type ('env, 'dag_data) tactic =
+  ('env, 'dag_data) local_view
   -> release:('env Dag.node -> unit)
   -> 'env state
   -> [ `Abort | `Continue ]
 
-let apply_tactic (tactic : ('env, 'data) tactic) (v : _ local_view) actions state =
+let apply_tactic (tactic : ('env, 'dag_data) tactic) (v : _ local_view) actions state =
   tactic v ~release:actions.share state
   |> function
   | `Continue -> state
@@ -53,8 +53,8 @@ let apply_tactic (tactic : ('env, 'data) tactic) (v : _ local_view) actions stat
 ;;
 
 let attack
-    (honest : ('env, 'data) local_view -> ('env, 'data, 'pow, 'state) node)
-    (tactic : ('env, 'data) tactic)
+    (honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node)
+    (tactic : ('env, 'dag_data) tactic)
     (v : _ local_view)
   =
   let node = withhold honest v in

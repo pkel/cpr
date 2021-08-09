@@ -2,7 +2,7 @@ open Cpr_lib
 
 type block = { height : int }
 
-type node =
+type dag_data =
   | Vote
   | Block of block
 
@@ -39,9 +39,9 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
-type ('env, 'data) extended_view =
+type ('env, 'dag_data) extended_view =
   { view : 'env Dag.view
-  ; data : 'env Dag.node -> 'data
+  ; data : 'env Dag.node -> 'dag_data
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
   ; delivered_at : 'env Dag.node -> float
@@ -175,9 +175,9 @@ let%test "convergence" =
     ]
 ;;
 
-let constant_pow c : ('env, node) reward_function = fun ~view:_ ~assign -> assign c
+let constant_pow c : ('env, dag_data) reward_function = fun ~view:_ ~assign -> assign c
 
-let constant_block c : ('env, node) reward_function =
+let constant_block c : ('env, dag_data) reward_function =
  fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
 ;;
 

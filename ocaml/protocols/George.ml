@@ -1,6 +1,6 @@
 open Cpr_lib
 
-type height =
+type dag_data =
   { block : int
   ; vote : int
   }
@@ -41,9 +41,9 @@ let init ~roots =
   | _ -> failwith "invalid roots"
 ;;
 
-type ('env, 'data) extended_view =
+type ('env, 'dag_data) extended_view =
   { view : 'env Dag.view
-  ; data : 'env Dag.node -> 'data
+  ; data : 'env Dag.node -> 'dag_data
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
   ; delivered_at : 'env Dag.node -> float
@@ -166,7 +166,7 @@ let constant_block c : _ reward_function =
  fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
 ;;
 
-let reward ~max_reward_per_block ~discount ~punish ~k : ('env, height) reward_function =
+let reward ~max_reward_per_block ~discount ~punish ~k : ('env, dag_data) reward_function =
   let k = float_of_int k in
   let c = max_reward_per_block /. k in
   fun ~view:v ~assign ->

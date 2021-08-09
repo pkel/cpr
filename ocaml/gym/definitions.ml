@@ -208,7 +208,7 @@ let bk ~alpha ~k ~reward =
   of_module
     ~alpha
     (module struct
-      type data = B_k.node
+      type data = B_k.dag_data
       type state = data Simulator.data PrivateAttack.state
 
       let description = Printf.sprintf "Bₖ with k=%d" k
