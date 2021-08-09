@@ -170,6 +170,9 @@ interface into an OpenAI-compatible `gym.Env` class.
 
 [openai-gym]: https://gym.openai.com/
 
+**To do:** Expose private attack on `Nakamoto`, `B_k_lessleader`, and
+`George` to Gym environment.
+
 
 ## Reward after Difficulty Adjustment
 
