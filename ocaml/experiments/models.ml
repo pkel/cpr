@@ -112,8 +112,8 @@ type task =
 
 type 'a deviation =
   | Deviation :
-      (('a Simulator.data, 'a) Protocol.local_view
-       -> ('a Simulator.data, 'a, Simulator.pow, 'state) Protocol.node)
+      (('a Simulator.data, 'a) local_view
+       -> ('a Simulator.data, 'a, Simulator.pow, 'state) node)
       -> 'a deviation
 
 type setup =
@@ -121,8 +121,8 @@ type setup =
       { task : task
       ; params : Simulator.params
       ; network : Network.t
-      ; protocol : ('a Simulator.data, 'a, Simulator.pow, 'state) Protocol.protocol
-      ; reward_functions : ('a Simulator.data, 'a) Protocol.reward_function list
+      ; protocol : ('a Simulator.data, 'a, Simulator.pow, 'state) Cpr_lib.protocol
+      ; reward_functions : ('a Simulator.data, 'a) reward_function list
       ; deviations : (int * 'a deviation) list
       }
       -> setup

@@ -1,4 +1,4 @@
-open Protocol
+open Intf
 
 let public_view (v : _ local_view) = { v with view = Dag.filter v.released v.view }
 

@@ -1,5 +1,4 @@
 open Cpr_lib
-open Protocol
 
 type block = { height : int }
 

@@ -1,5 +1,4 @@
 open Cpr_lib
-open Protocol
 
 type block = { height : int }
 
@@ -63,7 +62,7 @@ type ('env, 'data) extended_view =
 
 let max_pow_hash = max_int, max_int
 
-let extend_view (x : _ Protocol.local_view) =
+let extend_view (x : _ local_view) =
   { view = x.view
   ; data = x.data
   ; votes_only = Dag.filter (fun n -> x.data n |> is_vote) x.view

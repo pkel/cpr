@@ -1,6 +1,6 @@
+open Intf
 open Cpr_lib
 open Cpr_protocols
-open Intf
 
 type ('a, 'b) instance =
   { sim : 'a Simulator.state
@@ -10,8 +10,6 @@ type ('a, 'b) instance =
   }
 
 module type M = sig
-  open Protocol
-
   type data
   type state
 
@@ -59,8 +57,8 @@ end
 
 let of_module ~alpha (type s t) (module M : M with type state = s and type data = t)
     : ( t
-      , (t Simulator.data, t) Protocol.local_view
-        * (t Simulator.data, t, Simulator.pow) Protocol.actions
+      , (t Simulator.data, t) local_view
+        * (t Simulator.data, t, Simulator.pow) actions
         * (t, s) Simulator.node' )
       instance
       ref
@@ -118,7 +116,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
   in
   let step ref_t ~action:i =
     let t = !ref_t in
-    let v, (a : _ Protocol.actions), (n : _ Simulator.node') = t.attacker in
+    let v, (a : _ actions), (n : _ Simulator.node') = t.attacker in
     (* apply action *)
     let action = M.Action.of_int i in
     n.state <- M.apply_action v a n.state action;
