@@ -82,7 +82,7 @@ jobs:
         run: |
           black --check .
           flake8
-          pytest
+          pytest --forked
 
 
   publish:
