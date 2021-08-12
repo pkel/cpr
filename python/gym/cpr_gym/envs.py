@@ -18,7 +18,10 @@ class Core(gym.Env):
         return engine.reset(self.env)
 
     def step(self, a):
-        return engine.step(self.env, a)
+        obs, reward, done, info = engine.step(self.env, a)
+        if np.isnan(reward):
+            reward = 0.0
+        return obs, reward, done, info
 
     def render(self, mode="ascii"):
         print(engine.to_string(self.env))
