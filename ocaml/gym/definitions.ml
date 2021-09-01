@@ -162,6 +162,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
         in
         (Dag.data ca).appended_at -. last_ca_time)
     in
+    assert (cf.(0) = 0. || reward_time > 0.);
     (* 3. mark common ancestor DAG node *)
     t.reward_applied_upto <- Some ca;
     (* end reward *)
@@ -169,7 +170,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     t.last_time <- t.sim.clock.now;
     (* return *)
     ( observe t |> M.Observation.to_floatarray
-    , cf.(0) /. reward_time
+    , (if reward_time > 0. then cf.(0) /. reward_time else 0.)
     , false
     , [ "attacker_reward", Py.Float.of_float cf.(0)
       ; "defender_reward", Py.Float.of_float cf.(1)
