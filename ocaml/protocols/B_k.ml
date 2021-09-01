@@ -431,6 +431,9 @@ module PrivateAttack = struct
 
   module Action = struct
     type t =
+      | Release
+          (** Release up to preferred private block and all withheld votes for this block.
+              Used to model honest strategy. *)
       | Override
           (** Publish just enough information to make the defender adopt the chain just
               released. The attacker continues mining the private chain.
@@ -444,9 +447,6 @@ module PrivateAttack = struct
               If override is impossible, this still results in a release of withheld
               information. *)
       | Wait (** Continue withholding. Always possible. *)
-      | Release
-          (** Release up to preferred private block and all withheld votes for this block.
-              Used to model honest strategy. *)
     [@@deriving variants]
 
     let to_string = Variants.to_name
