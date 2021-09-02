@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
-          path: ocaml/_build/default/gym/bridge.so
+          path: _build/default/ocaml/gym/bridge.so
 
   python:
     strategy:
