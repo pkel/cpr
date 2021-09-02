@@ -68,8 +68,8 @@ let extend_view (x : _ local_view) =
   ; votes_only = Dag.filter (fun n -> x.data n |> is_vote) x.view
   ; blocks_only = Dag.filter (fun n -> x.data n |> is_block) x.view
   ; delivered_at = x.delivered_at
-  ; appended_by_me = x.appended_by_me
   ; pow_hash = x.pow_hash
+  ; appended_by_me = x.appended_by_me
   ; released = x.released
   ; my_id = x.my_id
   }
@@ -189,9 +189,7 @@ let quorum ~k v b =
     then (* fast path *) None
     else (
       let theirs = first v.delivered_at (k - nmine) theirs |> Option.get in
-      mine @ theirs
-      |> List.sort (fun a b -> compare (pow_hash_exn a) (pow_hash_exn b))
-      |> Option.some))
+      mine @ theirs |> List.sort Compare.(by (tuple int int) pow_hash_exn) |> Option.some))
 ;;
 
 let honest ~k v actions =

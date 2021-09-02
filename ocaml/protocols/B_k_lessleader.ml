@@ -16,17 +16,21 @@ let is_block = function
   | _ -> false
 ;;
 
-(* TODO verify vote uniqueness *)
 let dag_validity ~k (v : _ global_view) n =
   match v.pow_hash n, v.data n, Dag.parents v.view n with
-  | None, _, _ -> false
   | Some _, Vote, [ p ] -> v.data p |> is_block
-  | Some _, Block b', hd :: tl ->
-    (match v.data hd with
-    | Block b ->
-      List.for_all (fun n -> v.data n |> is_vote) tl
-      && List.length tl = k - 1
-      && b.height + 1 = b'.height
+  | Some _, Block b, pblock :: vote0 :: votes ->
+    (match v.data pblock with
+    | Block p ->
+      let ordered_votes, _, nvotes =
+        List.fold_left
+          (fun (ok, h, i) n ->
+            let h' = v.pow_hash n |> Option.get in
+            v.data n |> is_vote && h' > h && ok, h', i + 1)
+          (true, v.pow_hash vote0 |> Option.get, 1)
+          votes
+      in
+      p.height + 1 = b.height && nvotes = k - 1 && ordered_votes
     | _ -> false)
   | _ -> false
 ;;
@@ -45,6 +49,7 @@ type ('env, 'dag_data) extended_view =
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
   ; delivered_at : 'env Dag.vertex -> float
+  ; pow_hash : 'env Dag.vertex -> (int * int) option
   ; appended_by_me : 'env Dag.vertex -> bool
   ; released : 'env Dag.vertex -> bool
   ; my_id : int
@@ -56,6 +61,7 @@ let extend_view (x : _ local_view) =
   ; votes_only = Dag.filter (fun n -> x.data n |> is_vote) x.view
   ; blocks_only = Dag.filter (fun n -> x.data n |> is_block) x.view
   ; delivered_at = x.delivered_at
+  ; pow_hash = x.pow_hash
   ; appended_by_me = x.appended_by_me
   ; released = x.released
   ; my_id = x.my_id
@@ -105,7 +111,9 @@ let update_head v ~preferred ~consider =
   if compare_blocks v consider preferred > 0 then consider else preferred
 ;;
 
-let honest ~k v actions preferred = function
+let honest ~k v actions preferred =
+  let pow_hash_exn n = v.pow_hash n |> Option.get in
+  function
   | Activate pow ->
     let votes = Dag.children v.votes_only preferred in
     if List.length votes >= k - 1
@@ -115,10 +123,11 @@ let honest ~k v actions preferred = function
         actions.extend_dag
           ~pow
           (preferred
-          :: first
-               (fun n -> (if v.appended_by_me n then 0 else 1), v.delivered_at n)
-               (k - 1)
-               votes)
+          :: (first
+                (fun n -> (if v.appended_by_me n then 0 else 1), v.delivered_at n)
+                (k - 1)
+                votes
+             |> List.sort Compare.(by (tuple int int) pow_hash_exn)))
           (Block { height = head.height + 1 })
       in
       actions.share head';
