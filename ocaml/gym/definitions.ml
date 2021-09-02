@@ -5,7 +5,7 @@ open Cpr_protocols
 type ('a, 'b) instance =
   { sim : 'a Simulator.state
   ; attacker : 'b
-  ; mutable reward_applied_upto : 'a Simulator.data Dag.node option
+  ; mutable reward_applied_upto : 'a Simulator.data Dag.vertex option
   ; mutable last_time : float
   }
 
@@ -16,7 +16,7 @@ module type M = sig
   val description : string
 
   val protocol
-    : (data Simulator.data, data, Simulator.pow, data Simulator.data Dag.node) protocol
+    : (data Simulator.data, data, Simulator.pow, data Simulator.data Dag.vertex) protocol
 
   val reward_function : (data Simulator.data, data) reward_function
 
@@ -134,7 +134,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
       |> Dag.common_ancestor' t.sim.global.view
       |> Option.get
     in
-    (* 2. apply reward function up to last marked DAG node (exclusive) *)
+    (* 2. apply reward function up to last marked DAG vertex (exclusive) *)
     let ( $=? ) n m = Option.map (fun m -> m $== n) m |> Option.value ~default:false in
     let cf (* cash flow *) = Array.make 2 0. in
     let reward_time =
@@ -163,7 +163,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
         (Dag.data ca).appended_at -. last_ca_time)
     in
     assert (cf.(0) = 0. || reward_time > 0.);
-    (* 3. mark common ancestor DAG node *)
+    (* 3. mark common ancestor DAG vertex *)
     t.reward_applied_upto <- Some ca;
     (* end reward *)
     let step_time = t.sim.clock.now -. t.last_time in

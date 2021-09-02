@@ -21,8 +21,8 @@ let rec release_recursive v release ns =
 ;;
 
 type 'env state =
-  { public : 'env Dag.node (* private/withheld tip of chain *)
-  ; private_ : 'env Dag.node (* public/defender tip of chain *)
+  { public : 'env Dag.vertex (* private/withheld tip of chain *)
+  ; private_ : 'env Dag.vertex (* public/defender tip of chain *)
   }
 
 let withhold
@@ -51,7 +51,7 @@ let withhold
 
 type ('env, 'dag_data) tactic =
   ('env, 'dag_data) local_view
-  -> release:('env Dag.node -> unit)
+  -> release:('env Dag.vertex -> unit)
   -> 'env state
   -> [ `PreferPublic | `PreferPrivate ]
 

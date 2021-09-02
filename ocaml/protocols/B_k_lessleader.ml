@@ -41,12 +41,12 @@ let init ~roots =
 
 type ('env, 'dag_data) extended_view =
   { view : 'env Dag.view
-  ; data : 'env Dag.node -> 'dag_data
+  ; data : 'env Dag.vertex -> 'dag_data
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
-  ; delivered_at : 'env Dag.node -> float
-  ; appended_by_me : 'env Dag.node -> bool
-  ; released : 'env Dag.node -> bool
+  ; delivered_at : 'env Dag.vertex -> float
+  ; appended_by_me : 'env Dag.vertex -> bool
+  ; released : 'env Dag.vertex -> bool
   ; my_id : int
   }
 
@@ -98,7 +98,7 @@ let compare_blocks v =
     $ by int (fun n -> if v.appended_by_me n then 1 else 0)
     $ by (inv float) v.delivered_at
   in
-  skip_eq Dag.node_eq cmp
+  skip_eq Dag.vertex_eq cmp
 ;;
 
 let update_head v ~preferred ~consider =
@@ -182,8 +182,8 @@ let constant_block c : ('env, dag_data) reward_function =
 ;;
 
 type 'a strategic_state =
-  { public : 'a Dag.node
-  ; private_ : 'a Dag.node
+  { public : 'a Dag.vertex
+  ; private_ : 'a Dag.vertex
   }
 
 (* release a given node and all it's dependencies recursively *)

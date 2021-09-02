@@ -43,11 +43,11 @@ let init ~roots =
 
 type ('env, 'dag_data) extended_view =
   { view : 'env Dag.view
-  ; data : 'env Dag.node -> 'dag_data
+  ; data : 'env Dag.vertex -> 'dag_data
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
-  ; delivered_at : 'env Dag.node -> float
-  ; appended_by_me : 'env Dag.node -> bool
+  ; delivered_at : 'env Dag.vertex -> float
+  ; appended_by_me : 'env Dag.vertex -> bool
   ; my_id : int
   }
 

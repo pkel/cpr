@@ -5,8 +5,8 @@ module Network = Network
 module PrivateAttack = PrivateAttack
 module Simulator = Simulator
 
-let ( $== ) = Dag.node_eq
-let ( $!= ) = Dag.node_neq
+let ( $== ) = Dag.vertex_eq
+let ( $!= ) = Dag.vertex_neq
 
 module Compare : sig
   type 'a cmp = 'a -> 'a -> int

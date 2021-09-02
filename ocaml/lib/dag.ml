@@ -1,7 +1,7 @@
-type 'a node =
+type 'a vertex =
   { serial : int
-  ; parents : 'a node list
-  ; mutable children : 'a node list
+  ; parents : 'a vertex list
+  ; mutable children : 'a vertex list
   ; data : 'a
   ; mutable depth : int
   }
@@ -19,13 +19,13 @@ let debug_pp ?meta v fmt n =
   Format.fprintf fmt "this: %a" (debug_pp ?meta v) n
 ;;
 
-let node_eq a b = a.serial = b.serial
-let node_neq a b = a.serial <> b.serial
+let vertex_eq a b = a.serial = b.serial
+let vertex_neq a b = a.serial <> b.serial
 let id a = a.serial
 
 type 'a t =
   { mutable size : int
-  ; mutable roots : 'a node list
+  ; mutable roots : 'a vertex list
   }
 
 let create () = { size = 0; roots = [] }
@@ -34,16 +34,16 @@ let size t = t.size
 
 let append t parents data =
   let depth = List.fold_left (fun acc el -> max acc el.depth) 0 parents + 1 in
-  let node' = { serial = t.size; parents; children = []; data; depth } in
-  if parents = [] then t.roots <- node' :: t.roots;
-  List.iter (fun node -> node.children <- node' :: node.children) parents;
+  let vertex' = { serial = t.size; parents; children = []; data; depth } in
+  if parents = [] then t.roots <- vertex' :: t.roots;
+  List.iter (fun vertex -> vertex.children <- vertex' :: vertex.children) parents;
   t.size <- t.size + 1;
-  node'
+  vertex'
 ;;
 
 let data n = n.data
 
-type 'a view = ('a node -> bool) list
+type 'a view = ('a vertex -> bool) list
 
 let view _ : 'a view = []
 let filter a b = a :: b
@@ -160,14 +160,14 @@ let common_ancestor' view seq =
     Seq.fold_left f (Some hd) tl
 ;;
 
-let iterate order view entry_nodes =
+let iterate order view entry_vertexs =
   let expand, key =
     match order with
     | `Downward -> children view, fun n -> n.depth, n.serial
     | `Upward -> parents view, fun n -> -n.depth, -n.serial
   in
   let queue = List.fold_left (fun q n -> OrderedQueue.queue (key n) n q) in
-  let init = -1, queue (OrderedQueue.init compare) entry_nodes in
+  let init = -1, queue (OrderedQueue.init compare) entry_vertexs in
   Seq.unfold
     (fun (last, q) ->
       OrderedQueue.dequeue q

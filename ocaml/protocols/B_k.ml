@@ -50,13 +50,13 @@ let init ~roots =
 
 type ('env, 'dag_data) extended_view =
   { view : 'env Dag.view
-  ; data : 'env Dag.node -> 'dag_data
+  ; data : 'env Dag.vertex -> 'dag_data
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
-  ; delivered_at : 'env Dag.node -> float
-  ; pow_hash : 'env Dag.node -> (int * int) option
-  ; appended_by_me : 'env Dag.node -> bool
-  ; released : 'env Dag.node -> bool
+  ; delivered_at : 'env Dag.vertex -> float
+  ; pow_hash : 'env Dag.vertex -> (int * int) option
+  ; appended_by_me : 'env Dag.vertex -> bool
+  ; released : 'env Dag.vertex -> bool
   ; my_id : int
   }
 
@@ -143,7 +143,7 @@ let compare_blocks v =
     $ by (tuple int int |> inv) (leader_hash_exn v)
     $ by (inv float) v.delivered_at
   in
-  skip_eq Dag.node_eq cmp
+  skip_eq Dag.vertex_eq cmp
 ;;
 
 let update_head v ~preferred ~consider =

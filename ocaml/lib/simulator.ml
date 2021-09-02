@@ -3,7 +3,7 @@ type pow = { mutable fresh : bool }
 
 let pow () = { fresh = true }
 
-(* data attached to each DAG node *)
+(* data attached to each DAG vertex *)
 type 'a data =
   { value : 'a
   ; received_at : floatarray
@@ -31,7 +31,7 @@ type ('prot_data, 'node_state) node' =
   { mutable state : 'node_state
   ; mutable n_activations : int
   ; handler : 'node_state -> ('prot_data data, pow) Intf.event -> 'node_state
-  ; preferred : 'node_state -> 'prot_data data Dag.node
+  ; preferred : 'node_state -> 'prot_data data Dag.vertex
   }
 
 type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
@@ -85,7 +85,7 @@ let spawn (n : _ Intf.node) ~roots actions =
 ;;
 
 let all_honest params (protocol : _ Intf.protocol)
-    : _ state * _ Dag.node list * (_ Intf.local_view * _ Intf.actions) array
+    : _ state * _ Dag.vertex list * (_ Intf.local_view * _ Intf.actions) array
   =
   let n_nodes = Array.length params.network.nodes in
   let dag = Dag.create () in
@@ -222,8 +222,8 @@ let handle_event params state ev =
     (* apply event handler *)
     node.state <- node.handler node.state ev.event
   | Deliver n ->
-    (* deliver dag node exactly once to each network node as soon as all parent dag nodes
-       have been delivered *)
+    (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
+       vertices have been delivered *)
     if was_delivered n
     then (* n was delivered before *) ()
     else if List.exists
@@ -235,7 +235,7 @@ let handle_event params state ev =
       Float.Array.set (Dag.data n).delivered_at ev.node state.clock.now;
       node.state <- node.handler node.state ev.event;
       disseminate n;
-      (* recursive delivery of now unlocked dependent DAG nodes *)
+      (* recursive delivery of now unlocked dependent DAG vertices *)
       List.iter
         (fun n ->
           if was_received n && not (was_delivered n)

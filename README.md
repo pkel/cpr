@@ -68,14 +68,12 @@ Simulated nodes can share information (see Broadcast).
 Each shareable datum can have hash-links to other shareable data. The
 simulator models the hash-links in a single directed acyclic graph
 (DAG). Each simulated network node operates on a local view on the DAG.
-The local view restricts visibility of the DAG nodes according to
+The local view restricts visibility of the DAG vertices according to
 delivery status of network messages.
 
-**Note:** We use the term "node" for both participants of the
-network/protocol and elements of the DAG.
-
-**To do:** Rename `Dag.node` to `Dag.element` or similar. Use node only
-for network nodes.
+**Note:** We use try to consistently use the terms "node" for
+participants of the network/protocol and "vertex" for elements of the
+DAG.
 
 ## Protocols
 
