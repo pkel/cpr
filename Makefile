@@ -29,7 +29,7 @@ dependencies:
 
 bridge: python/gym/cpr_gym/bridge.so
 
-python/gym/cpr_gym/bridge.so: ocaml/_build/default/gym/bridge.so
+python/gym/cpr_gym/bridge.so: _build/default/ocaml/gym/bridge.so
 	cp $< $@
 
 # long-running simulations
