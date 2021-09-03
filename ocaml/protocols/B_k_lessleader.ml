@@ -6,6 +6,11 @@ type dag_data =
   | Vote
   | Block of block
 
+let info = function
+  | Vote -> [ "vote", "" ]
+  | Block { height } -> [ "block height", string_of_int height ]
+;;
+
 let is_vote = function
   | Vote -> true
   | _ -> false
@@ -19,6 +24,10 @@ let is_block = function
 let dag_validity ~k (v : _ global_view) n =
   match v.pow_hash n, v.data n, Dag.parents v.view n with
   | Some _, Vote, [ p ] -> v.data p |> is_block
+  | Some _, Block b, [ pblock ] when k = 1 ->
+    (match v.data pblock with
+    | Block p -> p.height + 1 = b.height
+    | _ -> false)
   | Some _, Block b, pblock :: vote0 :: votes ->
     (match v.data pblock with
     | Block p ->
@@ -102,7 +111,7 @@ let compare_blocks v =
     by int (block_height_exn v)
     $ by int (fun n -> List.length (Dag.children v.votes_only n))
     $ by int (fun n -> if v.appended_by_me n then 1 else 0)
-    $ by (inv float) v.delivered_at
+    $ by (neg float) v.delivered_at
   in
   skip_eq Dag.vertex_eq cmp
 ;;
@@ -148,7 +157,7 @@ let protocol ~k =
     and preferred x = x in
     { init; handler; preferred }
   in
-  { honest; dag_validity = dag_validity ~k; dag_roots }
+  { honest; dag_validity = dag_validity ~k; dag_roots; info }
 ;;
 
 let%test "convergence" =

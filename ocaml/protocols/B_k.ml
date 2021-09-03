@@ -6,6 +6,11 @@ type dag_data =
   | Vote of int
   | Block of block
 
+let info = function
+  | Vote voter -> [ "vote", ""; "id", string_of_int voter ]
+  | Block { height } -> [ "block", string_of_int height ]
+;;
+
 let is_vote = function
   | Vote _ -> true
   | _ -> false
@@ -75,23 +80,12 @@ let extend_view (x : _ local_view) =
   }
 ;;
 
-type exn += Invalid_DAG of string lazy_t
-
-let () =
-  Printexc.register_printer (function
-      | Invalid_DAG (lazy m) -> Some m
-      | _ -> None)
-;;
-
-let invalid_dag v n msg (type a) : a =
-  let msg = lazy (Format.asprintf "Invalid_DAG: %s: %a" msg (Dag.debug_pp v.view) n) in
-  raise (Invalid_DAG msg)
-;;
-
 let block_height_exn v n =
   match v.data n with
   | Block b -> b.height
-  | _ -> invalid_dag v n "not a block"
+  | _ ->
+    let info _v = [] in
+    Dag.Exn.raise v.view info [ n ] "not a block"
 ;;
 
 let last_block v n =
@@ -140,8 +134,8 @@ let compare_blocks v =
   let cmp =
     by int (block_height_exn v)
     $ by int (fun n -> List.length (Dag.children v.votes_only n))
-    $ by (tuple int int |> inv) (leader_hash_exn v)
-    $ by (inv float) v.delivered_at
+    $ by (tuple int int |> neg) (leader_hash_exn v)
+    $ by (neg float) v.delivered_at
   in
   skip_eq Dag.vertex_eq cmp
 ;;
@@ -232,7 +226,7 @@ let protocol ~k =
     and preferred x = x in
     { init; handler; preferred }
   in
-  { honest; dag_validity = dag_validity ~k; dag_roots }
+  { honest; dag_validity = dag_validity ~k; dag_roots; info }
 ;;
 
 let%test "convergence" =

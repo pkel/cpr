@@ -9,3 +9,8 @@
   owl-base
   parany
   progress))
+
+(rule
+ (alias runtest)
+ (action
+  (run ./visualize.exe)))

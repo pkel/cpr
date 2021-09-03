@@ -112,8 +112,6 @@ block for what I call block.
 
 [ppow]: https://github.com/pkel/hotpow/tree/ppow
 
-**To do:** `George` is buggy and must be fixed.
-
 **To do:** Consider adding Ethereum (Nakamoto + uncle rewards) and Bobtail.
 
 ## Private Attack

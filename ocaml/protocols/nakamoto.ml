@@ -2,6 +2,7 @@ open Cpr_lib
 
 type dag_data = { height : int }
 
+let info { height } = [ "height", string_of_int height ]
 let dag_roots = [ { height = 0 } ]
 
 let dag_validity (v : _ global_view) n =
@@ -34,7 +35,7 @@ let handler v actions preferred = function
 let protocol : _ protocol =
   let preferred x = x in
   let honest v = { handler = handler v; init; preferred } in
-  { dag_roots; dag_validity; honest }
+  { honest; dag_validity; dag_roots; info }
 ;;
 
 let%test "convergence" =
