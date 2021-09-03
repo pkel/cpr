@@ -53,11 +53,12 @@ val common_ancestor' : 'a view -> 'a vertex Seq.t -> 'a vertex option
 
 (** [iterate_descendants v vertices] recursively expands the DAG in direction of
     {!children} ordered by depth and id. The starting vertices are included in the
-    resulting sequence. *)
+    resulting sequence. Returned vertices are unique. *)
 val iterate_descendants : 'a view -> 'a vertex list -> 'a vertex Seq.t
 
 (** [iterate_ancestors v vertices] recursively expands the DAG in direction of {!parents}
-    ordered by depth and id. The starting vertices are included in the resulting sequence. *)
+    ordered by depth and id. The starting vertices are included in the resulting sequence.
+    Returned vertices are unique. *)
 val iterate_ancestors : 'a view -> 'a vertex list -> 'a vertex Seq.t
 
 type 'a pp = Format.formatter -> 'a -> unit

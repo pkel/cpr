@@ -160,14 +160,14 @@ let common_ancestor' view seq =
     Seq.fold_left f (Some hd) tl
 ;;
 
-let iterate order view entry_vertexs =
+let iterate order view entry_vertices =
   let expand, key =
     match order with
     | `Downward -> children view, fun n -> n.depth, n.serial
     | `Upward -> parents view, fun n -> -n.depth, -n.serial
   in
   let queue = List.fold_left (fun q n -> OrderedQueue.queue (key n) n q) in
-  let init = -1, queue (OrderedQueue.init compare) entry_vertexs in
+  let init = -1, queue (OrderedQueue.init compare) entry_vertices in
   Seq.unfold
     (fun (last, q) ->
       OrderedQueue.dequeue q

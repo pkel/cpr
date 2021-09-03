@@ -8,8 +8,15 @@ type dag_data =
 let is_vote h = h.vote > 0
 let is_block h = h.vote = 0
 
-(* TODO BUG: more than k pows might be referenced. Check nested references. *)
-(* TODO verify vote uniqueness *)
+let is_sorted ?(unique = false) compare =
+  let check a b = if unique then compare a b > 0 else compare a b >= 0 in
+  let rec f = function
+    | [] | [ _ ] -> true
+    | h :: h2 :: t -> if check h h2 then f (h2 :: t) else false
+  in
+  f
+;;
+
 let dag_validity ~k (v : _ global_view) n =
   let child = v.data n in
   child.block >= 0
@@ -21,13 +28,26 @@ let dag_validity ~k (v : _ global_view) n =
   | true, [ p ] ->
     (* child is vote *)
     let parent = v.data p in
-    child.vote = parent.vote + 1
+    child.block = parent.block && child.vote = parent.vote + 1
   | false, p :: votes ->
-    let parent = v.data p in
     (* child is block *)
+    let parent = v.data p in
+    let unique_votes =
+      let votes_only = Dag.filter (fun n -> v.data n |> is_block) v.view in
+      Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
+    and sorted_votes =
+      List.map
+        (fun x ->
+          let d = v.data x
+          and hash = v.pow_hash x |> Option.value ~default:(0, 0) in
+          -d.vote, hash)
+        votes
+      |> is_sorted ~unique:true Compare.(tuple int (tuple int int))
+    in
     is_block parent
+    && sorted_votes
     && List.for_all (fun n -> v.data n |> is_vote) votes
-    && List.length votes = k - 1
+    && unique_votes = k - 1
     && child.block = parent.block + 1
     && child.vote = 0
   | _ -> false
@@ -47,9 +67,13 @@ type ('env, 'dag_data) extended_view =
   ; votes_only : 'env Dag.view
   ; blocks_only : 'env Dag.view
   ; delivered_at : 'env Dag.vertex -> float
+  ; pow_hash : 'env Dag.vertex -> (int * int) option
   ; appended_by_me : 'env Dag.vertex -> bool
+  ; released : 'env Dag.vertex -> bool
   ; my_id : int
   }
+
+let max_pow_hash = max_int, max_int
 
 let extend_view (x : _ local_view) =
   { view = x.view
@@ -57,7 +81,9 @@ let extend_view (x : _ local_view) =
   ; votes_only = Dag.filter (fun n -> x.data n |> is_vote) x.view
   ; blocks_only = Dag.filter (fun n -> x.data n |> is_block) x.view
   ; delivered_at = x.delivered_at
+  ; pow_hash = x.pow_hash
   ; appended_by_me = x.appended_by_me
+  ; released = x.released
   ; my_id = x.my_id
   }
 ;;
@@ -95,24 +121,67 @@ let offspring view node =
   !l
 ;;
 
+module IntSet = Set.Make (struct
+  type t = int
+
+  let compare = compare
+end)
+
+let quorum ~k v for_block =
+  let rec f ids n q = function
+    | [] -> None
+    | hd :: tl ->
+      let fresh, n_fresh =
+        Dag.iterate_ancestors v.votes_only [ hd ]
+        |> Seq.fold_left
+             (fun (fresh, n_fresh) el ->
+               let id = Dag.id el in
+               if IntSet.mem id ids
+               then fresh, n_fresh
+               else IntSet.add id fresh, n_fresh + 1)
+             (IntSet.empty, 0)
+      in
+      if n_fresh + n > k - 1 || n_fresh < 1
+      then f ids n q tl
+      else if n_fresh + n = k - 1
+      then Some (List.rev (hd :: q))
+      else f (IntSet.union fresh ids) (n + n_fresh) (hd :: q) tl
+  in
+  offspring v.votes_only for_block
+  |> List.sort
+       Compare.(
+         by
+           (tuple int (tuple int float))
+           (fun x ->
+             -(v.data x).vote, ((if v.appended_by_me x then 0 else 1), v.delivered_at x)))
+  |> f IntSet.empty 0 []
+  |> Option.map
+       (List.sort
+          Compare.(
+            by
+              (tuple int (tuple int int))
+              (fun x ->
+                let d = v.data x
+                and hash = v.pow_hash x |> Option.value ~default:(0, 0) in
+                -d.vote, hash)))
+;;
+
 let honest ~k v =
   let v = extend_view v in
   let handler actions preferred = function
     | Activate pow ->
-      let b = last_block v preferred in
-      let votes = offspring v.votes_only b in
-      if List.length votes >= k - 1
-      then (
-        let b =
+      let head = last_block v preferred in
+      (match quorum ~k v head with
+      | Some q ->
+        let head' =
           actions.extend_dag
             ~pow
-            (* TODO Bug: transitive closure of last k received votes can be bigger than k *)
-            (b :: first v.delivered_at (k - 1) votes)
-            { block = (v.data b).block + 1; vote = 0 }
+            (head :: q)
+            { block = (v.data head).block + 1; vote = 0 }
         in
-        let () = actions.share b in
-        b)
-      else (
+        let () = actions.share head' in
+        head'
+      | None ->
         let vd = v.data preferred in
         let v = actions.extend_dag ~pow [ preferred ] { vd with vote = vd.vote + 1 } in
         let () = actions.share v in
