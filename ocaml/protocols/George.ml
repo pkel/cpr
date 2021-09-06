@@ -225,29 +225,20 @@ let reward ~max_reward_per_block ~discount ~punish ~k : ('env, dag_data) reward_
   let k = float_of_int k in
   let c = max_reward_per_block /. k in
   fun ~view:v ~assign ->
-    let vote_view = Dag.filter (fun x -> v.data x |> is_vote) v.view in
+    let votes_only = Dag.filter (fun x -> v.data x |> is_vote) v.view in
     fun n ->
       if v.data n |> is_block
       then (
-        match Dag.parents vote_view n with
+        match Dag.parents votes_only n with
         | [] -> (* Either genesis or k=1 *) assign c n
-        | hd :: tl as votes ->
-          let get_vdepth n = (v.data n).vote in
-          let longest, depth =
-            List.fold_left
-              (fun acc v ->
-                let depth = get_vdepth v in
-                if depth > snd acc then v, depth else acc)
-              (hd, get_vdepth hd)
-              tl
-          in
+        | hd :: _ ->
+          let depth = (v.data hd).vote in
           let x = if discount then (float_of_int depth +. 1.) /. k *. c else c in
-          assign x n;
           if punish
-          then
-            (* TODO BUG. longest can be ambiguous *)
-            Dag.iterate_ancestors vote_view [ longest ] |> Seq.iter (assign x)
-          else List.iter (assign x) votes)
+          then (
+            assign x n;
+            Dag.iterate_ancestors votes_only [ hd ] |> Seq.iter (assign x))
+          else Dag.iterate_ancestors votes_only [ n ] |> Seq.iter (assign x))
 ;;
 
 (* TODO: add tests for reward functions *)
