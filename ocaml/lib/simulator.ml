@@ -84,6 +84,10 @@ let spawn (n : _ Intf.node) ~roots actions =
   }
 ;;
 
+let string_of_pow_hash (nonce, _serial) =
+  Printf.sprintf "%.3f" (float_of_int nonce /. (2. ** 29.))
+;;
+
 let all_honest params (protocol : _ Intf.protocol)
     : _ state * _ Dag.vertex list * (_ Intf.local_view * _ Intf.actions) array
   =
@@ -158,9 +162,20 @@ let all_honest params (protocol : _ Intf.protocol)
               }
           in
           if not (protocol.dag_validity global node)
-          then
+          then (
             (* We assume that invalid extensions are never delivered elsewhere *)
-            failwith "invalid DAG extension";
+            let info x =
+              protocol.info x.value
+              @ [ ( "appended by"
+                  , Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
+                  )
+                ; "appended at", Printf.sprintf "%.2f" x.appended_at
+                ; ( "pow hash"
+                  , Option.map string_of_pow_hash x.pow_hash
+                    |> Option.value ~default:"n/a" )
+                ]
+            in
+            Dag.Exn.raise global.view info [ node ] "invalid append");
           node
         in
         (* TODO breakout and reuse for RL gyms *)

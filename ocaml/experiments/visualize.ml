@@ -164,7 +164,13 @@ let print_dag oc (sim, confirmed, rewards, legend, label_node) =
     ; ("color", if confirmed.(Dag.id n) then "black" else "red")
     ]
   in
-  Dag.dot oc ~legend sim.global.view ~node_attr (Dag.roots sim.dag) |> Result.ok
+  Dag.dot
+    (Format.formatter_of_out_channel oc)
+    ~legend
+    sim.global.view
+    ~node_attr
+    (Dag.roots sim.dag)
+  |> Result.ok
 ;;
 
 let run (task, fpaths_and_legends, label_node) =

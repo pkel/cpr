@@ -8,13 +8,10 @@ type dag_data =
 let is_vote h = h.vote > 0
 let is_block h = h.vote = 0
 
-let is_sorted ?(unique = false) compare =
-  let check a b = if unique then compare a b > 0 else compare a b >= 0 in
-  let rec f = function
-    | [] | [ _ ] -> true
-    | h :: h2 :: t -> if check h h2 then f (h2 :: t) else false
-  in
-  f
+let info h =
+  if is_vote h
+  then [ "vote", string_of_int h.block ^ "/" ^ string_of_int h.vote ]
+  else [ "block", string_of_int h.block ^ "/" ^ string_of_int h.vote ]
 ;;
 
 let dag_validity ~k (v : _ global_view) n =
@@ -33,16 +30,16 @@ let dag_validity ~k (v : _ global_view) n =
     (* child is block *)
     let parent = v.data p in
     let unique_votes =
-      let votes_only = Dag.filter (fun n -> v.data n |> is_block) v.view in
+      let votes_only = Dag.filter (fun n -> v.data n |> is_vote) v.view in
       Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
     and sorted_votes =
       List.map
         (fun x ->
           let d = v.data x
           and hash = v.pow_hash x |> Option.value ~default:(0, 0) in
-          -d.vote, hash)
+          d.vote, hash)
         votes
-      |> is_sorted ~unique:true Compare.(tuple int (tuple int int))
+      |> is_sorted ~unique:true Compare.(tuple (neg int) (tuple int int))
     in
     is_block parent
     && sorted_votes
@@ -108,19 +105,6 @@ let first by n l =
   !l
 ;;
 
-(* recursive version of children *)
-let offspring view node =
-  let l = ref [] in
-  let rec f node =
-    Dag.children view node
-    |> List.iter (fun c ->
-           l := c :: !l;
-           f c)
-  in
-  f node;
-  !l
-;;
-
 module IntSet = Set.Make (struct
   type t = int
 
@@ -147,23 +131,25 @@ let quorum ~k v for_block =
       then Some (List.rev (hd :: q))
       else f (IntSet.union fresh ids) (n + n_fresh) (hd :: q) tl
   in
-  offspring v.votes_only for_block
+  Dag.iterate_descendants v.votes_only [ for_block ]
+  |> Seq.filter (Dag.vertex_neq for_block)
+  |> List.of_seq
   |> List.sort
        Compare.(
          by
-           (tuple int (tuple int float))
+           (tuple (neg int) (tuple int float))
            (fun x ->
-             -(v.data x).vote, ((if v.appended_by_me x then 0 else 1), v.delivered_at x)))
+             (v.data x).vote, ((if v.appended_by_me x then 0 else 1), v.delivered_at x)))
   |> f IntSet.empty 0 []
   |> Option.map
        (List.sort
           Compare.(
             by
-              (tuple int (tuple int int))
+              (tuple (neg int) (tuple int int))
               (fun x ->
                 let d = v.data x
                 and hash = v.pow_hash x |> Option.value ~default:(0, 0) in
-                -d.vote, hash)))
+                d.vote, hash)))
 ;;
 
 let honest ~k v =
@@ -197,7 +183,7 @@ let honest ~k v =
   { init; handler; preferred = (fun x -> x) }
 ;;
 
-let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots }
+let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots; info }
 
 let%test "convergence" =
   let open Simulator in

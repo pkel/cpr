@@ -61,15 +61,22 @@ val iterate_descendants : 'a view -> 'a vertex list -> 'a vertex Seq.t
     Returned vertices are unique. *)
 val iterate_ancestors : 'a view -> 'a vertex list -> 'a vertex Seq.t
 
-type 'a pp = Format.formatter -> 'a -> unit
-
-val debug_pp : ?meta:'a vertex pp -> 'a view -> 'a vertex pp
-
 (** Print vertices and all descendants in graphviz dot format *)
 val dot
-  :  out_channel
+  :  Format.formatter
   -> ?legend:(string * string) list
   -> 'a view
   -> node_attr:('a vertex -> (string * string) list)
   -> 'a vertex list
   -> unit
+
+module Exn : sig
+  type exn +=
+    | Malformed_DAG of
+        { msg : string
+        ; dag : string lazy_t
+        }
+
+  val set_to_file : string -> unit
+  val raise : 'a view -> ('a -> (string * string) list) -> 'a vertex list -> string -> 'b
+end

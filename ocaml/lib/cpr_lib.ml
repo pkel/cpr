@@ -13,7 +13,7 @@ module Compare : sig
 
   val int : int cmp
   val float : float cmp
-  val inv : 'a cmp -> 'a cmp
+  val neg : 'a cmp -> 'a cmp
   val tuple : 'a cmp -> 'b cmp -> ('a * 'b) cmp
   val by : 'a cmp -> ('b -> 'a) -> 'b cmp
 
@@ -31,7 +31,7 @@ end = struct
 
   let int = Int.compare
   let float = Float.compare
-  let inv cmp a b = cmp b a
+  let neg cmp a b = cmp b a
 
   let tuple cmp0 cmp1 a b =
     match cmp0 (fst a) (fst b) with
@@ -72,3 +72,17 @@ let%expect_test _ =
       (2,1)
       (2,2) |}]
 ;;
+
+let is_sorted ?(unique = false) compare =
+  let check a b = if unique then compare a b < 0 else compare a b <= 0 in
+  let rec f = function
+    | [] | [ _ ] -> true
+    | h :: h2 :: t -> if check h h2 then f (h2 :: t) else false
+  in
+  f
+;;
+
+let%test "is_sorted" = is_sorted Compare.int [ 0; 1; 2; 3 ]
+let%test "is_sorted" = is_sorted Compare.int [ 0; 2; 1; 3 ] |> not
+let%test "is_sorted" = is_sorted ~unique:true Compare.int [ 0; 1; 2; 3 ]
+let%test "is_sorted" = is_sorted ~unique:true Compare.int [ 0; 1; 2; 2; 3 ] |> not

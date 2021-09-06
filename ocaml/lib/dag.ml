@@ -6,19 +6,6 @@ type 'a vertex =
   ; mutable depth : int
   }
 
-type 'a pp = Format.formatter -> 'a -> unit
-
-let debug_pp ?meta _v fmt n =
-  match meta with
-  | Some pp -> Format.fprintf fmt "@[id: %i@ meta: %a@]" n.serial pp n
-  | None -> Format.fprintf fmt "@[id: %i@]" n.serial
-;;
-
-let debug_pp ?meta v fmt n =
-  (* TODO Print number of parents/children; visibility & subset of parents/children *)
-  Format.fprintf fmt "this: %a" (debug_pp ?meta v) n
-;;
-
 let vertex_eq a b = a.serial = b.serial
 let vertex_neq a b = a.serial <> b.serial
 let id a = a.serial
@@ -249,7 +236,7 @@ let dot fmt ?(legend = []) v ~node_attr bl =
   and _, level, levels, edges =
     Seq.fold_left
       (fun (d, level, levels, edges) n ->
-        let edges = List.rev_map (fun c -> c, n) (children v n) :: edges in
+        let edges = List.mapi (fun i c -> n, c, i) (parents v n) :: edges in
         if d <> n.depth && level <> []
         then n.depth, [ n ], List.rev level :: levels, edges
         else n.depth, n :: level, levels, edges)
@@ -258,13 +245,13 @@ let dot fmt ?(legend = []) v ~node_attr bl =
   in
   let levels = level :: levels |> List.rev
   and edges = List.rev edges in
-  let open Printf in
+  let open Format in
   fprintf fmt "digraph {\n";
   fprintf fmt "  rankdir = LR;\n";
   fprintf fmt "  node [shape=box];\n";
   if legend <> []
   then
-    Printf.fprintf
+    fprintf
       fmt
       "  %s;\n"
       (List.map (fun (k, v) -> Printf.sprintf "{%s|%s}" k v) legend
@@ -279,7 +266,8 @@ let dot fmt ?(legend = []) v ~node_attr bl =
       fprintf fmt "  }\n")
     levels;
   List.iter
-    (List.iter (fun (c, n) -> fprintf fmt "  n%d -> n%d [dir=back];\n" n.serial c.serial))
+    (List.iter (fun (c, n, i) ->
+         fprintf fmt "  n%d -> n%d [label=\"%i\", dir=back];\n" n.serial c.serial i))
     edges;
   fprintf fmt "}\n"
 ;;
@@ -296,7 +284,11 @@ let%expect_test "dot" =
   let rbaa = append rba 6 in
   let _rbaaa = append rbaa 7 in
   let global = view t in
-  dot stdout global ~node_attr:(fun n -> [ "label", data n |> string_of_int ]) t.roots;
+  dot
+    Format.std_formatter
+    global
+    ~node_attr:(fun n -> [ "label", data n |> string_of_int ])
+    t.roots;
   [%expect
     {|
     digraph {
@@ -320,12 +312,61 @@ let%expect_test "dot" =
       { rank=same
         n7 [label="7"];
       }
-      n0 -> n1 [dir=back];
-      n0 -> n2 [dir=back];
-      n1 -> n3 [dir=back];
-      n2 -> n4 [dir=back];
-      n2 -> n5 [dir=back];
-      n4 -> n6 [dir=back];
-      n6 -> n7 [dir=back];
+      n0 -> n1 [label="0", dir=back];
+      n0 -> n2 [label="0", dir=back];
+      n1 -> n3 [label="0", dir=back];
+      n2 -> n4 [label="0", dir=back];
+      n2 -> n5 [label="0", dir=back];
+      n4 -> n6 [label="0", dir=back];
+      n6 -> n7 [label="0", dir=back];
     } |}]
 ;;
+
+module Exn = struct
+  type exn +=
+    | Malformed_DAG of
+        { msg : string
+        ; dag : string lazy_t
+        }
+
+  let to_file = ref (Bos.OS.Env.var "CPR_MALFORMED_DAG_TO_FILE")
+  let set_to_file f = to_file := Some f
+
+  let () =
+    Printexc.register_printer (fun exn ->
+        match exn, !to_file with
+        | Malformed_DAG t, Some f ->
+          let oc = open_out f in
+          let msg =
+            try
+              Printf.fprintf oc "%s" (Lazy.force t.dag);
+              Printf.sprintf "Malformed_DAG: %s (DAG written to %s)" t.msg f
+            with
+            | _ -> Printf.sprintf "Malformed_DAG: %s (writing DAG to %s failed)" t.msg f
+          in
+          close_out oc;
+          Some msg
+        | Malformed_DAG t, None ->
+          let () = Printf.eprintf "%s" (Lazy.force t.dag) in
+          Some (Printf.sprintf "Malformed_DAG: %s" t.msg)
+        | _ -> None)
+  ;;
+
+  let raise v info nodes msg (type a) : a =
+    let node_attr x =
+      let label =
+        data x
+        |> info
+        |> List.map (function
+               | "", s | s, "" -> s
+               | k, v -> k ^ ": " ^ v)
+        |> String.concat "\\n"
+      in
+      [ "label", label ]
+    in
+    let pp fmt = dot fmt ~legend:[] v ~node_attr in
+    let nodes = List.concat_map (parents v) nodes in
+    let dag = lazy (Format.asprintf "%a" pp nodes) in
+    raise (Malformed_DAG { msg; dag })
+  ;;
+end
