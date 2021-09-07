@@ -147,14 +147,15 @@ let tasks1 =
     [ 1.; 2.; 4. ]
 ;;
 
-let print_dag oc (sim, confirmed, rewards, legend, label_node) =
+let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
   let open Simulator in
   let node_attr n =
     let open Simulator in
     let d = Dag.data n in
     [ ( "label"
       , Printf.sprintf
-          "%s | t:%.1f%s | r:%.2g"
+          "%s | %s | t:%.1f%s | r:%.2g"
+          (label_vtx d.value)
           (label_node d.appended_by)
           d.appended_at
           (if d.released_at <> d.appended_at
@@ -210,7 +211,10 @@ let run (task, fpaths_and_legends, label_node) =
       let open Bos.OS in
       let d = Dir.create ~path:true (Fpath.parent path) in
       Result.bind d (fun _ ->
-          File.with_oc path print_dag (env, confirmed, rewards, legend, label_node))
+          File.with_oc
+            path
+            print_dag
+            (env, confirmed, rewards, legend, s.protocol.describe, label_node))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
     fpaths_and_legends

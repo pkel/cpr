@@ -6,9 +6,9 @@ type dag_data =
   | Vote
   | Block of block
 
-let info = function
-  | Vote -> [ "vote", "" ]
-  | Block { height } -> [ "block height", string_of_int height ]
+let describe = function
+  | Vote -> "vote"
+  | Block { height } -> "block " ^ string_of_int height
 ;;
 
 let is_vote = function
@@ -157,7 +157,7 @@ let protocol ~k =
     and preferred x = x in
     { init; handler; preferred }
   in
-  { honest; dag_validity = dag_validity ~k; dag_roots; info }
+  { honest; dag_validity = dag_validity ~k; dag_roots; describe }
 ;;
 
 let%test "convergence" =

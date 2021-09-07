@@ -8,10 +8,9 @@ type dag_data =
 let is_vote h = h.vote > 0
 let is_block h = h.vote = 0
 
-let info h =
-  if is_vote h
-  then [ "vote", string_of_int h.block ^ "/" ^ string_of_int h.vote ]
-  else [ "block", string_of_int h.block ^ "/" ^ string_of_int h.vote ]
+let describe h =
+  let ty = if is_vote h then "vote" else "block" in
+  Printf.sprintf "%s (%i|%i)" ty h.block h.vote
 ;;
 
 let dag_validity ~k (v : _ global_view) n =
@@ -183,7 +182,9 @@ let honest ~k v =
   { init; handler; preferred = (fun x -> x) }
 ;;
 
-let protocol ~k = { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots; info }
+let protocol ~k =
+  { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots; describe }
+;;
 
 let%test "convergence" =
   let open Simulator in

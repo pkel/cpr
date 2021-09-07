@@ -163,17 +163,16 @@ let all_honest params (protocol : _ Intf.protocol)
           in
           if not (protocol.dag_validity global node)
           then (
-            (* We assume that invalid extensions are never delivered elsewhere *)
+            (* We guarantee that invalid extensions are never delivered elsewhere *)
             let info x =
-              protocol.info x.value
-              @ [ ( "appended by"
-                  , Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
-                  )
-                ; "appended at", Printf.sprintf "%.2f" x.appended_at
-                ; ( "pow hash"
-                  , Option.map string_of_pow_hash x.pow_hash
-                    |> Option.value ~default:"n/a" )
-                ]
+              [ protocol.describe x.value, ""
+              ; ( "node"
+                , Option.map string_of_int x.appended_by |> Option.value ~default:"n/a" )
+              ; "time", Printf.sprintf "%.2f" x.appended_at
+              ; ( "hash"
+                , Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
+                )
+              ]
             in
             Dag.Exn.raise global.view info [ node ] "invalid append");
           node

@@ -59,7 +59,7 @@ type ('env, 'dag_data, 'pow, 'state) protocol =
         (** Restrict DAG extensions. The simulator checks validity for each appended DAG
             vertex. Invalid extensions are not delivered to other nodes. *)
   ; honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node
-  ; info : 'dag_data -> (string * string) list
+  ; describe : 'dag_data -> string
   }
 
 (** Calculate and assign rewards to a vertex and (potentially) its neighbours. Use this
