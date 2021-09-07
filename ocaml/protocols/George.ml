@@ -111,24 +111,27 @@ module IntSet = Set.Make (struct
 end)
 
 let quorum ~k v for_block =
-  let rec f ids n q = function
-    | [] -> None
-    | hd :: tl ->
-      let fresh, n_fresh =
-        Dag.iterate_ancestors v.votes_only [ hd ]
-        |> Seq.fold_left
-             (fun (fresh, n_fresh) el ->
-               let id = Dag.id el in
-               if IntSet.mem id ids
-               then fresh, n_fresh
-               else IntSet.add id fresh, n_fresh + 1)
-             (IntSet.empty, 0)
-      in
-      if n_fresh + n > k - 1 || n_fresh < 1
-      then f ids n q tl
-      else if n_fresh + n = k - 1
-      then Some (List.rev (hd :: q))
-      else f (IntSet.union fresh ids) (n + n_fresh) (hd :: q) tl
+  let rec f ids n q l =
+    if n = k - 1
+    then Some (List.rev q)
+    else (
+      match l with
+      | [] -> None
+      | hd :: tl ->
+        let fresh, n_fresh =
+          Dag.iterate_ancestors v.votes_only [ hd ]
+          |> Seq.fold_left
+               (fun (fresh, n_fresh) el ->
+                 let id = Dag.id el in
+                 if IntSet.mem id ids
+                 then fresh, n_fresh
+                 else IntSet.add id fresh, n_fresh + 1)
+               (IntSet.empty, 0)
+        in
+        let n' = n + n_fresh in
+        if n' > k - 1 || n_fresh < 1
+        then (* quorum would grow to big *) f ids n q tl
+        else f (IntSet.union fresh ids) n' (hd :: q) tl)
   in
   Dag.iterate_descendants v.votes_only [ for_block ]
   |> Seq.filter (Dag.vertex_neq for_block)
