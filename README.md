@@ -71,9 +71,8 @@ simulator models the hash-links in a single directed acyclic graph
 The local view restricts visibility of the DAG vertices according to
 delivery status of network messages.
 
-**Note:** We use try to consistently use the terms "node" for
-participants of the network/protocol and "vertex" for elements of the
-DAG.
+**Note:** We try to consistently use the terms "node" for participants
+of the network/protocol and "vertex" for elements of the DAG.
 
 ## Protocols
 
