@@ -131,6 +131,22 @@ chain must happen explicitly.
 
 **To do:** Instantiate this attack for `B_k_lessleader` and `George`.
 
+## Visualization
+
+We visualize protocol executions by plotting the resulting DAG
+structure. The simulator generates Graphviz files for rendering
+with the `dot` command. `make visualize` simulates and renders a number
+of configurations defined in `ocaml/experiments/visualize.ml`.
+
+Buggy protocol implementation may yield malformed DAGs and raise
+`Malformed_DAG` exceptions. The malformed DAG can be logged to Graphviz
+format for further inspection by setting the `CPR_MALFORMED_DAG_TO_FILE`
+environment variable.
+
+**To do:** Graphviz is convenient from a programmer's perspective.
+Export to and rendering by iGraph would have a few advantages. E.g., we
+could plot time on the x-axis and mining node on the y-axis.
+
 ## Selfish Mining Policies
 
 We are aware of three attacks, all can be described as policy for the

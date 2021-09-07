@@ -1,9 +1,15 @@
+export CPR_MALFORMED_DAG_TO_FILE=/tmp/malformed.dot
+
 build:
 	cd ocaml && dune build
 
 test: build bridge
 	cd ocaml && dune runtest
 	cd python && pytest
+
+watch-malformed-dag:
+	echo "$$CPR_MALFORMED_DAG_TO_FILE" \
+		| entr -r bash -c "clear; cat \"$$CPR_MALFORMED_DAG_TO_FILE\" ; dot \"$$CPR_MALFORMED_DAG_TO_FILE\" -Tpng | feh - -."
 
 check-format:
 	cd ocaml && dune build @fmt
