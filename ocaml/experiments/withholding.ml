@@ -12,7 +12,7 @@ let protocols =
         (fun k ->
           [ ( B_k_lessleadership { k }
             , [ Constant; Block ]
-            , [ Honest; SelfishSimple; SelfishAdvanced ] )
+            , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] )
           ; ( B_k { k }
             , [ Constant; Block ]
             , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] )
