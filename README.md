@@ -96,7 +96,7 @@ votes. Assume any participant of `B_k` could propose a block. Then
 everybody would propose an own block. Disambiguation would happen with the
 next dissemination of the next vote(s). `B_k_lessleader` does this but
 integrates the next vote into the block proposal to avoid redundant
-podcasts. In [HotPoW][hotpow] terminology, `B_k_lessleader` block
+broadcasts. In [HotPoW][hotpow] terminology, `B_k_lessleader` block
 proposals require one bound-to-proposal (BTP) puzzle solution in a
 addition to k-1 bound-to-identifier (BTI) votes.
 
@@ -129,7 +129,7 @@ chain whenever an honest node would do so.
 **To do:** Consider modeling attacks where adoption of `public`'s tip of
 chain must happen explicitly.
 
-**To do:** Instantiate this attack for `B_k_lessleader` and `George`.
+**To do:** Instantiate this attack for `George`.
 
 ## Visualization
 
@@ -181,8 +181,7 @@ interface into an OpenAI-compatible `gym.Env` class.
 
 [openai-gym]: https://gym.openai.com/
 
-**To do:** Expose private attack on `Nakamoto`, `B_k_lessleader`, and
-`George` to Gym environment.
+**To do:** Expose private attack on `George` to Gym environment.
 
 
 ## Reward after Difficulty Adjustment
