@@ -18,6 +18,8 @@ let protocols =
             , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] )
           ])
         k
+    ; [ Nakamoto, [ Constant ], [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
+      ]
       (* ; List.map (fun k -> George { k }, [ Constant; Punish; Discount; Hybrid ]) k *)
     ]
 ;;

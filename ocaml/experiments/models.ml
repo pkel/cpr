@@ -169,10 +169,13 @@ let setup t =
   in
   match t.protocol with
   | Nakamoto ->
-    let protocol = Nakamoto.protocol in
+    let open Nakamoto in
     let deviations =
       deviations (function
           | Honest -> Deviation protocol.honest
+          | SelfishAdvanced -> Deviation PrivateAttack.(attack' selfish_policy')
+          | NumHonest -> Deviation PrivateAttack.(attack honest_policy)
+          | NumSelfishAdvanced -> Deviation PrivateAttack.(attack selfish_policy)
           | x ->
             let m =
               Printf.sprintf

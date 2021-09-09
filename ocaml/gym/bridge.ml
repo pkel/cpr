@@ -108,6 +108,25 @@ let () =
   Py_module.set_value m "default" (PEnv default |> python_of_penv);
   Py_module.set
     m
+    "nakamoto"
+    (let%map alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+     and reward =
+       keyword
+         "reward"
+         string
+         ~default:"block"
+         ~docstring:"Select reward function.\n'block': for 1 per confirmed block"
+     in
+     let reward =
+       match reward with
+       | "block" -> Cpr_protocols.Nakamoto.constant 1.
+       | _ ->
+         let msg = "unknown reward function '" ^ reward ^ "'" in
+         failwith msg
+     in
+     PEnv (nakamoto ~alpha ~reward) |> python_of_penv);
+  Py_module.set
+    m
     "bk"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"

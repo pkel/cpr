@@ -205,6 +205,28 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
   }
 ;;
 
+let nakamoto ~alpha ~reward =
+  of_module
+    ~alpha
+    (module struct
+      type data = Nakamoto.dag_data
+      type state = data Simulator.data PrivateAttack.state
+
+      let description = Printf.sprintf "Nakamoto"
+      let protocol = Nakamoto.protocol
+      let reward_function = reward
+
+      include Nakamoto.PrivateAttack
+
+      let node = PrivateAttack.withhold protocol.honest
+
+      let apply_action v a state action =
+        let tactic = tactic_of_policy (fun _ -> action) in
+        PrivateAttack.apply_tactic tactic v a state
+      ;;
+    end)
+;;
+
 let bk ~alpha ~k ~reward =
   of_module
     ~alpha

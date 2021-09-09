@@ -32,3 +32,20 @@ def test_policies_selfish():
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
+
+
+def test_nakamoto(capsys):
+    env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=0.33))
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == "Protocol Nakamoto against α=0.33 attacker"
+
+    p = env.policies()["honest"]
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(p(np.array(obs)))
+
+    p = env.policies()["selfish"]
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(p(np.array(obs)))
