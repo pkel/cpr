@@ -93,17 +93,6 @@ let rec last_block v n =
     | _ -> failwith "invalid dag" (* votes have only one parent by dag_validity *))
 ;;
 
-let first by n l =
-  let a = Array.of_list l in
-  if Array.length a < n then raise (Invalid_argument "list too short");
-  let () = Array.sort (fun a b -> compare (by a) (by b)) a in
-  let l = ref [] in
-  for i = 0 to n - 1 do
-    l := a.(i) :: !l
-  done;
-  !l
-;;
-
 module IntSet = Set.Make (struct
   type t = int
 
@@ -182,7 +171,7 @@ let honest ~k v =
       then consider
       else preferred
   in
-  { init; handler; preferred = (fun x -> x) }
+  { init; handler; preferred = last_block v }
 ;;
 
 let protocol ~k =
@@ -246,3 +235,240 @@ let reward ~max_reward_per_block ~discount ~punish ~k : ('env, dag_data) reward_
 ;;
 
 (* TODO: add tests for reward functions *)
+
+let block_height v n = (v.data n).block
+
+module PrivateAttack = struct
+  open PrivateAttack
+
+  module Observation = struct
+    type t =
+      { public_blocks : int (** number of blocks after common ancestor *)
+      ; public_votes : int (** number of votes confirming the leading block *)
+      ; private_blocks : int (** number of blocks after common ancestor *)
+      ; private_votes : int (** number of votes confirming the leading block *)
+      ; diff_blocks : int (** private_blocks - public_blocks *)
+      ; diff_votes : int (** private_votes - public_votes *)
+      }
+    [@@deriving fields]
+
+    let length = List.length Fields.names
+
+    let observe v s =
+      let private_view = extend_view v
+      and public_view = extend_view (public_view v) in
+      let private_votes = Dag.children private_view.votes_only s.private_ |> List.length
+      and public_votes = Dag.children public_view.votes_only s.public |> List.length in
+      let v = private_view in
+      let ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
+      let ca_height = block_height v ca
+      and private_height = block_height v s.private_
+      and public_height = block_height v s.public in
+      { private_blocks = private_height - ca_height
+      ; public_blocks = public_height - ca_height
+      ; diff_blocks = private_height - public_height
+      ; private_votes
+      ; public_votes
+      ; diff_votes = private_votes - public_votes
+      }
+    ;;
+
+    let low =
+      { public_blocks = 0
+      ; public_votes = 0
+      ; private_blocks = 0
+      ; private_votes = 0
+      ; diff_blocks = min_int
+      ; diff_votes = min_int
+      }
+    ;;
+
+    let high =
+      { public_blocks = max_int
+      ; public_votes = max_int
+      ; private_blocks = max_int
+      ; private_votes = max_int
+      ; diff_blocks = max_int
+      ; diff_votes = max_int
+      }
+    ;;
+
+    let to_floatarray t =
+      let a = Float.Array.make length Float.nan in
+      let set conv i field =
+        Float.Array.set a i (Fieldslib.Field.get field t |> conv);
+        i + 1
+      in
+      let int = set float_of_int in
+      let _ =
+        Fields.fold
+          ~init:0
+          ~public_blocks:int
+          ~public_votes:int
+          ~private_blocks:int
+          ~private_votes:int
+          ~diff_blocks:int
+          ~diff_votes:int
+      in
+      a
+    ;;
+
+    let of_floatarray =
+      let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
+      let int = get int_of_float in
+      fst
+        (Fields.make_creator
+           0
+           ~public_blocks:int
+           ~public_votes:int
+           ~private_blocks:int
+           ~private_votes:int
+           ~diff_blocks:int
+           ~diff_votes:int)
+    ;;
+
+    let to_string t =
+      let conv to_s field =
+        Printf.sprintf
+          "%s: %s"
+          (Fieldslib.Field.name field)
+          (to_s (Fieldslib.Field.get field t))
+      in
+      let int = conv string_of_int in
+      Fields.to_list
+        ~public_blocks:int
+        ~public_votes:int
+        ~private_blocks:int
+        ~private_votes:int
+        ~diff_blocks:int
+        ~diff_votes:int
+      |> String.concat "\n"
+    ;;
+
+    let%test _ =
+      let run _i =
+        let t =
+          { public_blocks = Random.bits ()
+          ; public_votes = Random.bits ()
+          ; private_blocks = Random.bits ()
+          ; private_votes = Random.bits ()
+          ; diff_blocks = Random.bits ()
+          ; diff_votes = Random.bits ()
+          }
+        in
+        t = (to_floatarray t |> of_floatarray)
+      in
+      List.init 50 run |> List.for_all (fun x -> x)
+    ;;
+  end
+
+  module Action = struct
+    type t =
+      | Release
+          (** Release up to preferred private block and all withheld votes for this block.
+              Used to model honest strategy. *)
+      | Override
+          (** Publish just enough information to make the defender adopt the chain just
+              released. The attacker continues mining the private chain.
+
+              If override is impossible, this still results in a release of withheld
+              information. *)
+      | Match
+          (** Publish just enough information such that the defender observes a tie
+              between two chains. The attacker continues mining the private chain.
+
+              If override is impossible, this still results in a release of withheld
+              information. *)
+      | Wait (** Continue withholding. Always possible. *)
+    [@@deriving variants]
+
+    let to_string = Variants.to_name
+    let to_int = Variants.to_rank
+
+    let table =
+      let add acc var = var.Variantslib.Variant.constructor :: acc in
+      Variants.fold ~init:[] ~override:add ~match_:add ~wait:add ~release:add
+      |> List.rev
+      |> Array.of_list
+    ;;
+
+    let of_int i = table.(i)
+    let n = Array.length table
+  end
+
+  let honest_policy _o = Action.Release
+
+  let selfish_policy o =
+    let open Observation in
+    let open Action in
+    if o.private_blocks = 0 && o.public_blocks = 0
+    then Wait
+    else if o.public_blocks = 0
+    then Wait
+    else Override
+  ;;
+
+  let policies = [ "honest", honest_policy; "selfish", selfish_policy ]
+
+  let selfish_policy' (v : _ local_view) state =
+    let open Action in
+    if state.private_ $== state.public
+    then Wait
+    else (
+      let ca = Dag.common_ancestor v.view state.private_ state.public |> Option.get in
+      if ca $== state.public then Wait else Override)
+  ;;
+
+  let apply_action ~k:_ (v : _ local_view) ~release state =
+    let ev = extend_view v in
+    let parent n =
+      match Dag.parents v.view n with
+      | hd :: _ -> Some hd
+      | _ -> None
+    in
+    let match_ ~and_override () =
+      let cmp =
+        Compare.(
+          by (tuple int int) (fun x ->
+              let x = v.data x in
+              x.block, x.vote))
+      in
+      let x =
+        (* find node to be released backwards from private head *)
+        let rec h x x' =
+          let d = cmp x state.public in
+          if d <= 0 then if and_override then x' else x else h (parent x |> Option.get) x
+        in
+        h state.private_ state.private_
+        (* NOTE: if private height is smaller public height, then private head is marked
+           for release. *)
+      in
+      release_recursive v release [ x ]
+    in
+    fun a ->
+      match (a : Action.t) with
+      | Wait -> `PreferPrivate
+      | Match ->
+        match_ ~and_override:false ();
+        `PreferPrivate
+      | Override ->
+        match_ ~and_override:true ();
+        `PreferPrivate
+      | Release ->
+        Dag.leaves v.view (last_block ev state.private_) |> release_recursive v release;
+        `PreferPrivate
+  ;;
+
+  let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
+
+  let tactic_of_policy ~k p v ~release state =
+    (lift_policy p) v state |> apply_action ~k v ~release state
+  ;;
+
+  let tactic_of_policy' ~k p v ~release state =
+    p v state |> apply_action ~k v ~release state
+  ;;
+
+  let attack ~k p = attack (protocol ~k).honest (tactic_of_policy ~k p)
+  and attack' ~k p = attack (protocol ~k).honest (tactic_of_policy' ~k p)
+end

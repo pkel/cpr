@@ -86,9 +86,18 @@ let tasks0 =
           , [ Constant ]
           , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 20 )
-        ; George { k = 16 }, [ Constant ], [ Honest ], 48
-        ; George { k = 8 }, [ Constant ], [ Honest ], 24
-        ; George { k = 4 }, [ Constant ], [ Honest ], 12
+        ; ( George { k = 16 }
+          , [ Constant ]
+          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
+          , 48 )
+        ; ( George { k = 8 }
+          , [ Constant ]
+          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
+          , 24 )
+        ; ( George { k = 4 }
+          , [ Constant ]
+          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
+          , 12 )
         ])
     [ 0.25; 0.33; 0.5 ]
 ;;

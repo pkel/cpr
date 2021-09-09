@@ -266,10 +266,14 @@ let setup t =
     in
     S { task = t; params; network; protocol; deviations; reward_functions }
   | George { k } ->
-    let protocol = George.protocol ~k in
+    let open George in
+    let protocol = protocol ~k in
     let deviations =
       deviations (function
           | Honest -> Deviation protocol.honest
+          | SelfishAdvanced -> Deviation PrivateAttack.(attack' selfish_policy' ~k)
+          | NumHonest -> Deviation PrivateAttack.(attack honest_policy ~k)
+          | NumSelfishAdvanced -> Deviation PrivateAttack.(attack selfish_policy ~k)
           | x ->
             let m =
               Printf.sprintf

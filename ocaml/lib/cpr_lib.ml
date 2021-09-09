@@ -51,9 +51,13 @@ end = struct
 
   let ( $ ) = disambiguate
   let skip_eq eq cmp a b = if eq a b then 0 else cmp a b
+
+  let%test "int" = int 0 2 = -1
+  let%test "int" = int 2 2 = 0
+  let%test "int" = int 2 0 = 1
 end
 
-let%expect_test _ =
+let%expect_test "Compare" =
   let open Compare in
   let cmp = tuple int float in
   let shuffle a =

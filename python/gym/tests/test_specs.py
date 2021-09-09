@@ -66,3 +66,20 @@ def test_bk_ll(capsys):
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
+
+
+def test_george(capsys):
+    env = gym.make("cpr-v0", spec=specs.george(k=13, alpha=0.33, reward="discount"))
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == "Protocol George with k=13 against α=0.33 attacker"
+
+    p = env.policies()["honest"]
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(p(np.array(obs)))
+
+    p = env.policies()["selfish"]
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(p(np.array(obs)))

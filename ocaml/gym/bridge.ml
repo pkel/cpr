@@ -172,5 +172,58 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk_ll ~k ~alpha ~reward) |> python_of_penv)
+     PEnv (bk_ll ~k ~alpha ~reward) |> python_of_penv);
+  Py_module.set
+    m
+    "george"
+    (let%map k = keyword "k" int ~docstring:"number of votes per block"
+     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+     and reward =
+       keyword
+         "reward"
+         string
+         ~default:"constant"
+         ~docstring:
+           "Select reward function.\n\
+            'block': k per confirmed block\n\
+            'constant': 1 per confirmed pow solution\n\
+            'punish': max k per confirmed block, 1 per pow solution on longest chain of \
+            votes\n\
+            'discount': max k per confirmed block, d/k per pow solution (d ∊ 1..k = \
+            height since last block)\n\
+            'hybrid': max k per confirmed block, d/k per pow solution on longest chain \
+            of votes (d ∊ 1..k = height since last block)"
+     in
+     let reward =
+       match reward with
+       | "block" -> Cpr_protocols.George.constant_block (float_of_int k)
+       | "constant" ->
+         Cpr_protocols.George.reward
+           ~max_reward_per_block:1.
+           ~punish:false
+           ~discount:false
+           ~k
+       | "punish" ->
+         Cpr_protocols.George.reward
+           ~max_reward_per_block:1.
+           ~punish:true
+           ~discount:false
+           ~k
+       | "discount" ->
+         Cpr_protocols.George.reward
+           ~max_reward_per_block:1.
+           ~punish:false
+           ~discount:true
+           ~k
+       | "hybrid" ->
+         Cpr_protocols.George.reward
+           ~max_reward_per_block:1.
+           ~punish:true
+           ~discount:true
+           ~k
+       | _ ->
+         let msg = "unknown reward function '" ^ reward ^ "'" in
+         failwith msg
+     in
+     PEnv (george ~k ~alpha ~reward) |> python_of_penv)
 ;;

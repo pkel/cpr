@@ -123,13 +123,13 @@ activations. `public` can see foreign or released information only. A
 policy controls which information is released and whether `private_`
 should prefer `public`'s tip of chain as preferred node.
 
+This attack is implemented for all protocols.
+
 **Note:** It follows naturally that `private_` adopts `public`'s tip of
 chain whenever an honest node would do so.
 
 **To do:** Consider modeling attacks where adoption of `public`'s tip of
 chain must happen explicitly.
-
-**To do:** Instantiate this attack for `George`.
 
 ## Visualization
 
@@ -150,7 +150,7 @@ could plot time on the x-axis and mining node on the y-axis.
 ## Selfish Mining Policies
 
 We are aware of three attacks, all can be described as policy for the
-private attack above.
+described private attack above.
 
 1. Withhold until anybody can cast the next (strong) block, then prefer
 own votes for this block. George calls this proof packing. We call it
@@ -169,8 +169,8 @@ selfish-1.
 
 ## Reinforcement Learning
 
-The attack policies described above might be sub-optimal. We follow [Hou
-et al.][squirrl] and expose the private attack as an [OpenAI
+The private attack policies described above might be sub-optimal. We
+follow [Hou et al.][squirrl] and expose the private attack as an [OpenAI
 gym][openai-gym] environment. This enables easy access from Python-based
 policy learning tools to the protocol logic implemented in OCaml.
 
@@ -180,8 +180,6 @@ Python. A python package living `python/gym` wraps the exposed OCaml
 interface into an OpenAI-compatible `gym.Env` class.
 
 [openai-gym]: https://gym.openai.com/
-
-**To do:** Expose private attack on `George` to Gym environment.
 
 
 ## Reward after Difficulty Adjustment
