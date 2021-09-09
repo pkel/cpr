@@ -109,26 +109,6 @@ let leader_hash_exn v n =
     max_pow_hash
 ;;
 
-let first ?(skip_to = fun _ -> true) by n l =
-  let a = Array.of_list l in
-  if Array.length a < n
-  then None
-  else (
-    let () = Array.sort (fun a b -> compare (by a) (by b)) a in
-    let i = ref 0 in
-    while !i < Array.length a && not (skip_to a.(!i)) do
-      incr i
-    done;
-    if Array.length a - !i < n
-    then None
-    else (
-      let l = ref [] in
-      for j = 0 to n - 1 do
-        l := a.(n - 1 + !i - j) :: !l
-      done;
-      Some !l))
-;;
-
 let compare_blocks v =
   let open Compare in
   let cmp =
@@ -168,7 +148,7 @@ let quorum ~k v b =
   if replace_hash <= my_hash || nmine + ntheirs < k
   then (* fast path *) None
   else if nmine >= k
-  then first pow_hash_exn k mine
+  then first Compare.(by (tuple int int) pow_hash_exn) k mine
   else (
     let theirs, ntheirs =
       List.fold_left
@@ -182,7 +162,9 @@ let quorum ~k v b =
     if ntheirs < k - nmine
     then (* fast path *) None
     else (
-      let theirs = first v.delivered_at (k - nmine) theirs |> Option.get in
+      let theirs =
+        first Compare.(by float v.delivered_at) (k - nmine) theirs |> Option.get
+      in
       mine @ theirs |> List.sort Compare.(by (tuple int int) pow_hash_exn) |> Option.some))
 ;;
 
@@ -301,7 +283,12 @@ module PrivateAttack = struct
         | [] -> false
         | votes ->
           let leader =
-            first (fun n -> v.pow_hash n |> Option.get) 1 votes |> Option.get |> List.hd
+            first
+              Compare.(by (tuple int int) (fun n -> v.pow_hash n |> Option.get))
+              1
+              votes
+            |> Option.get
+            |> List.hd
           in
           v.appended_by_me leader
       and ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
@@ -510,7 +497,7 @@ module PrivateAttack = struct
            for release. *)
       in
       let votes = Dag.children ev.votes_only block in
-      match first v.delivered_at nvotes votes with
+      match first Compare.(by float v.delivered_at) nvotes votes with
       | Some subset -> release_recursive v release (block :: subset)
       | None ->
         (* not enough votes, release all *)

@@ -148,5 +148,29 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk ~k ~alpha ~reward) |> python_of_penv)
+     PEnv (bk ~k ~alpha ~reward) |> python_of_penv);
+  Py_module.set
+    m
+    "bk_ll"
+    (let%map k = keyword "k" int ~docstring:"number of votes per block"
+     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+     and reward =
+       keyword
+         "reward"
+         string
+         ~default:"pow"
+         ~docstring:
+           "Select reward function.\n\
+            'pow': for 1 per confirmed proof-of-work vote\n\
+            'block': for 1 per confirmed block"
+     in
+     let reward =
+       match reward with
+       | "pow" -> Cpr_protocols.B_k_lessleader.constant_pow 1.
+       | "block" -> Cpr_protocols.B_k_lessleader.constant_block 1.
+       | _ ->
+         let msg = "unknown reward function '" ^ reward ^ "'" in
+         failwith msg
+     in
+     PEnv (bk_ll ~k ~alpha ~reward) |> python_of_penv)
 ;;

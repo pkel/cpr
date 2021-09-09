@@ -49,3 +49,20 @@ def test_nakamoto(capsys):
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
+
+
+def test_bk_ll(capsys):
+    env = gym.make("cpr-v0", spec=specs.bk_ll(k=17, alpha=0.33))
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == "Protocol Bₖ/ll with k=17 against α=0.33 attacker"
+
+    p = env.policies()["honest"]
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(p(np.array(obs)))
+
+    p = env.policies()["selfish"]
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(p(np.array(obs)))

@@ -11,6 +11,7 @@ let ( $!= ) = Dag.vertex_neq
 module Compare : sig
   type 'a cmp = 'a -> 'a -> int
 
+  val bool : bool cmp
   val int : int cmp
   val float : float cmp
   val neg : 'a cmp -> 'a cmp
@@ -29,6 +30,7 @@ module Compare : sig
 end = struct
   type 'a cmp = 'a -> 'a -> int
 
+  let bool = Bool.compare
   let int = Int.compare
   let float = Float.compare
   let neg cmp a b = cmp b a
@@ -86,3 +88,32 @@ let%test "is_sorted" = is_sorted Compare.int [ 0; 1; 2; 3 ]
 let%test "is_sorted" = is_sorted Compare.int [ 0; 2; 1; 3 ] |> not
 let%test "is_sorted" = is_sorted ~unique:true Compare.int [ 0; 1; 2; 3 ]
 let%test "is_sorted" = is_sorted ~unique:true Compare.int [ 0; 1; 2; 2; 3 ] |> not
+
+let first ?(skip_to = fun _ -> true) compare n l =
+  let a = Array.of_list l in
+  if Array.length a < n
+  then None
+  else (
+    let () = Array.sort compare a in
+    let i = ref 0 in
+    while !i < Array.length a && not (skip_to a.(!i)) do
+      incr i
+    done;
+    if Array.length a - !i < n
+    then None
+    else (
+      let l = ref [] in
+      for j = 0 to n - 1 do
+        l := a.(n - 1 + !i - j) :: !l
+      done;
+      Some !l))
+;;
+
+let%test "first" = first Compare.int 2 [ 1 ] = None
+let%test "first" = first Compare.int 2 [ 19; 2; 5; 3; 41 ] = Some [ 2; 3 ]
+
+let%test "first" =
+  first Compare.int ~skip_to:(fun x -> x > 10) 2 [ 19; 2; 5; 3; 42 ] = Some [ 19; 42 ]
+;;
+
+let%test "first" = first Compare.int ~skip_to:(fun x -> x > 10) 2 [ 19; 2; 5; 3 ] = None

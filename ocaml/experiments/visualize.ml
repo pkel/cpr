@@ -72,19 +72,19 @@ let tasks0 =
           , 20 )
         ; ( B_k_lessleadership { k = 16 }
           , [ Constant ]
-          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 200 )
         ; ( B_k_lessleadership { k = 8 }
           , [ Constant ]
-          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 100 )
         ; ( B_k_lessleadership { k = 4 }
           , [ Constant ]
-          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 50 )
         ; ( B_k_lessleadership { k = 1 }
           , [ Constant ]
-          , [ Honest; SelfishSimple; SelfishAdvanced ]
+          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 20 )
         ; George { k = 16 }, [ Constant ], [ Honest ], 48
         ; George { k = 8 }, [ Constant ], [ Honest ], 24

@@ -237,9 +237,10 @@ let setup t =
     let protocol = protocol ~k in
     let deviations =
       deviations (function
-          | Honest -> Deviation (strategic honest_tactic ~k)
-          | SelfishSimple -> Deviation (strategic simple_tactic ~k)
-          | SelfishAdvanced -> Deviation (strategic advanced_tactic ~k)
+          | Honest -> Deviation protocol.honest
+          | SelfishAdvanced -> Deviation PrivateAttack.(attack' selfish_policy' ~k)
+          | NumHonest -> Deviation PrivateAttack.(attack honest_policy ~k)
+          | NumSelfishAdvanced -> Deviation PrivateAttack.(attack selfish_policy ~k)
           | x ->
             let m =
               Printf.sprintf

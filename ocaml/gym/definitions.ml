@@ -249,4 +249,26 @@ let bk ~alpha ~k ~reward =
     end)
 ;;
 
+let bk_ll ~alpha ~k ~reward =
+  of_module
+    ~alpha
+    (module struct
+      type data = B_k_lessleader.dag_data
+      type state = data Simulator.data PrivateAttack.state
+
+      let description = Printf.sprintf "Bₖ/ll with k=%d" k
+      let protocol = B_k_lessleader.protocol ~k
+      let reward_function = reward
+
+      include B_k_lessleader.PrivateAttack
+
+      let node = PrivateAttack.withhold protocol.honest
+
+      let apply_action v a state action =
+        let tactic = tactic_of_policy ~k (fun _ -> action) in
+        PrivateAttack.apply_tactic tactic v a state
+      ;;
+    end)
+;;
+
 let default = bk ~k:51 ~alpha:0.25 ~reward:(B_k.constant_pow 1.)
