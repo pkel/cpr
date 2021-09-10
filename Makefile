@@ -24,8 +24,8 @@ pre-commit: check-format test
 
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
-	opam switch create . "4.11.1+flambda" --deps-only
-	opam install dune
+	opam switch create . "4.11.1+flambda"
+	opam install ./ocaml --deps-only --working-dir
 
 dependencies:
 	dune build ocaml/{cpr,cpr-dev}.opam
