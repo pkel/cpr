@@ -1,4 +1,5 @@
 include Intf
+module Collection = Collection
 module Dag = Dag
 module Distributions = Distributions
 module Network = Network

@@ -106,20 +106,19 @@ let run task =
     | None -> failwith "no common ancestor found"
     | Some common_chain ->
       (* incentive stats *)
-      List.map2
-        (fun is rewardfn ->
+      Collection.map_to_list
+        (fun ~info key rewardfn ->
           let reward = apply_reward_function rewardfn common_chain env in
           { row with
             activations
           ; compute
-          ; incentive_scheme = tag_incentive_scheme is
-          ; incentive_scheme_description = describe_incentive_scheme is
+          ; incentive_scheme = key
+          ; incentive_scheme_description = info
           ; reward
           ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
           ; error = ""
           })
-        task.incentive_schemes
-        s.reward_functions
+        s.protocol.reward_functions
   with
   | e ->
     let bt = Printexc.get_backtrace () in

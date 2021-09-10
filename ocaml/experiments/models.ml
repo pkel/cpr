@@ -42,33 +42,6 @@ let describe_protocol = function
   | George { k } -> "George's protocol with k=" ^ string_of_int k
 ;;
 
-type incentive_scheme =
-  | Block
-  | Constant
-  | Discount
-  | Punish
-  | Hybrid
-
-let tag_incentive_scheme = function
-  | Block -> "block"
-  | Constant -> "constant"
-  | Discount -> "discount"
-  | Punish -> "punish"
-  | Hybrid -> "hybrid"
-;;
-
-let describe_incentive_scheme = function
-  | Block -> "1 per confirmed block"
-  | Constant -> "1 per confirmed pow solution"
-  | Discount ->
-    "max k per confirmed block, d/k per pow solution (d ∊ 1..k = height since last \
-     block)"
-  | Punish -> "max k per confirmed block, 1 per pow solution on longest chain of votes"
-  | Hybrid ->
-    "max k per confirmed block, d/k per pow solution on longest chain of votes (d ∊ \
-     1..k = height since last block)"
-;;
-
 type scenario =
   | AllHonest
   | FirstSelfish
@@ -114,7 +87,6 @@ type task =
   ; protocol : protocol
   ; scenario : scenario
   ; strategy : strategy
-  ; incentive_schemes : incentive_scheme list
   ; activations : int
   ; activation_delay : float
   }
@@ -131,7 +103,6 @@ type setup =
       ; params : Simulator.params
       ; network : Network.t
       ; protocol : ('a Simulator.data, 'a, Simulator.pow, 'state) Cpr_lib.protocol
-      ; reward_functions : ('a Simulator.data, 'a) reward_function list
       ; deviations : (int * 'a deviation) list
       }
       -> setup
@@ -184,21 +155,8 @@ let setup t =
                 (tag_strategy x)
             in
             raise (Invalid_argument m))
-    and reward_functions =
-      List.map
-        (function
-          | Constant -> Nakamoto.constant 1.
-          | x ->
-            let m =
-              Printf.sprintf
-                "protocol %s does not support incentive scheme %s"
-                (protocol_family t.protocol)
-                (tag_incentive_scheme x)
-            in
-            raise (Invalid_argument m))
-        t.incentive_schemes
     in
-    S { task = t; params; network; protocol; deviations; reward_functions }
+    S { task = t; params; network; protocol; deviations }
   | B_k { k } ->
     let open B_k in
     let protocol = protocol ~k in
@@ -216,22 +174,8 @@ let setup t =
                 (tag_strategy x)
             in
             raise (Invalid_argument m))
-    and reward_functions =
-      List.map
-        (function
-          | Constant -> constant_pow 1.
-          | Block -> constant_block 1.
-          | x ->
-            let m =
-              Printf.sprintf
-                "protocol %s does not support incentive scheme %s"
-                (protocol_family t.protocol)
-                (tag_incentive_scheme x)
-            in
-            raise (Invalid_argument m))
-        t.incentive_schemes
     in
-    S { task = t; params; network; protocol; deviations; reward_functions }
+    S { task = t; params; network; protocol; deviations }
   | B_k_lessleadership { k } ->
     let open B_k_lessleader in
     let protocol = protocol ~k in
@@ -249,22 +193,8 @@ let setup t =
                 (tag_strategy x)
             in
             raise (Invalid_argument m))
-    and reward_functions =
-      List.map
-        (function
-          | Constant -> constant_pow 1.
-          | Block -> constant_block 1.
-          | x ->
-            let m =
-              Printf.sprintf
-                "protocol %s does not support incentive scheme %s"
-                (protocol_family t.protocol)
-                (tag_incentive_scheme x)
-            in
-            raise (Invalid_argument m))
-        t.incentive_schemes
     in
-    S { task = t; params; network; protocol; deviations; reward_functions }
+    S { task = t; params; network; protocol; deviations }
   | George { k } ->
     let open George in
     let protocol = protocol ~k in
@@ -282,16 +212,6 @@ let setup t =
                 (tag_strategy x)
             in
             raise (Invalid_argument m))
-    and reward_functions =
-      List.map
-        (let reward = George.reward ~max_reward_per_block:(float_of_int k) ~k in
-         function
-         | Constant -> reward ~punish:false ~discount:false
-         | Discount -> reward ~punish:false ~discount:true
-         | Punish -> reward ~punish:true ~discount:false
-         | Hybrid -> reward ~punish:true ~discount:true
-         | Block -> George.constant_block 1.)
-        t.incentive_schemes
     in
-    S { task = t; params; network; protocol; deviations; reward_functions }
+    S { task = t; params; network; protocol; deviations }
 ;;

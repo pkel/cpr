@@ -34,10 +34,20 @@ let handler v actions preferred = function
     if node.height > head.height then gnode else preferred
 ;;
 
+let constant c : ('env, dag_data) reward_function = fun ~view:_ ~assign n -> assign c n
+
 let protocol : _ protocol =
-  let preferred x = x in
-  let honest v = { handler = handler v; init; preferred } in
-  { honest; dag_validity; dag_roots; describe }
+  let honest v =
+    let preferred x = x in
+    { handler = handler v; init; preferred }
+  in
+  { honest
+  ; dag_validity
+  ; dag_roots
+  ; describe
+  ; reward_functions =
+      Collection.(empty |> add ~info:"1 per confirmed block" "block" (constant 1.))
+  }
 ;;
 
 let%test "convergence" =
@@ -62,8 +72,6 @@ let%test "convergence" =
       (* bad conditions, 50% orphans *)
     ]
 ;;
-
-let constant c : ('env, dag_data) reward_function = fun ~view:_ ~assign n -> assign c n
 
 module PrivateAttack = struct
   open PrivateAttack

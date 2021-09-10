@@ -144,13 +144,28 @@ let honest ~k v actions preferred =
     update_head v ~preferred ~consider
 ;;
 
+let constant_pow c : ('env, dag_data) reward_function = fun ~view:_ ~assign -> assign c
+
+let constant_block c : ('env, dag_data) reward_function =
+ fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
+;;
+
 let protocol ~k =
   let honest v =
     let handler = honest ~k (extend_view v)
     and preferred x = x in
     { init; handler; preferred }
   in
-  { honest; dag_validity = dag_validity ~k; dag_roots; describe }
+  { honest
+  ; dag_validity = dag_validity ~k
+  ; dag_roots
+  ; describe
+  ; reward_functions =
+      Collection.(
+        empty
+        |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
+        |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.))
+  }
 ;;
 
 let%test "convergence" =
@@ -184,12 +199,6 @@ let%test "convergence" =
     ; 32, 01., 900
       (* bad conditions, 10% orphans, high k *)
     ]
-;;
-
-let constant_pow c : ('env, dag_data) reward_function = fun ~view:_ ~assign -> assign c
-
-let constant_block c : ('env, dag_data) reward_function =
- fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
 ;;
 
 module PrivateAttack = struct

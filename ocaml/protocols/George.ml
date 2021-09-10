@@ -143,39 +143,93 @@ let quorum ~k v for_block =
                 d.vote, hash)))
 ;;
 
-let honest ~k v =
-  let v = extend_view v in
-  let handler actions preferred = function
-    | Activate pow ->
-      let head = last_block v preferred in
-      (match quorum ~k v head with
-      | Some q ->
-        let head' =
-          actions.extend_dag
-            ~pow
-            (head :: q)
-            { block = (v.data head).block + 1; vote = 0 }
-        in
-        let () = actions.share head' in
-        head'
-      | None ->
-        let vd = v.data preferred in
-        let v = actions.extend_dag ~pow [ preferred ] { vd with vote = vd.vote + 1 } in
-        let () = actions.share v in
-        v)
-    | Deliver consider ->
-      (* Prefer longest chain of votes after longest chain of blocks *)
-      let p = v.data preferred
-      and c = v.data consider in
-      if c.block > p.block || (c.block = p.block && c.vote > p.vote)
-      then consider
-      else preferred
-  in
-  { init; handler; preferred = last_block v }
+let honest ~k v actions preferred = function
+  | Activate pow ->
+    let head = last_block v preferred in
+    (match quorum ~k v head with
+    | Some q ->
+      let head' =
+        actions.extend_dag ~pow (head :: q) { block = (v.data head).block + 1; vote = 0 }
+      in
+      let () = actions.share head' in
+      head'
+    | None ->
+      let vd = v.data preferred in
+      let v = actions.extend_dag ~pow [ preferred ] { vd with vote = vd.vote + 1 } in
+      let () = actions.share v in
+      v)
+  | Deliver consider ->
+    (* Prefer longest chain of votes after longest chain of blocks *)
+    let p = v.data preferred
+    and c = v.data consider in
+    if c.block > p.block || (c.block = p.block && c.vote > p.vote)
+    then consider
+    else preferred
 ;;
 
+let constant_block c : _ reward_function =
+ fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
+;;
+
+let reward ~max_reward_per_block ~discount ~punish ~k : ('env, dag_data) reward_function =
+  let k = float_of_int k in
+  let c = max_reward_per_block /. k in
+  fun ~view:v ~assign ->
+    let votes_only = Dag.filter (fun x -> v.data x |> is_vote) v.view in
+    fun n ->
+      if v.data n |> is_block
+      then (
+        match Dag.parents votes_only n with
+        | [] -> (* Either genesis or k=1 *) assign c n
+        | hd :: _ ->
+          let depth = (v.data hd).vote in
+          let x = if discount then (float_of_int depth +. 1.) /. k *. c else c in
+          if punish
+          then (
+            assign x n;
+            Dag.iterate_ancestors votes_only [ hd ] |> Seq.iter (assign x))
+          else Dag.iterate_ancestors votes_only [ n ] |> Seq.iter (assign x))
+;;
+
+(* TODO: add tests for reward functions *)
+
 let protocol ~k =
-  { honest = honest ~k; dag_validity = dag_validity ~k; dag_roots; describe }
+  let honest v =
+    let v = extend_view v in
+    let handler = honest ~k v
+    and preferred x = last_block v x in
+    { init; handler; preferred }
+  and reward = reward ~k ~max_reward_per_block:(float_of_int k) in
+  { honest
+  ; dag_validity = dag_validity ~k
+  ; dag_roots
+  ; describe
+  ; reward_functions =
+      Collection.(
+        empty
+        |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
+        |> add
+             ~info:
+               "max k per confirmed block, d/k per pow solution on longest chain of \
+                votes (d ∊ 1..k = height since last block)"
+             "hybrid"
+             (reward ~discount:true ~punish:true)
+        |> add
+             ~info:
+               "max k per confirmed block, 1 per pow solution on longest chain of votes"
+             "punish"
+             (reward ~discount:false ~punish:true)
+        |> add
+             ~info:"1 per confirmed pow solution"
+             "discount"
+             (reward ~discount:true ~punish:false)
+        |> add
+             ~info:
+               "max k per confirmed block, d/k per pow solution on longest chain of \
+                votes (d ∊ 1..k = height since last block)"
+             "constant"
+             (reward ~discount:false ~punish:false))
+  }
 ;;
 
 let%test "convergence" =
@@ -209,32 +263,6 @@ let%test "convergence" =
       (* bad conditions, 10% orphans, high k *)
     ]
 ;;
-
-let constant_block c : _ reward_function =
- fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
-;;
-
-let reward ~max_reward_per_block ~discount ~punish ~k : ('env, dag_data) reward_function =
-  let k = float_of_int k in
-  let c = max_reward_per_block /. k in
-  fun ~view:v ~assign ->
-    let votes_only = Dag.filter (fun x -> v.data x |> is_vote) v.view in
-    fun n ->
-      if v.data n |> is_block
-      then (
-        match Dag.parents votes_only n with
-        | [] -> (* Either genesis or k=1 *) assign c n
-        | hd :: _ ->
-          let depth = (v.data hd).vote in
-          let x = if discount then (float_of_int depth +. 1.) /. k *. c else c in
-          if punish
-          then (
-            assign x n;
-            Dag.iterate_ancestors votes_only [ hd ] |> Seq.iter (assign x))
-          else Dag.iterate_ancestors votes_only [ n ] |> Seq.iter (assign x))
-;;
-
-(* TODO: add tests for reward functions *)
 
 let block_height v n = (v.data n).block
 

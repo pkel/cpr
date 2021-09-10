@@ -2,31 +2,29 @@ open Cpr_lib
 open Models
 
 let tasks0 =
-  let fpaths_and_legends ~alpha task =
+  let fpath ~alpha ~rewardfn task =
     let open Fpath in
-    List.map
-      (fun is ->
-        let a =
-          Printf.sprintf
-            "%s:%s:α=%.2f:%s:k=%d:%s:%s.dot"
-            (tag_network task.network)
-            (tag_scenario task.scenario)
-            alpha
-            (protocol_family task.protocol)
-            (pow_per_block task.protocol)
-            (tag_incentive_scheme is)
-            (tag_strategy task.strategy)
-        in
-        ( v a
-        , [ "Network", describe_network task.network
-          ; "Scenario", describe_scenario task.scenario
-          ; "Attacker Compute (α)", string_of_float alpha
-          ; "Protocol", describe_protocol task.protocol
-          ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
-          ; "Incentive Scheme", describe_incentive_scheme is
-          ; "Attack Strategy", describe_strategy task.strategy
-          ] ))
-      task.incentive_schemes
+    let a =
+      Printf.sprintf
+        "%s:%s:α=%.2f:%s:k=%d:%s:%s.dot"
+        (tag_network task.network)
+        (tag_scenario task.scenario)
+        alpha
+        (protocol_family task.protocol)
+        (pow_per_block task.protocol)
+        rewardfn
+        (tag_strategy task.strategy)
+    in
+    v a
+  and legend ~alpha ~rewardfn task =
+    [ "Network", describe_network task.network
+    ; "Scenario", describe_scenario task.scenario
+    ; "Attacker Compute (α)", string_of_float alpha
+    ; "Protocol", describe_protocol task.protocol
+    ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
+    ; "Incentive Scheme", rewardfn
+    ; "Attack Strategy", describe_strategy task.strategy
+    ]
   and label_node = function
     | None -> "genesis"
     | Some 0 -> "a"
@@ -35,12 +33,11 @@ let tasks0 =
   List.concat_map
     (fun alpha ->
       List.concat_map
-        (fun (protocol, incentive_schemes, strategies, activations) ->
+        (fun (protocol, strategies, activations) ->
           List.map
             (fun strategy ->
               let t =
                 { network = TwoAgentsZero { alpha }
-                ; incentive_schemes
                 ; protocol
                 ; scenario = FirstSelfish
                 ; strategy
@@ -48,84 +45,56 @@ let tasks0 =
                 ; activation_delay = 1.
                 }
               in
-              t, fpaths_and_legends ~alpha t, label_node)
+              t, fpath ~alpha t, legend ~alpha t, label_node)
             strategies)
-        [ ( Nakamoto
-          , [ Constant ]
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 30 )
-        ; ( B_k { k = 16 }
-          , [ Constant ]
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 200 )
-        ; ( B_k { k = 8 }
-          , [ Constant ]
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 100 )
-        ; ( B_k { k = 4 }
-          , [ Constant ]
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 50 )
-        ; ( B_k { k = 1 }
-          , [ Constant ]
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 20 )
+        [ Nakamoto, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 30
+        ; B_k { k = 16 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 200
+        ; B_k { k = 8 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 100
+        ; B_k { k = 4 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 50
+        ; B_k { k = 1 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 20
         ; ( B_k_lessleadership { k = 16 }
-          , [ Constant ]
           , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 200 )
         ; ( B_k_lessleadership { k = 8 }
-          , [ Constant ]
           , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 100 )
         ; ( B_k_lessleadership { k = 4 }
-          , [ Constant ]
           , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 50 )
         ; ( B_k_lessleadership { k = 1 }
-          , [ Constant ]
           , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 20 )
         ; ( George { k = 16 }
-          , [ Constant ]
           , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           , 48 )
-        ; ( George { k = 8 }
-          , [ Constant ]
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 24 )
-        ; ( George { k = 4 }
-          , [ Constant ]
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 12 )
+        ; George { k = 8 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 24
+        ; George { k = 4 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 12
         ])
     [ 0.25; 0.33; 0.5 ]
 ;;
 
 let tasks1 =
-  let fpaths_and_legends ~activation_delay task =
+  let fpath ~activation_delay ~rewardfn task =
     let open Fpath in
-    List.map
-      (fun is ->
-        let a =
-          Printf.sprintf
-            "%s:%s:d=%.2g:%s:k=%d:%s.dot"
-            (tag_network task.network)
-            (tag_scenario task.scenario)
-            activation_delay
-            (protocol_family task.protocol)
-            (pow_per_block task.protocol)
-            (tag_incentive_scheme is)
-        in
-        ( v a
-        , [ "Network", describe_network task.network
-          ; "Scenario", describe_scenario task.scenario
-          ; "Activation Delay", string_of_float activation_delay
-          ; "Protocol", describe_protocol task.protocol
-          ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
-          ; "Incentive Scheme", describe_incentive_scheme is
-          ] ))
-      task.incentive_schemes
+    let a =
+      Printf.sprintf
+        "%s:%s:d=%.2g:%s:k=%d:%s.dot"
+        (tag_network task.network)
+        (tag_scenario task.scenario)
+        activation_delay
+        (protocol_family task.protocol)
+        (pow_per_block task.protocol)
+        rewardfn
+    in
+    v a
+  and legend ~activation_delay ~rewardfn task =
+    [ "Network", describe_network task.network
+    ; "Scenario", describe_scenario task.scenario
+    ; "Activation Delay", string_of_float activation_delay
+    ; "Protocol", describe_protocol task.protocol
+    ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
+    ; "Incentive Scheme", rewardfn
+    ]
   and label_node = function
     | Some n -> "n:" ^ string_of_int n
     | None -> "genesis"
@@ -133,10 +102,9 @@ let tasks1 =
   List.concat_map
     (fun activation_delay ->
       List.map
-        (fun (protocol, incentive_schemes, activations) ->
+        (fun (protocol, activations) ->
           let t =
             { network = CliqueUniform10
-            ; incentive_schemes
             ; protocol
             ; scenario = AllHonest
             ; strategy = Honest
@@ -144,17 +112,17 @@ let tasks1 =
             ; activation_delay
             }
           in
-          t, fpaths_and_legends ~activation_delay t, label_node)
-        [ Nakamoto, [ Constant ], 10
-        ; B_k { k = 16 }, [ Constant ], 200
-        ; B_k { k = 8 }, [ Constant ], 100
-        ; B_k { k = 4 }, [ Constant ], 50
-        ; B_k_lessleadership { k = 16 }, [ Constant ], 200
-        ; B_k_lessleadership { k = 8 }, [ Constant ], 100
-        ; B_k_lessleadership { k = 4 }, [ Constant ], 50
-        ; George { k = 16 }, [ Constant; Punish; Discount; Hybrid ], 100
-        ; George { k = 8 }, [ Constant; Punish; Discount; Hybrid ], 50
-        ; George { k = 4 }, [ Constant; Punish; Discount; Hybrid ], 30
+          t, fpath ~activation_delay t, legend ~activation_delay t, label_node)
+        [ Nakamoto, 10
+        ; B_k { k = 16 }, 200
+        ; B_k { k = 8 }, 100
+        ; B_k { k = 4 }, 50
+        ; B_k_lessleadership { k = 16 }, 200
+        ; B_k_lessleadership { k = 8 }, 100
+        ; B_k_lessleadership { k = 4 }, 50
+        ; George { k = 16 }, 100
+        ; George { k = 8 }, 50
+        ; George { k = 4 }, 30
         ])
     [ 1.; 2.; 4. ]
 ;;
@@ -186,7 +154,7 @@ let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
   |> Result.ok
 ;;
 
-let run (task, fpaths_and_legends, label_node) =
+let run (task, fpath, legend, label_node) =
   let (S s) = setup task in
   (* simulate *)
   let open Simulator in
@@ -203,14 +171,14 @@ let run (task, fpaths_and_legends, label_node) =
     |> Option.get
   in
   let confirmed = Array.make (Dag.size env.dag) false in
-  List.iter2
-    (fun (path, legend) rw ->
+  Collection.iter
+    (fun ~info key rewardfn ->
       let rewards = Array.make (Dag.size env.dag) 0. in
       let () =
         Seq.iter
           (fun n ->
             confirmed.(Dag.id n) <- true;
-            rw
+            rewardfn
               ~view:env.global
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
@@ -218,7 +186,7 @@ let run (task, fpaths_and_legends, label_node) =
       in
       let path =
         let open Fpath in
-        v "." / "fig" / "chains" // path
+        v "." / "fig" / "chains" // fpath ~rewardfn:key
       in
       let open Bos.OS in
       let d = Dir.create ~path:true (Fpath.parent path) in
@@ -226,11 +194,15 @@ let run (task, fpaths_and_legends, label_node) =
           File.with_oc
             path
             print_dag
-            (env, confirmed, rewards, legend, s.protocol.describe, label_node))
+            ( env
+            , confirmed
+            , rewards
+            , legend ~rewardfn:info
+            , s.protocol.describe
+            , label_node ))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
-    fpaths_and_legends
-    s.reward_functions
+    s.protocol.reward_functions
 ;;
 
 let () =

@@ -11,18 +11,12 @@ let protocols =
     [ List.concat_map
         (fun k ->
           [ ( B_k_lessleadership { k }
-            , [ Constant; Block ]
             , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] )
-          ; ( B_k { k }
-            , [ Constant; Block ]
-            , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] )
-          ; ( George { k }
-            , [ Constant; Block; Punish; Discount; Hybrid ]
-            , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] )
+          ; B_k { k }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
+          ; George { k }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
           ])
         k
-    ; [ Nakamoto, [ Constant ], [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-      ]
+    ; [ Nakamoto, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ] ]
     ]
 ;;
 
@@ -32,13 +26,12 @@ let tasks ~n_activations =
   List.concat_map
     (fun network ->
       List.concat_map
-        (fun (protocol, incentive_schemes, strategies) ->
+        (fun (protocol, strategies) ->
           List.concat_map
             (fun strategy ->
               List.map
                 (fun block_interval ->
                   { network
-                  ; incentive_schemes
                   ; protocol
                   ; activations = n_activations
                   ; scenario = FirstSelfish

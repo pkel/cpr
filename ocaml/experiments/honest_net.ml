@@ -5,10 +5,10 @@ let networks = [ CliqueUniform10 ]
 let protocols =
   let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
   List.concat
-    [ [ Nakamoto, [ Constant ] ]
-    ; List.map (fun k -> B_k { k }, [ Constant; Block ]) k
-    ; List.map (fun k -> B_k_lessleadership { k }, [ Constant; Block ]) k
-    ; List.map (fun k -> George { k }, [ Constant; Block; Punish; Discount; Hybrid ]) k
+    [ [ Nakamoto ]
+    ; List.map (fun k -> B_k { k }) k
+    ; List.map (fun k -> B_k_lessleadership { k }) k
+    ; List.map (fun k -> George { k }) k
     ]
 ;;
 
@@ -18,11 +18,10 @@ let tasks ~n_activations =
   List.concat_map
     (fun network ->
       List.concat_map
-        (fun (protocol, incentive_schemes) ->
+        (fun protocol ->
           List.map
             (fun block_interval ->
               { network
-              ; incentive_schemes
               ; protocol
               ; activations = n_activations
               ; scenario = AllHonest

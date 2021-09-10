@@ -53,15 +53,6 @@ type ('env, 'dag_data) local_view =
   ; appended_by_me : 'env Dag.vertex -> bool (** Recognize own DAG vertices. *)
   }
 
-type ('env, 'dag_data, 'pow, 'state) protocol =
-  { dag_roots : 'dag_data list (** Specify the roots of the global DAG. *)
-  ; dag_validity : ('env, 'dag_data) global_view -> 'env Dag.vertex -> bool
-        (** Restrict DAG extensions. The simulator checks validity for each appended DAG
-            vertex. Invalid extensions are not delivered to other nodes. *)
-  ; honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node
-  ; describe : 'dag_data -> string
-  }
-
 (** Calculate and assign rewards to a vertex and (potentially) its neighbours. Use this
     together with {!Dag.iterate_ancestors}. *)
 type ('env, 'dag_data) reward_function =
@@ -69,3 +60,13 @@ type ('env, 'dag_data) reward_function =
   -> assign:(float -> 'env Dag.vertex -> unit)
   -> 'env Dag.vertex
   -> unit
+
+type ('env, 'dag_data, 'pow, 'state) protocol =
+  { dag_roots : 'dag_data list (** Specify the roots of the global DAG. *)
+  ; dag_validity : ('env, 'dag_data) global_view -> 'env Dag.vertex -> bool
+        (** Restrict DAG extensions. The simulator checks validity for each appended DAG
+            vertex. Invalid extensions are not delivered to other nodes. *)
+  ; honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node
+  ; describe : 'dag_data -> string
+  ; reward_functions : ('env, 'dag_data) reward_function Collection.t
+  }
