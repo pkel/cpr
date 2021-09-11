@@ -1,6 +1,17 @@
 open Cpr_lib
 open Models
 
+type task =
+  | Task :
+      { model : model
+      ; protocol : ('dag_data Simulator.data, 'dag_data, Simulator.pow, 'state) protocol
+      ; attack :
+          ('dag_data Simulator.data, 'dag_data, Simulator.pow) opaque_node
+          Collection.entry
+          option
+      }
+      -> task
+
 type row =
   { network : string
   ; network_description : string
@@ -22,6 +33,8 @@ type row =
   ; machine_duration_s : float
   ; error : string
   }
+
+(* TODO: use fieldslib to ensure that we do not miss any fields *)
 
 let df_spec =
   let open Owl_dataframe in
@@ -57,24 +70,29 @@ let save_rows_as_tsv filename l =
   Owl_dataframe.to_csv ~sep:'\t' df filename
 ;;
 
-let prepare_row task =
+let prepare_row (Task { model; protocol; attack }) =
+  let strategy, strategy_description =
+    match attack with
+    | Some x -> x.Collection.key, x.info
+    | None -> "n/a", ""
+  in
   let open Models in
-  { network = tag_network task.network
-  ; network_description = describe_network task.network
-  ; protocol = protocol_family task.protocol
-  ; protocol_description = describe_protocol task.protocol
-  ; k = pow_per_block task.protocol
-  ; activation_delay = task.activation_delay
-  ; number_activations = task.activations
+  { network = tag_network model.network
+  ; network_description = describe_network model.network
+  ; protocol = protocol.key
+  ; protocol_description = protocol.info
+  ; k = protocol.pow_per_block
+  ; activation_delay = model.activation_delay
+  ; number_activations = model.activations
   ; activations = [||]
   ; compute = [||]
-  ; block_interval = task.activation_delay *. (pow_per_block task.protocol |> float_of_int)
+  ; block_interval = model.activation_delay *. (protocol.pow_per_block |> float_of_int)
   ; incentive_scheme = "na"
   ; incentive_scheme_description = ""
-  ; strategy = tag_strategy task.strategy
-  ; strategy_description = describe_strategy task.strategy
-  ; scenario = tag_scenario task.scenario
-  ; scenario_description = describe_scenario task.scenario
+  ; strategy
+  ; strategy_description
+  ; scenario = tag_scenario model.scenario
+  ; scenario_description = describe_scenario model.scenario
   ; reward = [||]
   ; machine_duration_s = Float.nan
   ; error = ""
@@ -83,9 +101,10 @@ let prepare_row task =
 
 let run task =
   let row = prepare_row task in
+  let (Task t) = task in
   let clock = Mtime_clock.counter () in
   try
-    let (S s) = setup task in
+    let s = setup t.model in
     let compute =
       let open Network in
       Array.map (fun x -> x.compute) s.network.nodes
@@ -93,8 +112,13 @@ let run task =
     (* simulate *)
     let open Simulator in
     let env =
-      let x = all_honest s.params s.protocol in
-      List.iter (fun (node, Deviation d) -> patch ~node d x |> ignore) s.deviations;
+      let x = all_honest s.params t.protocol in
+      let () =
+        match t.attack, s.attacker with
+        (* TODO argument to patch should be opaque_node *)
+        | Some { it = Node d; _ }, Some node -> patch ~node d x |> ignore
+        | _ -> ()
+      in
       init x
     in
     loop s.params env;
@@ -107,29 +131,31 @@ let run task =
     | Some common_chain ->
       (* incentive stats *)
       Collection.map_to_list
-        (fun ~info key rewardfn ->
-          let reward = apply_reward_function rewardfn common_chain env in
+        (fun rewardfn ->
+          let reward = apply_reward_function rewardfn.it common_chain env in
           { row with
             activations
           ; compute
-          ; incentive_scheme = key
-          ; incentive_scheme_description = info
+          ; incentive_scheme = rewardfn.key
+          ; incentive_scheme_description = rewardfn.info
           ; reward
           ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
           ; error = ""
           })
-        s.protocol.reward_functions
+        t.protocol.reward_functions
   with
   | e ->
     let bt = Printexc.get_backtrace () in
     let () =
       Printf.eprintf
         "\nRUN:\tnet:%s\tscenario:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
-        (tag_network task.network)
-        (tag_scenario task.scenario)
-        (protocol_family task.protocol)
-        (pow_per_block task.protocol)
-        (tag_strategy task.strategy);
+        (tag_network t.model.network)
+        (tag_scenario t.model.scenario)
+        t.protocol.key
+        t.protocol.pow_per_block
+        (match t.attack with
+        | None -> "n/a"
+        | Some a -> a.key);
       Printf.eprintf "ERROR:\t%s\n%s" (Printexc.to_string e) bt;
       flush stderr
     in

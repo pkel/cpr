@@ -42,10 +42,7 @@ module type M = sig
   end
 
   val policies : (string * (Observation.t -> Action.t)) list
-
-  val node
-    :  (data Simulator.data, data) local_view
-    -> (data Simulator.data, data, Simulator.pow, state) node
+  val node : (data Simulator.data, data, Simulator.pow, state) node
 
   val apply_action
     :  (data Simulator.data, data) local_view

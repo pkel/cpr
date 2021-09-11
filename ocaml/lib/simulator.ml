@@ -76,7 +76,7 @@ let disseminate params clock source x =
     params.network.nodes.(source).links
 ;;
 
-let spawn (n : _ Intf.node) ~roots actions =
+let spawn (n : _ Intf.node') ~roots actions =
   { handler = n.handler actions
   ; state = n.init ~roots
   ; preferred = n.preferred

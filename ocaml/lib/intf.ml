@@ -15,18 +15,6 @@ type ('env, 'pow) event =
   | Activate of 'pow
   | Deliver of 'env Dag.vertex
 
-(** Behaviour of a single network node. *)
-type ('env, 'dag_data, 'pow, 'state) node =
-  { init : roots:'env Dag.vertex list -> 'state
-        (** Node initialization. The [roots] argument holds references to global versions
-            of {protocol.dag_roots}. The roots are visible to all nodes from the
-            beginning. *)
-  ; handler : ('env, 'dag_data, 'pow) actions -> 'state -> ('env, 'pow) event -> 'state
-        (** Event handlers. May trigger side effects via [actions] argument. *)
-  ; preferred : 'state -> 'env Dag.vertex
-        (** Returns a node's preferred tip of the chain. *)
-  }
-
 type ('env, 'dag_data) global_view =
   { view : 'env Dag.view (** View on the simulator's DAG. *)
   ; data : 'env Dag.vertex -> 'dag_data
@@ -53,6 +41,24 @@ type ('env, 'dag_data) local_view =
   ; appended_by_me : 'env Dag.vertex -> bool (** Recognize own DAG vertices. *)
   }
 
+(** Behaviour of a single network node. *)
+type ('env, 'dag_data, 'pow, 'state) node' =
+  { init : roots:'env Dag.vertex list -> 'state
+        (** Node initialization. The [roots] argument holds references to global versions
+            of {protocol.dag_roots}. The roots are visible to all nodes from the
+            beginning. *)
+  ; handler : ('env, 'dag_data, 'pow) actions -> 'state -> ('env, 'pow) event -> 'state
+        (** Event handlers. May trigger side effects via [actions] argument. *)
+  ; preferred : 'state -> 'env Dag.vertex
+        (** Returns a node's preferred tip of the chain. *)
+  }
+
+type ('env, 'dag_data, 'pow, 'state) node =
+  ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node'
+
+type ('env, 'dag_data, 'pow) opaque_node =
+  | Node : ('env, 'dag_data, 'pow, 'state) node -> ('env, 'dag_data, 'pow) opaque_node
+
 (** Calculate and assign rewards to a vertex and (potentially) its neighbours. Use this
     together with {!Dag.iterate_ancestors}. *)
 type ('env, 'dag_data) reward_function =
@@ -62,11 +68,15 @@ type ('env, 'dag_data) reward_function =
   -> unit
 
 type ('env, 'dag_data, 'pow, 'state) protocol =
-  { dag_roots : 'dag_data list (** Specify the roots of the global DAG. *)
+  { key : string
+  ; info : string
+  ; pow_per_block : int
+  ; dag_roots : 'dag_data list (** Specify the roots of the global DAG. *)
   ; dag_validity : ('env, 'dag_data) global_view -> 'env Dag.vertex -> bool
         (** Restrict DAG extensions. The simulator checks validity for each appended DAG
             vertex. Invalid extensions are not delivered to other nodes. *)
-  ; honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node
+  ; honest : ('env, 'dag_data, 'pow, 'state) node
   ; describe : 'dag_data -> string
   ; reward_functions : ('env, 'dag_data) reward_function Collection.t
+  ; attacks : ('env, 'dag_data, 'pow) opaque_node Collection.t
   }

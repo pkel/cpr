@@ -1,0 +1,4 @@
+[submodule "parany"]
+	path = ocaml/ext/parany
+	url = https://github.com/pkel/parany.git
+	branch = closures

@@ -144,61 +144,23 @@ let honest ~k v actions preferred =
     update_head v ~preferred ~consider
 ;;
 
+let honest ~k v =
+  let handler = honest ~k (extend_view v)
+  and preferred x = x in
+  { init; handler; preferred }
+;;
+
 let constant_pow c : ('env, dag_data) reward_function = fun ~view:_ ~assign -> assign c
 
 let constant_block c : ('env, dag_data) reward_function =
  fun ~view:v ~assign n -> if v.data n |> is_block then assign c n
 ;;
 
-let protocol ~k =
-  let honest v =
-    let handler = honest ~k (extend_view v)
-    and preferred x = x in
-    { init; handler; preferred }
-  in
-  { honest
-  ; dag_validity = dag_validity ~k
-  ; dag_roots
-  ; describe
-  ; reward_functions =
-      Collection.(
-        empty
-        |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
-        |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.))
-  }
-;;
-
-let%test "convergence" =
-  let open Simulator in
-  let test k params height =
-    let env = all_honest params (protocol ~k) |> init in
-    loop params env;
-    Array.to_seq env.nodes
-    |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor'
-         (Dag.filter (fun x -> is_block (Dag.data x).value) env.global.view)
-    |> function
-    | None -> false
-    | Some n ->
-      (match (Dag.data n).value with
-      | Block b ->
-        if b.height < height
-        then (
-          Printf.eprintf "k: %i\theight: %i\texpected: %i\n" k b.height height;
-          false)
-        else true (* more than 900 blocks in a sequence imply less than 10% orphans. *)
-      | _ -> failwith "invalid dag")
-  in
-  let delay = Distributions.exponential ~ev:1. in
-  List.for_all
-    (fun (k, activation_delay, height) ->
-      let network = Network.homogeneous ~delay 32 in
-      test k { network; activations = 1000 * k; activation_delay } height)
-    [ 08, 10., 900 (* good condition, 10% orphans *)
-    ; 08, 01., 700 (* bad conditions, 30% orphans *)
-    ; 32, 01., 900
-      (* bad conditions, 10% orphans, high k *)
-    ]
+let reward_functions =
+  let open Collection in
+  empty
+  |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
+  |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.)
 ;;
 
 module PrivateAttack = struct
@@ -445,6 +407,69 @@ module PrivateAttack = struct
     p v state |> apply_action ~k v ~release state
   ;;
 
-  let attack ~k p = attack (protocol ~k).honest (tactic_of_policy ~k p)
-  and attack' ~k p = attack (protocol ~k).honest (tactic_of_policy' ~k p)
+  let attack ~k p = Node (attack (honest ~k) (tactic_of_policy ~k p))
+  and attack' ~k p = Node (attack (honest ~k) (tactic_of_policy' ~k p))
 end
+
+let attacks ~k =
+  let open Collection in
+  empty
+  |> add
+       ~info:"Private attack with honest policy"
+       "private-honest"
+       PrivateAttack.(attack ~k honest_policy)
+  |> add
+       ~info:"Private attack with selfish policy"
+       "private-selfish"
+       PrivateAttack.(attack ~k selfish_policy)
+  |> add
+       ~info:"Private attack with selfish policy (alternative policy implementation)"
+       "private-selfish-alt"
+       PrivateAttack.(attack' ~k selfish_policy')
+;;
+
+let protocol ~k =
+  { key = "bk+ll"
+  ; info = "Bₖ with less leader modification with k=" ^ string_of_int k
+  ; pow_per_block = k
+  ; honest = honest ~k
+  ; dag_validity = dag_validity ~k
+  ; dag_roots
+  ; describe
+  ; reward_functions
+  ; attacks = attacks ~k
+  }
+;;
+
+let%test "convergence" =
+  let open Simulator in
+  let test k params height =
+    let env = all_honest params (protocol ~k) |> init in
+    loop params env;
+    Array.to_seq env.nodes
+    |> Seq.map (fun (Node x) -> x.preferred x.state)
+    |> Dag.common_ancestor'
+         (Dag.filter (fun x -> is_block (Dag.data x).value) env.global.view)
+    |> function
+    | None -> false
+    | Some n ->
+      (match (Dag.data n).value with
+      | Block b ->
+        if b.height < height
+        then (
+          Printf.eprintf "k: %i\theight: %i\texpected: %i\n" k b.height height;
+          false)
+        else true (* more than 900 blocks in a sequence imply less than 10% orphans. *)
+      | _ -> failwith "invalid dag")
+  in
+  let delay = Distributions.exponential ~ev:1. in
+  List.for_all
+    (fun (k, activation_delay, height) ->
+      let network = Network.homogeneous ~delay 32 in
+      test k { network; activations = 1000 * k; activation_delay } height)
+    [ 08, 10., 900 (* good condition, 10% orphans *)
+    ; 08, 01., 700 (* bad conditions, 30% orphans *)
+    ; 32, 01., 900
+      (* bad conditions, 10% orphans, high k *)
+    ]
+;;

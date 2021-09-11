@@ -1,130 +1,105 @@
 open Cpr_lib
 open Models
 
-let tasks0 =
-  let fpath ~alpha ~rewardfn task =
-    let open Fpath in
-    let a =
-      Printf.sprintf
-        "%s:%s:α=%.2f:%s:k=%d:%s:%s.dot"
-        (tag_network task.network)
-        (tag_scenario task.scenario)
-        alpha
-        (protocol_family task.protocol)
-        (pow_per_block task.protocol)
-        rewardfn
-        (tag_strategy task.strategy)
-    in
-    v a
-  and legend ~alpha ~rewardfn task =
-    [ "Network", describe_network task.network
-    ; "Scenario", describe_scenario task.scenario
-    ; "Attacker Compute (α)", string_of_float alpha
-    ; "Protocol", describe_protocol task.protocol
-    ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
-    ; "Incentive Scheme", rewardfn
-    ; "Attack Strategy", describe_strategy task.strategy
+let fpath (Csv_runner.Task t) ~rewardfn =
+  let l =
+    let open Collection in
+    [ tag_network t.model.network
+    ; Printf.sprintf "d=%g" t.model.activation_delay
+    ; (match t.model.network, t.model.scenario with
+      | TwoAgentsZero { alpha }, FirstSelfish -> Printf.sprintf "α=%.2f" alpha
+      | _ -> tag_scenario t.model.scenario)
+    ; t.protocol.key
+    ; Printf.sprintf "k=%i" t.protocol.pow_per_block
+    ; rewardfn.key
     ]
-  and label_node = function
-    | None -> "genesis"
-    | Some 0 -> "a"
-    | Some _ -> "d"
+    @
+    match t.attack with
+    | Some x -> [ x.key ]
+    | None -> []
   in
-  List.concat_map
-    (fun alpha ->
-      List.concat_map
-        (fun (protocol, strategies, activations) ->
-          List.map
-            (fun strategy ->
-              let t =
-                { network = TwoAgentsZero { alpha }
-                ; protocol
-                ; scenario = FirstSelfish
-                ; strategy
-                ; activations
-                ; activation_delay = 1.
-                }
-              in
-              t, fpath ~alpha t, legend ~alpha t, label_node)
-            strategies)
-        [ Nakamoto, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 30
-        ; B_k { k = 16 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 200
-        ; B_k { k = 8 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 100
-        ; B_k { k = 4 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 50
-        ; B_k { k = 1 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 20
-        ; ( B_k_lessleadership { k = 16 }
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 200 )
-        ; ( B_k_lessleadership { k = 8 }
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 100 )
-        ; ( B_k_lessleadership { k = 4 }
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 50 )
-        ; ( B_k_lessleadership { k = 1 }
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 20 )
-        ; ( George { k = 16 }
-          , [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ]
-          , 48 )
-        ; George { k = 8 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 24
-        ; George { k = 4 }, [ Honest; SelfishAdvanced; NumHonest; NumSelfishAdvanced ], 12
-        ])
-    [ 0.25; 0.33; 0.5 ]
+  Fpath.v (String.concat ":" l ^ ".dot")
 ;;
 
-let tasks1 =
-  let fpath ~activation_delay ~rewardfn task =
-    let open Fpath in
-    let a =
-      Printf.sprintf
-        "%s:%s:d=%.2g:%s:k=%d:%s.dot"
-        (tag_network task.network)
-        (tag_scenario task.scenario)
-        activation_delay
-        (protocol_family task.protocol)
-        (pow_per_block task.protocol)
-        rewardfn
-    in
-    v a
-  and legend ~activation_delay ~rewardfn task =
-    [ "Network", describe_network task.network
-    ; "Scenario", describe_scenario task.scenario
-    ; "Activation Delay", string_of_float activation_delay
-    ; "Protocol", describe_protocol task.protocol
-    ; "PoW per Block (k)", string_of_int (pow_per_block task.protocol)
-    ; "Incentive Scheme", rewardfn
-    ]
-  and label_node = function
-    | Some n -> "n:" ^ string_of_int n
+let legend (Csv_runner.Task t) ~rewardfn =
+  let open Collection in
+  [ "Network", describe_network t.model.network
+  ; "Activation Delay", string_of_float t.model.activation_delay
+  ; (match t.model.network, t.model.scenario with
+    | TwoAgentsZero { alpha }, FirstSelfish ->
+      "Attacker Compute (α)", string_of_float alpha
+    | _ -> "Scenario", describe_scenario t.model.scenario)
+  ; "Protocol", t.protocol.info
+  ; "PoW per Block (k)", string_of_int t.protocol.pow_per_block
+  ; "Incentive Scheme", rewardfn.info
+  ]
+  @
+  match t.attack with
+  | Some x -> [ "Attack Strategy", x.info ]
+  | None -> []
+;;
+
+let node_name (Csv_runner.Task t) =
+  match t.model.network with
+  | TwoAgentsZero _ ->
+    (function
     | None -> "genesis"
-  in
+    | Some 0 -> "a"
+    | Some _ -> "d")
+  | _ ->
+    (function
+    | None -> "genesis"
+    | Some i -> "n" ^ string_of_int i)
+;;
+
+let attack_model ~n_activations ~alpha =
+  { network = TwoAgentsZero { alpha }
+  ; scenario = FirstSelfish
+  ; activations = n_activations
+  ; activation_delay = 1.
+  }
+;;
+
+let honest_model ~n_activations ~activation_delay =
+  { network = CliqueUniform10
+  ; scenario = AllHonest
+  ; activations = n_activations
+  ; activation_delay
+  }
+;;
+
+let tasks =
   List.concat_map
-    (fun activation_delay ->
-      List.map
-        (fun (protocol, activations) ->
-          let t =
-            { network = CliqueUniform10
-            ; protocol
-            ; scenario = AllHonest
-            ; strategy = Honest
-            ; activations
-            ; activation_delay
-            }
-          in
-          t, fpath ~activation_delay t, legend ~activation_delay t, label_node)
-        [ Nakamoto, 10
-        ; B_k { k = 16 }, 200
-        ; B_k { k = 8 }, 100
-        ; B_k { k = 4 }, 50
-        ; B_k_lessleadership { k = 16 }, 200
-        ; B_k_lessleadership { k = 8 }, 100
-        ; B_k_lessleadership { k = 4 }, 50
-        ; George { k = 16 }, 100
-        ; George { k = 8 }, 50
-        ; George { k = 4 }, 30
-        ])
-    [ 1.; 2.; 4. ]
+    (fun (P protocol, n_activations) ->
+      List.concat_map
+        (fun activation_delay ->
+          let model = honest_model ~n_activations ~activation_delay in
+          let open Csv_runner in
+          [ Task { model; protocol; attack = None } ])
+        [ 1.; 2.; 4. ]
+      @ List.concat_map
+          (fun alpha ->
+            let model = attack_model ~n_activations ~alpha in
+            let open Csv_runner in
+            Task { model; protocol; attack = None }
+            :: Collection.map_to_list
+                 (fun attack -> Task { model; protocol; attack = Some attack })
+                 protocol.attacks)
+          [ 0.25; 0.33; 0.5 ])
+    [ nakamoto, 30
+    ; bk ~k:16, 200
+    ; bk ~k:8, 100
+    ; bk ~k:4, 50
+    ; bk ~k:1, 20
+    ; bk_lessleader ~k:16, 200
+    ; bk_lessleader ~k:8, 100
+    ; bk_lessleader ~k:4, 50
+    ; bk_lessleader ~k:1, 20
+    ; george ~k:16, 200
+    ; george ~k:8, 100
+    ; george ~k:4, 50
+    ; george ~k:1, 20
+    ]
 ;;
 
 let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
@@ -154,13 +129,18 @@ let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
   |> Result.ok
 ;;
 
-let run (task, fpath, legend, label_node) =
-  let (S s) = setup task in
+let run (Csv_runner.Task t) =
+  let s = setup t.model in
   (* simulate *)
   let open Simulator in
   let env =
-    let x = all_honest s.params s.protocol in
-    List.iter (fun (node, Deviation d) -> patch ~node d x |> ignore) s.deviations;
+    let x = all_honest s.params t.protocol in
+    let () =
+      match t.attack, s.attacker with
+      (* TODO argument to patch should be opaque_node *)
+      | Some { it = Node d; _ }, Some node -> patch ~node d x |> ignore
+      | _ -> ()
+    in
     init x
   in
   loop s.params env;
@@ -172,13 +152,13 @@ let run (task, fpath, legend, label_node) =
   in
   let confirmed = Array.make (Dag.size env.dag) false in
   Collection.iter
-    (fun ~info key rewardfn ->
+    (fun rewardfn ->
       let rewards = Array.make (Dag.size env.dag) 0. in
       let () =
         Seq.iter
           (fun n ->
             confirmed.(Dag.id n) <- true;
-            rewardfn
+            rewardfn.it
               ~view:env.global
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
@@ -186,7 +166,7 @@ let run (task, fpath, legend, label_node) =
       in
       let path =
         let open Fpath in
-        v "." / "fig" / "chains" // fpath ~rewardfn:key
+        v "." / "fig" / "chains" // fpath (Task t) ~rewardfn
       in
       let open Bos.OS in
       let d = Dir.create ~path:true (Fpath.parent path) in
@@ -197,15 +177,15 @@ let run (task, fpath, legend, label_node) =
             ( env
             , confirmed
             , rewards
-            , legend ~rewardfn:info
-            , s.protocol.describe
-            , label_node ))
+            , legend (Task t) ~rewardfn
+            , t.protocol.describe
+            , node_name (Task t) ))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
-    s.protocol.reward_functions
+    t.protocol.reward_functions
 ;;
 
 let () =
   Random.self_init ();
-  List.iter run (tasks0 @ tasks1)
+  List.iter run tasks
 ;;

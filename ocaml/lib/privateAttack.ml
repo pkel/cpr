@@ -25,10 +25,7 @@ type 'env state =
   ; private_ : 'env Dag.vertex (* public/defender tip of chain *)
   }
 
-let withhold
-    (honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node)
-    (v : _ local_view)
-  =
+let withhold (honest : ('env, 'dag_data, 'pow, 'state) node) (v : _ local_view) =
   let public = honest (public_view v)
   and private_ = honest v in
   let handler actions state event =
@@ -63,7 +60,7 @@ let apply_tactic (tactic : ('env, 'dag_data) tactic) (v : _ local_view) actions 
 ;;
 
 let attack
-    (honest : ('env, 'dag_data) local_view -> ('env, 'dag_data, 'pow, 'state) node)
+    (honest : ('env, 'dag_data, 'pow, 'state) node)
     (tactic : ('env, 'dag_data) tactic)
     (v : _ local_view)
   =
