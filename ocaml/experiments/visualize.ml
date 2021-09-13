@@ -4,11 +4,8 @@ open Models
 let fpath (Csv_runner.Task t) ~rewardfn =
   let l =
     let open Collection in
-    [ tag_network t.model.network
-    ; Printf.sprintf "d=%g" t.model.activation_delay
-    ; (match t.model.network, t.model.scenario with
-      | TwoAgentsZero { alpha }, FirstSelfish -> Printf.sprintf "α=%.2f" alpha
-      | _ -> tag_scenario t.model.scenario)
+    [ t.sim.key
+    ; Printf.sprintf "d=%g" t.params.activation_delay
     ; t.protocol.key
     ; Printf.sprintf "k=%i" t.protocol.pow_per_block
     ; rewardfn.key
@@ -23,12 +20,8 @@ let fpath (Csv_runner.Task t) ~rewardfn =
 
 let legend (Csv_runner.Task t) ~rewardfn =
   let open Collection in
-  [ "Network", describe_network t.model.network
-  ; "Activation Delay", string_of_float t.model.activation_delay
-  ; (match t.model.network, t.model.scenario with
-    | TwoAgentsZero { alpha }, FirstSelfish ->
-      "Attacker Compute (α)", string_of_float alpha
-    | _ -> "Scenario", describe_scenario t.model.scenario)
+  [ "Network", t.sim.info
+  ; "Activation Delay", string_of_float t.params.activation_delay
   ; "Protocol", t.protocol.info
   ; "PoW per Block (k)", string_of_int t.protocol.pow_per_block
   ; "Incentive Scheme", rewardfn.info
@@ -39,52 +32,43 @@ let legend (Csv_runner.Task t) ~rewardfn =
   | None -> []
 ;;
 
+(* TODO : this should be part of the scenario *)
 let node_name (Csv_runner.Task t) =
-  match t.model.network with
-  | TwoAgentsZero _ ->
-    (function
+  if Array.length (t.sim.it ()).nodes = 2
+  then
+    function
     | None -> "genesis"
     | Some 0 -> "a"
-    | Some _ -> "d")
-  | _ ->
-    (function
+    | Some _ -> "d"
+  else
+    function
     | None -> "genesis"
-    | Some i -> "n" ^ string_of_int i)
-;;
-
-let attack_model ~n_activations ~alpha =
-  { network = TwoAgentsZero { alpha }
-  ; scenario = FirstSelfish
-  ; activations = n_activations
-  ; activation_delay = 1.
-  }
-;;
-
-let honest_model ~n_activations ~activation_delay =
-  { network = CliqueUniform10
-  ; scenario = AllHonest
-  ; activations = n_activations
-  ; activation_delay
-  }
+    | Some i -> "n" ^ string_of_int i
 ;;
 
 let tasks =
   List.concat_map
     (fun (P protocol, n_activations) ->
-      List.concat_map
+      List.map
         (fun activation_delay ->
-          let model = honest_model ~n_activations ~activation_delay in
-          let open Csv_runner in
-          [ Task { model; protocol; attack = None } ])
+          let params = Simulator.{ activations = n_activations; activation_delay } in
+          Csv_runner.Task
+            { params; protocol; attack = None; sim = honest_clique ~n:7 protocol params })
         [ 2.; 4. ]
       @ List.concat_map
           (fun alpha ->
-            let model = attack_model ~n_activations ~alpha in
-            let open Csv_runner in
-            Task { model; protocol; attack = None }
-            :: Collection.map_to_list
-                 (fun attack -> Task { model; protocol; attack = Some attack })
-                 protocol.attacks)
+            let params =
+              Simulator.{ activations = n_activations; activation_delay = 1. }
+            in
+            Collection.map_to_list
+              (fun attack ->
+                Csv_runner.Task
+                  { params
+                  ; protocol
+                  ; attack = Some attack
+                  ; sim = two_agents ~alpha protocol attack params
+                  })
+              protocol.attacks)
           [ 0.25; 0.33; 0.5 ])
     [ nakamoto, 30
     ; bk ~k:8, 100
@@ -127,20 +111,10 @@ let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
 ;;
 
 let run (Csv_runner.Task t) =
-  let s = setup t.model in
   (* simulate *)
   let open Simulator in
-  let env =
-    let x = all_honest s.params t.protocol in
-    let () =
-      match t.attack, s.attacker with
-      (* TODO argument to patch should be opaque_node *)
-      | Some { it = Node d; _ }, Some node -> patch ~node d x |> ignore
-      | _ -> ()
-    in
-    init x
-  in
-  loop s.params env;
+  let env = t.sim.it () in
+  loop t.params env;
   let head =
     Array.to_seq env.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)

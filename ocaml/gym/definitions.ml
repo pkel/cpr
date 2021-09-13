@@ -61,23 +61,19 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
       ref
     env
   =
-  let params : Simulator.params =
+  let params : Simulator.params = { activations = -1; activation_delay = 1. }
+  and network : Network.t =
     let delay = Distributions.constant 0. in
-    { activations = -1
-    ; network =
-        Network.
-          { dissemination = Simple
-          ; nodes =
-              [| { compute = alpha; links = [ { dest = 1; delay } ] }
-               ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
-              |]
-          }
-    ; activation_delay = 1.
+    { dissemination = Simple
+    ; nodes =
+        [| { compute = alpha; links = [ { dest = 1; delay } ] }
+         ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
+        |]
     }
   in
   let init () =
     let open Simulator in
-    let setup = all_honest params M.protocol in
+    let setup = all_honest params network M.protocol in
     let v, a, n = patch ~node:0 M.node setup in
     { sim = Simulator.init setup
     ; attacker = v, a, n

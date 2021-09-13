@@ -17,77 +17,55 @@ end
 
 (** {1} simulated environments *)
 
-type network =
-  | CliqueUniform10
-  | TwoAgentsZero of { alpha : float }
-
-let tag_network = function
-  | CliqueUniform10 -> "clique-uniform-10"
-  | TwoAgentsZero _ -> "two-agents-zero"
-;;
-
-let describe_network = function
-  | CliqueUniform10 ->
-    "10 nodes, compute 1..10, simple dissemination, uniform delay 0.6..1.4"
-  | TwoAgentsZero { alpha } -> Printf.sprintf "2 nodes, alpha=%g, zero delay" alpha
-;;
-
-type scenario =
-  | AllHonest
-  | FirstSelfish
-
-let tag_scenario = function
-  | AllHonest -> "all-honest"
-  | FirstSelfish -> "first-selfish"
-;;
-
-let describe_scenario = function
-  | AllHonest -> "all nodes follow the protocol"
-  | FirstSelfish -> "first node acts selfishly, other nodes follow the protocol"
-;;
-
-type model =
-  { network : network
-  ; scenario : scenario
-  ; activations : int
-  ; activation_delay : float
-  }
-
-type setup =
-  { model : model
-  ; params : Simulator.params
-  ; network : Network.t
-  ; attacker : int option
-  }
-
-let setup (m : model) =
-  let network, attacker =
-    match m.network with
-    | CliqueUniform10 ->
-      let delay = Distributions.uniform ~lower:0.6 ~upper:1.4 in
-      Network.homogeneous ~delay 10
-      |> fun n ->
-      ( { n with
-          nodes =
-            Array.mapi
-              Network.(fun i x -> { x with compute = float_of_int (i + 1) })
-              n.nodes
-        }
-      , None )
-    | TwoAgentsZero { alpha } ->
-      let delay = Distributions.constant 0. in
-      ( Network.
-          { dissemination = Simple
-          ; nodes =
-              [| { compute = alpha; links = [ { dest = 1; delay } ] }
-               ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
-              |]
-          }
-      , Some 0 )
+let honest_clique ~n protocol params =
+  let delay = Distributions.uniform ~lower:0.5 ~upper:1.5 in
+  let net = Network.homogeneous ~delay n in
+  let net =
+    { net with
+      nodes =
+        Array.mapi
+          Network.(fun i x -> { x with compute = float_of_int (i + 1) })
+          net.nodes
+    }
   in
-  let params =
-    Simulator.
-      { network; activations = m.activations; activation_delay = m.activation_delay }
+  let it () = Simulator.all_honest params net protocol |> Simulator.init in
+  Collection.
+    { it
+    ; key = Printf.sprintf "honest-clique-%i" n
+    ; info =
+        (* TODO: describe delay distribution *)
+        Printf.sprintf
+          "%i nodes, compute 1..%i, simple dissemination, uniform propagation delay 0.5 \
+           .. 1.5"
+          n
+          n
+    }
+;;
+
+let two_agents ~alpha protocol attack params =
+  let delay = Distributions.constant 0. in
+  let net =
+    Network.
+      { dissemination = Simple
+      ; nodes =
+          [| { compute = alpha; links = [ { dest = 1; delay } ] }
+           ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
+          |]
+      }
   in
-  { model = m; params; network; attacker }
+  let it () =
+    let sim = Simulator.all_honest params net protocol in
+    let () =
+      let (Node n) = attack.Collection.it in
+      Simulator.patch ~node:0 n sim |> ignore
+    in
+    Simulator.init sim
+  in
+  Collection.
+    { it
+    ; key = Printf.sprintf "two-agents-%g" alpha
+    ; info =
+        Printf.sprintf "2 nodes, alpha=%g, no propagation delays" alpha
+        (* TODO: describe delay distribution *)
+    }
 ;;

@@ -258,8 +258,11 @@ let protocol : _ protocol =
 
 let%test "convergence" =
   let open Simulator in
-  let test params height =
-    let env = all_honest params protocol |> init in
+  let delay = Distributions.exponential ~ev:1. in
+  let network = Network.homogeneous ~delay 32 in
+  let test (activation_delay, height) =
+    let params = { activations = 1000; activation_delay } in
+    let env = all_honest params network protocol |> init in
     loop params env;
     Array.to_seq env.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)
@@ -268,13 +271,10 @@ let%test "convergence" =
     | None -> false
     | Some n -> (Dag.data n).value.height > height
   in
-  let delay = Distributions.exponential ~ev:1. in
   List.for_all
-    (fun (activation_delay, height) ->
-      let network = Network.homogeneous ~delay 32 in
-      test { network; activations = 10000; activation_delay } height)
-    [ 10., 9000 (* good condition, 10% orphans *)
-    ; 01., 5000
+    test
+    [ 10., 900 (* good condition, 10% orphans *)
+    ; 01., 500
       (* bad conditions, 50% orphans *)
     ]
 ;;

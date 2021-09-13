@@ -1,14 +1,14 @@
 open Cpr_lib
-open Models
 
 type task =
   | Task :
-      { model : model
+      { params : Simulator.params
       ; protocol : ('dag_data Simulator.data, 'dag_data, Simulator.pow, 'state) protocol
       ; attack :
           ('dag_data Simulator.data, 'dag_data, Simulator.pow) opaque_node
           Collection.entry
           option
+      ; sim : (unit -> 'dag_data Simulator.state) Collection.entry
       }
       -> task
 
@@ -25,8 +25,6 @@ type row =
   ; activations : int array
   ; incentive_scheme : string
   ; incentive_scheme_description : string
-  ; scenario : string
-  ; scenario_description : string
   ; strategy : string
   ; strategy_description : string
   ; reward : float array
@@ -51,8 +49,6 @@ let df_spec =
    ; ("activations", fun row -> array string_of_int row.activations)
    ; ("incentive_scheme", fun row -> String row.incentive_scheme)
    ; ("incentive_scheme_description", fun row -> String row.incentive_scheme_description)
-   ; ("scenario", fun row -> String row.scenario)
-   ; ("scenario_description", fun row -> String row.scenario_description)
    ; ("strategy", fun row -> String row.strategy)
    ; ("strategy_description", fun row -> String row.strategy_description)
    ; ("reward", fun row -> array string_of_float row.reward)
@@ -70,29 +66,26 @@ let save_rows_as_tsv filename l =
   Owl_dataframe.to_csv ~sep:'\t' df filename
 ;;
 
-let prepare_row (Task { model; protocol; attack }) =
+let prepare_row (Task { params; protocol; attack; sim }) =
   let strategy, strategy_description =
     match attack with
     | Some x -> x.Collection.key, x.info
     | None -> "n/a", ""
   in
-  let open Models in
-  { network = tag_network model.network
-  ; network_description = describe_network model.network
+  { network = sim.key
+  ; network_description = sim.info
   ; protocol = protocol.key
   ; protocol_description = protocol.info
   ; k = protocol.pow_per_block
-  ; activation_delay = model.activation_delay
-  ; number_activations = model.activations
+  ; activation_delay = params.activation_delay
+  ; number_activations = params.activations
   ; activations = [||]
   ; compute = [||]
-  ; block_interval = model.activation_delay *. (protocol.pow_per_block |> float_of_int)
+  ; block_interval = params.activation_delay *. (protocol.pow_per_block |> float_of_int)
   ; incentive_scheme = "na"
   ; incentive_scheme_description = ""
   ; strategy
   ; strategy_description
-  ; scenario = tag_scenario model.scenario
-  ; scenario_description = describe_scenario model.scenario
   ; reward = [||]
   ; machine_duration_s = Float.nan
   ; error = ""
@@ -104,35 +97,22 @@ let run task =
   let (Task t) = task in
   let clock = Mtime_clock.counter () in
   try
-    let s = setup t.model in
-    let compute =
-      let open Network in
-      Array.map (fun x -> x.compute) s.network.nodes
-    in
-    (* simulate *)
     let open Simulator in
-    let env =
-      let x = all_honest s.params t.protocol in
-      let () =
-        match t.attack, s.attacker with
-        (* TODO argument to patch should be opaque_node *)
-        | Some { it = Node d; _ }, Some node -> patch ~node d x |> ignore
-        | _ -> ()
-      in
-      init x
-    in
-    loop s.params env;
-    let activations = Array.map (fun (Node x) -> x.n_activations) env.nodes in
-    Array.to_seq env.nodes
+    let sim = t.sim.it () in
+    let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
+    (* simulate *)
+    loop t.params sim;
+    let activations = Array.map (fun (Node x) -> x.n_activations) sim.nodes in
+    Array.to_seq sim.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor' env.global.view
+    |> Dag.common_ancestor' sim.global.view
     |> function
     | None -> failwith "no common ancestor found"
     | Some common_chain ->
       (* incentive stats *)
       Collection.map_to_list
         (fun rewardfn ->
-          let reward = apply_reward_function rewardfn.it common_chain env in
+          let reward = apply_reward_function rewardfn.it common_chain sim in
           { row with
             activations
           ; compute
@@ -148,9 +128,8 @@ let run task =
     let bt = Printexc.get_backtrace () in
     let () =
       Printf.eprintf
-        "\nRUN:\tnet:%s\tscenario:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
-        (tag_network t.model.network)
-        (tag_scenario t.model.scenario)
+        "\nRUN:\tnetwork:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
+        t.sim.key
         t.protocol.key
         t.protocol.pow_per_block
         (match t.attack with

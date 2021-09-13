@@ -42,11 +42,11 @@ type 'prot_data state =
   ; global : ('prot_data data, 'prot_data) Intf.global_view
   ; nodes : 'prot_data node array
   ; assign_pow : int Distributions.iid
+  ; network : Network.t
   }
 
 type params =
-  { network : Network.t
-  ; activations : int
+  { activations : int
   ; activation_delay : float
   }
 
@@ -60,10 +60,10 @@ let schedule_activation params state =
   schedule state.clock delay { node; event = Activate (pow ()) }
 ;;
 
-let disseminate params clock source x =
+let disseminate network clock source x =
+  let open Network in
   List.iter
     (fun link ->
-      let open Network in
       let received_at = (Dag.data x).received_at in
       let t = Float.Array.get received_at link.dest
       and delay = link.delay () in
@@ -73,7 +73,7 @@ let disseminate params clock source x =
         (* only schedule event if it enables faster delivery *)
         Float.Array.set received_at link.dest t';
         schedule clock delay { node = link.dest; event = Deliver x }))
-    params.network.nodes.(source).links
+    network.nodes.(source).links
 ;;
 
 let spawn (n : _ Intf.node') ~roots actions =
@@ -88,10 +88,10 @@ let string_of_pow_hash (nonce, _serial) =
   Printf.sprintf "%.3f" (float_of_int nonce /. (2. ** 29.))
 ;;
 
-let all_honest params (protocol : _ Intf.protocol)
+let all_honest params (network : Network.t) (protocol : _ Intf.protocol)
     : _ state * _ Dag.vertex list * (_ Intf.local_view * _ Intf.actions) array
   =
-  let n_nodes = Array.length params.network.nodes in
+  let n_nodes = Array.length network.nodes in
   let dag = Dag.create () in
   let roots =
     let delivered_at = Float.Array.make n_nodes 0.
@@ -130,7 +130,7 @@ let all_honest params (protocol : _ Intf.protocol)
         and share n =
           let d = Dag.data n in
           d.released_at <- min d.released_at clock.now;
-          disseminate params clock node n
+          disseminate network clock node n
         and released n = (Dag.data n).released_at <= clock.now
         and extend_dag ?pow ?(sign = false) parents child =
           let pow_hash =
@@ -192,7 +192,7 @@ let all_honest params (protocol : _ Intf.protocol)
         view, actions)
   and assign_pow =
     let weights =
-      Array.map (fun x -> Network.(x.compute)) params.network.nodes |> Array.to_list
+      Array.map (fun x -> Network.(x.compute)) network.nodes |> Array.to_list
     in
     Distributions.discrete ~weights
   in
@@ -201,7 +201,7 @@ let all_honest params (protocol : _ Intf.protocol)
       (fun (view, actions) -> Node (spawn (protocol.honest view) ~roots actions))
       views_actions
   in
-  let state = { clock; dag; global; nodes; assign_pow } in
+  let state = { clock; dag; global; nodes; assign_pow; network } in
   schedule_activation params state;
   state, roots, views_actions
 ;;
@@ -222,8 +222,8 @@ let handle_event params state ev =
     Float.Array.get (Dag.data n).delivered_at ev.node <= state.clock.now
   and was_received n = Float.Array.get (Dag.data n).received_at ev.node <= state.clock.now
   and disseminate =
-    match params.network.dissemination with
-    | Flooding -> disseminate params state.clock ev.node
+    match state.network.dissemination with
+    | Flooding -> disseminate state.network state.clock ev.node
     | Simple -> fun _n -> ()
   in
   match ev.event with

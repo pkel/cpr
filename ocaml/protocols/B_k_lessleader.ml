@@ -443,13 +443,15 @@ let protocol ~k =
 
 let%test "convergence" =
   let open Simulator in
-  let test k params height =
-    let env = all_honest params (protocol ~k) |> init in
+  let delay = Distributions.exponential ~ev:1. in
+  let network = Network.homogeneous ~delay 32 in
+  let test (k, activation_delay, height) =
+    let params = { activations = 1000 * k; activation_delay } in
+    let env = all_honest params network (protocol ~k) |> init in
     loop params env;
     Array.to_seq env.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor'
-         (Dag.filter (fun x -> is_block (Dag.data x).value) env.global.view)
+    |> Dag.common_ancestor' env.global.view
     |> function
     | None -> false
     | Some n ->
@@ -462,11 +464,8 @@ let%test "convergence" =
         else true (* more than 900 blocks in a sequence imply less than 10% orphans. *)
       | _ -> failwith "invalid dag")
   in
-  let delay = Distributions.exponential ~ev:1. in
   List.for_all
-    (fun (k, activation_delay, height) ->
-      let network = Network.homogeneous ~delay 32 in
-      test k { network; activations = 1000 * k; activation_delay } height)
+    test
     [ 08, 10., 900 (* good condition, 10% orphans *)
     ; 08, 01., 700 (* bad conditions, 30% orphans *)
     ; 32, 01., 900
