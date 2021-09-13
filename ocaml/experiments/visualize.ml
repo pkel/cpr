@@ -76,7 +76,7 @@ let tasks =
           let model = honest_model ~n_activations ~activation_delay in
           let open Csv_runner in
           [ Task { model; protocol; attack = None } ])
-        [ 1.; 2.; 4. ]
+        [ 2.; 4. ]
       @ List.concat_map
           (fun alpha ->
             let model = attack_model ~n_activations ~alpha in
@@ -87,15 +87,12 @@ let tasks =
                  protocol.attacks)
           [ 0.25; 0.33; 0.5 ])
     [ nakamoto, 30
-    ; bk ~k:16, 200
     ; bk ~k:8, 100
     ; bk ~k:4, 50
     ; bk ~k:1, 20
-    ; bk_lessleader ~k:16, 200
     ; bk_lessleader ~k:8, 100
     ; bk_lessleader ~k:4, 50
     ; bk_lessleader ~k:1, 20
-    ; george ~k:16, 200
     ; george ~k:8, 100
     ; george ~k:4, 50
     ; george ~k:1, 20
