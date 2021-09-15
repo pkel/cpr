@@ -167,6 +167,9 @@ is selfish-advanced here.
 **To do:** Rename selfish-simple and selfish-advanced to selfish-0 and
 selfish-1.
 
+**To do:** Report attack results. Compare alpha thresholds for attack
+being better than honest mining.
+
 ## Reinforcement Learning
 
 The private attack policies described above might be sub-optimal. We
