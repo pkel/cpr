@@ -1,0 +1,108 @@
+\documentclass{article}
+
+\usepackage[a4paper]{geometry}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{mathtools}
+\usepackage{tabularx}
+
+\title{Reward Inequality for Different Tailstorm Incentive Schemes}
+\author{Patrik Keller}
+
+\begin{document}
+
+\maketitle
+
+\section{Tailstorm}
+
+\paragraph{Global data structure}
+
+Each block requires a proof-of-work. Each block $b$ has two integer properties 
+\begin{enumerate}
+\item integer $\operatorname{depth}(b)$
+\item integer $\operatorname{epoch}(b)$
+\end{enumerate}
+
+There are two kind of blocks. Each sub block $b'$ references exactly one block $b$. For sub blocks it holds that
+$\operatorname{depth}(b') = \operatorname{depth}(b) + 1$ and $\operatorname{epoch}(b') = \operatorname{epoch}(b)$.
+
+A strong block $b$ references a list $l$ of blocks all having the same epoch $e$. Let $Q$ denote the set of sub blocks with epoch $e$ that are member of $l$ or in the history of a member of $l$. If $b$ is valid it holds that
+\begin{enumerate}
+  \item $|Q| = k - 1$
+  \item $\operatorname{epoch}(b) = e + 1$
+  \item $\operatorname{depth}(b) = 0$
+\end{enumerate}
+
+\paragraph{Protocol}
+
+Nodes maintain a preferred block $b$. Whenever a node is activated, it attaches a new valid block to the global data structure. It first tries to attach a strong block that references $b$. If this is not possible, it attaches a sub block instead.
+
+Whenever a node becomes aware of a new block $b'$ it updates it preference. A node prefers $b'$ over $b$ if $\operatorname{epoch}(b') > \operatorname{epoch}(b)$ or $\operatorname{epoch}(b') = \operatorname{epoch}(b) \wedge \operatorname{depth}(b') > \operatorname{depth}(b)$. In case of a tie, nodes prefer the block first received.
+
+\section{Incentive Schemes}
+
+All reward schemes have in common that rewards are only assigned to (sub-)blocks that end up in the common chain of all participating nodes.
+
+\paragraph{block}
+Constant reward per strong block.
+
+\paragraph{constant}
+Constant reward per sub and strong block.
+
+\paragraph{discount}
+The rewards for an epoch are discounted for the depth of the resulting epoch tree.
+
+\paragraph{punish}
+For any epoch tree, only the sub blocks on the longest path get a reward. The assigned rewards are constant.
+
+\paragraph{hybrid}
+A combination of discount and punish.
+
+\section{Measurements}
+
+We simulate 10 honest nodes executing the protocol in a fully connected network with uniformly distributed propagation delays.
+We label the nodes $1, 2, \dots, 10$. The nodes have compute powers $1, 2, \dots, 10$.
+We simulate $1 000 000$ activations per combination of input parameters.
+After protocol simulation we search for the longest common chain, i.\,e., the block with the biggest epoch number that is also in the history of all nodes.
+We apply the incentive scheme to this longest common chain.
+
+\paragraph{Efficiency of weakest miner}
+
+Let $\operatorname{reward}(i)$ denote the rewards assigned to node $i$ and $\operatorname{activations}(i)$ the amount of activations it received during the simulation.
+We define a node's efficiency as follows.
+\[
+  \operatorname{efficiency}(i) =
+  \frac{
+    \frac{\operatorname{reward}(i)}{\sum_{j=1}^{10}{\operatorname{reward}(j)}}
+    }{
+    \frac{\operatorname{activations}(i)}{\sum_{j=1}^{10}{\operatorname{activations}(j)}}
+  }
+\]
+
+We call node $1$ the weakest miner.
+Table~\ref{tab:efficiency_weakest} lists the efficiency of the weakest miner for different combinations of block interval and protocol parameter $k$ (rows) and incentive schemes (columns). We observe that efficiency of the weakest miner is consistently below 1. The incentive schemes \textbf{constant} and \textbf{discount} yield the more rewards for the weakest miner. Depending on $k$, the might be better of with the \textbf{block} incentive scheme or the \textbf{punish} and \textbf{hybrid} incentive schemes. The latter two yield comparable results for all combinations of block interval and $k$.
+
+\begin{table}
+  \caption{Efficiency of the weakest miner for different block intervals (row), k (row), and incentive schemes (column). An efficiency of one implies that the weakest miner's relative rewards equal its relative compute power.}
+  \label{tab:efficiency_weakest}
+  \input{tab/efficiency-weakest}
+\end{table}
+
+\paragraph{Gini Inequality}
+
+Similar to above.
+Instead of looking at the efficiency of a single miner, we now look at the inequality of rewards between all nodes.
+We use the Gini coefficient as a measure for inequality.
+The inequality between the compute powers is 0.3.
+Values lower than 0.3 would speak for reduced inequality.
+However, as we observe in Table~\ref{tab:reward_gini}, rewards inhibit higher inequality for all combinations of $k$, block interval, and incentive scheme.
+
+\begin{table}
+  \caption{Gini coefficient of rewards for different block intervals (row), $k$ (row), and incentive schemes (column).
+  Lower values stand for less inequality. The Gini coefficient of compute power is $0.3$.}
+  \label{tab:reward_gini}
+  \input{tab/reward-gini}
+\end{table}
+
+\end{document}

@@ -70,7 +70,7 @@ let prepare_row (Task { params; protocol; attack; sim }) =
   let strategy, strategy_description =
     match attack with
     | Some x -> x.Collection.key, x.info
-    | None -> "n/a", ""
+    | None -> "none", ""
   in
   { network = sim.key
   ; network_description = sim.info
@@ -82,7 +82,7 @@ let prepare_row (Task { params; protocol; attack; sim }) =
   ; activations = [||]
   ; compute = [||]
   ; block_interval = params.activation_delay *. (protocol.pow_per_block |> float_of_int)
-  ; incentive_scheme = "na"
+  ; incentive_scheme = "none"
   ; incentive_scheme_description = ""
   ; strategy
   ; strategy_description
