@@ -417,6 +417,10 @@ module PrivateAttack = struct
     then Override
     else if o.public_blocks = o.private_blocks && o.private_depth = o.private_depth + 1
     then Override
+    else if o.private_blocks - o.public_blocks > 10
+            (* fork can become really deep for strong attackers. Cut-off shortens time
+               spent in common ancestor computation. *)
+    then Override
     else Wait
   ;;
 
