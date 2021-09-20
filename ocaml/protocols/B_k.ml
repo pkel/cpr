@@ -262,7 +262,9 @@ module PrivateAttack = struct
             |> List.hd
           in
           v.appended_by_me leader
-      and ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
+      and ca =
+        Dag.common_ancestor v.view s.private_ s.public |> Option.get |> last_block v
+      in
       let ca_height = block_height_exn v ca
       and private_height = block_height_exn v s.private_
       and public_height = block_height_exn v s.public in

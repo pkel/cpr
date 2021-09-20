@@ -59,6 +59,15 @@ let print ?(indent = "") v data_to_string b =
   h indent (children v b)
 ;;
 
+let leaves view =
+  let rec h acc n =
+    match children view n with
+    | [] -> n :: acc
+    | l -> List.fold_left h acc l
+  in
+  h []
+;;
+
 let%expect_test _ =
   let t = create () in
   let r = append t [] 0 in
@@ -77,6 +86,7 @@ let%expect_test _ =
   print ~indent:"subtree:  " global string_of_int rb;
   print ~indent:"local:    " local string_of_int r;
   print ~indent:"local2:   " local2 string_of_int r;
+  leaves global r |> List.iter (fun v -> print_int v.serial);
   [%expect
     {|
     global:   0
@@ -98,53 +108,8 @@ let%expect_test _ =
     local:            |-- 6
     local2:   0
     local2:   |-- 2
-    local2:       |-- 4 |}]
-;;
-
-(* TODO test [leaves] *)
-let leaves view =
-  let rec h acc n =
-    match children view n with
-    | [] -> n :: acc
-    | l -> List.fold_left h acc l
-  in
-  h []
-;;
-
-let common_ancestor view =
-  let rec h a b =
-    if a == b
-    then Some a
-    else if a.depth = b.depth
-    then (
-      match parents view a, parents view b with
-      | a :: _, b :: _ -> h a b
-      | [], _ | _, [] -> None)
-    else if a.depth > b.depth
-    then (
-      match parents view a with
-      | a :: _ -> h a b
-      | [] -> None)
-    else (
-      match parents view b with
-      | b :: _ -> h a b
-      | [] -> None)
-  in
-  h
-;;
-
-let have_common_ancestor view a b = common_ancestor view a b |> Option.is_some
-
-let common_ancestor' view seq =
-  let open Seq in
-  match seq () with
-  | Nil -> None
-  | Cons (hd, tl) ->
-    let f = function
-      | Some a -> common_ancestor view a
-      | None -> fun _ -> None
-    in
-    Seq.fold_left f (Some hd) tl
+    local2:       |-- 4
+    375 |}]
 ;;
 
 let iterate order view entry_vertices =
@@ -228,6 +193,69 @@ let%expect_test "iterate" =
 
 let iterate_descendants view = iterate `Downward view
 let iterate_ancestors view = iterate `Upward view
+
+let common_ancestor view a b =
+  let rec h a b =
+    match a, b with
+    | Seq.Cons (ah, aseq), Seq.Cons (bh, bseq) ->
+      if ah.serial = bh.serial
+      then Some ah
+      else if ah.depth > bh.depth
+      then h (aseq ()) b
+      else if ah.depth < bh.depth
+      then h a (bseq ())
+      else (
+        let () = assert (ah.depth = bh.depth) in
+        if ah.serial > bh.serial
+        then h (aseq ()) b
+        else (
+          let () = assert (ah.serial < bh.serial) in
+          h a (bseq ())))
+    | _ -> None
+  in
+  h (iterate_ancestors view [ a ] ()) (iterate_ancestors view [ b ] ())
+;;
+
+let have_common_ancestor view a b = common_ancestor view a b |> Option.is_some
+
+let common_ancestor' view seq =
+  let open Seq in
+  match seq () with
+  | Nil -> None
+  | Cons (hd, tl) ->
+    let f = function
+      | Some a -> common_ancestor view a
+      | None -> fun _ -> None
+    in
+    Seq.fold_left f (Some hd) tl
+;;
+
+let%test "common_ancestor" =
+  let t = create () in
+  let r = append t [] 0 in
+  let append r = append t [ r ] in
+  let ra = append r 1
+  and rb = append r 2 in
+  let raa = append ra 3
+  and rba = append rb 4
+  and rbb = append rb 5 in
+  let rbaa = append rba 6 in
+  let rbaaa = append rbaa 7 in
+  let global = view t in
+  let check a b ca =
+    match common_ancestor global a b with
+    | Some c -> c.serial = ca.serial
+    | None -> false
+  in
+  List.for_all
+    (fun x -> x)
+    [ check ra ra ra
+    ; check ra rb r
+    ; check rbb rba rb
+    ; check raa rba r
+    ; check rbaaa rbaa rbaa
+    ]
+;;
 
 let dot fmt ?(legend = []) v ~node_attr bl =
   let attr l =

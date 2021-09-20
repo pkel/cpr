@@ -39,16 +39,8 @@ val children : 'a view -> 'a vertex -> 'a vertex list
 (* advanced access *)
 
 val leaves : 'a view -> 'a vertex -> 'a vertex list
-
-(* TODO common_ancestor should support any DAG not only trees *)
-
-(* Assumes that DAG is a tree and uses only the first parent *)
 val common_ancestor : 'a view -> 'a vertex -> 'a vertex -> 'a vertex option
-
-(* Assumes that DAG is a tree and uses only the first parent *)
 val have_common_ancestor : 'a view -> 'a vertex -> 'a vertex -> bool
-
-(* Assumes that DAG is a tree and uses only the first parent *)
 val common_ancestor' : 'a view -> 'a vertex Seq.t -> 'a vertex option
 
 (** [iterate_descendants v vertices] recursively expands the DAG in direction of
