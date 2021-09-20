@@ -235,52 +235,53 @@ module PrivateAttack = struct
   module Observation = struct
     type t =
       { public_blocks : int (** number of blocks after common ancestor *)
-      ; public_votes : int (** number of votes confirming the leading block *)
+      ; public_depth : int (** number of votes confirming the leading block *)
       ; private_blocks : int (** number of blocks after common ancestor *)
-      ; private_votes : int (** number of votes confirming the leading block *)
+      ; private_depth : int (** number of votes confirming the leading block *)
       ; diff_blocks : int (** private_blocks - public_blocks *)
-      ; diff_votes : int (** private_votes - public_votes *)
+      ; diff_depth : int (** private_votes - public_votes *)
       }
     [@@deriving fields]
 
     let length = List.length Fields.names
 
     let observe v s =
-      let private_view = extend_view v
-      and public_view = extend_view (public_view v) in
-      let private_votes = Dag.children private_view.votes_only s.private_ |> List.length
-      and public_votes = Dag.children public_view.votes_only s.public |> List.length in
+      let private_view = extend_view v in
+      let private_depth = (private_view.data s.private_).vote
+      and public_depth = (private_view.data s.public).vote in
       let v = private_view in
-      let ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
+      let ca =
+        Dag.common_ancestor v.view s.private_ s.public |> Option.get |> last_block v
+      in
       let ca_height = block_height v ca
       and private_height = block_height v s.private_
       and public_height = block_height v s.public in
       { private_blocks = private_height - ca_height
       ; public_blocks = public_height - ca_height
       ; diff_blocks = private_height - public_height
-      ; private_votes
-      ; public_votes
-      ; diff_votes = private_votes - public_votes
+      ; private_depth
+      ; public_depth
+      ; diff_depth = private_depth - public_depth
       }
     ;;
 
     let low =
       { public_blocks = 0
-      ; public_votes = 0
+      ; public_depth = 0
       ; private_blocks = 0
-      ; private_votes = 0
+      ; private_depth = 0
       ; diff_blocks = min_int
-      ; diff_votes = min_int
+      ; diff_depth = min_int
       }
     ;;
 
     let high =
       { public_blocks = max_int
-      ; public_votes = max_int
+      ; public_depth = max_int
       ; private_blocks = max_int
-      ; private_votes = max_int
+      ; private_depth = max_int
       ; diff_blocks = max_int
-      ; diff_votes = max_int
+      ; diff_depth = max_int
       }
     ;;
 
@@ -295,11 +296,11 @@ module PrivateAttack = struct
         Fields.fold
           ~init:0
           ~public_blocks:int
-          ~public_votes:int
+          ~public_depth:int
           ~private_blocks:int
-          ~private_votes:int
+          ~private_depth:int
           ~diff_blocks:int
-          ~diff_votes:int
+          ~diff_depth:int
       in
       a
     ;;
@@ -311,11 +312,11 @@ module PrivateAttack = struct
         (Fields.make_creator
            0
            ~public_blocks:int
-           ~public_votes:int
+           ~public_depth:int
            ~private_blocks:int
-           ~private_votes:int
+           ~private_depth:int
            ~diff_blocks:int
-           ~diff_votes:int)
+           ~diff_depth:int)
     ;;
 
     let to_string t =
@@ -328,11 +329,11 @@ module PrivateAttack = struct
       let int = conv string_of_int in
       Fields.to_list
         ~public_blocks:int
-        ~public_votes:int
+        ~public_depth:int
         ~private_blocks:int
-        ~private_votes:int
+        ~private_depth:int
         ~diff_blocks:int
-        ~diff_votes:int
+        ~diff_depth:int
       |> String.concat "\n"
     ;;
 
@@ -340,11 +341,11 @@ module PrivateAttack = struct
       let run _i =
         let t =
           { public_blocks = Random.bits ()
-          ; public_votes = Random.bits ()
+          ; public_depth = Random.bits ()
           ; private_blocks = Random.bits ()
-          ; private_votes = Random.bits ()
+          ; private_depth = Random.bits ()
           ; diff_blocks = Random.bits ()
-          ; diff_votes = Random.bits ()
+          ; diff_depth = Random.bits ()
           }
         in
         t = (to_floatarray t |> of_floatarray)
@@ -402,12 +403,19 @@ module PrivateAttack = struct
   let policies = [ "honest", honest_policy; "selfish", selfish_policy ]
 
   let selfish_policy' (v : _ local_view) state =
+    let v = extend_view v in
+    let priv = last_block v state.private_
+    and publ = last_block v state.public in
     let open Action in
-    if state.private_ $== state.public
+    if priv $== publ
     then Wait
     else (
-      let ca = Dag.common_ancestor v.view state.private_ state.public |> Option.get in
-      if ca $== state.public then Wait else Override)
+      let ca =
+        Dag.common_ancestor v.view state.private_ state.public
+        |> Option.get
+        |> last_block v
+      in
+      if ca $== publ then Wait else Override)
   ;;
 
   let apply_action ~k:_ (v : _ local_view) ~release state =

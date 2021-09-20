@@ -158,7 +158,7 @@ selfish-simple here.
 
 2. Withhold until defender can form the next (strong) block, then
 overwrite if possible, else adopt. George calls this long-range. We call
-is selfish-advanced here.
+it selfish-advanced here.
 
 3. Withhold until defender is about to catch up, then overwrite.
 
