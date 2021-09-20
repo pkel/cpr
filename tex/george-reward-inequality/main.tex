@@ -61,6 +61,8 @@ A combination of discount and punish.
 
 \section{Measurements}
 
+\subsection{Honest Network}
+
 We simulate 10 honest nodes executing the protocol in a fully connected network with uniformly distributed propagation delays.
 We label the nodes $1, 2, \dots, 10$. The nodes have compute powers $1, 2, \dots, 10$.
 We simulate $1 000 000$ activations per combination of input parameters.
@@ -83,7 +85,7 @@ We define a node's efficiency as follows.
 We call node $1$ the weakest miner.
 Table~\ref{tab:efficiency_weakest} lists the efficiency of the weakest miner for different combinations of block interval and protocol parameter $k$ (rows) and incentive schemes (columns). We observe that efficiency of the weakest miner is consistently below 1. The incentive schemes \textbf{constant} and \textbf{discount} yield the more rewards for the weakest miner. Depending on $k$, the might be better of with the \textbf{block} incentive scheme or the \textbf{punish} and \textbf{hybrid} incentive schemes. The latter two yield comparable results for all combinations of block interval and $k$.
 
-TODO: Add orphan rate columns.
+% TODO: Add orphan rate columns.
 
 \begin{table}
   \caption{Efficiency of the weakest miner for different block intervals (row), k (row), and incentive schemes (column). An efficiency of one implies that the weakest miner's relative rewards equal its relative compute power.}
@@ -106,5 +108,31 @@ However, as we observe in Table~\ref{tab:reward_gini}, rewards inhibit higher in
   \label{tab:reward_gini}
   \input{tab/reward-gini}
 \end{table}
+
+\subsection{Withholding Attacks}
+
+We simulate two nodes in a network with zero delays.
+Node $a$ implements a withholding strategy.
+We call this node attacker.
+Node $b$ acts honestly, i.\,e, follows the protocol as specified.
+We call this node defender.
+
+We assign compute $\alpha$ to the attacker and $1-\alpha$ to the defender.
+
+We simulate $1 000 000$ activations per combination of input parameters.
+After protocol simulation we search for the longest common chain, i.\,e., the block with the biggest epoch number that is also in the history of all nodes.
+We apply the incentive scheme to this longest common chain.
+
+\paragraph{Efficiency of the Attacker}
+
+We reuse the definition of efficiency above.
+Figure~\ref{fig:attack_efficiency} depicts the efficiency of various withholding strategies for the two incentive schemes \textbf{constant} and \textbf{discount}.
+
+\begin{figure}
+  \caption{
+    A caption.
+  }
+  \label{fig:attack_efficiency}
+\end{figure}
 
 \end{document}
