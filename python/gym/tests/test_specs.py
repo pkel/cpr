@@ -79,7 +79,7 @@ def test_george(capsys):
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies()["selfish"]
+    p = env.policies()["override_block"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))

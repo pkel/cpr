@@ -390,7 +390,13 @@ module PrivateAttack = struct
 
   let honest_policy _o = Action.Release
 
-  let selfish_policy o =
+  let release_block_policy o =
+    let open Observation in
+    let open Action in
+    if o.private_blocks > o.public_blocks then Override else Wait
+  ;;
+
+  let override_block_policy o =
     let open Observation in
     let open Action in
     if o.private_blocks = 0 && o.public_blocks = 0
@@ -400,9 +406,29 @@ module PrivateAttack = struct
     else Override
   ;;
 
-  let policies = [ "honest", honest_policy; "selfish", selfish_policy ]
+  let override_catchup_policy o =
+    let open Observation in
+    let open Action in
+    if o.private_blocks = 0 && o.public_blocks = 0
+    then Wait
+    else if o.public_blocks = 0
+    then Wait
+    else if o.private_depth = 0 && o.private_blocks = o.public_blocks + 1
+    then Override
+    else if o.public_blocks = o.private_blocks && o.private_depth = o.private_depth + 1
+    then Override
+    else Wait
+  ;;
 
-  let selfish_policy' (v : _ local_view) state =
+  let policies =
+    [ "honest", honest_policy
+    ; "release_block", release_block_policy
+    ; "override_block", override_block_policy
+    ; "override_catchup", override_catchup_policy
+    ]
+  ;;
+
+  let override_block_policy' (v : _ local_view) state =
     let v = extend_view v in
     let priv = last_block v state.private_
     and publ = last_block v state.public in
@@ -480,13 +506,23 @@ let attacks ~k =
        "private-honest"
        PrivateAttack.(attack ~k honest_policy)
   |> add
-       ~info:"Private attack with selfish policy"
-       "private-selfish"
-       PrivateAttack.(attack ~k selfish_policy)
+       ~info:"Private attack: release private block a.s.a.p."
+       "private-release-block"
+       PrivateAttack.(attack ~k release_block_policy)
   |> add
-       ~info:"Private attack with selfish policy (alternative policy implementation)"
-       "private-selfish-alt"
-       PrivateAttack.(attack' ~k selfish_policy')
+       ~info:"Private attack: override public block a.s.a.p."
+       "private-override-block"
+       PrivateAttack.(attack ~k override_block_policy)
+  |> add
+       ~info:
+         "Private attack: override public block a.s.a.p. (alternative policy \
+          implementation)"
+       "private-override-block-alt"
+       PrivateAttack.(attack' ~k override_block_policy')
+  |> add
+       ~info:"Private attack: override public head just before defender catches up"
+       "private-override-catchup"
+       PrivateAttack.(attack ~k override_catchup_policy)
 ;;
 
 let protocol ~k =
