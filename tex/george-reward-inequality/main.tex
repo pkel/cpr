@@ -123,6 +123,28 @@ We simulate $1 000 000$ activations per combination of input parameters.
 After protocol simulation we search for the longest common chain, i.\,e., the block with the biggest epoch number that is also in the history of all nodes.
 We apply the incentive scheme to this longest common chain.
 
+\subsection{Strategies}
+
+\paragraph{Common to All Strategies}
+The attacker maintains a private fork of the chain and releases blocks tactically.
+If the private chain falls behind the public chain, i.\,e., an honest node would prefer the public chain over the withheld private chain, the attacker adopts the private chain.
+
+\paragraph{Release Strong Block}
+The attacker withholds all sub blocks until he can form a strong block.
+He then releases this strong block together with all referenced sub blocks.
+When forming a strong block, the attacker prefers his own sub blocks in order to maximize his own rewards.
+
+\paragraph{Override Block}
+The attacker withholds all blocks (sub and strong) until the defender forms a strong block.
+He then releases a withheld strong block including all referenced sub blocks as well as one sub block that confirms the just released strong block.
+The goal is to override the most recent defender strong block.
+
+\paragraph{Override Catch-Up}
+The attacker withholds all blocks (sub and strong) as the withheld chain is clearly better than the defender's chain.
+When the attacker is about to catch up, i.\,e., needs only one more puzzle solution to match the defender's chain, the attacker releases his private chain.
+The goal is to override all defender blocks since the attacker started to withhold blocks.
+
+
 \paragraph{Efficiency of the Attacker}
 
 We reuse the definition of efficiency above.
