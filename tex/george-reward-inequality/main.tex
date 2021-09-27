@@ -145,19 +145,28 @@ The goal is to override all defender blocks since the attacker started to withho
 
 \subsection{Measurements}
 
-We measure the attacker's relative share of reward dependent on $k$, $\alpha$, the strategy, and the reward scheme.
-Figure~\ref{fig:withholding} shows the results.
+We measure the attacker's reward dependent on $k$, $\alpha$, the strategy, and the reward scheme.
+Figure~\ref{fig:withholding_relative} shows the attacker's rewards relative to the overall rewards assigned.
+Figure~\ref{fig:withholding_absolute} shows the attacker's absolute.
 
 We simulate $1 000 000$ activations per combination of input parameters.
 After protocol simulation we search for the longest common chain, i.\,e., the block with the biggest epoch number that is also in the history of all nodes.
 We apply the incentive scheme to this longest common chain.
 
 \begin{figure}
-  \includegraphics[width=\linewidth]{fig/withholding}
+  \includegraphics[width=\linewidth]{fig/withholding_relative}
   \caption{
-    A caption.
+    The attacker's relative share of reward depends on $k$, $\alpha$, the withholding strategy, and the reward scheme.
   }
-  \label{fig:withholding}
+  \label{fig:withholding_relative}
+\end{figure}
+
+\begin{figure}
+  \includegraphics[width=\linewidth]{fig/withholding_absolute}
+  \caption{
+    The attacker's absolute reward depends on $k$, $\alpha$, the withholding strategy, and the reward scheme.
+  }
+  \label{fig:withholding_absolute}
 \end{figure}
 
 \end{document}
