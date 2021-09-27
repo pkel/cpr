@@ -28,42 +28,45 @@ type row =
   ; strategy : string
   ; strategy_description : string
   ; reward : float array
+  ; ca_time : float
   ; machine_duration_s : float
   ; error : string
   }
-
-(* TODO: use fieldslib to ensure that we do not miss any fields *)
-
-let df_spec =
-  let open Owl_dataframe in
-  let array f arr = String (Array.to_list arr |> List.map f |> String.concat "|") in
-  [| ("network", fun row -> String row.network)
-   ; ("network_description", fun row -> String row.network_description)
-   ; ("compute", fun row -> array string_of_float row.compute)
-   ; ("protocol", fun row -> String row.protocol)
-   ; ("k", fun row -> Int row.k)
-   ; ("protocol_description", fun row -> String row.protocol_description)
-   ; ("block_interval", fun row -> Float row.block_interval)
-   ; ("activation_delay", fun row -> Float row.activation_delay)
-   ; ("number_activations", fun row -> Int row.number_activations)
-   ; ("activations", fun row -> array string_of_int row.activations)
-   ; ("incentive_scheme", fun row -> String row.incentive_scheme)
-   ; ("incentive_scheme_description", fun row -> String row.incentive_scheme_description)
-   ; ("strategy", fun row -> String row.strategy)
-   ; ("strategy_description", fun row -> String row.strategy_description)
-   ; ("reward", fun row -> array string_of_float row.reward)
-   ; ("machine_duration_s", fun row -> Float row.machine_duration_s)
-   ; ("error", fun row -> String row.error)
-  |]
-;;
+[@@deriving fields]
 
 let save_rows_as_tsv filename l =
-  let df = Owl_dataframe.make (Array.map fst df_spec) in
+  let open Owl_dataframe in
+  let df = Fields_of_row.names |> Array.of_list |> make in
   let record (row : row) =
-    Array.map (fun (_, f) -> f row) df_spec |> Owl_dataframe.append_row df
+    let string _ _ x = String x
+    and float _ _ x = Float x
+    and int _ _ x = Int x
+    and array f _ _ arr = String (Array.to_list arr |> List.map f |> String.concat "|") in
+    Fields_of_row.Direct.to_list
+      row
+      ~number_activations:int
+      ~network:string
+      ~network_description:string
+      ~compute:(array string_of_float)
+      ~protocol:string
+      ~protocol_description:string
+      ~k:int
+      ~block_interval:float
+      ~activation_delay:float
+      ~activations:(array string_of_int)
+      ~incentive_scheme:string
+      ~incentive_scheme_description:string
+      ~strategy:string
+      ~strategy_description:string
+      ~reward:(array string_of_float)
+      ~ca_time:float
+      ~machine_duration_s:float
+      ~error:string
+    |> Array.of_list
+    |> append_row df
   in
   List.iter record l;
-  Owl_dataframe.to_csv ~sep:'\t' df filename
+  to_csv ~sep:'\t' df filename
 ;;
 
 let prepare_row (Task { params; protocol; attack; sim }) =
@@ -87,6 +90,7 @@ let prepare_row (Task { params; protocol; attack; sim }) =
   ; strategy
   ; strategy_description
   ; reward = [||]
+  ; ca_time = 0. (* ; ca_height *)
   ; machine_duration_s = Float.nan
   ; error = ""
   }
@@ -119,6 +123,7 @@ let run task =
           ; incentive_scheme = rewardfn.key
           ; incentive_scheme_description = rewardfn.info
           ; reward
+          ; ca_time = (Dag.data common_chain).appended_at
           ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
           ; error = ""
           })

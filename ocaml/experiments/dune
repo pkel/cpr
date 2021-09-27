@@ -8,7 +8,9 @@
   mtime
   owl-base
   parany
-  progress))
+  progress)
+ (preprocess
+  (pps ppx_fields_conv)))
 
 (rule
  (alias runtest)

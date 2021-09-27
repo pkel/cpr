@@ -25,10 +25,9 @@ let tasks ~n_activations =
           List.concat_map
             (fun block_interval ->
               let params = params ~n_activations ~block_interval ~protocol in
-              let open Csv_runner in
               Collection.map_to_list
                 (fun attack ->
-                  Task
+                  Csv_runner.Task
                     { params
                     ; protocol
                     ; attack = Some attack
