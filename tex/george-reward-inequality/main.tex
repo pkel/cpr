@@ -146,12 +146,40 @@ The goal is to override all defender blocks since the attacker started to withho
 \subsection{Measurements}
 
 We measure the attacker's reward dependent on $k$, $\alpha$, the strategy, and the reward scheme.
-Figure~\ref{fig:withholding_relative} shows the attacker's rewards relative to the overall rewards assigned.
-Figure~\ref{fig:withholding_absolute} shows the attacker's absolute.
 
 We simulate $1 000 000$ activations per combination of input parameters.
 After protocol simulation we search for the longest common chain, i.\,e., the block with the biggest epoch number that is also in the history of all nodes.
 We apply the incentive scheme to this longest common chain.
+
+Figure~\ref{fig:withholding_absolute} shows the attacker's rewards per time. The unit of time is 1. The activation delay is one puzzle solution per 1 unit of time. We observe that in the short run, i.\,e.\ before difficulty adjustment, all dishonest strategies reduce the attackers rewards.
+
+We observe confirmed blocks per simulated time and then rescale the simulation time by this factor.
+This emulates the effect of a difficulty adjustment algorithm.%
+\footnote{In real world settings, the difficulty affects the orphan rate. Here we have zero network delays, and orphan rate does not depend on the difficulty.}
+Figure~\ref{fig:withholding_daa} shows the attacker's rewards per time \emph{after} difficulty adjustment.
+The unit of time is rescaled such that we observe one confirmed puzzle solution per 1 unit of time.
+We observe that in the long run certain strategies benefit the attacker.
+However, the \textbf{discount} incentive scheme dampens the profitability of the attack.
+
+Figure~\ref{fig:withholding_relative} shows the attacker's rewards relative to the overall rewards assigned.
+This is a measure used in selfish mining to model long term rewards after difficulty adjustment.
+We observe that the positive effect of the \textbf{discount} incentive scheme is mostly hidden by this metric.
+
+\begin{figure}
+  \includegraphics[width=\linewidth]{fig/withholding_absolute}
+  \caption{
+    The attacker's absolute reward (per time) depends on $k$, $\alpha$, the withholding strategy, and the reward scheme.
+  }
+  \label{fig:withholding_absolute}
+\end{figure}
+
+\begin{figure}
+  \includegraphics[width=\linewidth]{fig/withholding_daa}
+  \caption{
+    The attacker's absolute reward (per time) after difficulty adjustment depends on $k$, $\alpha$, the withholding strategy, and the reward scheme.
+  }
+  \label{fig:withholding_daa}
+\end{figure}
 
 \begin{figure}
   \includegraphics[width=\linewidth]{fig/withholding_relative}
@@ -159,14 +187,6 @@ We apply the incentive scheme to this longest common chain.
     The attacker's relative share of reward depends on $k$, $\alpha$, the withholding strategy, and the reward scheme.
   }
   \label{fig:withholding_relative}
-\end{figure}
-
-\begin{figure}
-  \includegraphics[width=\linewidth]{fig/withholding_absolute}
-  \caption{
-    The attacker's absolute reward depends on $k$, $\alpha$, the withholding strategy, and the reward scheme.
-  }
-  \label{fig:withholding_absolute}
 \end{figure}
 
 \end{document}
