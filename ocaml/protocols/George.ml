@@ -217,13 +217,13 @@ let reward_functions ~k =
        "punish"
        (reward ~discount:false ~punish:true)
   |> add
-       ~info:"1 per confirmed pow solution"
+       ~info:
+         "max k per confirmed block, d/k per confirmed pow solution (d ∊ 1..k = height \
+          since last block)"
        "discount"
        (reward ~discount:true ~punish:false)
   |> add
-       ~info:
-         "max k per confirmed block, d/k per pow solution on longest chain of votes (d \
-          ∊ 1..k = height since last block)"
+       ~info:"1 per confirmed pow solution"
        "constant"
        (reward ~discount:false ~punish:false)
 ;;
