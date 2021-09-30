@@ -2,6 +2,7 @@ open Cpr_lib
 
 type dag_data = { height : int }
 
+let height x = x.height
 let describe { height } = Printf.sprintf "block %i" height
 let dag_roots = [ { height = 0 } ]
 
@@ -251,6 +252,7 @@ let protocol : _ protocol =
   ; dag_validity
   ; dag_roots
   ; describe
+  ; height
   ; reward_functions
   ; attacks
   }

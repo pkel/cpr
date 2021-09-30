@@ -7,6 +7,7 @@ type dag_data =
 
 let is_vote h = h.vote > 0
 let is_block h = h.vote = 0
+let height h = h.block
 
 let describe h =
   let ty = if is_vote h then "vote" else "block" in
@@ -537,6 +538,7 @@ let protocol ~k =
   ; dag_validity = dag_validity ~k
   ; dag_roots
   ; describe
+  ; height
   ; reward_functions = reward_functions ~k
   ; attacks = attacks ~k
   }

@@ -29,6 +29,7 @@ type row =
   ; strategy_description : string
   ; reward : float array
   ; ca_time : float
+  ; ca_height : int
   ; machine_duration_s : float
   ; error : string
   }
@@ -60,6 +61,7 @@ let save_rows_as_tsv filename l =
       ~strategy_description:string
       ~reward:(array string_of_float)
       ~ca_time:float
+      ~ca_height:int
       ~machine_duration_s:float
       ~error:string
     |> Array.of_list
@@ -90,7 +92,8 @@ let prepare_row (Task { params; protocol; attack; sim }) =
   ; strategy
   ; strategy_description
   ; reward = [||]
-  ; ca_time = 0. (* ; ca_height *)
+  ; ca_time = 0.
+  ; ca_height = 0
   ; machine_duration_s = Float.nan
   ; error = ""
   }
@@ -124,6 +127,7 @@ let run task =
           ; incentive_scheme_description = rewardfn.info
           ; reward
           ; ca_time = (Dag.data common_chain).appended_at
+          ; ca_height = t.protocol.height (Dag.data common_chain).value
           ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
           ; error = ""
           })

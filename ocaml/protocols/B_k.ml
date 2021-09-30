@@ -3,11 +3,19 @@ open Cpr_lib
 type block = { height : int }
 
 type dag_data =
-  | Vote of int
+  | Vote of
+      { height : int
+      ; id : int
+      }
   | Block of block
 
+let height = function
+  | Vote x -> x.height
+  | Block x -> x.height
+;;
+
 let describe = function
-  | Vote voter -> "vote by " ^ string_of_int voter
+  | Vote x -> "vote by " ^ string_of_int x.id
   | Block { height } -> "block " ^ string_of_int height
 ;;
 
@@ -25,7 +33,9 @@ let dag_validity ~k (v : _ global_view) n =
   let has_pow n = v.pow_hash n |> Option.is_some
   and pow_hash n = v.pow_hash n |> Option.get in
   match v.data n, Dag.parents v.view n with
-  | Vote _, [ p ] -> has_pow n && v.data p |> is_block
+  | Vote x, [ p ] ->
+    let pd = v.data p in
+    has_pow n && is_block pd && x.height = height pd
   | Block b, pblock :: vote0 :: votes ->
     (match v.data pblock, v.data vote0 with
     | Block p, Vote leader ->
@@ -40,7 +50,7 @@ let dag_validity ~k (v : _ global_view) n =
       p.height + 1 = b.height
       && nvotes = k
       && ordered_votes
-      && v.signed_by n = Some leader
+      && v.signed_by n = Some leader.id
     | _ -> false)
   | _ -> false
 ;;
@@ -183,7 +193,8 @@ let honest ~k v actions =
   in
   fun preferred -> function
     | Activate pow ->
-      let vote = actions.extend_dag ~pow [ preferred ] (Vote v.my_id) in
+      let height = v.data preferred |> height in
+      let vote = actions.extend_dag ~pow [ preferred ] (Vote { id = v.my_id; height }) in
       actions.share vote;
       Option.value ~default:preferred (propose preferred)
     | Deliver n ->
@@ -530,6 +541,7 @@ let protocol ~k =
   ; dag_validity = dag_validity ~k
   ; dag_roots
   ; describe
+  ; height
   ; reward_functions
   ; attacks = attacks ~k
   }

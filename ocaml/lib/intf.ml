@@ -77,6 +77,7 @@ type ('env, 'dag_data, 'pow, 'state) protocol =
             vertex. Invalid extensions are not delivered to other nodes. *)
   ; honest : ('env, 'dag_data, 'pow, 'state) node
   ; describe : 'dag_data -> string
+  ; height : 'dag_data -> int
   ; reward_functions : ('env, 'dag_data) reward_function Collection.t
   ; attacks : ('env, 'dag_data, 'pow) opaque_node Collection.t
   }

@@ -3,16 +3,21 @@ open Cpr_lib
 type block = { height : int }
 
 type dag_data =
-  | Vote
+  | Vote of { height : int }
   | Block of block
 
 let describe = function
-  | Vote -> "vote"
+  | Vote _ -> "vote"
   | Block { height } -> "block " ^ string_of_int height
 ;;
 
+let height = function
+  | Vote x -> x.height
+  | Block x -> x.height
+;;
+
 let is_vote = function
-  | Vote -> true
+  | Vote _ -> true
   | _ -> false
 ;;
 
@@ -23,7 +28,9 @@ let is_block = function
 
 let dag_validity ~k (v : _ global_view) n =
   match v.pow_hash n, v.data n, Dag.parents v.view n with
-  | Some _, Vote, [ p ] -> v.data p |> is_block
+  | Some _, Vote x, [ p ] ->
+    let pd = v.data p in
+    is_block pd && x.height = height pd
   | Some _, Block b, [ pblock ] when k = 1 ->
     (match v.data pblock with
     | Block p -> p.height + 1 = b.height
@@ -80,7 +87,7 @@ let extend_view (x : _ local_view) =
 let last_block v n =
   match v.data n with
   | Block _ -> n
-  | Vote ->
+  | Vote _ ->
     (match Dag.parents v.view n with
     | [ n ] -> n
     | _ -> failwith "invalid dag")
@@ -135,7 +142,8 @@ let honest ~k v actions preferred =
       actions.share head';
       head')
     else (
-      let vote = actions.extend_dag ~pow [ preferred ] Vote in
+      let height = v.data preferred |> height in
+      let vote = actions.extend_dag ~pow [ preferred ] (Vote { height }) in
       actions.share vote;
       preferred)
   | Deliver n ->
@@ -438,6 +446,7 @@ let protocol ~k =
   ; dag_validity = dag_validity ~k
   ; dag_roots
   ; describe
+  ; height
   ; reward_functions
   ; attacks = attacks ~k
   }
