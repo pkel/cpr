@@ -62,6 +62,9 @@ val dot
   -> 'a vertex list
   -> unit
 
+(** Export vertices and all descendants to iGraph/GraphML representation *)
+val graphml : 'a view -> ('a -> GraphML.Data.t) -> 'a vertex list -> GraphML.graph
+
 module Exn : sig
   type exn +=
     | Malformed_DAG of

@@ -350,6 +350,59 @@ let%expect_test "dot" =
     } |}]
 ;;
 
+let graphml view data vertices : GraphML.graph =
+  let nodes, edges =
+    Seq.fold_left
+      (fun (nodes, edges) vertex ->
+        let nodes = { GraphML.id = vertex.serial; data = data vertex.data } :: nodes
+        and edges =
+          List.fold_left
+            (fun edges child ->
+              { GraphML.src = child.serial; dst = vertex.serial; data = [] } :: edges)
+            edges
+            (children view vertex)
+        in
+        nodes, edges)
+      ([], [])
+      (iterate_descendants view vertices)
+  in
+  GraphML.{ nodes = List.rev nodes; edges = List.rev edges; kind = Directed; data = [] }
+;;
+
+let%expect_test "graphml" =
+  let t = create () in
+  let r = append t [] "r" in
+  let append r = append t [ r ] in
+  let ra = append r "ra"
+  and rb = append r "rb" in
+  let _raa = append ra "raa"
+  and rba = append rb "rba"
+  and _rbb = append rb "rbb" in
+  let rbaa = append rba "rbaa" in
+  let _rbaaa = append rbaa "rbaaa" in
+  let global = view t in
+  graphml global (fun lbl -> [ "label", GraphML.Data.String lbl ]) [ r ]
+  |> GraphML.pp_graph Format.std_formatter;
+  [%expect
+    {|
+    { kind = Directed; data = [];
+      nodes =
+      [{ id = 0; data = [("label", String ("r"))] };
+       { id = 1; data = [("label", String ("ra"))] };
+       { id = 2; data = [("label", String ("rb"))] };
+       { id = 3; data = [("label", String ("raa"))] };
+       { id = 4; data = [("label", String ("rba"))] };
+       { id = 5; data = [("label", String ("rbb"))] };
+       { id = 6; data = [("label", String ("rbaa"))] };
+       { id = 7; data = [("label", String ("rbaaa"))] }];
+      edges =
+      [{ src = 2; dst = 0; data = [] }; { src = 1; dst = 0; data = [] };
+       { src = 3; dst = 1; data = [] }; { src = 5; dst = 2; data = [] };
+       { src = 4; dst = 2; data = [] }; { src = 6; dst = 4; data = [] };
+       { src = 7; dst = 6; data = [] }]
+      } |}]
+;;
+
 module Exn = struct
   type exn +=
     | Malformed_DAG of
