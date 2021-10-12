@@ -1,35 +1,26 @@
-(** {1} GraphML Writing and reading GraphML files targeting iGraph compatibility. *)
+(** GraphML: Writing and reading GraphML files targeting iGraph compatibility. *)
 
 module Data : sig
   type value =
     | String of string
-    | Double of float
-    | Boolean of bool
+    | Float of float
+    | Bool of bool
 
   type t = (string * value) list
 
   module Read : sig
-    type 'a f = string -> t -> ('a, [ `Key_not_found | `Type_mismatch ]) result
-
-    val string : string f
-    val double : float f
-    val boolean : bool f
+    val string : value -> string StrResult.t
+    val float : value -> float StrResult.t
+    val bool : value -> bool StrResult.t
+    val get : (value -> 'a StrResult.t) -> string -> t -> 'a StrResult.t
+    val pop : (value -> 'a StrResult.t) -> string -> t -> ('a * t) StrResult.t
   end
 
-  module Pop : sig
-    type 'a f = string -> t -> ('a * t, [ `Key_not_found | `Type_mismatch ]) result
-
-    val string : string f
-    val double : float f
-    val boolean : bool f
-  end
-
-  module Set : sig
-    type 'a f = string -> 'a -> t -> t
-
-    val string : string f
-    val double : float f
-    val boolean : bool f
+  module Write : sig
+    val string : string -> value
+    val float : float -> value
+    val bool : bool -> value
+    val set : ('a -> value) -> string -> 'a -> t -> t
   end
 end
 

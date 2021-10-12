@@ -20,4 +20,4 @@ type t =
 val homogeneous : delay:float Distributions.iid -> int -> t
 
 (** read network spec from iGraph/graphml *)
-val of_graphml : GraphML.graph -> (t, t * string list) result
+val of_graphml : GraphML.graph -> t StrResult.t

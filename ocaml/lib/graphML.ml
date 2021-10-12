@@ -1,70 +1,56 @@
 module Data = struct
   type value =
     | String of string
-    | Double of float
-    | Boolean of bool
+    | Float of float
+    | Bool of bool
   [@@deriving show { with_path = false }]
-
-  let string x = String x
-  let double x = Double x
-  let boolean x = Boolean x
-
-  let get_string = function
-    | String s -> Ok s
-    | _ -> Error `Type_mismatch
-  ;;
-
-  let get_double = function
-    | Double d -> Ok d
-    | _ -> Error `Type_mismatch
-  ;;
-
-  let get_boolean = function
-    | Boolean b -> Ok b
-    | _ -> Error `Type_mismatch
-  ;;
 
   type t = (string * value) list [@@deriving show { with_path = false }]
 
   module Read = struct
-    type 'a f = string -> t -> ('a, [ `Key_not_found | `Type_mismatch ]) result
-
-    let f f str data =
-      match List.assoc_opt str data with
-      | None -> Error `Key_not_found
-      | Some d -> f d
+    let string = function
+      | String s -> Ok s
+      | Bool x -> StrResult.errf "expected string, got bool %b" x
+      | Float x -> StrResult.errf "expected string, got float %f" x
     ;;
 
-    let string = f get_string
-    let double = f get_double
-    let boolean = f get_boolean
-  end
+    let float = function
+      | Float x -> Ok x
+      | Bool x -> StrResult.errf "expected float, got bool %b" x
+      | String x -> StrResult.errf "expected float, got string '%s'" x
+    ;;
 
-  module Pop = struct
-    type 'a f = string -> t -> ('a * t, [ `Key_not_found | `Type_mismatch ]) result
+    let bool = function
+      | Bool x -> Ok x
+      | Float x -> StrResult.errf "expected bool, got float %f" x
+      | String x -> StrResult.errf "expected bool, got string '%s'" x
+    ;;
 
-    let f f str data =
-      match Read.f f str data with
+    let get f str data =
+      match List.assoc_opt str data with
+      | None -> StrResult.errf "missing attribute '%s'" str
+      | Some d ->
+        Result.map_error
+          (fun m -> Printf.sprintf "invalid value for attribute '%s': %s" str m)
+          (f d)
+    ;;
+
+    let pop f str data =
+      match get f str data with
       | Ok x -> Ok (x, List.remove_assoc str data)
       | Error e -> Error e
     ;;
-
-    let string = f get_string
-    let double = f get_double
-    let boolean = f get_boolean
   end
 
-  module Set = struct
-    type 'a f = string -> 'a -> t -> t
+  module Write = struct
+    let string x = String x
+    let float x = Float x
+    let bool x = Bool x
 
-    let f f str value data =
+    let set f str value data =
       let data = List.remove_assoc str data in
       (str, f value) :: data
     ;;
-
-    let string = f string
-    let double = f double
-    let boolean = f boolean
   end
 end
 
@@ -104,9 +90,9 @@ let graph_to_xml =
     let s, t =
       match d with
       | Data.String s -> s, `String
-      | Double f -> string_of_float f, `Double
-      | Boolean true -> "true", `Boolean
-      | Boolean false -> "false", `Boolean
+      | Float f -> string_of_float f, `Double
+      | Bool true -> "true", `Boolean
+      | Bool false -> "false", `Boolean
     and key' =
       match eon with
       | `Edge -> "e_" ^ key
@@ -249,11 +235,11 @@ let graph_of_xml =
     match typ with
     | `Boolean ->
       (match bool_of_string_opt s with
-      | Some b -> Data.Boolean b
+      | Some b -> Data.Bool b
       | None -> failwith "invalid boolean")
     | `Double ->
       (match float_of_string_opt s with
-      | Some f -> Double f
+      | Some f -> Float f
       | None -> failwith "invalid double")
     | `String -> String s
   in
