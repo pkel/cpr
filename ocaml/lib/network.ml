@@ -65,24 +65,26 @@ let of_graphml graph =
         { compute; links = [] })
       id_table
   in
-  let add_edge (e : edge) =
+  let add_edge delay (e : edge) =
     match Hashtbl.find_opt node_ht e.src, Hashtbl.find_opt node_ht e.dst with
     | Some (src, _), Some (dest, _) ->
-      let l = { dest; delay = Distributions.constant 1. (* TODO read *) } in
+      let l = { dest; delay } in
       let n = nodes.(src) in
       nodes.(src) <- { n with links = l :: n.links };
       Ok ()
     | _ -> StrResult.errf "edge (%i,%i) references undefined node" e.src e.dst
   in
   let+ () =
+    let delay_of_string = Distributions.float_of_string_memoize () in
     List.fold_left
       (fun ok (e : edge) ->
-        let* () = ok in
+        let* () = ok
+        and* delay = get string "delay" e.data >>= delay_of_string in
         match graph.kind with
-        | Directed -> add_edge e
+        | Directed -> add_edge delay e
         | Undirected ->
-          let* () = add_edge e in
-          add_edge { e with dst = e.src; src = e.dst })
+          let* () = add_edge delay e in
+          add_edge delay { e with dst = e.src; src = e.dst })
       (Ok ())
       graph.edges
   in

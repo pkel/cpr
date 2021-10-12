@@ -8,6 +8,7 @@ homepage: "https://github.com/pkel/cpr"
 bug-reports: "https://github.com/pkel/cpr/issues"
 depends: [
   "dune" {>= "2.8"}
+  "angstrom" {>= "0.15.0"}
   "bos" {>= "0.2.0"}
   "cmdliner" {>= "1.0"}
   "ezxmlm" {>= "1.1.0"}

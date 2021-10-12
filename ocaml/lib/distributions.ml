@@ -60,3 +60,82 @@ let discrete ~weights =
     | None -> i
     | Some j -> if Random.float 1. > p.(i) then j else i
 ;;
+
+module Parsers = struct
+  open Angstrom
+
+  let whitespace = function
+    | ' ' -> true
+    | _ -> false
+  ;;
+
+  let space = skip_many1 (skip whitespace)
+
+  let float_literal =
+    let* str = take_till whitespace in
+    match float_of_string_opt str with
+    | Some x -> return x
+    | None -> fail "could not parse float"
+  ;;
+
+  let constant = string "constant" *> space *> lift constant float_literal
+
+  let uniform =
+    string "uniform"
+    *> space
+    *> lift2
+         (fun lower upper -> uniform ~lower ~upper)
+         float_literal
+         (space *> float_literal)
+  ;;
+
+  let exponential =
+    string "exponential" *> space *> lift (fun ev -> exponential ~ev) float_literal
+  ;;
+
+  let float = constant <|> uniform <|> exponential
+end
+
+let float_of_string = Angstrom.parse_string ~consume:Angstrom.Consume.All Parsers.float
+
+let float_of_string_memoize () =
+  let t = Hashtbl.create 42 in
+  fun s ->
+    match Hashtbl.find_opt t s with
+    | Some x -> x
+    | None ->
+      let x = float_of_string s in
+      Hashtbl.add t s x;
+      x
+;;
+
+let%test_module "float" =
+  (module struct
+    let expect_ok s =
+      match float_of_string s with
+      | Error e ->
+        Printf.eprintf "'%s' yields error '%s'" s e;
+        false
+      | _ -> true
+    ;;
+
+    let expect_bad s =
+      match float_of_string s with
+      | Ok _ ->
+        Printf.printf "'%s' should not parse but does" s;
+        false
+      | _ -> true
+    ;;
+
+    let%test _ = expect_bad ""
+    let%test _ = expect_bad "random"
+    let%test _ = expect_ok "constant 1"
+    let%test _ = expect_ok "constant 0"
+    let%test _ = expect_ok "constant 1.2"
+    let%test _ = expect_bad "constant"
+    let%test _ = expect_ok "uniform 1.2 2"
+    let%test _ = expect_bad "uniform 1"
+    let%test _ = expect_ok "exponential 1.2"
+    let%test _ = expect_bad "exponential 1 2"
+  end)
+;;

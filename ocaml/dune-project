@@ -12,6 +12,7 @@
  (name cpr)
  (synopsis "Simulating various DAG-based proof-of-work consensus protocols")
  (depends
+  (angstrom (>= 0.15.0))
   (bos (>= 0.2.0))
   (cmdliner (>= 1.0))
   (ezxmlm (>= 1.1.0))
