@@ -93,7 +93,11 @@ module Parsers = struct
     string "exponential" *> space *> lift (fun ev -> exponential ~ev) float_literal
   ;;
 
-  let float = constant <|> uniform <|> exponential
+  let trim = skip_many (skip whitespace)
+
+  let float =
+    trim *> constant <|> uniform <|> exponential <|> fail "unknown distribution" <* trim
+  ;;
 end
 
 let float_of_string = Angstrom.parse_string ~consume:Angstrom.Consume.All Parsers.float
