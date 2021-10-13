@@ -454,12 +454,11 @@ let protocol ~k =
 
 let%test "convergence" =
   let open Simulator in
-  let delay = Distributions.exponential ~ev:1. in
-  let network = Network.homogeneous ~delay 32 in
+  let propagation_delay = Distributions.exponential ~ev:1. in
   let test (k, activation_delay, height) =
-    let params = { activations = 1000 * k; activation_delay } in
-    let env = all_honest params network (protocol ~k) |> init in
-    loop params env;
+    let network = Network.homogeneous ~activation_delay ~propagation_delay 32 in
+    let env = all_honest network (protocol ~k) |> init in
+    loop ~activations:(1000 * k) env;
     Array.to_seq env.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)
     |> Dag.common_ancestor' env.global.view

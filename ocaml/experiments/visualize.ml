@@ -5,7 +5,7 @@ let fpath (Csv_runner.Task t) ~rewardfn =
   let l =
     let open Collection in
     [ t.sim.key
-    ; Printf.sprintf "d=%g" t.params.activation_delay
+    ; Printf.sprintf "d=%g" t.network.activation_delay
     ; t.protocol.key
     ; Printf.sprintf "k=%i" t.protocol.pow_per_block
     ; rewardfn.key
@@ -21,7 +21,7 @@ let fpath (Csv_runner.Task t) ~rewardfn =
 let legend (Csv_runner.Task t) ~rewardfn =
   let open Collection in
   [ "Network", t.sim.info
-  ; "Activation Delay", string_of_float t.params.activation_delay
+  ; "Activation Delay", string_of_float t.network.activation_delay
   ; "Protocol", t.protocol.info
   ; "PoW per Block (k)", string_of_int t.protocol.pow_per_block
   ; "Incentive Scheme", rewardfn.info
@@ -51,22 +51,21 @@ let tasks =
     (fun (P protocol, n_activations) ->
       List.map
         (fun activation_delay ->
-          let params = Simulator.{ activations = n_activations; activation_delay } in
+          let sim, network = honest_clique ~activation_delay ~n:7 protocol in
           Csv_runner.Task
-            { params; protocol; attack = None; sim = honest_clique ~n:7 protocol params })
+            { activations = n_activations; protocol; attack = None; sim; network })
         [ 2.; 4. ]
       @ List.concat_map
           (fun alpha ->
-            let params =
-              Simulator.{ activations = n_activations; activation_delay = 1. }
-            in
             Collection.map_to_list
               (fun attack ->
+                let sim, network = two_agents ~alpha protocol attack in
                 Csv_runner.Task
-                  { params
+                  { activations = n_activations
                   ; protocol
                   ; attack = Some attack
-                  ; sim = two_agents ~alpha protocol attack params
+                  ; sim
+                  ; network
                   })
               protocol.attacks)
           [ 0.25; 0.33; 0.5 ])
@@ -114,7 +113,7 @@ let run (Csv_runner.Task t) =
   (* simulate *)
   let open Simulator in
   let env = t.sim.it () in
-  loop t.params env;
+  loop ~activations:t.activations env;
   let head =
     Array.to_seq env.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)

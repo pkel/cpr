@@ -15,9 +15,14 @@ type dissemination =
 type t =
   { nodes : node array
   ; dissemination : dissemination
+  ; activation_delay : float
   }
 
-val homogeneous : delay:float Distributions.iid -> int -> t
+val homogeneous
+  :  activation_delay:float
+  -> propagation_delay:float Distributions.iid
+  -> int
+  -> t
 
 type to_graphml =
   ?node_data:(int -> GraphML.Data.t)

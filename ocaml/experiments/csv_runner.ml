@@ -2,7 +2,8 @@ open Cpr_lib
 
 type task =
   | Task :
-      { params : Simulator.params
+      { activations : int
+      ; network : Network.t
       ; protocol : ('dag_data Simulator.data, 'dag_data, Simulator.pow, 'state) protocol
       ; attack :
           ('dag_data Simulator.data, 'dag_data, Simulator.pow) opaque_node
@@ -71,7 +72,7 @@ let save_rows_as_tsv filename l =
   to_csv ~sep:'\t' df filename
 ;;
 
-let prepare_row (Task { params; protocol; attack; sim }) =
+let prepare_row (Task { activations; network; protocol; attack; sim }) =
   let strategy, strategy_description =
     match attack with
     | Some x -> x.Collection.key, x.info
@@ -82,11 +83,11 @@ let prepare_row (Task { params; protocol; attack; sim }) =
   ; protocol = protocol.key
   ; protocol_description = protocol.info
   ; k = protocol.pow_per_block
-  ; activation_delay = params.activation_delay
-  ; number_activations = params.activations
+  ; activation_delay = network.activation_delay
+  ; number_activations = activations
   ; activations = [||]
   ; compute = [||]
-  ; block_interval = params.activation_delay *. (protocol.pow_per_block |> float_of_int)
+  ; block_interval = network.activation_delay *. (protocol.pow_per_block |> float_of_int)
   ; incentive_scheme = "none"
   ; incentive_scheme_description = ""
   ; strategy
@@ -108,7 +109,7 @@ let run task =
     let sim = t.sim.it () in
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
-    loop t.params sim;
+    loop ~activations:t.activations sim;
     let activations = Array.map (fun (Node x) -> x.n_activations) sim.nodes in
     Array.to_seq sim.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)

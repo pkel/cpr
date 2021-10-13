@@ -8,11 +8,8 @@ let protocols =
 
 let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
 
-let params ~n_activations ~block_interval ~protocol =
-  Simulator.
-    { activations = n_activations
-    ; activation_delay = block_interval /. (protocol.pow_per_block |> float_of_int)
-    }
+let activation_delay ~block_interval ~protocol =
+  block_interval /. (protocol.pow_per_block |> float_of_int)
 ;;
 
 (* Run all combinations of protocol, network and block_interval. *)
@@ -23,9 +20,10 @@ let tasks ~n_activations =
         (fun net ->
           List.map
             (fun block_interval ->
-              let params = params ~n_activations ~block_interval ~protocol in
+              let activation_delay = activation_delay ~block_interval ~protocol in
+              let sim, network = net ~activation_delay protocol in
               Csv_runner.Task
-                { params; protocol; attack = None; sim = net protocol params })
+                { activations = n_activations; protocol; attack = None; sim; network })
             block_intervals)
         [ honest_clique ~n:10 ])
     protocols

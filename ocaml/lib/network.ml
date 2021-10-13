@@ -28,9 +28,10 @@ let dissemination_of_string s =
 type t =
   { nodes : node array
   ; dissemination : dissemination
+  ; activation_delay : float
   }
 
-let homogeneous ~delay n : t =
+let homogeneous ~activation_delay ~propagation_delay:delay n : t =
   let compute = 1. /. float_of_int n in
   { nodes =
       Array.init n (fun i ->
@@ -39,6 +40,7 @@ let homogeneous ~delay n : t =
           ; compute
           })
   ; dissemination = Simple
+  ; activation_delay
   }
 ;;
 
@@ -60,7 +62,9 @@ let to_graphml
   let open GraphML in
   let open Data.Write in
   let data =
-    graph_data |> set string "dissemination" (dissemination_to_string t.dissemination)
+    graph_data
+    |> set string "dissemination" (dissemination_to_string t.dissemination)
+    |> set float "activation_delay" t.activation_delay
   and nodes, edges =
     Array.to_list t.nodes
     |> List.mapi (fun i n ->
@@ -89,6 +93,7 @@ let of_graphml graph =
   let open Data.Read in
   let* dissemination, graph_data = pop string "dissemination" graph.data in
   let* dissemination = dissemination_of_string dissemination in
+  let* activation_delay, graph_data = pop float "activation_delay" graph_data in
   let n = List.length graph.nodes in
   let map_id = Array.make n (-1)
   and node_data = Array.make n []
@@ -136,7 +141,7 @@ let of_graphml graph =
   in
   let network =
     let nodes = Array.map2 (fun compute links -> { compute; links }) compute links in
-    { dissemination; nodes }
+    { dissemination; nodes; activation_delay }
   in
   let to_graphml ?node_data:n ?edge_data:e ?graph_data:g =
     let node_data i =
@@ -160,11 +165,18 @@ let of_graphml graph =
 let to_graphml = to_graphml ~map_id:Fun.id
 
 let%expect_test _ =
-  let t = homogeneous ~delay:(Distributions.uniform ~lower:0.6 ~upper:1.4) 3 in
+  let t =
+    homogeneous
+      ~activation_delay:1.
+      ~propagation_delay:(Distributions.uniform ~lower:0.6 ~upper:1.4)
+      3
+  in
   to_graphml t () |> GraphML.pp_graph Format.std_formatter;
   [%expect
     {|
-    { kind = Directed; data = [("dissemination", String ("simple"))];
+    { kind = Directed;
+      data =
+      [("activation_delay", Float (1.)); ("dissemination", String ("simple"))];
       nodes =
       [{ id = 0; data = [("compute", Float (0.333333333333))] };
        { id = 1; data = [("compute", Float (0.333333333333))] };
@@ -180,6 +192,8 @@ let%expect_test _ =
 ;;
 
 let%test _ =
-  let t = homogeneous ~delay:(Distributions.constant 1.) 3 in
+  let t =
+    homogeneous ~activation_delay:1. ~propagation_delay:(Distributions.constant 1.) 3
+  in
   to_graphml t () |> of_graphml |> Result.map_error failwith |> Result.is_ok
 ;;

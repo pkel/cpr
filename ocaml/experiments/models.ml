@@ -17,9 +17,9 @@ end
 
 (** {1} simulated environments *)
 
-let honest_clique ~n protocol params =
-  let delay = Distributions.uniform ~lower:0.5 ~upper:1.5 in
-  let net = Network.homogeneous ~delay n in
+let honest_clique ~activation_delay ~n protocol =
+  let propagation_delay = Distributions.uniform ~lower:0.5 ~upper:1.5 in
+  let net = Network.homogeneous ~activation_delay ~propagation_delay n in
   let net =
     { net with
       nodes =
@@ -28,21 +28,22 @@ let honest_clique ~n protocol params =
           net.nodes
     }
   in
-  let it () = Simulator.all_honest params net protocol |> Simulator.init in
-  Collection.
-    { it
-    ; key = Printf.sprintf "honest-clique-%i" n
-    ; info =
-        (* TODO: describe delay distribution *)
-        Printf.sprintf
-          "%i nodes, compute 1..%i, simple dissemination, uniform propagation delay 0.5 \
-           .. 1.5"
-          n
-          n
-    }
+  let it () = Simulator.all_honest net protocol |> Simulator.init in
+  ( Collection.
+      { it
+      ; key = Printf.sprintf "honest-clique-%i" n
+      ; info =
+          (* TODO: describe delay distribution *)
+          Printf.sprintf
+            "%i nodes, compute 1..%i, simple dissemination, uniform propagation delay \
+             0.5 .. 1.5"
+            n
+            n
+      }
+  , net )
 ;;
 
-let two_agents ~alpha protocol attack params =
+let two_agents ~alpha protocol attack =
   let delay = Distributions.constant 0. in
   let net =
     Network.
@@ -51,21 +52,23 @@ let two_agents ~alpha protocol attack params =
           [| { compute = alpha; links = [ { dest = 1; delay } ] }
            ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
           |]
+      ; activation_delay = 1.
       }
   in
   let it () =
-    let sim = Simulator.all_honest params net protocol in
+    let sim = Simulator.all_honest net protocol in
     let () =
       let (Node n) = attack.Collection.it in
       Simulator.patch ~node:0 n sim |> ignore
     in
     Simulator.init sim
   in
-  Collection.
-    { it
-    ; key = Printf.sprintf "two-agents-%g" alpha
-    ; info =
-        Printf.sprintf "2 nodes, alpha=%g, no propagation delays" alpha
-        (* TODO: describe delay distribution *)
-    }
+  ( Collection.
+      { it
+      ; key = Printf.sprintf "two-agents-%g" alpha
+      ; info =
+          Printf.sprintf "2 nodes, alpha=%g, no propagation delays" alpha
+          (* TODO: describe delay distribution *)
+      }
+  , net )
 ;;

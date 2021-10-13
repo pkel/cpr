@@ -46,11 +46,6 @@ type 'prot_data state =
   ; network : Network.t
   }
 
-type params =
-  { activations : int
-  ; activation_delay : float
-  }
-
 let schedule time delay event =
   time.queue <- OrderedQueue.queue (time.now +. delay) event time.queue
 ;;
@@ -89,7 +84,7 @@ let string_of_pow_hash (nonce, _serial) =
   Printf.sprintf "%.3f" (float_of_int nonce /. (2. ** 29.))
 ;;
 
-let all_honest params (network : Network.t) (protocol : _ Intf.protocol)
+let all_honest (network : Network.t) (protocol : _ Intf.protocol)
     : _ state * _ Dag.vertex list * (_ Intf.local_view * _ Intf.actions) array
   =
   let n_nodes = Array.length network.nodes in
@@ -196,7 +191,7 @@ let all_honest params (network : Network.t) (protocol : _ Intf.protocol)
       Array.map (fun x -> Network.(x.compute)) network.nodes |> Array.to_list
     in
     Distributions.discrete ~weights
-  and activation_delay_distr = Distributions.exponential ~ev:params.activation_delay in
+  and activation_delay_distr = Distributions.exponential ~ev:network.activation_delay in
   let nodes =
     Array.map
       (fun (view, actions) -> Node (spawn (protocol.honest view) ~roots actions))
@@ -219,7 +214,7 @@ let patch ~node impl (state, roots, views_actions) =
 (* TODO hide second and third element *)
 let init (state, _roots, _views_actions) = state
 
-let handle_event params state ev =
+let handle_event ~activations state ev =
   let (Node node) = state.nodes.(ev.node) in
   let was_delivered n =
     Float.Array.get (Dag.data n).delivered_at ev.node <= state.clock.now
@@ -234,7 +229,7 @@ let handle_event params state ev =
     state.clock.c_activations <- state.clock.c_activations + 1;
     node.n_activations <- node.n_activations + 1;
     (* check ending condition; schedule next activation *)
-    if state.clock.c_activations < params.activations || params.activations < 0
+    if state.clock.c_activations < activations || activations < 0
     then schedule_activation state;
     (* apply event handler *)
     node.state <- node.handler node.state ev.event
@@ -269,12 +264,12 @@ let dequeue state =
          ev)
 ;;
 
-let rec loop params state =
+let rec loop ~activations state =
   match dequeue state with
   | None -> ()
   | Some ev ->
-    handle_event params state ev;
-    loop params state
+    handle_event ~activations state ev;
+    loop ~activations state
 ;;
 
 let apply_reward_function' (fn : _ Intf.reward_function) seq state =

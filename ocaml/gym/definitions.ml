@@ -61,19 +61,19 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
       ref
     env
   =
-  let params : Simulator.params = { activations = -1; activation_delay = 1. }
-  and network : Network.t =
+  let network : Network.t =
     let delay = Distributions.constant 0. in
     { dissemination = Simple
     ; nodes =
         [| { compute = alpha; links = [ { dest = 1; delay } ] }
          ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
         |]
+    ; activation_delay = 1.
     }
   in
   let init () =
     let open Simulator in
-    let setup = all_honest params network M.protocol in
+    let setup = all_honest network M.protocol in
     let v, a, n = patch ~node:0 M.node setup in
     { sim = Simulator.init setup
     ; attacker = v, a, n
@@ -85,7 +85,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     let open Simulator in
     match dequeue sim with
     | Some ev ->
-      handle_event params sim ev;
+      handle_event ~activations:(-1) sim ev;
       if ev.node = 0 then () else skip_to_interaction sim
     | None -> failwith "simulation should continue forever"
   and observe t =
