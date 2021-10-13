@@ -1,6 +1,6 @@
 type link =
   { dest : int
-  ; delay : unit -> float
+  ; delay : float Distributions.iid
   }
 
 type node =
@@ -71,8 +71,8 @@ let to_graphml
              List.map
                (fun l ->
                  let data =
-                   edge_data ~src:i ~dst:l.dest |> set string "delay" "constant 1."
-                   (* TODO do something useful here *)
+                   edge_data ~src:i ~dst:l.dest
+                   |> set string "delay" (Distributions.to_string l.delay)
                  in
                  { src = map_id i; dst = map_id l.dest; data })
                n.links
@@ -160,7 +160,7 @@ let of_graphml graph =
 let to_graphml = to_graphml ~map_id:Fun.id
 
 let%expect_test _ =
-  let t = homogeneous ~delay:(Distributions.constant 1.) 3 in
+  let t = homogeneous ~delay:(Distributions.uniform ~lower:0.6 ~upper:1.4) 3 in
   to_graphml t () |> GraphML.pp_graph Format.std_formatter;
   [%expect
     {|
@@ -170,12 +170,12 @@ let%expect_test _ =
        { id = 1; data = [("compute", Float (0.333333333333))] };
        { id = 2; data = [("compute", Float (0.333333333333))] }];
       edges =
-      [{ src = 0; dst = 1; data = [("delay", String ("constant 1."))] };
-       { src = 0; dst = 2; data = [("delay", String ("constant 1."))] };
-       { src = 1; dst = 0; data = [("delay", String ("constant 1."))] };
-       { src = 1; dst = 2; data = [("delay", String ("constant 1."))] };
-       { src = 2; dst = 0; data = [("delay", String ("constant 1."))] };
-       { src = 2; dst = 1; data = [("delay", String ("constant 1."))] }]
+      [{ src = 0; dst = 1; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = 0; dst = 2; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = 1; dst = 0; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = 1; dst = 2; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = 2; dst = 0; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = 2; dst = 1; data = [("delay", String ("uniform 0.6 1.4"))] }]
       } |}]
 ;;
 

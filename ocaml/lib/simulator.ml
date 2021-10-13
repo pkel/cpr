@@ -41,7 +41,8 @@ type 'prot_data state =
   ; dag : 'prot_data data Dag.t
   ; global : ('prot_data data, 'prot_data) Intf.global_view
   ; nodes : 'prot_data node array
-  ; assign_pow : int Distributions.iid
+  ; assign_pow_distr : int Distributions.iid
+  ; activation_delay_distr : float Distributions.iid
   ; network : Network.t
   }
 
@@ -54,9 +55,9 @@ let schedule time delay event =
   time.queue <- OrderedQueue.queue (time.now +. delay) event time.queue
 ;;
 
-let schedule_activation params state =
-  let delay = Distributions.exponential ~ev:params.activation_delay ()
-  and node = state.assign_pow () in
+let schedule_activation state =
+  let delay = Distributions.sample state.activation_delay_distr
+  and node = Distributions.sample state.assign_pow_distr in
   schedule state.clock delay { node; event = Activate (pow ()) }
 ;;
 
@@ -66,7 +67,7 @@ let disseminate network clock source x =
     (fun link ->
       let received_at = (Dag.data x).received_at in
       let t = Float.Array.get received_at link.dest
-      and delay = link.delay () in
+      and delay = Distributions.sample link.delay in
       let t' = clock.now +. delay in
       if t' < t
       then (
@@ -190,19 +191,21 @@ let all_honest params (network : Network.t) (protocol : _ Intf.protocol)
           }
         and actions : _ Intf.actions = { share; extend_dag } in
         view, actions)
-  and assign_pow =
+  and assign_pow_distr =
     let weights =
       Array.map (fun x -> Network.(x.compute)) network.nodes |> Array.to_list
     in
     Distributions.discrete ~weights
-  in
+  and activation_delay_distr = Distributions.exponential ~ev:params.activation_delay in
   let nodes =
     Array.map
       (fun (view, actions) -> Node (spawn (protocol.honest view) ~roots actions))
       views_actions
   in
-  let state = { clock; dag; global; nodes; assign_pow; network } in
-  schedule_activation params state;
+  let state =
+    { clock; dag; global; nodes; assign_pow_distr; activation_delay_distr; network }
+  in
+  schedule_activation state;
   state, roots, views_actions
 ;;
 
@@ -232,7 +235,7 @@ let handle_event params state ev =
     node.n_activations <- node.n_activations + 1;
     (* check ending condition; schedule next activation *)
     if state.clock.c_activations < params.activations || params.activations < 0
-    then schedule_activation params state;
+    then schedule_activation state;
     (* apply event handler *)
     node.state <- node.handler node.state ev.event
   | Deliver n ->

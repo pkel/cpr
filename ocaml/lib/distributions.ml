@@ -1,8 +1,25 @@
-type 'a iid = unit -> 'a
+type 'a iid =
+  { sample : unit -> 'a
+  ; string : string lazy_t
+  }
 
-let constant a () = a
-let uniform ~lower ~upper () = Random.float (upper -. lower) +. lower
-let exponential ~ev () = -1. *. ev *. log (Random.float 1.)
+let sample t = t.sample ()
+let to_string t = Lazy.force t.string
+
+let constant x =
+  { sample = (fun () -> x); string = lazy (Printf.sprintf "constant %g" x) }
+;;
+
+let uniform ~lower ~upper =
+  let sample () = Random.float (upper -. lower) +. lower
+  and string = lazy (Printf.sprintf "uniform %g %g" lower upper) in
+  { sample; string }
+;;
+
+let exponential ~ev =
+  let sample () = -1. *. ev *. log (Random.float 1.) in
+  { sample; string = lazy (Printf.sprintf "exponential %g" ev) }
+;;
 
 (* Voses Alias Method for efficient sampling of discrete random variables
    http://keithschwarz.com/darts-dice-coins/
@@ -53,12 +70,15 @@ let discrete ~weights =
     in
     f (small, large)
   in
-  (* sample *)
-  fun () ->
+  let sample () =
     let i = Random.int n in
     match alias.(i) with
     | None -> i
     | Some j -> if Random.float 1. > p.(i) then j else i
+  and string =
+    lazy (String.concat " " ("discrete" :: List.map string_of_float weights))
+  in
+  { sample; string }
 ;;
 
 module Parsers = struct
