@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns
+         http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+<!-- Created by igraph -->
+  <key id="g_name" for="graph" attr.name="name" attr.type="string"/>
+  <key id="g_power" for="graph" attr.name="power" attr.type="double"/>
+  <key id="g_m" for="graph" attr.name="m" attr.type="double"/>
+  <key id="g_zero.appeal" for="graph" attr.name="zero.appeal" attr.type="double"/>
+  <key id="g_algorithm" for="graph" attr.name="algorithm" attr.type="string"/>
+  <key id="g_dissemination" for="graph" attr.name="dissemination" attr.type="string"/>
+  <key id="g_activation_delay" for="graph" attr.name="activation_delay" attr.type="double"/>
+  <key id="v_compute" for="node" attr.name="compute" attr.type="double"/>
+  <key id="v_closeness" for="node" attr.name="closeness" attr.type="double"/>
+  <key id="v_farness" for="node" attr.name="farness" attr.type="double"/>
+  <key id="e_distance" for="edge" attr.name="distance" attr.type="double"/>
+  <key id="e_delay" for="edge" attr.name="delay" attr.type="string"/>
+  <graph id="G" edgedefault="undirected">
+    <data key="g_name">Barabasi graph</data>
+    <data key="g_power">1</data>
+    <data key="g_m">2</data>
+    <data key="g_zero.appeal">1</data>
+    <data key="g_algorithm">psumtree</data>
+    <data key="g_dissemination">flooding</data>
+    <data key="g_activation_delay">92.0961630465105</data>
+    <node id="n0">
+      <data key="v_compute">0.733559195417911</data>
+      <data key="v_closeness">0.0113334514497222</data>
+      <data key="v_farness">88.2343745359685</data>
+    </node>
+    <node id="n1">
+      <data key="v_compute">0.813468925654888</data>
+      <data key="v_closeness">0.0144203847097768</data>
+      <data key="v_farness">69.3462775179651</data>
+    </node>
+    <node id="n2">
+      <data key="v_compute">0.647614400135353</data>
+      <data key="v_closeness">0.0142933276302843</data>
+      <data key="v_farness">69.9627144823316</data>
+    </node>
+    <node id="n3">
+      <data key="v_compute">0.776012697257102</data>
+      <data key="v_closeness">0.010211794346317</data>
+      <data key="v_farness">97.9259830433875</data>
+    </node>
+    <node id="n4">
+      <data key="v_compute">0.0250592317897826</data>
+      <data key="v_closeness">0.0130138528678048</data>
+      <data key="v_farness">76.8411945453845</data>
+    </node>
+    <node id="n5">
+      <data key="v_compute">0.276022345293313</data>
+      <data key="v_closeness">0.0125245188637589</data>
+      <data key="v_farness">79.8433864708059</data>
+    </node>
+    <node id="n6">
+      <data key="v_compute">0.202039012918249</data>
+      <data key="v_closeness">0.00842114002498118</data>
+      <data key="v_farness">118.748767629266</data>
+    </node>
+    <node id="n7">
+      <data key="v_compute">0.172961548902094</data>
+      <data key="v_closeness">0.0117292759850846</data>
+      <data key="v_farness">85.2567542337347</data>
+    </node>
+    <node id="n8">
+      <data key="v_compute">0.235056674806401</data>
+      <data key="v_closeness">0.00857765471785354</data>
+      <data key="v_farness">116.581983408425</data>
+    </node>
+    <node id="n9">
+      <data key="v_compute">0.286997003480792</data>
+      <data key="v_closeness">0.00881323032600376</data>
+      <data key="v_farness">113.46577395685</data>
+    </node>
+    <node id="n10">
+      <data key="v_compute">0.481847822898999</data>
+      <data key="v_closeness">0.0122813295583996</data>
+      <data key="v_farness">81.424408916384</data>
+    </node>
+    <node id="n11">
+      <data key="v_compute">0.13855208735913</data>
+      <data key="v_closeness">0.0102178656174755</data>
+      <data key="v_farness">97.8677971933503</data>
+    </node>
+    <node id="n12">
+      <data key="v_compute">0.635016930522397</data>
+      <data key="v_closeness">0.00982794186107573</data>
+      <data key="v_farness">101.750703670783</data>
+    </node>
+    <edge source="n0" target="n1">
+      <data key="e_distance">6.67879226757213</data>
+      <data key="e_delay">uniform 5.0090942006791 8.34849033446517</data>
+    </edge>
+    <edge source="n0" target="n2">
+      <data key="e_distance">3.60900355549529</data>
+      <data key="e_delay">uniform 2.70675266662147 4.51125444436911</data>
+    </edge>
+    <edge source="n1" target="n2">
+      <data key="e_distance">4.43284857226536</data>
+      <data key="e_delay">uniform 3.32463642919902 5.5410607153317</data>
+    </edge>
+    <edge source="n1" target="n3">
+      <data key="e_distance">2.95447910367511</data>
+      <data key="e_delay">uniform 2.21585932775633 3.69309887959389</data>
+    </edge>
+    <edge source="n0" target="n3">
+      <data key="e_distance">7.67348906374536</data>
+      <data key="e_delay">uniform 5.75511679780902 9.59186132968171</data>
+    </edge>
+    <edge source="n1" target="n4">
+      <data key="e_distance">1.665925309062</data>
+      <data key="e_delay">uniform 1.2494439817965 2.08240663632751</data>
+    </edge>
+    <edge source="n2" target="n4">
+      <data key="e_distance">3.87913659331389</data>
+      <data key="e_delay">uniform 2.90935244498542 4.84892074164236</data>
+    </edge>
+    <edge source="n1" target="n5">
+      <data key="e_distance">1.87880638171919</data>
+      <data key="e_delay">uniform 1.40910478628939 2.34850797714898</data>
+    </edge>
+    <edge source="n4" target="n5">
+      <data key="e_distance">3.12871118518524</data>
+      <data key="e_delay">uniform 2.34653338888893 3.91088898148155</data>
+    </edge>
+    <edge source="n2" target="n6">
+      <data key="e_distance">4.55715834232979</data>
+      <data key="e_delay">uniform 3.41786875674734 5.69644792791223</data>
+    </edge>
+    <edge source="n4" target="n6">
+      <data key="e_distance">7.46581411687657</data>
+      <data key="e_delay">uniform 5.59936058765743 9.33226764609572</data>
+    </edge>
+    <edge source="n2" target="n7">
+      <data key="e_distance">5.8546157067176</data>
+      <data key="e_delay">uniform 4.3909617800382 7.31826963339699</data>
+    </edge>
+    <edge source="n5" target="n7">
+      <data key="e_distance">4.53695299569517</data>
+      <data key="e_delay">uniform 3.40271474677138 5.67119124461897</data>
+    </edge>
+    <edge source="n1" target="n8">
+      <data key="e_distance">9.60905172699131</data>
+      <data key="e_delay">uniform 7.20678879524348 12.0113146587391</data>
+    </edge>
+    <edge source="n7" target="n8">
+      <data key="e_distance">4.98667789367028</data>
+      <data key="e_delay">uniform 3.74000842025271 6.23334736708784</data>
+    </edge>
+    <edge source="n0" target="n9">
+      <data key="e_distance">3.77587764826603</data>
+      <data key="e_delay">uniform 2.83190823619952 4.71984706033254</data>
+    </edge>
+    <edge source="n8" target="n9">
+      <data key="e_distance">3.87706931005232</data>
+      <data key="e_delay">uniform 2.90780198253924 4.8463366375654</data>
+    </edge>
+    <edge source="n1" target="n10">
+      <data key="e_distance">8.69935409259051</data>
+      <data key="e_delay">uniform 6.52451556944288 10.8741926157381</data>
+    </edge>
+    <edge source="n2" target="n10">
+      <data key="e_distance">1.16814923589118</data>
+      <data key="e_delay">uniform 0.876111926918384 1.46018654486397</data>
+    </edge>
+    <edge source="n10" target="n11">
+      <data key="e_distance">6.90745324734598</data>
+      <data key="e_delay">uniform 5.18058993550949 8.63431655918248</data>
+    </edge>
+    <edge source="n7" target="n11">
+      <data key="e_distance">1.27263546548784</data>
+      <data key="e_delay">uniform 0.954476599115878 1.5907943318598</data>
+    </edge>
+    <edge source="n4" target="n12">
+      <data key="e_distance">4.40281828981824</data>
+      <data key="e_delay">uniform 3.30211371736368 5.5035228622728</data>
+    </edge>
+    <edge source="n1" target="n12">
+      <data key="e_distance">2.97654529777355</data>
+      <data key="e_delay">uniform 2.23240897333017 3.72068162221694</data>
+    </edge>
+  </graph>
+</graphml>
