@@ -1,7 +1,7 @@
 (executables
- (names honest_net visualize withholding)
+ (names honest_net igraph visualize withholding)
  (libraries
-  bos
+  bos.setup
   cmdliner
   cpr_lib
   cpr_protocols

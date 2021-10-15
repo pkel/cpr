@@ -20,6 +20,7 @@ module Data : sig
     val string : string -> value
     val float : float -> value
     val bool : bool -> value
+    val int : int -> value
     val set : ('a -> value) -> string -> 'a -> t -> t
   end
 end
@@ -50,3 +51,5 @@ val show_graph : graph -> string
 val pp_graph : Format.formatter -> graph -> unit
 val graph_to_xml : graph -> (Ezxmlm.node, string) result
 val graph_of_xml : Ezxmlm.nodes -> (graph, string) result
+val load_graph : Fpath.t -> graph StrResult.t
+val write_graph : graph -> Fpath.t -> unit StrResult.t

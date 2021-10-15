@@ -46,6 +46,7 @@ module Data = struct
     let string x = String x
     let float x = Float x
     let bool x = Bool x
+    let int x = float_of_int x |> float
 
     let set f str value data =
       let data = List.remove_assoc str data in
@@ -304,4 +305,23 @@ let graph_of_xml =
       Ok { nodes; edges; data; kind }
     with
     | Failure s -> Error s
+;;
+
+let load_graph p =
+  let open Bos.OS in
+  let open StrResult.Syntax in
+  let* xml =
+    File.with_ic p (fun ic () -> Ezxmlm.from_channel ic |> snd) ()
+    |> Result.map_error (function `Msg e -> e)
+  in
+  graph_of_xml xml
+;;
+
+let write_graph g p =
+  let open Bos.OS in
+  let open StrResult.Syntax in
+  let* xml = graph_to_xml g in
+  File.with_oc p (fun oc () -> Ok (Ezxmlm.to_channel oc None [ xml ])) ()
+  |> Result.join
+  |> Result.map_error (function `Msg e -> e)
 ;;

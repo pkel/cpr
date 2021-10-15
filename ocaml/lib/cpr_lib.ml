@@ -6,6 +6,7 @@ module GraphML = GraphML
 module Network = Network
 module PrivateAttack = PrivateAttack
 module Simulator = Simulator
+module StrResult = StrResult
 
 let ( $== ) = Dag.vertex_eq
 let ( $!= ) = Dag.vertex_neq
