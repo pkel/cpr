@@ -1,3 +1,5 @@
+open Rresult
+
 type 'a iid
 
 val sample : 'a iid -> 'a
@@ -9,7 +11,7 @@ val exponential : ev:float -> float iid
 val discrete : weights:float list -> int iid
 
 val to_string : 'a iid -> string
-val float_of_string : string -> float iid StrResult.t
+val float_of_string : string -> (float iid, R.msg) result
 
 (** same as [float_of_string] but reuses previously returned values *)
-val float_of_string_memoize : unit -> string -> float iid StrResult.t
+val float_of_string_memoize : unit -> string -> (float iid, R.msg) result

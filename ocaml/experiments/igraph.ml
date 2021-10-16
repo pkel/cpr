@@ -22,9 +22,9 @@ let protocols =
 
 let run ~activations ~srcfile ~protocol =
   let (Simulator.Protocol protocol) = protocol in
-  let open StrResult.Syntax in
-  let* g = GraphML.load_graph srcfile |> R.reword_error R.msg in
-  let* net, to_graphml = Network.of_graphml g |> R.reword_error R.msg in
+  let open ResultSyntax in
+  let* g = GraphML.load_graph srcfile in
+  let* net, to_graphml = Network.of_graphml g in
   let clock = Mtime_clock.counter () in
   let env = Simulator.(all_honest net protocol |> init) in
   let () = Simulator.loop ~activations env in
@@ -71,7 +71,7 @@ let run ~activations ~srcfile ~protocol =
            [ "reward", float rewards.(i); "activations", int n.n_activations ]
          in
          let g = to_graphml ~node_data ~graph_data () in
-         GraphML.write_graph g dstfile |> Result.fold ~ok:ignore ~error:failwith))
+         GraphML.write_graph g dstfile |> R.failwith_error_msg))
     protocol.reward_functions
   |> R.error_exn_trap_to_msg
 ;;
@@ -80,7 +80,7 @@ let run ~activations ~srcfile ~protocol =
 (* TODO: Ensure unique output file names with digest? *)
 
 let run_all activations cores =
-  let open StrResult.Syntax in
+  let open ResultSyntax in
   let* networks =
     OS.Dir.contents inpdir
     >>| List.filter (fun path -> OS.File.exists path |> Result.value ~default:false)
@@ -104,13 +104,10 @@ let run_all activations cores =
           |> R.reword_error_msg (R.msgf "ERROR: %a: %s" Fpath.pp (relativize srcfile)))
         ~mux:(fun r ->
           progress 1;
-          Result.fold
-            ~ok:ignore
-            ~error:(fun (`Msg s) ->
+          R.ignore_error r ~use:(fun e ->
               all_ok := false;
-              prerr_endline s)
-            r));
-  if !all_ok then Ok () else Rresult.R.error_msgf "some tasks failed"
+              R.pp_msg Fmt.stderr e)));
+  if !all_ok then Ok () else R.error_msgf "some tasks failed"
 ;;
 
 open Cmdliner

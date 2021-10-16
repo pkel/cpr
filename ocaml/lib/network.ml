@@ -1,3 +1,5 @@
+open Rresult
+
 type link =
   { dest : int
   ; delay : float Distributions.iid
@@ -21,8 +23,7 @@ let dissemination_of_string s =
   match s with
   | "simple" -> Ok Simple
   | "flooding" -> Ok Flooding
-  | _ ->
-    StrResult.errf "Invalid dissemination strategy '%s'. Use 'simple' or 'flooding'." s
+  | _ -> R.error_msgf "Invalid dissemination strategy '%s'. Use 'simple' or 'flooding'." s
 ;;
 
 type t =
@@ -89,7 +90,7 @@ let to_graphml
 
 let of_graphml graph =
   let open GraphML in
-  let open StrResult.Syntax in
+  let open ResultSyntax in
   let open Data.Read in
   let* dissemination, graph_data = pop string "dissemination" graph.data in
   let* dissemination = dissemination_of_string dissemination in
@@ -107,7 +108,7 @@ let of_graphml graph =
         let* i = i
         and* c, data = pop float "compute" n.data in
         if Hashtbl.mem rev_map_id n.id
-        then StrResult.errf "node %i defined multiple times" n.id
+        then R.error_msgf "node %i defined multiple times" n.id
         else (
           Hashtbl.add rev_map_id n.id i;
           map_id.(i) <- n.id;
@@ -126,7 +127,7 @@ let of_graphml graph =
         let+ delay = delay_of_string delay in
         edge_data.(src).(dest) <- data;
         links.(src) <- { dest; delay } :: links.(src)
-      | _ -> StrResult.errf "edge (%i,%i) references undefined node" e.src e.dst
+      | _ -> R.error_msgf "edge (%i,%i) references undefined node" e.src e.dst
     in
     List.fold_left
       (fun ok (e : edge) ->
@@ -195,5 +196,6 @@ let%test _ =
   let t =
     homogeneous ~activation_delay:1. ~propagation_delay:(Distributions.constant 1.) 3
   in
-  to_graphml t () |> of_graphml |> Result.map_error failwith |> Result.is_ok
+  let _g, _tograph = to_graphml t () |> of_graphml |> R.failwith_error_msg in
+  true
 ;;

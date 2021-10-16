@@ -1,5 +1,7 @@
 (** GraphML: Writing and reading GraphML files targeting iGraph compatibility. *)
 
+open Rresult
+
 module Data : sig
   type value =
     | String of string
@@ -9,11 +11,11 @@ module Data : sig
   type t = (string * value) list
 
   module Read : sig
-    val string : value -> string StrResult.t
-    val float : value -> float StrResult.t
-    val bool : value -> bool StrResult.t
-    val get : (value -> 'a StrResult.t) -> string -> t -> 'a StrResult.t
-    val pop : (value -> 'a StrResult.t) -> string -> t -> ('a * t) StrResult.t
+    val string : value -> (string, R.msg) result
+    val float : value -> (float, R.msg) result
+    val bool : value -> (bool, R.msg) result
+    val get : (value -> ('a, R.msg) result) -> string -> t -> ('a, R.msg) result
+    val pop : (value -> ('a, R.msg) result) -> string -> t -> ('a * t, R.msg) result
   end
 
   module Write : sig
@@ -49,7 +51,7 @@ type graph =
 
 val show_graph : graph -> string
 val pp_graph : Format.formatter -> graph -> unit
-val graph_to_xml : graph -> (Ezxmlm.node, string) result
-val graph_of_xml : Ezxmlm.nodes -> (graph, string) result
-val load_graph : Fpath.t -> graph StrResult.t
-val write_graph : graph -> Fpath.t -> unit StrResult.t
+val graph_to_xml : graph -> (Ezxmlm.node, R.msg) result
+val graph_of_xml : Ezxmlm.nodes -> (graph, R.msg) result
+val load_graph : Fpath.t -> (graph, R.msg) result
+val write_graph : graph -> Fpath.t -> (unit, R.msg) result

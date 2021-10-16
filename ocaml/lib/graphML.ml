@@ -1,3 +1,5 @@
+open Rresult
+
 module Data = struct
   type value =
     | String of string
@@ -10,28 +12,28 @@ module Data = struct
   module Read = struct
     let string = function
       | String s -> Ok s
-      | Bool x -> StrResult.errf "expected string, got bool %b" x
-      | Float x -> StrResult.errf "expected string, got float %f" x
+      | Bool x -> R.error_msgf "expected string, got bool %b" x
+      | Float x -> R.error_msgf "expected string, got float %f" x
     ;;
 
     let float = function
       | Float x -> Ok x
-      | Bool x -> StrResult.errf "expected float, got bool %b" x
-      | String x -> StrResult.errf "expected float, got string '%s'" x
+      | Bool x -> R.error_msgf "expected float, got bool %b" x
+      | String x -> R.error_msgf "expected float, got string '%s'" x
     ;;
 
     let bool = function
       | Bool x -> Ok x
-      | Float x -> StrResult.errf "expected bool, got float %f" x
-      | String x -> StrResult.errf "expected bool, got string '%s'" x
+      | Float x -> R.error_msgf "expected bool, got float %f" x
+      | String x -> R.error_msgf "expected bool, got string '%s'" x
     ;;
 
     let get f str data =
       match List.assoc_opt str data with
-      | None -> StrResult.errf "missing attribute '%s'" str
+      | None -> R.error_msgf "missing attribute '%s'" str
       | Some d ->
-        Result.map_error
-          (fun m -> Printf.sprintf "invalid value for attribute '%s': %s" str m)
+        R.reword_error_msg
+          (fun m -> R.msgf "invalid value for attribute '%s': %s" str m)
           (f d)
     ;;
 
@@ -154,7 +156,7 @@ let graph_to_xml =
   in
   fun g ->
     match nodes_edges_data_keys g with
-    | exception Failure s -> Stdlib.Result.error s
+    | exception Failure s -> R.error_msg s
     | nodes, edges, data, keys ->
       let edgedefault =
         match g.kind with
@@ -304,24 +306,19 @@ let graph_of_xml =
       let edges = edges keys graph in
       Ok { nodes; edges; data; kind }
     with
-    | Failure s -> Error s
+    | Failure s -> R.error_msg s
 ;;
 
 let load_graph p =
   let open Bos.OS in
-  let open StrResult.Syntax in
-  let* xml =
-    File.with_ic p (fun ic () -> Ezxmlm.from_channel ic |> snd) ()
-    |> Result.map_error (function `Msg e -> e)
-  in
+  let open ResultSyntax in
+  let* xml = File.with_ic p (fun ic () -> Ezxmlm.from_channel ic |> snd) () in
   graph_of_xml xml
 ;;
 
 let write_graph g p =
   let open Bos.OS in
-  let open StrResult.Syntax in
+  let open ResultSyntax in
   let* xml = graph_to_xml g in
-  File.with_oc p (fun oc () -> Ok (Ezxmlm.to_channel oc None [ xml ])) ()
-  |> Result.join
-  |> Result.map_error (function `Msg e -> e)
+  File.with_oc p (fun oc () -> Ok (Ezxmlm.to_channel oc None [ xml ])) () |> Result.join
 ;;

@@ -1,3 +1,5 @@
+open Rresult
+
 type link =
   { dest : int
   ; delay : float Distributions.iid
@@ -36,4 +38,4 @@ val to_graphml : t -> to_graphml
 
 (** Read network spec from iGraph/graphml. The second return value allows to merge results
     back into the source graph. *)
-val of_graphml : GraphML.graph -> (t * to_graphml) StrResult.t
+val of_graphml : GraphML.graph -> (t * to_graphml, R.msg) result

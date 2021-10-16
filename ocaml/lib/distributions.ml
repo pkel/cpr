@@ -1,3 +1,5 @@
+open Rresult
+
 type 'a iid =
   { sample : unit -> 'a
   ; string : string lazy_t
@@ -120,7 +122,10 @@ module Parsers = struct
   ;;
 end
 
-let float_of_string = Angstrom.parse_string ~consume:Angstrom.Consume.All Parsers.float
+let float_of_string s =
+  Angstrom.parse_string ~consume:Angstrom.Consume.All Parsers.float s
+  |> R.reword_error R.msg
+;;
 
 let float_of_string_memoize () =
   let t = Hashtbl.create 42 in
@@ -137,7 +142,7 @@ let%test_module "float" =
   (module struct
     let expect_ok s =
       match float_of_string s with
-      | Error e ->
+      | Error (`Msg e) ->
         Printf.eprintf "'%s' yields error '%s'" s e;
         false
       | _ -> true
