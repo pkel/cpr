@@ -95,91 +95,91 @@
     </edge>
     <edge source="n0" target="n2">
       <data key="e_distance">8.66737886494957</data>
-      <data key="e_delay">uniform 6.50053414871218 10.834223581187</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n1" target="n2">
       <data key="e_distance">4.98516641440801</data>
-      <data key="e_delay">uniform 3.73887481080601 6.23145801801002</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n0" target="n3">
       <data key="e_distance">2.42092090379447</data>
-      <data key="e_delay">uniform 1.81569067784585 3.02615112974308</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n1" target="n3">
       <data key="e_distance">4.98092174949124</data>
-      <data key="e_delay">uniform 3.73569131211843 6.22615218686406</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n2" target="n4">
       <data key="e_distance">9.70960300508887</data>
-      <data key="e_delay">uniform 7.28220225381665 12.1370037563611</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n1" target="n4">
       <data key="e_distance">5.36129136499949</data>
-      <data key="e_delay">uniform 4.02096852374962 6.70161420624936</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n1" target="n5">
       <data key="e_distance">3.27212595497258</data>
-      <data key="e_delay">uniform 2.45409446622944 4.09015744371573</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n2" target="n5">
       <data key="e_distance">3.3372098216787</data>
-      <data key="e_delay">uniform 2.50290736625902 4.17151227709837</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n2" target="n6">
       <data key="e_distance">5.87814346794039</data>
-      <data key="e_delay">uniform 4.40860760095529 7.34767933492549</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n0" target="n6">
       <data key="e_distance">6.84888253849931</data>
-      <data key="e_delay">uniform 5.13666190387448 8.56110317312414</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n5" target="n7">
       <data key="e_distance">4.02777219074778</data>
-      <data key="e_delay">uniform 3.02082914306084 5.03471523843473</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n2" target="n7">
       <data key="e_distance">1.54854771657847</data>
-      <data key="e_delay">uniform 1.16141078743385 1.93568464572309</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n5" target="n8">
       <data key="e_distance">5.06179765192792</data>
-      <data key="e_delay">uniform 3.79634823894594 6.3272470649099</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n4" target="n8">
       <data key="e_distance">8.54879530100152</data>
-      <data key="e_delay">uniform 6.41159647575114 10.6859941262519</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n7" target="n9">
       <data key="e_distance">6.1717360089533</data>
-      <data key="e_delay">uniform 4.62880200671498 7.71467001119163</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n6" target="n9">
       <data key="e_distance">4.18015339667909</data>
-      <data key="e_delay">uniform 3.13511504750932 5.22519174584886</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n2" target="n10">
       <data key="e_distance">5.92683470412157</data>
-      <data key="e_delay">uniform 4.44512602809118 7.40854338015197</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n1" target="n10">
       <data key="e_distance">9.03446734440513</data>
-      <data key="e_delay">uniform 6.77585050830385 11.2930841805064</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n7" target="n11">
       <data key="e_distance">5.40991513524204</data>
-      <data key="e_delay">uniform 4.05743635143153 6.76239391905256</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n6" target="n11">
       <data key="e_distance">2.54468901851214</data>
-      <data key="e_delay">uniform 1.90851676388411 3.18086127314018</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n10" target="n12">
       <data key="e_distance">5.88727894611657</data>
-      <data key="e_delay">uniform 4.41545920958742 7.35909868264571</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
     <edge source="n7" target="n12">
       <data key="e_distance">9.65320926299319</data>
-      <data key="e_delay">uniform 7.23990694724489 12.0665115787415</data>
+      <data key="e_delay">uniform 4.24049962498248 7.06749937497079</data>
     </edge>
   </graph>
 </graphml>
