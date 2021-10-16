@@ -33,6 +33,7 @@ type row =
   ; ca_height : int
   ; machine_duration_s : float
   ; error : string
+  ; version : string
   }
 [@@deriving fields]
 
@@ -65,6 +66,7 @@ let save_rows_as_tsv filename l =
       ~ca_height:int
       ~machine_duration_s:float
       ~error:string
+      ~version:string
     |> Array.of_list
     |> append_row df
   in
@@ -97,6 +99,7 @@ let prepare_row (Task { activations; network; protocol; attack; sim }) =
   ; ca_height = 0
   ; machine_duration_s = Float.nan
   ; error = ""
+  ; version = Common.version
   }
 ;;
 
@@ -155,33 +158,18 @@ let run task =
     ]
 ;;
 
-let bar ~n_tasks =
-  let open Progress.Line in
-  list
-    [ brackets (elapsed ())
-    ; bar n_tasks
-    ; count_to n_tasks
-    ; parens (const "eta: " ++ eta n_tasks)
-    ]
-;;
-
 let main tasks n_activations n_cores filename =
   let tasks = tasks ~n_activations in
   let n_tasks = List.length tasks in
   let queue = ref tasks in
   let acc = ref [] in
   Printf.eprintf "Run %d simulations in parallel\n" n_cores;
-  Progress.with_reporter (bar ~n_tasks) (fun progress ->
+  Progress.with_reporter (Common.progress_bar n_tasks) (fun progress ->
       if n_cores > 1
       then
         Parany.run
           n_cores
-          ~demux:(fun () ->
-            match !queue with
-            | [] -> raise Parany.End_of_input
-            | hd :: tl ->
-              queue := tl;
-              hd)
+          ~demux:(Common.parany_demux_list_ref queue)
           ~work:(fun task -> run task)
           ~mux:(fun l ->
             progress 1;
@@ -200,28 +188,11 @@ let main tasks n_activations n_cores filename =
 
 open Cmdliner
 
-let activations =
-  let doc = "Number of proof-of-work activations simulated per output row." in
-  let env = Arg.env_var "CPR_ACTIVATIONS" ~doc in
-  Arg.(value & opt int 10000 & info [ "n"; "activations" ] ~env ~docv:"ACTIVATIONS" ~doc)
-;;
-
-let cores =
-  let doc = "Number of simulation tasks run in parallel" in
-  let env = Arg.env_var "CPR_CORES" ~doc in
-  Arg.(value & opt int (Cpu.numcores ()) & info [ "p"; "cores" ] ~env ~docv:"CORES" ~doc)
-;;
-
 let filename =
   let doc = "Name of CSV output file (tab-separated)." in
   Arg.(required & pos 0 (some string) None & info [] ~docv:"OUTPUT" ~doc)
 ;;
 
-let main_t tasks = Term.(const (main tasks) $ activations $ cores $ filename)
-
-let info =
-  let doc = "simulate withholding attacks against various protocols" in
-  Term.info "withholding" ~doc
+let main_t tasks =
+  Term.(const (main tasks) $ Common.activations $ Common.cores $ filename)
 ;;
-
-let command tasks = Term.exit @@ Term.eval (main_t tasks, info)

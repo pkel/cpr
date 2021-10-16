@@ -29,4 +29,12 @@ let tasks ~n_activations =
     protocols
 ;;
 
-let () = Csv_runner.command tasks
+open Cmdliner
+open Common
+
+let info =
+  let doc = "simulate honest networks running proof-of-work protocols" in
+  Term.info ~version ~doc "honest_net"
+;;
+
+let () = Term.exit @@ Term.eval (Csv_runner.main_t tasks, info)

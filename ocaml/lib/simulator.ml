@@ -46,6 +46,9 @@ type 'prot_data state =
   ; network : Network.t
   }
 
+type wrapped_protocol =
+  | Protocol : ('dag_data data, 'dag_data, pow, 'state) Intf.protocol -> wrapped_protocol
+
 let schedule time delay event =
   time.queue <- OrderedQueue.queue (time.now +. delay) event time.queue
 ;;
