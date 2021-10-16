@@ -12,6 +12,10 @@ let version =
   Cmd.(v "git" % "describe" % "--tags" % "--dirty")
   |> OS.Cmd.run_out
   |> OS.Cmd.to_string
+  |> R.kignore_error ~use:(fun _ ->
+         Cmd.(v "git" % "describe" % "--all" % "--long" % "--dirty")
+         |> OS.Cmd.run_out
+         |> OS.Cmd.to_string)
   |> R.failwith_error_msg
 ;;
 
