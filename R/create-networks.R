@@ -3,11 +3,13 @@ require(igraph)
 
 setwd(system("git rev-parse --show-toplevel", intern=T))
 system("mkdir -p data/networks/input")
-system("rm data/networks/input/*-graphml.xml")
+system("rm -f data/networks/input/*-graphml.xml")
 
-pref.att <- function(n, .., exponential=F) {
-  g <- barabasi.game(n, power=1, m=2, directed=F)
+preferential_attachment <- function(n, ..., exponential=F) {
+  g <- sample_pa(n, ..., directed=F)
+  g$name <- "preferential_attachment"
   g$dissemination <- "flooding"
+  g$link_delay_distr <- ifelse(exponential, "exponential", "uniform")
   V(g)$compute <- runif(n)
   E(g)$distance <- runif(length(E(g))) * 9 + 1
   E(g)$delay <- ifelse(exponential,
@@ -22,10 +24,10 @@ pref.att <- function(n, .., exponential=F) {
 
 set.seed(42)
 for (i in 1:10) {
-  g <- pref.att(13)
+  g <- preferential_attachment(13, m=2)
   write.graph(g, sprintf("data/networks/input/%03i-uni-graphml.xml", i), format="graphml")
 }
 for (i in 1:10) {
-  g <- pref.att(13, exponential=T)
+  g <- preferential_attachment(13, m=2, exponential=T)
   write.graph(g, sprintf("data/networks/input/%03i-exp-graphml.xml", i), format="graphml")
 }
