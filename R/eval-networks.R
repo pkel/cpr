@@ -16,7 +16,7 @@ node_df_of_file <- function(f) {
   g <- read.graph(f, format="graphml")
   v <- V(g)
   all_rewards <- sum(v$reward)
-  all_activations <- sum(v$all_activations)
+  all_activations <- sum(v$activations)
   data.frame(# parameters
              networkSize = length(v),
              networkKind = g$name,
@@ -28,6 +28,7 @@ node_df_of_file <- function(f) {
              allRewards = all_rewards,
              closeness = v$closeness,
              farness = v$farness,
+             netBias = v$net_bias,
              compute = v$compute,
              connectivity = factorize(v$closeness),
              strength = factorize(v$compute),
@@ -41,44 +42,53 @@ node_df_of_file <- function(f) {
 }
 nodes <- NULL
 for (r in results) nodes <- rbind(nodes, node_df_of_file(r))
+nodes$linkDelayDistr <- relevel(as.factor(nodes$linkDelayDistr), "constant")
 nodes$protocolFamily <- relevel(as.factor(nodes$protocolFamily), "nakamoto")
 nodes$protocol <- relevel(as.factor(nodes$protocol), "nakamoto-k001-block")
 summary(nodes)
 
-m <- lm(reward_per_activation ~ reward_function + closeness + protocol + pow_per_block, data=nodes)
+m <- lm(rewardPerActivation ~ rewardFn + closeness + protocol + k, data=nodes)
 summary(m)
 
-m <- lm(rel_reward ~ compute + reward_function + closeness + protocol + pow_per_block, data=nodes)
+m <- lm(relReward ~ compute + rewardFn + closeness + protocol + k, data=nodes)
 summary(m)
+
+### build a causal graph
 
 # install.packages("dagitty")
 require(dagitty)
 
 node_scm_lines <- c('dag {',
-                    'compute -> activations',
-                    '{rewardPerActivation activations} -> reward',
+                    'compute -> activations -> reward',
+                    'rewardPerActivation -> reward',
                     '{k protocolFamily rewardFn} -> protocol',
                     'protocolFamily -> {rewardFn k}',
-                    'location -> {closeness farness}',
-                    '{protocol location activations} -> rewardPerActivation',
+                    '{topology linkDelayDistr} -> network',
+                    'topology -> {closeness farness netBias}',
+                    '{protocol network} -> rewardPerActivation',
                     # 'network_size -> all_rewards',
                     # 'reward_function -> all_rewards',
                     # 'all_activations -> all_rewards',
                     '}')
 node_scm <- dagitty(paste(node_scm_lines, collapse='\n'))
-latents(node_scm) <- c('location')
+latents(node_scm) <- c('network', 'topology')
 plot(node_scm)
-impliedConditionalIndependencies(node_scm)
 
 # install.packages("lavaan")
 # library( lavaan )
 # corr <- lavCor( nodes )
 # https://currentprotocols.onlinelibrary.wiley.com/doi/full/10.1002/cpz1.45
 
+### Check implied independencies
+
+impliedConditionalIndependencies(node_scm)
+
+# This is intended to work on discrete variables only, outliers on continuous variables might be ok
+# it is also quite expensive to compute ..
 res <- localTests(node_scm, nodes, type="cis.chisq")
 plotLocalTestResults(res)
 
-adjustmentSets(node_scm, exposure=c('protocol', 'farness'), outcome='rewardPerActivation', type='minimal')
+### Run a few simple models for weak and bad connected nodes
 
 weak_nodes <- subset(nodes,
                      strength == 'bot05'
@@ -98,3 +108,43 @@ weak_outer_nodes <- subset(nodes,
                            & (protocolFamily == 'nakamoto' | rewardFn != 'block'))
 mwo <- lm(rewardPerActivation ~ protocol, data=weak_outer_nodes)
 summary(mwo)
+
+### How does our proposed net bias metric affect the relative rewards?
+
+adjustmentSets(node_scm, exposure=c('protocol', 'topology'), outcome='rewardPerActivation', type='minimal')
+
+look.at <- subset(nodes, (protocolFamily == 'nakamoto' | rewardFn != 'block'))
+mfa <- lm(rewardPerActivation ~ farness + protocol, data=look.at)
+summary(mfa)
+mnb <- lm(rewardPerActivation ~ netBias + protocol, data=look.at)
+summary(mnb)
+
+plot(rewardPerActivation ~ netBias, data=subset(nodes, protocol=='bk-k032-constant'))
+
+### look at nakamoto only
+
+look.at <- subset(nodes, (protocolFamily == 'nakamoto') & linkDelayDistr == 'constant')
+mfac <- lm(rewardPerActivation ~ farness, data=look.at)
+summary(mfac)
+mnbc <- lm(rewardPerActivation ~ netBias, data=look.at)
+summary(mnbc)
+
+look.at <- subset(nodes, (protocolFamily == 'nakamoto') & linkDelayDistr == 'uniform')
+mfau <- lm(rewardPerActivation ~ farness, data=look.at)
+summary(mfau)
+mnbu <- lm(rewardPerActivation ~ netBias, data=look.at)
+summary(mnbu)
+
+look.at <- subset(nodes, (protocolFamily == 'nakamoto') & linkDelayDistr == 'exponential')
+mfae <- lm(rewardPerActivation ~ farness, data=look.at)
+summary(mfae)
+mnbe <- lm(rewardPerActivation ~ netBias, data=look.at)
+summary(mnbe)
+
+lapply(list(mfac, mfau, mfae), coef)
+lapply(list(mnbc, mnbu, mnbe), coef)
+
+plot(rewardPerActivation ~ netBias, data=look.at)
+plot(rewardPerActivation ~ farness, data=look.at)
+hist(nodes$compute)
+plot(netBias ~ farness, data=look.at)
