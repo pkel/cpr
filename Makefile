@@ -3,22 +3,22 @@ export CPR_MALFORMED_DAG_TO_FILE=/tmp/malformed.dot
 build:
 	cd ocaml && dune build
 
-test: build bridge
+test: build bridge _venv
 	cd ocaml && dune runtest
-	cd python && pytest
+	cd python && ../_venv/bin/pytest
 
 watch-malformed-dag:
 	echo "$$CPR_MALFORMED_DAG_TO_FILE" \
 		| entr -r bash -c "clear; cat \"$$CPR_MALFORMED_DAG_TO_FILE\" ; dot \"$$CPR_MALFORMED_DAG_TO_FILE\" -Tpng | feh - -."
 
-check-format:
+check-format: _venv
 	cd ocaml && dune build @fmt
-	cd python && black --check .
-	cd python && flake8
+	cd python && ../_venv/bin/black --check .
+	cd python && ../_venv/bin/flake8
 
-format:
+format: _venv
 	cd ocaml && dune build @fmt --auto-promote
-	cd python && black .
+	cd python && ../_venv/bin/black .
 
 pre-commit: check-format test
 
@@ -30,6 +30,12 @@ setup:
 dependencies:
 	dune build ocaml/{cpr,cpr-dev}.opam
 	opam install ./ocaml --deps-only --working-dir
+
+_venv: python/requirements.txt
+	rm -rf _venv
+	python -m venv _venv
+	_venv/bin/python -m pip install --upgrade pip
+	cd python && ../_venv/bin/pip install -r requirements.txt
 
 # bridge OCaml and Python
 
@@ -45,9 +51,9 @@ simulate:
 	dune exec ocaml/experiments/honest_net.exe -- data/honest_net.tsv
 	dune exec ocaml/experiments/withholding.exe -- data/withholding.tsv
 
-expand:
-	python python/eval/honest_net.py
-	python python/eval/withholding.py
+expand: _venv
+	_venv/bin/python python/eval/honest_net.py
+	_venv/bin/python python/eval/withholding.py
 
 # visualizations from short simulations
 
