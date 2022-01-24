@@ -1,0 +1,105 @@
+\documentclass[a4paper]{article}
+
+% Math
+\usepackage{mathtools}
+
+% Float environments
+\usepackage{float}
+\restylefloat{table}
+\restylefloat{figure}
+\usepackage{algorithm}
+
+% Code and Pseudocode
+\usepackage{listings}
+% \usepackage[noend]{algpseudocode}
+\usepackage{algpseudocodex}
+
+% Drawings
+\usepackage{tikz}
+
+% layout
+\usepackage{multicol}
+
+% commands
+\newcommand{\height}{\operatorname{height}}
+\newcommand{\subheight}{\operatorname{subheight}}
+\newcommand{\parents}{\operatorname{parents}}
+\newcommand{\subparents}{\operatorname{subparents}}
+
+\begin{document}
+
+\title{Protocols}
+\author{Patrik Keller}
+
+\begin{abstract}
+\dots
+\end{abstract}
+
+\maketitle
+
+% ----------------------------------------------------------------
+\section{George's Protocol}
+
+George proposes to modify the $B_k$ protocol such that votes link back to the last seen (longest chain) vote.
+In $B_k$, the votes link back to the most recent (longest chain) block.
+George refers to his protocol as Tailstorm.
+I have implemented George's protocol in the simulator and ran a few attacks.
+I proceed with a description of my interpretation of Tailstorm.
+
+\subsection{DAG structure}
+
+The distributed system maintains a directed acyclic graph (DAG).
+Let $v$ be a vertex of the DAG.
+We denote $\parents(v)$ the set of vertices that $v$ refers to.
+% We denote $\data(v)$ the information that is attached to $v$.
+
+\paragraph{Local and Global View}
+
+Nodes append vertices to the DAG locally.
+Disseminating vertices to other nodes in the network takes time.
+Hence, different nodes may observe the DAG evolving differently over time.
+We say local view to refer to a current state of a DAG as it is known to a single node at a given time.
+We say global view to refer to the union of all valid (see below) DAG vertices and edges.
+
+\paragraph{Proof-of-Work}
+In order to append a vertex to the DAG, a node has to solve a proof-of-work puzzle.
+In practice, we distributed DAG and proof-of-work share a common implementation.
+A vertex $w$ is in $\parents(v)$ iff $v$ includes a hash $h$ of $w$ and $h$ is smaller than a given threshold (difficulty parameter).
+
+
+\paragraph{DAG Validity}
+The protocol defines a root vertex $g$.
+We define $\height(g) = 0$ and $\subheight(g) = 0$.
+We divide the other vertices of the DAG in two classes: blocks and subblocks.
+Vertex $v$ is a valid subblock iff $\parents(v) = \{ w \}$.
+For each valid subblock, we define $\height(v) = \height(w)$ and $\subheight(v) = \subheight(w) + 1$.
+%
+Let
+\begin{align}
+  f(v) = \{ w \in \parents(v) \mid w \text{ is a valid subblock}\}
+\end{align}
+and let $\subparents(v)$ denote all vertices in the DAG that can be reached from $v$ using $f$.
+Vertex $v$ is a valid block iff
+\begin{align}
+  |\subparents(v)| = k - 1 \shortintertext{and}
+  \exists\, h : \forall\, w \in \subparents(v) : \height(w) = h \,.
+\end{align}
+We define $\height(v) = h + 1$ and $\subheight(v) = 0$.
+
+\subsection{Incentives}
+
+Rewards are assigned to the nodes that append vertices to the DAG.
+The size and number of the rewards depends on the structure of the DAG.
+
+Let $b$ be a valid block.
+Then $b$ as well as the $k-1$ subblocks in $\subparents(b)$ are assigned reward
+\begin{align}
+  \frac{k}{\max_{v \in \subparents(b)}(\subheight(v)) + 1}\,.
+\end{align}
+
+\subsection{Protocol}
+
+If possible, nodes append a block that maximizes their own reward.
+Otherwise, they append a subblock and link it to the subblock with maximum $\height$ and $\subheight$.
+
+\end{document}
