@@ -1,0 +1,41 @@
+\documentclass[a4paper]{article}
+
+% Math
+\usepackage{mathtools}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\theoremstyle{definition}
+\newtheorem{example}{Example}
+
+% Float environments
+\usepackage{float}
+\restylefloat{table}
+\restylefloat{figure}
+\usepackage{algorithm}
+
+% Code and Pseudocode
+\usepackage{listings}
+% \usepackage[noend]{algpseudocode}
+\usepackage{algpseudocodex}
+
+% Drawings
+\usepackage{tikz}
+
+% layout
+\usepackage{multicol}
+
+% commands
+\newcommand{\parents}{\operatorname{parents}}
+
+\begin{document}
+
+\title{Protocols}
+\author{Patrik Keller}
+
+\maketitle
+
+\input{model}
+
+\input{george}
+
+\end{document}

@@ -1,43 +1,9 @@
-\documentclass[a4paper]{article}
+\bgroup
+\newcommand{\height}{h}
+\newcommand{\subheight}{h^*}
 
-% Math
-\usepackage{mathtools}
-
-% Float environments
-\usepackage{float}
-\restylefloat{table}
-\restylefloat{figure}
-\usepackage{algorithm}
-
-% Code and Pseudocode
-\usepackage{listings}
-% \usepackage[noend]{algpseudocode}
-\usepackage{algpseudocodex}
-
-% Drawings
-\usepackage{tikz}
-
-% layout
-\usepackage{multicol}
-
-% commands
-\newcommand{\height}{\operatorname{height}}
-\newcommand{\subheight}{\operatorname{subheight}}
-\newcommand{\parents}{\operatorname{parents}}
 \newcommand{\subparents}{\operatorname{subparents}}
 
-\begin{document}
-
-\title{Protocols}
-\author{Patrik Keller}
-
-\begin{abstract}
-\dots
-\end{abstract}
-
-\maketitle
-
-% ----------------------------------------------------------------
 \section{George's Protocol}
 
 George proposes to modify the $B_k$ protocol such that votes link back to the last seen (longest chain) vote.
@@ -46,60 +12,68 @@ George refers to his protocol as Tailstorm.
 I have implemented George's protocol in the simulator and ran a few attacks.
 I proceed with a description of my interpretation of Tailstorm.
 
-\subsection{DAG structure}
+Tailstorm is a family of protocols.
+It is parametrized by $k \geq 2$.
 
-The distributed system maintains a directed acyclic graph (DAG).
-Let $v$ be a vertex of the DAG.
-We denote $\parents(v)$ the set of vertices that $v$ refers to.
-% We denote $\data(v)$ the information that is attached to $v$.
+\subsection{DAG validity}
 
-\paragraph{Local and Global View}
+Tailstorm data are called blocks.
+The protocol defines a root block $g$.
+All other blocks must inherit from $g$.
 
-Nodes append vertices to the DAG locally.
-Disseminating vertices to other nodes in the network takes time.
-Hence, different nodes may observe the DAG evolving differently over time.
-We say local view to refer to a current state of a DAG as it is known to a single node at a given time.
-We say global view to refer to the union of all valid (see below) DAG vertices and edges.
+We associate each block with a height $\height$ and a sub height $\subheight$.
+We set $\height(g) := 0$ and $\subheight(g) := 0$.
+We use height and sub height to further restrict the validity of the Tailstorm DAG.
 
-\paragraph{Proof-of-Work}
-In order to append a vertex to the DAG, a node has to solve a proof-of-work puzzle.
-In practice, we distributed DAG and proof-of-work share a common implementation.
-A vertex $w$ is in $\parents(v)$ iff $v$ includes a hash $h$ of $w$ and $h$ is smaller than a given threshold (difficulty parameter).
+Blocks can be split in two categories: storm blocks and sub blocks.
+Each sub blocks links to exactly one other block.
+Sub blocks are not restricted by height or sub height.
+If sub block $a$ was appended to parent block $b$, then we set $\height(a) := \height(b)$ and $\subheight(a) := \subheight(b) + 1$.
 
+Each strong block links to exactly $k-1$ sub blocks.
+All parent sub blocks must have the same height.
+If strong block $a$ was appended to sub blocks with height $x$, then we set $\height(a) := x + 1$ and $\subheight(a) := 0$.
 
-\paragraph{DAG Validity}
-The protocol defines a root vertex $g$.
-We define $\height(g) = 0$ and $\subheight(g) = 0$.
-We divide the other vertices of the DAG in two classes: blocks and subblocks.
-Vertex $v$ is a valid subblock iff $\parents(v) = \{ w \}$.
-For each valid subblock, we define $\height(v) = \height(w)$ and $\subheight(v) = \subheight(w) + 1$.
-%
-Let
-\begin{align}
-  f(v) = \{ w \in \parents(v) \mid w \text{ is a valid subblock}\}
-\end{align}
-and let $\subparents(v)$ denote all vertices in the DAG that can be reached from $v$ using $f$.
-Vertex $v$ is a valid block iff
-\begin{align}
-  |\subparents(v)| = k - 1 \shortintertext{and}
-  \exists\, h : \forall\, w \in \subparents(v) : \height(w) = h \,.
-\end{align}
-We define $\height(v) = h + 1$ and $\subheight(v) = 0$.
-
-\subsection{Incentives}
-
-Rewards are assigned to the nodes that append vertices to the DAG.
-The size and number of the rewards depends on the structure of the DAG.
-
-Let $b$ be a valid block.
-Then $b$ as well as the $k-1$ subblocks in $\subparents(b)$ are assigned reward
-\begin{align}
-  \frac{k}{\max_{v \in \subparents(b)}(\subheight(v)) + 1}\,.
-\end{align}
+Each block, both storm and sub, has to fulfill a proof-of-work criterion.
 
 \subsection{Protocol}
 
-If possible, nodes append a block that maximizes their own reward.
-Otherwise, they append a subblock and link it to the subblock with maximum $\height$ and $\subheight$.
+Nodes continuously grind on the proof-of-work criterion.
 
-\end{document}
+Nodes try to append blocks that maximize for height and sub height.
+Let $b$ be the visible storm block of maximum height.
+If there are $k-1$ sub blocks with height $\height(b)$, then a node tries to find a puzzle solution that allows him to append a strong block of height $\height(b) + 1$.
+Otherwise, the node appends a sub block to the block with maximum height and sub height.
+In case ambiguities, nodes prefer to append to the data that became visible first.
+
+\subsection{Incentive Scheme}
+
+We assign rewards to the individual nodes, depending on their contributions to the DAG.
+The size and number of the rewards depends on the structure of the DAG.
+The reward procedure is as follows.
+
+Rewards are assigned backwards, storm block for storm block.
+For each storm block $b$, calculate
+\begin{align}
+  r &= \frac1k \cdot \max_{a \in \parents(b)}\left(\subheight(a) + 1\right) \\
+    &= c_1 + c_2 \cdot \max_{a \in \parents(b)}\subheight(a)
+\end{align}
+Then, for each $a$ in $\parents(b) \cup \{b\}$, reward $r$ to the node who appended $a$.
+
+\subsection{Unauthorized Storm Blocks}
+
+In the actual Tailstorm protocol draft, storm blocks do not have to fulfil a proof-of-work criterion.
+According to my understanding, a storm block is just set of $k$ sub blocks or hashes thereof.
+There is no possibility to grind on a storm block besides referencing other sub blocks.
+If I follow correctly, the hash of a storm block $b$ is something like $\mathcal{H}(\operatorname{sort}(\parents(b))$.
+
+Upcoming sub and storm blocks include such hash references.
+Nodes have to de-reference the hashes to verify the validity of the reference.
+I observe, that inverting $\mathcal{H}(\operatorname{sort}(\parents(\cdot))$ is hard if there are more sub blocks than necessary.
+In order to avoid DoS-attacks, $\parents(b)$ has to be shared explicitly---at the latest with the next sub block that links to the strong block ($=\parents(b)$).
+
+I argue that $\parents(b)$ can be merged into the next sub block.
+I.\,e., make the strong block require a proof-of-work solution and count it as the first sub block of the next epoch.
+This is what I have proposed above.
+
+\egroup % protocol-local commands

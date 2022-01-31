@@ -1,0 +1,45 @@
+\section{Model}
+
+\subsection{Distributed System} \label{sec:distsys}
+
+A distributed system is a set of interconnected machines that follow a set of instructions to reach a common goal.
+The set of instructions is called protocol.
+The machines are called network nodes or parties.
+The connections between the machines are called network.
+The nodes may use the network to exchange information.
+
+\subsection{Time} \label{sec:time}
+
+We model continuous time.
+Our default time variable is $t$, the default unit is seconds.
+If not stated otherwise, protocol execution starts at time $t = 0$.
+
+\subsection{Information DAG} \label{sec:infodag}
+
+We organize information in a directed acyclic graph (DAG) that grows over time.
+Each vertex represents one datum.
+Nodes can extend the DAG by appending a new datum $x$ to a set $\parents(x)$ of existing data.
+We say that datum $a$ links to datum $b$, or that $a$ was appended to $b$, if and only if $b \in \parents(a)$.
+
+Let $x_1, \dots, x_n$ be a sequence of data.
+We say that datum $x_n$ inherits from datum $x_1$, if and only if
+$x_{i-1} \in \parents(x_{i})$ for all $i = 2, \dots, n$.
+
+The protocol may impose restrictions on what data can be appended when.
+E.\,g., in Bitcoin, data are called blocks.
+Each appended block must have exactly one parent, must inherit from the genesis block, and must satisfy a proof-of-work criterion.
+By virtue of the first restriction, the DAG becomes a tree.
+The nodes use Nakamoto's consensus protocol to agree on and extend upon the same branch of this tree.
+
+\subsection{Partial Visibility} \label{sec:visibility}
+
+Not all nodes see all information at all times.
+Right after creation, a datum is only visible to the node that appended the data.
+When a datum becomes visible to a node, it stays visible in the future.
+Data becomes visible according to the communication rules.
+
+\subsection{Communication} \label{sec:communication}
+
+A node can share visible data with other nodes.
+We assume a $\Delta$-synchronous network model.
+I.\,e., if a node shares datum $x$ at time $t$, then $x$ is visible to all other nodes at time $t + \Delta$.
