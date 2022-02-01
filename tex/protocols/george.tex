@@ -31,7 +31,7 @@ Sub blocks are not restricted by height or sub height.
 If sub block $a$ was appended to parent block $b$, then we set $\height(a) := \height(b)$ and $\subheight(a) := \subheight(b) + 1$.
 
 Each strong block links to exactly $k-1$ sub blocks.
-All parent sub blocks must have the same height.
+All parent sub blocks must have the same height. [ This is not enough. They must link to the same strong block. ]
 If strong block $a$ was appended to sub blocks with height $x$, then we set $\height(a) := x + 1$ and $\subheight(a) := 0$.
 
 Each block, both storm and sub, has to fulfill a proof-of-work criterion.
@@ -75,5 +75,29 @@ In order to avoid DoS-attacks, $\parents(b)$ has to be shared explicitly---at th
 I argue that $\parents(b)$ can be merged into the next sub block.
 I.\,e., make the strong block require a proof-of-work solution and count it as the first sub block of the next epoch.
 This is what I have proposed above.
+
+\subsection{Application: Transaction Ordering}
+
+Within the DAG, storm blocks are strictly ordered. Multiple sub blocks may exist in parallel.
+
+Payloads attached to storm blocks have atomic broadcast semantics (with eventual consistency), i.\,e., all nodes agree on inclusion \emph{and ordering} of payloads.
+
+Payloads attached to sub blocks have reliable broadcast semantics (with eventual consistency), i.\,e., all nodes agree on the inclusion \emph{but not the ordering} of payloads.
+
+We use sub blocks as an unordered staging mechanism for the ordered storm block payload.
+Each sub block contains a list of transactions.
+The strong block accumulates all transactions of the sub block.
+Multiple variants are possible for accumulation and ordering of the transactions in a storm block.
+
+\begin{enumerate}
+  \item The miner of the strong block decides on the ordering of transactions.
+    The miner may omit transactions, only if they would be invalid if appended to the ordering.
+  \item All transactions are part of the strong block.
+    The ordering is induced by the pow-solution of the strong block.
+    Invalid transactions will not be executed.
+  \item All transactions are part of the strong block.
+    For each minimal subset of transactions where the ordering affects validity, all input UTXO are invalidated.
+    I.\,e., if two transactions use the same UTXO, then both transaction values (all unlocked UTXO) are burned.
+\end{enumerate}
 
 \egroup % protocol-local commands
