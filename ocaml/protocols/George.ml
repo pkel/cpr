@@ -503,6 +503,35 @@ module PrivateAttack = struct
   and attack' ~k p = Node (attack (honest ~k) (tactic_of_policy' ~k p))
 end
 
+module MdpPolicy = struct
+  (** George works on an MDP for this protocol.
+
+      https://github.com/umass-forensics/2019-project-proof-mdp
+
+      He can solve the MDP on a high-memory machine for k=3. We are working on k=4.
+
+      For k=2 and k=3, he observes that the break-even point of his policies is alpha=.25.
+      We want to apply the optimal policies in the simulator for validation. Also,
+      apparently it is not trivial to say how profitable the policy is in terms of rewards
+      after DA. We can get such numbers from the simulator.
+
+      I get the policy as [state:int -> action:int] json. For k=2 there are 180 000
+      states. This fits easily into my machine. My plan is to implement a k=2 PoC here. We
+      will have to be smarter for k>2; maybe use binary file formats and interface with
+      Python/numpy. *)
+
+  type state =
+    { treesize : int (* number of sub blocks confirming the last public strong block *)
+    ; allocation : bool array (* honest or attacker sub block? *)
+    ; hidden : int
+          (* number of withheld sub blocks referencing the last public strong block *)
+    ; skip : int (* number of withheld sub blocks referencing a withheld strong block *)
+    ; tree : int (* sub block tree encoded as pruefer sequence *)
+    }
+
+  (* WIP *)
+end
+
 let attacks ~k =
   let open Collection in
   empty
