@@ -10,7 +10,12 @@ try:
     curdir = dir_path = os.path.dirname(os.path.realpath(__file__))
     dll_basename = "bridge.so"
     dll_name = f"{curdir}/{dll_basename}"
-    dll_url = "https://pkel.github.io/cpr/bridge.so"
+    if sys.platform == "linux":
+        dll_url = "https://pkel.github.io/cpr/linux/bridge.so"
+    elif sys.platform == "darwin":
+        dll_url = "https://pkel.github.io/cpr/macos/bridge.so"
+    else:
+        raise OSError(f"Unsupported OS: '{sys.platform}' - we support Linux and MacOS")
     dll = PyDLL(dll_name, RTLD_GLOBAL)
     argv_t = c_char_p * 2
     argv = argv_t(dll_basename.encode("utf-8"), None)
