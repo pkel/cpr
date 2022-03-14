@@ -1,4 +1,4 @@
-See [DEVELOPMENT.md][./DEVELOPMENT.md] for compiling the OCaml stuff
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for compiling the OCaml stuff
 locally.
 
 # Consensus Protocol Research
