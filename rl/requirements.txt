@@ -1,0 +1,13 @@
+pandas
+numpy
+black
+flake8
+pytest
+jupyter
+matplotlib
+seaborn
+-e ../python/gym
+pytest-forked
+jupyterlab
+stable-baselines3
+tqdm
