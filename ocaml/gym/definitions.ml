@@ -108,14 +108,15 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     |> String.concat " | "
   in
   let step ref_t ~action:i =
+    (* env.step () *)
+    (* Apply action i to the simulator state. *)
     let t = !ref_t in
     let v, (a : _ actions), (n : _ Simulator.node') = t.attacker in
-    (* apply action *)
     let action = M.Action.of_int i in
     n.state <- M.apply_action v a n.state action;
-    (* continue simulation *)
+    (* Continue simulation till next attacker action. *)
     skip_to_interaction t.sim;
-    (* reward *)
+    (* Calculate rewards for the new common blocks. *)
     (* 1. find common ancestor *)
     let ca =
       (* TODO move this into Simulator.common_ancestor *)
@@ -130,9 +131,13 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     (* 2. apply reward function up to last marked DAG vertex (exclusive) *)
     let ( $=? ) n m = Option.map (fun m -> m $== n) m |> Option.value ~default:false in
     let cf (* cash flow *) = Array.make 2 0. in
-    let reward_time =
+    let reward_time_elapsed, time_rewarded =
+      let last_ca_time =
+        Option.map Simulator.(fun x -> (Dag.data x).appended_at) t.reward_applied_upto
+        |> Option.value ~default:0.
+      in
       if ca $=? t.reward_applied_upto
-      then 0.
+      then 0., last_ca_time
       else (
         let rec iter seq =
           match seq () with
@@ -149,27 +154,28 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
             iter seq
         in
         iter (Dag.iterate_ancestors t.sim.global.view [ ca ]);
-        let last_ca_time =
-          Option.map Simulator.(fun x -> (Dag.data x).appended_at) t.reward_applied_upto
-          |> Option.value ~default:0.
-        in
-        (Dag.data ca).appended_at -. last_ca_time)
+        (Dag.data ca).appended_at -. last_ca_time, (Dag.data ca).appended_at)
     in
-    assert (cf.(0) = 0. || reward_time > 0.);
+    assert (cf.(0) = 0. || reward_time_elapsed > 0.);
     (* 3. mark common ancestor DAG vertex *)
     t.reward_applied_upto <- Some ca;
-    (* end reward *)
+    (* Calculate simulated time. *)
     let step_time = t.sim.clock.now -. t.last_time in
     t.last_time <- t.sim.clock.now;
-    (* return *)
-    ( observe t |> M.Observation.to_floatarray
-    , (if reward_time > 0. then cf.(0) /. reward_time else 0.)
-    , false
-    , [ "attacker_reward", Py.Float.of_float cf.(0)
-      ; "defender_reward", Py.Float.of_float cf.(1)
-      ; "timedelta_reward", Py.Float.of_float reward_time
-      ; "timedelta_step", Py.Float.of_float step_time
-      ; "time", Py.Float.of_float t.sim.clock.now
+    (* Return *)
+    ( (* observation *)
+      observe t |> M.Observation.to_floatarray
+    , (* reward *)
+      cf.(0) *. reward_time_elapsed
+    , (* done? no, continue forever *)
+      false
+    , (* info dict *)
+      [ "reward_attacker", Py.Float.of_float cf.(0)
+      ; "reward_defender", Py.Float.of_float cf.(1)
+      ; "reward_time_elapsed", Py.Float.of_float reward_time_elapsed
+      ; "step_time_elapsed", Py.Float.of_float step_time
+      ; "time_simulated", Py.Float.of_float t.sim.clock.now
+      ; "time_rewarded", Py.Float.of_float time_rewarded
       ] )
   and low = M.Observation.(low |> to_floatarray)
   and high = M.Observation.(high |> to_floatarray)
