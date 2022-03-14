@@ -26,6 +26,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
           opam-local-packages: ocaml/*.opam
+          dune-cache: true
 
       - name: Install dependencies
         run: opam install cpr cpr-dev --deps-only --with-test
