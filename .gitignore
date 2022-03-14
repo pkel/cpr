@@ -1,2 +1,8 @@
 fig/chains
 .ipynb_checkpoints
+
+.vscode/
+
+_build/
+
+*.pyc
