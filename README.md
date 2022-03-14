@@ -1,3 +1,6 @@
+See [DEVELOPMENT.md][./DEVELOPMENT.md] for compiling the OCaml stuff
+locally.
+
 # Consensus Protocol Research
 
 We evaluate a number of proof-of-work consensus protocols by discrete
