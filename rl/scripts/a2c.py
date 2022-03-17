@@ -5,11 +5,13 @@ from cpr_gym import specs
 from stable_baselines3 import A2C, PPO, DQN
 from tqdm import tqdm
 
+ALPHA = 0.4
 
-env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=0.26))
+
+env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=ALPHA))
 model = A2C("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=10e5)
-model.save("a2c_nakamoto_alpha_0.26")
+model.save(f"a2c_nakamoto_alpha_{ALPHA}")
 # p = env.policies()["honest"]
 # obs = env.reset()
 # rs = []
