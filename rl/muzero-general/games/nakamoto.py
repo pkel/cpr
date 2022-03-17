@@ -21,7 +21,7 @@ class MuZeroConfig:
 
 
         ### Game
-        self.observation_shape = (1, 1, 3)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
+        self.observation_shape = (1, 1, 4)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
         self.action_space = list(range(4))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 0  # Number of previous observations and previous actions to add to the current observation
@@ -136,7 +136,10 @@ class Game(AbstractGame):
     """
 
     def __init__(self, seed=None):
-        spec = specs.nakamoto(alpha=0.25)
+        alpha = np.random.normal(0.25, 0.1)
+        alpha = min(alpha, 0.49)
+        alpha = max(alpha, 0.1)
+        spec = specs.nakamoto(alpha=alpha)
 
         self.env = gym.make("cpr-v0", spec=spec)
         if seed is not None:
