@@ -176,7 +176,9 @@ class Game(AbstractGame):
             Initial observation of the game.
         """
         alpha = np.random.normal(0.25, 0.1)
-        spec = specs.nakamoto(alpha=0.25)
+        alpha = min(alpha, 0.49)
+        alpha = max(alpha, 0.1)
+        spec = specs.nakamoto(alpha=alpha)
 
         self.env = gym.make("cpr-v0", spec=spec)
         return numpy.array([[self.env.reset()]])
