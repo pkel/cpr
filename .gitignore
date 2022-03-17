@@ -4,5 +4,5 @@ fig/chains
 .vscode/
 
 _build/
-
+_opam/
 *.pyc
