@@ -5,4 +5,5 @@ fig/chains
 
 _build/
 _opam/
+_venv/
 *.pyc
