@@ -178,19 +178,21 @@ let of_module ~alpha (type r s) (module M : M with type state = s and type data 
     (* 2. apply reward function up to last marked DAG vertex (exclusive) *)
     let ( $=? ) n m = Option.map (fun m -> m $== n) m |> Option.value ~default:false in
     let cf (* cash flow *) = Array.make 2 0. in
-    let reward_time_elapsed, time_rewarded =
+    let reward_time_elapsed, reward_n_pows, simulator_clock_rewarded =
       let last_ca_time =
         Option.map Simulator.(fun x -> (Dag.data x).appended_at) t.reward_applied_upto
         |> Option.value ~default:0.
       in
       if ca $=? t.reward_applied_upto
-      then 0., last_ca_time
+      then 0., 0, last_ca_time
       else (
+        let pow_cnt = ref 0 in
         let rec iter seq =
           match seq () with
           | Seq.Nil -> ()
           | Cons (n, _seq) when n $=? t.reward_applied_upto -> ()
           | Cons (n, seq) ->
+            if Option.is_some (Dag.data n).pow_hash then incr pow_cnt else ();
             M.reward_function
               ~view:t.sim.global
               ~assign:(fun x n ->
@@ -201,7 +203,7 @@ let of_module ~alpha (type r s) (module M : M with type state = s and type data 
             iter seq
         in
         iter (Dag.iterate_ancestors t.sim.global.view [ ca ]);
-        (Dag.data ca).appended_at -. last_ca_time, (Dag.data ca).appended_at)
+        (Dag.data ca).appended_at -. last_ca_time, !pow_cnt, (Dag.data ca).appended_at)
     in
     assert (cf.(0) = 0. || reward_time_elapsed > 0.);
     (* 3. mark common ancestor DAG vertex *)
@@ -220,9 +222,10 @@ let of_module ~alpha (type r s) (module M : M with type state = s and type data 
       [ "reward_attacker", Py.Float.of_float cf.(0)
       ; "reward_defender", Py.Float.of_float cf.(1)
       ; "reward_time_elapsed", Py.Float.of_float reward_time_elapsed
+      ; "reward_n_pows", Py.Int.of_int reward_n_pows
       ; "step_time_elapsed", Py.Float.of_float step_time
-      ; "time_simulated", Py.Float.of_float t.sim.clock.now
-      ; "time_rewarded", Py.Float.of_float time_rewarded
+      ; "simulator_clock_now", Py.Float.of_float t.sim.clock.now
+      ; "simulator_clock_rewarded", Py.Float.of_float simulator_clock_rewarded
       ] )
   and low = O.(low |> to_floatarray)
   and high = O.(high |> to_floatarray)
