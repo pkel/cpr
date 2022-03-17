@@ -1,2 +1,6 @@
 fig/chains
 .ipynb_checkpoints
+_build/
+_opam/
+_venv
+*.pyc
