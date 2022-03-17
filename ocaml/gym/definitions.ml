@@ -9,6 +9,20 @@ type ('a, 'b) instance =
   ; mutable last_time : float
   }
 
+module type Observation = sig
+  type t
+  type data
+  type state
+
+  val length : int
+  val low : t
+  val high : t
+  val observe : (data Simulator.data, data) local_view -> state -> t
+  val to_floatarray : t -> floatarray
+  val of_floatarray : floatarray -> t
+  val to_string : t -> string
+end
+
 module type M = sig
   type data
   type state
@@ -20,17 +34,7 @@ module type M = sig
 
   val reward_function : (data Simulator.data, data) reward_function
 
-  module Observation : sig
-    type t
-
-    val length : int
-    val low : t
-    val high : t
-    val observe : (data Simulator.data, data) local_view -> state -> t
-    val to_floatarray : t -> floatarray
-    val of_floatarray : floatarray -> t
-    val to_string : t -> string
-  end
+  module Observation : Observation with type data := data and type state := state
 
   module Action : sig
     type t
@@ -52,15 +56,59 @@ module type M = sig
     -> state
 end
 
-let of_module ~alpha (type s t) (module M : M with type state = s and type data = t)
-    : ( t
-      , (t Simulator.data, t) local_view
-        * (t Simulator.data, t, Simulator.pow) actions
-        * (t, s) Simulator.node' )
+let augment_observation
+    ~alpha
+    (type r s t)
+    (module M : Observation with type t = t and type state = s and type data = r)
+  =
+  (module struct
+    type data = M.data
+    type state = M.state
+    type t = M.t * float
+
+    let length = M.length + 1
+    let observe x y = M.observe x y, alpha
+    let low = M.low, 0.
+    let high = M.high, 1.
+
+    let to_floatarray (t, alpha) =
+      let a = Float.Array.make 1 alpha in
+      Float.Array.append (M.to_floatarray t) a
+    ;;
+
+    let of_floatarray a =
+      let alpha = Float.Array.get a (length - 1)
+      and arr = Float.Array.make M.length Float.nan in
+      let () = Float.Array.blit a 0 arr 0 M.length in
+      M.of_floatarray arr, alpha
+    ;;
+
+    let to_string (t, _alpha) = M.to_string t
+  end : Observation
+    with type t = t * float
+     and type state = s
+     and type data = r)
+;;
+
+let of_module ~alpha (type r s) (module M : M with type state = s and type data = r)
+    : ( r
+      , (r Simulator.data, r) local_view
+        * (r Simulator.data, r, Simulator.pow) actions
+        * (r, s) Simulator.node' )
       instance
       ref
     env
   =
+  let (module O) =
+    augment_observation
+      ~alpha
+      (module struct
+        include M.Observation
+
+        type state = s
+        type data = r
+      end)
+  in
   let network : Network.t =
     let delay = Distributions.constant 0. in
     { dissemination = Simple
@@ -90,8 +138,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     | None -> failwith "simulation should continue forever"
   and observe t =
     let v, _a, (n : _ Simulator.node') = t.attacker in
-    let open M.Observation in
-    observe v n.state
+    O.observe v n.state
   in
   let create () =
     let t = init () in
@@ -101,7 +148,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     let t = init () in
     skip_to_interaction t.sim;
     ref_t := t;
-    observe t |> M.Observation.to_floatarray
+    observe t |> O.to_floatarray
   and actions_hum =
     let open M.Action in
     List.init n (fun i -> Printf.sprintf "(%d) %s" i (of_int i |> to_string))
@@ -131,19 +178,21 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     (* 2. apply reward function up to last marked DAG vertex (exclusive) *)
     let ( $=? ) n m = Option.map (fun m -> m $== n) m |> Option.value ~default:false in
     let cf (* cash flow *) = Array.make 2 0. in
-    let reward_time_elapsed, time_rewarded =
+    let reward_time_elapsed, reward_n_pows, simulator_clock_rewarded =
       let last_ca_time =
         Option.map Simulator.(fun x -> (Dag.data x).appended_at) t.reward_applied_upto
         |> Option.value ~default:0.
       in
       if ca $=? t.reward_applied_upto
-      then 0., last_ca_time
+      then 0., 0, last_ca_time
       else (
+        let pow_cnt = ref 0 in
         let rec iter seq =
           match seq () with
           | Seq.Nil -> ()
           | Cons (n, _seq) when n $=? t.reward_applied_upto -> ()
           | Cons (n, seq) ->
+            if Option.is_some (Dag.data n).pow_hash then incr pow_cnt else ();
             M.reward_function
               ~view:t.sim.global
               ~assign:(fun x n ->
@@ -154,7 +203,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
             iter seq
         in
         iter (Dag.iterate_ancestors t.sim.global.view [ ca ]);
-        (Dag.data ca).appended_at -. last_ca_time, (Dag.data ca).appended_at)
+        (Dag.data ca).appended_at -. last_ca_time, !pow_cnt, (Dag.data ca).appended_at)
     in
     assert (cf.(0) = 0. || reward_time_elapsed > 0.);
     (* 3. mark common ancestor DAG vertex *)
@@ -164,7 +213,7 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
     t.last_time <- t.sim.clock.now;
     (* Return *)
     ( (* observation *)
-      observe t |> M.Observation.to_floatarray
+      observe t |> O.to_floatarray
     , (* reward *)
       cf.(0) *. reward_time_elapsed
     , (* done? no, continue forever *)
@@ -173,27 +222,27 @@ let of_module ~alpha (type s t) (module M : M with type state = s and type data 
       [ "reward_attacker", Py.Float.of_float cf.(0)
       ; "reward_defender", Py.Float.of_float cf.(1)
       ; "reward_time_elapsed", Py.Float.of_float reward_time_elapsed
+      ; "reward_n_pows", Py.Int.of_int reward_n_pows
       ; "step_time_elapsed", Py.Float.of_float step_time
-      ; "time_simulated", Py.Float.of_float t.sim.clock.now
-      ; "time_rewarded", Py.Float.of_float time_rewarded
+      ; "simulator_clock_now", Py.Float.of_float t.sim.clock.now
+      ; "simulator_clock_rewarded", Py.Float.of_float simulator_clock_rewarded
       ] )
-  and low = M.Observation.(low |> to_floatarray)
-  and high = M.Observation.(high |> to_floatarray)
+  and low = O.(low |> to_floatarray)
+  and high = O.(high |> to_floatarray)
   and to_string t =
     Printf.sprintf
       "Protocol %s against α=%.2f attacker\n%s\nActions: %s"
       M.description
       alpha
-      (observe !t |> M.Observation.to_string)
+      (observe !t |> O.to_string)
       actions_hum
   and policies =
     List.map
-      (fun (name, p) ->
-        name, fun a -> M.Observation.of_floatarray a |> p |> M.Action.to_int)
+      (fun (name, p) -> name, fun a -> O.of_floatarray a |> fst |> p |> M.Action.to_int)
       M.policies
   in
   { n_actions = M.Action.n
-  ; observation_length = M.Observation.length
+  ; observation_length = O.length
   ; create
   ; reset
   ; step
