@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-model = A2C.load("a2c_nakamoto_alpha_0.26")
 env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=0.26))
 
 sum_rs = []

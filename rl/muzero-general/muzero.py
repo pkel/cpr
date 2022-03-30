@@ -19,6 +19,8 @@ import replay_buffer
 import self_play
 import shared_storage
 import trainer
+import numpy as np
+import pandas as pd
 
 
 class MuZero:
@@ -114,6 +116,8 @@ class MuZero:
             "num_played_steps": 0,
             "num_reanalysed_games": 0,
             "terminate": False,
+            "relative_reward": 0,
+            "alpha": 0,
         }
         self.replay_buffer = {}
 
@@ -262,6 +266,8 @@ class MuZero:
             "num_played_games",
             "num_played_steps",
             "num_reanalysed_games",
+            "relative_reward",
+            "alpha",
         ]
         info = ray.get(self.shared_storage_worker.get_info.remote(keys))
         try:
@@ -321,7 +327,7 @@ class MuZero:
                 writer.add_scalar("3.Loss/Reward_loss", info["reward_loss"], counter)
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
                 print(
-                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}',
+                    f'Last relative reward: {info["relative_reward"]:.2f} Last alpha: {info["alpha"]:.2f} Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}',
                     end="\r",
                 )
                 counter += 1
@@ -409,7 +415,21 @@ class MuZero:
         self_play_worker.close_game.remote()
 
         if len(self.config.players) == 1:
-            result = numpy.mean([sum(history.reward_history) for history in results])
+            result = pd.DataFrame(
+                {
+                    "alpha": [np.round(history.alpha, 2) for history in results],
+                    "relative_reward": (
+                        sum(history.attacker_rewards)
+                        / (
+                            sum(history.attacker_rewards)
+                            + sum(history.defender_rewards)
+                        )
+                        for history in results
+                    ),
+                }
+            )
+
+            # result = numpy.mean([sum(history.reward_history) for history in results])
         else:
             result = numpy.mean(
                 [
@@ -677,7 +697,14 @@ if __name__ == "__main__":
             elif choice == 2:
                 muzero.diagnose_model(30)
             elif choice == 3:
-                muzero.test(render=True, opponent="self", muzero_player=None)
+                num_tests = input("Enter number of games to play: ")
+                res = muzero.test(
+                    render=True,
+                    opponent="self",
+                    muzero_player=None,
+                    num_tests=num_tests,
+                )
+                print(f"Result: {res}")
             elif choice == 4:
                 muzero.test(render=True, opponent="human", muzero_player=0)
             elif choice == 5:

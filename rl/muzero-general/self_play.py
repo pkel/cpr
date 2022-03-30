@@ -61,11 +61,22 @@ class SelfPlay:
                     self.config.muzero_player,
                 )
 
+                try:
+
+                    relative_reward = sum(game_history.attacker_rewards) / (
+                        sum(game_history.attacker_rewards)
+                        + sum(game_history.defender_rewards)
+                    )
+
+                except:
+                    relative_reward = 0
                 # Save to the shared storage
                 shared_storage.set_info.remote(
                     {
                         "episode_length": len(game_history.action_history) - 1,
                         "total_reward": sum(game_history.reward_history),
+                        "relative_reward": relative_reward,
+                        "alpha": game_history.alpha,
                         "mean_value": numpy.mean(
                             [value for value in game_history.root_values if value]
                         ),
@@ -115,6 +126,8 @@ class SelfPlay:
         """
         game_history = GameHistory()
         observation = self.game.reset()
+        alpha = observation[0][0][-1]
+        game_history.alpha = alpha
         game_history.action_history.append(0)
         game_history.observation_history.append(observation)
         game_history.reward_history.append(0)
@@ -166,7 +179,7 @@ class SelfPlay:
                         opponent, stacked_observations
                     )
 
-                observation, reward, done = self.game.step(action)
+                observation, reward, done, info = self.game.step(action)
 
                 if render:
                     print(f"Played action: {self.game.action_to_string(action)}")
@@ -179,6 +192,8 @@ class SelfPlay:
                 game_history.observation_history.append(observation)
                 game_history.reward_history.append(reward)
                 game_history.to_play_history.append(self.game.to_play())
+                game_history.attacker_rewards.append(info["reward_attacker"])
+                game_history.defender_rewards.append(info["reward_defender"])
 
         return game_history
 
@@ -482,12 +497,15 @@ class GameHistory:
     """
 
     def __init__(self):
+        self.alpha = None
         self.observation_history = []
         self.action_history = []
         self.reward_history = []
         self.to_play_history = []
         self.child_visits = []
         self.root_values = []
+        self.attacker_rewards = []
+        self.defender_rewards = []
         self.reanalysed_predicted_root_values = None
         # For PER
         self.priorities = None
