@@ -7,3 +7,4 @@ _build/
 _opam/
 _venv/
 *.pyc
+rl/muzero-general/results/

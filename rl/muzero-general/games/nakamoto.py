@@ -35,7 +35,7 @@ class MuZeroConfig:
         ### Self-Play
         self.num_workers = 1  # Number of simultaneous threads/workers self-playing to feed the replay buffer
         self.selfplay_on_gpu = False
-        self.max_moves = 500  # Maximum number of moves if game is not finished before
+        self.max_moves = 100  # Maximum number of moves if game is not finished before
         self.num_simulations = 50  # Number of future moves self-simulated
         self.discount = 0.997  # Chronological discount of the reward
         self.temperature_threshold = None  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
@@ -79,17 +79,17 @@ class MuZeroConfig:
         self.results_path = pathlib.Path(__file__).resolve().parents[1] / "results" / pathlib.Path(__file__).stem / datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 10000  # Total number of training steps (ie weights update according to a batch)
-        self.batch_size = 128  # Number of parts of games to train on at each training step
+        self.batch_size = 32000  # Number of parts of games to train on at each training step
         self.checkpoint_interval = 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
-        self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD
+        self.optimizer = "SGD"  # "Adam" or "SGD". Paper uses SGD
         self.weight_decay = 1e-4  # L2 weights regularization
         self.momentum = 0.9  # Used only if optimizer is SGD
 
         # Exponential learning rate schedule
-        self.lr_init = 0.02  # Initial learning rate
+        self.lr_init = 0.0001  # Initial learning rate
         self.lr_decay_rate = 0.8  # Set it to 1 to use a constant learning rate
         self.lr_decay_steps = 1000
 
@@ -136,9 +136,9 @@ class Game(AbstractGame):
     """
 
     def __init__(self, seed=None):
-        alpha = np.random.normal(0.25, 0.1)
+        alpha = np.random.normal(0.3, 0.1)
         alpha = min(alpha, 0.49)
-        alpha = max(alpha, 0.1)
+        alpha = max(alpha, 0.25)
         spec = specs.nakamoto(alpha=alpha)
 
         self.env = gym.make("cpr-v0", spec=spec)
@@ -155,8 +155,8 @@ class Game(AbstractGame):
         Returns:
             The new observation, the reward and a boolean if the game has ended.
         """
-        observation, reward, done, _ = self.env.step(action)
-        return numpy.array([[observation]]), reward, done
+        observation, reward, done, info = self.env.step(action)
+        return numpy.array([[observation]]), reward, done, info
 
     def legal_actions(self):
         """
@@ -178,11 +178,10 @@ class Game(AbstractGame):
         Returns:
             Initial observation of the game.
         """
-        alpha = np.random.normal(0.25, 0.1)
+        alpha = np.random.normal(0.3, 0.1)
         alpha = min(alpha, 0.49)
-        alpha = max(alpha, 0.1)
+        alpha = max(alpha, 0.25)
         spec = specs.nakamoto(alpha=alpha)
-
         self.env = gym.make("cpr-v0", spec=spec)
         return numpy.array([[self.env.reset()]])
 
@@ -197,7 +196,7 @@ class Game(AbstractGame):
         Display the game observation.
         """
         self.env.render()
-        input("Press enter to take a step ")
+        # input("Press enter to take a step ")
 
     def action_to_string(self, action_number):
         """
