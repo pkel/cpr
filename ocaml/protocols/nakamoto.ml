@@ -170,18 +170,19 @@ module PrivateAttack = struct
   ;;
 
   let selfish_policy o =
+    (* TODO: check SSZ'16 and ES'14 for better strategies *)
     let open Observation in
     let open Action in
-    if o.private_blocks = 0 && o.public_blocks = 0
-    then Wait
-    else if o.public_blocks = 0
-    then Wait
-    else Override
+    if o.public_blocks > 0
+    then if o.private_blocks < o.public_blocks then Adopt else Override
+    else Wait
   ;;
 
   let policies = [ "honest", honest_policy; "selfish", selfish_policy ]
 
-  let selfish_policy' v state =
+  (* This strategy was designed for the PrivateAttack module. It does not work for
+     Ssz16compat!*)
+  let _selfish_policy' v state =
     let open Action in
     if state.private_ $== state.public
     then Wait
@@ -239,10 +240,6 @@ let attacks =
        ~info:"Private attack with selfish policy"
        "private-selfish"
        PrivateAttack.(attack selfish_policy)
-  |> add
-       ~info:"Private attack with selfish policy (alternative policy implementation)"
-       "private-selfish-alt"
-       PrivateAttack.(attack' selfish_policy')
 ;;
 
 let protocol : _ protocol =
