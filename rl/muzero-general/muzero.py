@@ -428,6 +428,8 @@ class MuZero:
                     ),
                 }
             )
+            with open("test_result.pkl", "wb") as f:
+                pickle.dump(result, f)
 
             # result = numpy.mean([sum(history.reward_history) for history in results])
         else:
@@ -698,6 +700,10 @@ if __name__ == "__main__":
                 muzero.diagnose_model(30)
             elif choice == 3:
                 num_tests = input("Enter number of games to play: ")
+                render = input(
+                    "Do you want to render the game (1 for yes, 0, for no)?: "
+                )
+                render = int(render) == 1
                 res = muzero.test(
                     render=True,
                     opponent="self",
