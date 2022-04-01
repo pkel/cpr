@@ -9,6 +9,7 @@ type 'a vertex =
 let vertex_eq a b = a.serial = b.serial
 let vertex_neq a b = a.serial <> b.serial
 let id a = a.serial
+let partial_order a b = compare a.depth b.depth
 
 type 'a t =
   { mutable size : int
