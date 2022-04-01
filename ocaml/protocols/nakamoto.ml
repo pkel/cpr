@@ -48,7 +48,7 @@ let reward_functions =
 ;;
 
 module PrivateAttack = struct
-  open PrivateAttack
+  open Ssz16compat
 
   module Observation = struct
     type t =
@@ -62,6 +62,7 @@ module PrivateAttack = struct
 
     let observe v s =
       let ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
+      let () = assert (ca $== s.common) (* TODO. Eliminate call of common_ancestor *) in
       let ca_height = block_height v ca
       and private_height = block_height v s.private_
       and public_height = block_height v s.public in
@@ -124,22 +125,28 @@ module PrivateAttack = struct
 
   module Action = struct
     type t =
-      | Release
-          (** Release up to preferred private block and all withheld votes for this block.
-              Used to model honest strategy. *)
+      | Adopt
+          (** Adopt the defender's preferred chain as attacker's preferred chain. Withheld
+              attacker blocks are discarded.
+
+              Equivalent to SSZ'16 model. *)
       | Override
           (** Publish just enough information to make the defender adopt the chain just
               released. The attacker continues mining the private chain.
 
               If override is impossible, this still results in a release of withheld
-              information. *)
+              information.
+
+              Equivalent to SSZ'16 model. *)
       | Match
           (** Publish just enough information such that the defender observes a tie
               between two chains. The attacker continues mining the private chain.
 
-              If override is impossible, this still results in a release of withheld
-              information. *)
-      | Wait (** Continue withholding. Always possible. *)
+              If match is impossible, this still results in a release of withheld
+              information.
+
+              Equivalent to SSZ'16 model. *)
+      | Wait (** Continue withholding. Always possible. Equivalent to SSZ'16 model. *)
     [@@deriving variants]
 
     let to_string = Variants.to_name
@@ -147,7 +154,7 @@ module PrivateAttack = struct
 
     let table =
       let add acc var = var.Variantslib.Variant.constructor :: acc in
-      Variants.fold ~init:[] ~override:add ~match_:add ~wait:add ~release:add
+      Variants.fold ~init:[] ~adopt:add ~override:add ~match_:add ~wait:add
       |> List.rev
       |> Array.of_list
     ;;
@@ -156,7 +163,11 @@ module PrivateAttack = struct
     let n = Array.length table
   end
 
-  let honest_policy _o = Action.Release
+  let honest_policy o =
+    let open Observation in
+    let open Action in
+    if o.private_blocks > 0 then Override else Adopt
+  ;;
 
   let selfish_policy o =
     let open Observation in
@@ -179,7 +190,7 @@ module PrivateAttack = struct
       if ca $== state.public then Wait else Override)
   ;;
 
-  let apply_action v ~release state =
+  let apply_action v state =
     let parent v n =
       match Dag.parents v.view n with
       | [ x ] -> Some x
@@ -187,7 +198,7 @@ module PrivateAttack = struct
     in
     let match_ ~and_override () =
       let height =
-        let v = public_view v in
+        let v = public_view state v in
         block_height v state.public + if and_override then 1 else 0
       in
       let block =
@@ -199,32 +210,22 @@ module PrivateAttack = struct
         (* NOTE: if private height is smaller public height, then private head is marked
            for release. *)
       in
-      release_recursive v release [ block ]
+      { release = Some block; adopt = false }
     in
     fun a ->
       match (a : Action.t) with
-      | Wait -> `PreferPrivate
-      | Match ->
-        match_ ~and_override:false ();
-        `PreferPrivate
-      | Override ->
-        match_ ~and_override:true ();
-        `PreferPrivate
-      | Release ->
-        release_recursive v release [ state.private_ ];
-        `PreferPrivate
+      | Adopt -> { release = None; adopt = true }
+      | Match -> match_ ~and_override:false ()
+      | Override -> match_ ~and_override:true ()
+      | Wait -> { release = None; adopt = false }
   ;;
 
   let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
+  let tactic_of_policy p v state = (lift_policy p) v state |> apply_action v state
+  let tactic_of_policy' p v state = p v state |> apply_action v state
 
-  let tactic_of_policy p v ~release state =
-    (lift_policy p) v state |> apply_action v ~release state
-  ;;
-
-  let tactic_of_policy' p v ~release state = p v state |> apply_action v ~release state
-
-  let attack p = Node (attack honest (tactic_of_policy p))
-  and attack' p = Node (attack honest (tactic_of_policy' p))
+  let attack p = Node (attack ~honest (tactic_of_policy p))
+  and attack' p = Node (attack ~honest (tactic_of_policy' p))
 end
 
 let attacks =
