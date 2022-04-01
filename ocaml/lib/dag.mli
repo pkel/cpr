@@ -20,6 +20,9 @@ val vertex_eq : 'a vertex -> 'a vertex -> bool
 
 val vertex_neq : 'a vertex -> 'a vertex -> bool
 
+(** partial order. Only useful, if the compared vertices are on the same path. *)
+val partial_order : 'a vertex -> 'a vertex -> int
+
 (** [id n] ranges from [0] to [size t - 1] *)
 val id : 'a vertex -> int
 

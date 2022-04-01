@@ -258,7 +258,7 @@ let nakamoto ~alpha ~reward =
     ~alpha
     (module struct
       type data = Nakamoto.dag_data
-      type state = data Simulator.data PrivateAttack.state
+      type state = data Simulator.data Ssz16compat.state
 
       let description = Printf.sprintf "Nakamoto"
       let protocol = Nakamoto.protocol
@@ -266,11 +266,11 @@ let nakamoto ~alpha ~reward =
 
       include Nakamoto.PrivateAttack
 
-      let node = PrivateAttack.withhold protocol.honest
+      let node = Ssz16compat.withhold ~honest:protocol.honest
 
       let apply_action v a state action =
         let tactic = tactic_of_policy (fun _ -> action) in
-        PrivateAttack.apply_tactic tactic v a state
+        Ssz16compat.apply_tactic ~honest:protocol.honest tactic v a state
       ;;
     end)
 ;;
