@@ -166,7 +166,11 @@ module Ssz16compat = struct
   let honest_policy o =
     let open Observation in
     let open Action in
-    if o.private_blocks > 0 then Override else Adopt
+    if o.private_blocks > o.public_blocks
+    then Override
+    else if o.private_blocks < o.public_blocks
+    then Adopt
+    else Wait
   ;;
 
   (* Patrik's ad-hoc strategy *)
@@ -180,9 +184,11 @@ module Ssz16compat = struct
 
   (* Eyal and Sirer. Majority is not enough: Bitcoin mining is vulnerable. 2014. *)
   let es_2014 o =
+    (* I interpret this from the textual description of the strategy. There is an
+       algorithmic version in the paper, but it depends on the observation whether the
+       last mined block is honest or not. *)
     let open Observation in
     let open Action in
-    (* I take this from the textual description of the strategy. *)
     if o.private_blocks < o.public_blocks
     then (* 1. *) Adopt
     else if o.public_blocks = 0 && o.private_blocks = 1
@@ -192,7 +198,7 @@ module Ssz16compat = struct
     else if o.public_blocks = 1 && o.private_blocks = 2
     then (* 4. *) Override
     else if o.public_blocks = 2 && o.private_blocks = 1
-    then (* 5. redundant: included in 1. *)
+    then (* 5. Redundant: included in 1. *)
       Adopt
     else (
       (* The attacker established a lead of more than two before: *)
@@ -205,9 +211,32 @@ module Ssz16compat = struct
       else Wait)
   ;;
 
-  (* TODO: check SSZ'16 and GKWGRC'16 for better strategies *)
+  (* Sapirshtein, Sompolinsky, Zohar. Optimal Selfish Mining Strategies in Bitcoin. 2016. *)
+  let ssz_2016_sm1 o =
+    (* The authors rephrase the policy of ES'14 and call it SM1. Their version is much
+       shorter.
 
-  let policies = [ "honest", honest_policy; "simple", simple; "eyal-sirer-2014", es_2014 ]
+       The authors define an MDP to find better strategies for various parameters alpha
+       and gamma. We cannot reproduce this here in this module. Our RL framework should be
+       able to find these policies, though. *)
+    let open Observation in
+    let open Action in
+    match o.public_blocks, o.private_blocks with
+    | h, a when h > a -> Adopt
+    | 1, 1 -> Match
+    | h, a when h = a - 1 && h >= 1 -> Override
+    | _ (* Otherwise *) -> Wait
+  ;;
+
+  (* TODO: check GKWGRC'16 for better strategies *)
+
+  let policies =
+    [ "honest", honest_policy
+    ; "simple", simple
+    ; "eyal-sirer-2014", es_2014
+    ; "sapirshtein-2016-sm1", ssz_2016_sm1
+    ]
+  ;;
 
   (* This strategy was designed for the PrivateAttack module. It does not work for
      Ssz16compat!*)
@@ -269,6 +298,10 @@ let attacks =
        ~info:"SSZ'16 compatible attack model with ES'14 selfish mining policy"
        "private-eyal-sirer-2014"
        Ssz16compat.(attack es_2014)
+  |> add
+       ~info:"SSZ'16 compatible attack model with SSZ'16 SM1 policy"
+       "private-sapirshtein-2016-sm1"
+       Ssz16compat.(attack ssz_2016_sm1)
 ;;
 
 let protocol : _ protocol =
