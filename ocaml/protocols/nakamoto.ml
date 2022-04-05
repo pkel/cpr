@@ -184,23 +184,24 @@ module Ssz16compat = struct
     let open Action in
     (* I take this from the textual description of the strategy. *)
     if o.private_blocks < o.public_blocks
-    then Adopt
+    then (* 1. *) Adopt
     else if o.public_blocks = 0 && o.private_blocks = 1
-    then Wait
+    then (* 2. *) Wait
     else if o.public_blocks = 1 && o.private_blocks = 1
-    then Match
+    then (* 3. *) Match
     else if o.public_blocks = 1 && o.private_blocks = 2
-    then Override
+    then (* 4. *) Override
     else if o.public_blocks = 2 && o.private_blocks = 1
-    then (* redundant case *)
+    then (* 5. redundant: included in 1. *)
       Adopt
     else (
       (* The attacker established a lead of more than two before: *)
       let _ = () in
       if o.public_blocks > 0
-      then Override
-      else if o.private_blocks - o.public_blocks = 1
-      then (* redundant case *) Override
+      then
+        if o.private_blocks - o.public_blocks = 1
+        then (* 6. *) Override
+        else (* 7. *) Match
       else Wait)
   ;;
 
