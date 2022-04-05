@@ -45,7 +45,7 @@ def test_nakamoto(capsys):
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies()["selfish"]
+    p = env.policies()["eyal-sirer-2014"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))

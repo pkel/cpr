@@ -169,6 +169,15 @@ module Ssz16compat = struct
     if o.private_blocks > 0 then Override else Adopt
   ;;
 
+  (* Patrik's ad-hoc strategy *)
+  let simple o =
+    let open Observation in
+    let open Action in
+    if o.public_blocks > 0
+    then if o.private_blocks < o.public_blocks then Adopt else Override
+    else Wait
+  ;;
+
   (* Eyal and Sirer. Majority is not enough: Bitcoin mining is vulnerable. 2014. *)
   let es_2014 o =
     let open Observation in
@@ -197,7 +206,7 @@ module Ssz16compat = struct
 
   (* TODO: check SSZ'16 and GKWGRC'16 for better strategies *)
 
-  let policies = [ "honest", honest_policy; "selfish", es_2014 ]
+  let policies = [ "honest", honest_policy; "simple", simple; "eyal-sirer-2014", es_2014 ]
 
   (* This strategy was designed for the PrivateAttack module. It does not work for
      Ssz16compat!*)
@@ -210,34 +219,30 @@ module Ssz16compat = struct
       if ca $== state.public then Wait else Override)
   ;;
 
-  let apply_action v state =
+  let apply_action v state action =
     let parent v n =
       match Dag.parents v.view n with
       | [ x ] -> Some x
       | _ -> None
     in
-    let match_ ~and_override () =
+    let match_ offset =
       let height =
+        (* height of to be released block *)
         let v = public_view state v in
-        block_height v state.public + if and_override then 1 else 0
+        block_height v state.public + offset
       in
-      let block =
-        (* find block to be released backwards from private head *)
-        let rec h b =
-          if block_height v b <= height then b else parent v b |> Option.get |> h
-        in
-        h state.private_
-        (* NOTE: if private height is smaller public height, then private head is marked
-           for release. *)
+      (* look for to be released block backwards from private head *)
+      let rec h b =
+        if block_height v b <= height then b else parent v b |> Option.get |> h
       in
-      { release = Some block; adopt = false }
+      Some (h state.private_)
+      (* NOTE: if private height is smaller target height, then private head is released. *)
     in
-    fun a ->
-      match (a : Action.t) with
-      | Adopt -> { release = None; adopt = true }
-      | Match -> match_ ~and_override:false ()
-      | Override -> match_ ~and_override:true ()
-      | Wait -> { release = None; adopt = false }
+    match (action : Action.t) with
+    | Adopt -> { release = None; adopt = true }
+    | Match -> { release = match_ 0; adopt = false }
+    | Override -> { release = match_ 1; adopt = false }
+    | Wait -> { release = None; adopt = false }
   ;;
 
   let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
@@ -256,8 +261,12 @@ let attacks =
        "private-honest"
        Ssz16compat.(attack honest_policy)
   |> add
+       ~info:"SSZ'16 compatible attack model with simple selfish mining policy"
+       "private-simple"
+       Ssz16compat.(attack simple)
+  |> add
        ~info:"SSZ'16 compatible attack model with ES'14 selfish mining policy"
-       "private-selfish"
+       "private-eyal-sirer-2014"
        Ssz16compat.(attack es_2014)
 ;;
 
