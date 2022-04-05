@@ -7,6 +7,7 @@ type ('a, 'b) instance =
   ; attacker : 'b
   ; mutable reward_applied_upto : 'a Simulator.data Dag.vertex option
   ; mutable last_time : float
+  ; mutable steps : int
   }
 
 module type Observation = sig
@@ -54,6 +55,12 @@ module type M = sig
     -> state
     -> Action.t
     -> state
+
+  val shutdown
+    :  (data Simulator.data, data) local_view
+    -> (data Simulator.data, data, Simulator.pow) actions
+    -> state
+    -> state
 end
 
 let augment_observation
@@ -90,7 +97,11 @@ let augment_observation
      and type data = r)
 ;;
 
-let of_module ~alpha (type r s) (module M : M with type state = s and type data = r)
+let of_module
+    ~n_steps
+    ~alpha
+    (type r s)
+    (module M : M with type state = s and type data = r)
     : ( r
       , (r Simulator.data, r) local_view
         * (r Simulator.data, r, Simulator.pow) actions
@@ -127,6 +138,7 @@ let of_module ~alpha (type r s) (module M : M with type state = s and type data 
     ; attacker = v, a, n
     ; reward_applied_upto = None
     ; last_time = 0.
+    ; steps = 0
     }
   in
   let rec skip_to_interaction sim =
@@ -156,13 +168,22 @@ let of_module ~alpha (type r s) (module M : M with type state = s and type data 
   in
   let step ref_t ~action:i =
     (* env.step () *)
-    (* Apply action i to the simulator state. *)
     let t = !ref_t in
+    let () = t.steps <- t.steps + 1 in
+    (* Apply action i to the simulator state. *)
     let v, (a : _ actions), (n : _ Simulator.node') = t.attacker in
     let action = M.Action.of_int i in
     n.state <- M.apply_action v a n.state action;
     (* Continue simulation till next attacker action. *)
     skip_to_interaction t.sim;
+    (* End simulation? *)
+    let done_ =
+      if t.steps < n_steps
+      then false
+      else (
+        n.state <- M.shutdown v a n.state;
+        true)
+    in
     (* Calculate rewards for the new common blocks. *)
     (* 1. find common ancestor *)
     let ca =
@@ -216,8 +237,7 @@ let of_module ~alpha (type r s) (module M : M with type state = s and type data 
       observe t |> O.to_floatarray
     , (* reward *)
       cf.(0) *. reward_time_elapsed
-    , (* done? no, continue forever *)
-      false
+    , done_
     , (* info dict *)
       [ "reward_attacker", Py.Float.of_float cf.(0)
       ; "reward_defender", Py.Float.of_float cf.(1)
@@ -253,9 +273,8 @@ let of_module ~alpha (type r s) (module M : M with type state = s and type data 
   }
 ;;
 
-let nakamoto ~alpha ~reward =
+let nakamoto ~reward =
   of_module
-    ~alpha
     (module struct
       type data = Nakamoto.dag_data
       type state = data Simulator.data Ssz16compat.state
@@ -264,7 +283,7 @@ let nakamoto ~alpha ~reward =
       let protocol = Nakamoto.protocol
       let reward_function = reward
 
-      include Nakamoto.PrivateAttack
+      include Nakamoto.Ssz16compat
 
       let node = Ssz16compat.withhold ~honest:protocol.honest
 
@@ -272,12 +291,17 @@ let nakamoto ~alpha ~reward =
         let tactic = tactic_of_policy (fun _ -> action) in
         Ssz16compat.apply_tactic ~honest:protocol.honest tactic v a state
       ;;
+
+      let shutdown v a state =
+        let open Ssz16compat in
+        let tactic _ _ = { release = Some state.private_; adopt = true } in
+        Ssz16compat.apply_tactic ~honest:protocol.honest tactic v a state
+      ;;
     end)
 ;;
 
-let bk ~alpha ~k ~reward =
+let bk ~k ~reward =
   of_module
-    ~alpha
     (module struct
       type data = B_k.dag_data
       type state = data Simulator.data PrivateAttack.state
@@ -294,12 +318,15 @@ let bk ~alpha ~k ~reward =
         let tactic = tactic_of_policy ~k (fun _ -> action) in
         PrivateAttack.apply_tactic tactic v a state
       ;;
+
+      let shutdown _v _a state =
+        (* TODO: implement shutdown for non-Nakamoto protocols *) state
+      ;;
     end)
 ;;
 
-let bk_ll ~alpha ~k ~reward =
+let bk_ll ~k ~reward =
   of_module
-    ~alpha
     (module struct
       type data = B_k_lessleader.dag_data
       type state = data Simulator.data PrivateAttack.state
@@ -316,12 +343,15 @@ let bk_ll ~alpha ~k ~reward =
         let tactic = tactic_of_policy ~k (fun _ -> action) in
         PrivateAttack.apply_tactic tactic v a state
       ;;
+
+      let shutdown _v _a state =
+        (* TODO: implement shutdown for non-Nakamoto protocols *) state
+      ;;
     end)
 ;;
 
-let george ~alpha ~k ~reward =
+let george ~k ~reward =
   of_module
-    ~alpha
     (module struct
       type data = George.dag_data
       type state = data Simulator.data PrivateAttack.state
@@ -338,7 +368,12 @@ let george ~alpha ~k ~reward =
         let tactic = tactic_of_policy ~k (fun _ -> action) in
         PrivateAttack.apply_tactic tactic v a state
       ;;
+
+      let shutdown _v _a state =
+        (* TODO: implement shutdown for non-Nakamoto protocols *) state
+      ;;
     end)
 ;;
 
-let default = bk ~k:51 ~alpha:0.25 ~reward:(B_k.constant_pow 1.)
+let default_n_steps = 1000
+let default = bk ~n_steps:default_n_steps ~k:51 ~alpha:0.25 ~reward:(B_k.constant_pow 1.)

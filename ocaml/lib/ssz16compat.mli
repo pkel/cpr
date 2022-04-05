@@ -29,7 +29,7 @@ val attack
   -> ('env, 'dag_data) local_view
   -> ('env, 'dag_data, 'pow, 'env state) node'
 
-(* [attack] decomposed into two steps for the ML framework *)
+(* [attack] decomposed into two steps for the ML framework: *)
 
 val withhold
   :  honest:('env, 'dag_data, 'pow, 'env Dag.vertex) node
