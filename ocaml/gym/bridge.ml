@@ -105,11 +105,20 @@ let () =
 let () =
   let open Definitions in
   let m = Py_module.create "specs" in
+  let alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+  and n_steps =
+    keyword
+      "n_steps"
+      int
+      ~docstring:"number of steps before terminating the simulation"
+      ~default:default_n_steps
+  in
   Py_module.set_value m "default" (PEnv default |> python_of_penv);
   Py_module.set
     m
     "nakamoto"
-    (let%map alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+    (let%map alpha = alpha
+     and n_steps = n_steps
      and reward =
        keyword
          "reward"
@@ -124,12 +133,13 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (nakamoto ~alpha ~reward) |> python_of_penv);
+     PEnv (nakamoto ~n_steps ~alpha ~reward) |> python_of_penv);
   Py_module.set
     m
     "bk"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+     and alpha = alpha
+     and n_steps = n_steps
      and reward =
        keyword
          "reward"
@@ -148,12 +158,13 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk ~k ~alpha ~reward) |> python_of_penv);
+     PEnv (bk ~n_steps ~k ~alpha ~reward) |> python_of_penv);
   Py_module.set
     m
     "bk_ll"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+     and alpha = alpha
+     and n_steps = n_steps
      and reward =
        keyword
          "reward"
@@ -172,12 +183,13 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk_ll ~k ~alpha ~reward) |> python_of_penv);
+     PEnv (bk_ll ~n_steps ~k ~alpha ~reward) |> python_of_penv);
   Py_module.set
     m
     "george"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+     and alpha = alpha
+     and n_steps = n_steps
      and reward =
        keyword
          "reward"
@@ -225,5 +237,5 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (george ~k ~alpha ~reward) |> python_of_penv)
+     PEnv (george ~n_steps ~k ~alpha ~reward) |> python_of_penv)
 ;;
