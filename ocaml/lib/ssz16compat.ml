@@ -26,27 +26,35 @@ let public_view state (v : _ local_view) =
   }
 ;;
 
-let update_common v state =
+let set_common v state =
   let common = Dag.common_ancestor v.view state.public state.private_ in
   assert (Option.is_some common) (* all our protocols maintain this invariant *);
   { state with common = Option.get common }
 ;;
 
+let handle_private ~honest v actions state event =
+  let node = honest (private_view state v)
+  and drop_messages = { actions with share = (fun _n -> ()) } in
+  set_common v { state with private_ = node.handler drop_messages state.private_ event }
+;;
+
+let handle_public ~honest v actions state event =
+  let node = honest (public_view state v)
+  and drop_messages = { actions with share = (fun _n -> ()) } in
+  set_common v { state with public = node.handler drop_messages state.public event }
+;;
+
+(* TODO: for non-Nakamoto protocols, we might consider delivering some of the messages to
+   the attacker. E.g. in B_k, the attacker might try to fork but still use defender votes.
+   Not sure whether this is supported by this module. *)
 let handler ~honest v actions state event =
-  let public = honest (public_view state v)
-  and private_ = honest (private_view state v) in
-  let withhold = { actions with share = (fun _n -> ()) } in
   match event with
   | Activate _ ->
     (* work on private chain *)
-    { state with private_ = private_.handler withhold state.private_ event }
+    handle_private ~honest v actions state event
   | Deliver _ ->
     (* simulate defender *)
-    let public = public.handler withhold state.public event in
-    (* TODO: for non-Nakamoto protocols, we might consider delivering some of the messages
-       to the attacker. E.g. in B_k, the attacker might try to fork but still use defender
-       votes. Not sure whether this is supported by this module. *)
-    update_common v { state with public }
+    handle_public ~honest v actions state event
 ;;
 
 let withhold ~(honest : ('env, 'dag_data, 'pow, 'state) node) (v : _ local_view) =
@@ -66,7 +74,7 @@ type 'env action =
 
 type ('env, 'dag_data) tactic = ('env, 'dag_data) local_view -> 'env state -> 'env action
 
-(* release a given vertex and all it's dependencies recursively *)
+(* release a given vertex and all its dependencies recursively *)
 let rec release_recursive v release ns =
   List.iter
     (fun n ->
@@ -85,19 +93,16 @@ let apply_tactic
     state
   =
   let { release; adopt } = tactic v state in
-  let public =
+  let state =
+    (* release information and simulate defender *)
     match release with
-    | None -> state.public
+    | None -> state
     | Some release ->
       let () = release_recursive v actions.share [ release ] in
-      let withhold = { actions with share = (fun _n -> ()) } in
-      let public = honest (public_view state v) in
-      public.handler withhold state.public (Deliver release)
+      handle_public ~honest v actions state (Deliver release)
   in
-  let private_ = if adopt then public else state.private_ in
-  let common = Dag.common_ancestor v.view public private_ in
-  assert (Option.is_some common) (* all our protocols maintain this invariant *);
-  { private_; public; common = Option.get common }
+  (* adopt defender chain (or don't) *)
+  if adopt then { state with private_ = state.public; common = state.public } else state
 ;;
 
 let attack
