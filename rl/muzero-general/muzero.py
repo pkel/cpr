@@ -426,6 +426,9 @@ class MuZero:
                         )
                         for history in results
                     ),
+                    "total_reward": [
+                        sum(history.attacker_rewards) for history in results
+                    ],
                 }
             )
             with open("test_result.pkl", "wb") as f:

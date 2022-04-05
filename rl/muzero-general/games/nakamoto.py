@@ -66,12 +66,12 @@ class MuZeroConfig:
         self.resnet_fc_policy_layers = []  # Define the hidden layers in the policy head of the prediction network
 
         # Fully Connected Network
-        self.encoding_size = 8
+        self.encoding_size = 100
         self.fc_representation_layers = []  # Define the hidden layers in the representation network
-        self.fc_dynamics_layers = [16]  # Define the hidden layers in the dynamics network
-        self.fc_reward_layers = [16]  # Define the hidden layers in the reward network
-        self.fc_value_layers = [16]  # Define the hidden layers in the value network
-        self.fc_policy_layers = [16]  # Define the hidden layers in the policy network
+        self.fc_dynamics_layers = [100]  # Define the hidden layers in the dynamics network
+        self.fc_reward_layers = [100]  # Define the hidden layers in the reward network
+        self.fc_value_layers = [100]  # Define the hidden layers in the value network
+        self.fc_policy_layers = [100]  # Define the hidden layers in the policy network
 
 
 
@@ -79,12 +79,12 @@ class MuZeroConfig:
         self.results_path = pathlib.Path(__file__).resolve().parents[1] / "results" / pathlib.Path(__file__).stem / datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 10000  # Total number of training steps (ie weights update according to a batch)
-        self.batch_size = 32000  # Number of parts of games to train on at each training step
+        self.batch_size = 2048  # Number of parts of games to train on at each training step
         self.checkpoint_interval = 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
-        self.optimizer = "SGD"  # "Adam" or "SGD". Paper uses SGD
+        self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD
         self.weight_decay = 1e-4  # L2 weights regularization
         self.momentum = 0.9  # Used only if optimizer is SGD
 
@@ -111,7 +111,7 @@ class MuZeroConfig:
         ### Adjust the self play / training ratio to avoid over/underfitting
         self.self_play_delay = 0  # Number of seconds to wait after each played game
         self.training_delay = 0  # Number of seconds to wait after each training step
-        self.ratio = 1.5  # Desired training steps per self played step ratio. Equivalent to a synchronous version, training can take much longer. Set it to None to disable it
+        self.ratio = None  # Desired training steps per self played step ratio. Equivalent to a synchronous version, training can take much longer. Set it to None to disable it
         # fmt: on
 
     def visit_softmax_temperature_fn(self, trained_steps):
