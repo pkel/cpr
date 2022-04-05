@@ -47,7 +47,7 @@ let reward_functions =
   empty |> add ~info:"1 per confirmed block" "block" (constant 1.)
 ;;
 
-module PrivateAttack = struct
+module Ssz16compat = struct
   open Ssz16compat
 
   module Observation = struct
@@ -169,16 +169,35 @@ module PrivateAttack = struct
     if o.private_blocks > 0 then Override else Adopt
   ;;
 
-  let selfish_policy o =
-    (* TODO: check SSZ'16 and ES'14 for better strategies *)
+  (* Eyal and Sirer. Majority is not enough: Bitcoin mining is vulnerable. 2014. *)
+  let es_2014 o =
     let open Observation in
     let open Action in
-    if o.public_blocks > 0
-    then if o.private_blocks < o.public_blocks then Adopt else Override
-    else Wait
+    (* I take this from the textual description of the strategy. *)
+    if o.private_blocks < o.public_blocks
+    then Adopt
+    else if o.public_blocks = 0 && o.private_blocks = 1
+    then Wait
+    else if o.public_blocks = 1 && o.private_blocks = 1
+    then Match
+    else if o.public_blocks = 1 && o.private_blocks = 2
+    then Override
+    else if o.public_blocks = 2 && o.private_blocks = 1
+    then (* redundant case *)
+      Adopt
+    else (
+      (* The attacker established a lead of more than two before: *)
+      let _ = () in
+      if o.public_blocks > 0
+      then Override
+      else if o.private_blocks - o.public_blocks = 1
+      then (* redundant case *) Override
+      else Wait)
   ;;
 
-  let policies = [ "honest", honest_policy; "selfish", selfish_policy ]
+  (* TODO: check SSZ'16 and GKWGRC'16 for better strategies *)
+
+  let policies = [ "honest", honest_policy; "selfish", es_2014 ]
 
   (* This strategy was designed for the PrivateAttack module. It does not work for
      Ssz16compat!*)
@@ -233,13 +252,13 @@ let attacks =
   let open Collection in
   empty
   |> add
-       ~info:"Private attack with honest policy"
+       ~info:"SSZ'16 compatible attack model with honest policy"
        "private-honest"
-       PrivateAttack.(attack honest_policy)
+       Ssz16compat.(attack honest_policy)
   |> add
-       ~info:"Private attack with selfish policy"
+       ~info:"SSZ'16 compatible attack model with ES'14 selfish mining policy"
        "private-selfish"
-       PrivateAttack.(attack selfish_policy)
+       Ssz16compat.(attack es_2014)
 ;;
 
 let protocol : _ protocol =

@@ -264,7 +264,7 @@ let nakamoto ~alpha ~reward =
       let protocol = Nakamoto.protocol
       let reward_function = reward
 
-      include Nakamoto.PrivateAttack
+      include Nakamoto.Ssz16compat
 
       let node = Ssz16compat.withhold ~honest:protocol.honest
 
