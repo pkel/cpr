@@ -19,7 +19,7 @@ end
 
 let honest_clique ~activation_delay ~n protocol =
   let propagation_delay = Distributions.uniform ~lower:0.5 ~upper:1.5 in
-  let net = Network.homogeneous ~activation_delay ~propagation_delay n in
+  let net = Network.T.symmetric_clique ~activation_delay ~propagation_delay n in
   let net =
     { net with
       nodes =
@@ -44,17 +44,7 @@ let honest_clique ~activation_delay ~n protocol =
 ;;
 
 let two_agents ~alpha protocol attack =
-  let delay = Distributions.constant 0. in
-  let net =
-    Network.
-      { dissemination = Simple
-      ; nodes =
-          [| { compute = alpha; links = [ { dest = 1; delay } ] }
-           ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
-          |]
-      ; activation_delay = 1.
-      }
-  in
+  let net = Network.T.two_agents ~alpha ~activation_delay:1. in
   let it () =
     let sim = Simulator.all_honest net protocol in
     let () =
@@ -81,52 +71,8 @@ let two_agents ~alpha protocol attack =
    down to reordering messages. The following function creates networks that exhibit a
    certain gamma. *)
 let selfish_mining ?(msg_delay = 1. /. 10000.) ~defenders ~alpha gamma protocol attack =
-  let defender_compute =
-    if defenders < 1
-    then raise (Invalid_argument "defenders must be greater zero.")
-    else (1. -. alpha) /. float_of_int defenders
-  in
-  let attacker_msg_delay =
-    if gamma > 1. -. defender_compute
-    then
-      raise (Invalid_argument "gamma must not be greater ( 1 - (1 - alpha) / defenders )")
-    else (
-      let gamma' = gamma +. defender_compute in
-      let lower = msg_delay *. (1. -. gamma')
-      and upper = msg_delay *. (2. -. gamma') in
-      Distributions.uniform ~lower ~upper)
-  in
   let net =
-    let n = defenders + 1 in
-    let open Network in
-    let links src =
-      List.filter
-        (fun l -> l.dest <> src)
-        (if src = 0
-        then
-          (* attacker messages take random time to model gamma *)
-          List.init n (fun dest -> { dest; delay = attacker_msg_delay })
-        else
-          List.init n (fun dest ->
-              if dest = 0
-              then
-                (* attacker receives messages immediately *)
-                { dest; delay = Distributions.constant 0. }
-              else
-                (* defender messages take msg_delay time *)
-                { dest; delay = Distributions.constant msg_delay }))
-    in
-    Network.
-      { dissemination = Simple
-      ; nodes =
-          Array.init n (fun i ->
-              let links = links i in
-              if i = 0
-              then (* attacker *)
-                { compute = alpha; links }
-              else (* defender *) { compute = defender_compute; links })
-      ; activation_delay = 1.
-      }
+    Network.T.selfish_mining ~gamma ~propagation_delay:msg_delay ~defenders ~alpha
   in
   let it () =
     let sim = Simulator.all_honest net protocol in

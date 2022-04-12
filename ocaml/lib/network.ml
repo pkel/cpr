@@ -32,18 +32,79 @@ type t =
   ; activation_delay : float
   }
 
-let homogeneous ~activation_delay ~propagation_delay:delay n : t =
-  let compute = 1. /. float_of_int n in
-  { nodes =
-      Array.init n (fun i ->
-          { links =
-              List.init (n - 1) (fun j -> { dest = (if j >= i then j + 1 else j); delay })
-          ; compute
-          })
-  ; dissemination = Simple
-  ; activation_delay
-  }
-;;
+module T = struct
+  let symmetric_clique ~activation_delay ~propagation_delay:delay n : t =
+    let compute = 1. /. float_of_int n in
+    { nodes =
+        Array.init n (fun i ->
+            { links =
+                List.init (n - 1) (fun j ->
+                    { dest = (if j >= i then j + 1 else j); delay })
+            ; compute
+            })
+    ; dissemination = Simple
+    ; activation_delay
+    }
+  ;;
+
+  let two_agents ~activation_delay ~alpha =
+    let delay = Distributions.constant 0. in
+    { dissemination = Simple
+    ; nodes =
+        [| { compute = alpha; links = [ { dest = 1; delay } ] }
+         ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
+        |]
+    ; activation_delay
+    }
+  ;;
+
+  let selfish_mining ~alpha ~gamma ~propagation_delay ~defenders =
+    let defender_compute =
+      if defenders < 1
+      then raise (Invalid_argument "defenders must be greater zero.")
+      else (1. -. alpha) /. float_of_int defenders
+    in
+    let attacker_msg_delay =
+      if gamma > 1. -. defender_compute
+      then
+        raise
+          (Invalid_argument "gamma must not be greater ( 1 - (1 - alpha) / defenders )")
+      else (
+        let gamma' = gamma +. defender_compute in
+        let lower = propagation_delay *. (1. -. gamma')
+        and upper = propagation_delay *. (2. -. gamma') in
+        Distributions.uniform ~lower ~upper)
+    in
+    let n = defenders + 1 in
+    let links src =
+      List.filter
+        (fun l -> l.dest <> src)
+        (if src = 0
+        then
+          (* attacker messages take random time to model gamma *)
+          List.init n (fun dest -> { dest; delay = attacker_msg_delay })
+        else
+          List.init n (fun dest ->
+              if dest = 0
+              then
+                (* attacker receives messages immediately *)
+                { dest; delay = Distributions.constant 0. }
+              else
+                (* defender messages take msg_delay time *)
+                { dest; delay = Distributions.constant propagation_delay }))
+    in
+    { dissemination = Simple
+    ; nodes =
+        Array.init n (fun i ->
+            let links = links i in
+            if i = 0
+            then (* attacker *)
+              { compute = alpha; links }
+            else (* defender *) { compute = defender_compute; links })
+    ; activation_delay = 1.
+    }
+  ;;
+end
 
 type to_graphml =
   ?node_data:(int -> GraphML.Data.t)
@@ -167,7 +228,7 @@ let to_graphml = to_graphml ~map_id:Fun.id
 
 let%expect_test _ =
   let t =
-    homogeneous
+    T.symmetric_clique
       ~activation_delay:1.
       ~propagation_delay:(Distributions.uniform ~lower:0.6 ~upper:1.4)
       3
@@ -194,7 +255,10 @@ let%expect_test _ =
 
 let%test _ =
   let t =
-    homogeneous ~activation_delay:1. ~propagation_delay:(Distributions.constant 1.) 3
+    T.symmetric_clique
+      ~activation_delay:1.
+      ~propagation_delay:(Distributions.constant 1.)
+      3
   in
   let _g, _tograph = to_graphml t () |> of_graphml |> R.failwith_error_msg in
   true
