@@ -1,0 +1,43 @@
+import gym
+from cpr_gym import specs
+
+
+def test_simple_daa():
+    target = 600  # block interval
+    eps = 30
+
+    def env_with_activation_delay(x):
+        env = gym.make(
+            "cpr-v0",
+            spec=specs.nakamoto(
+                n_steps=10000, alpha=1 / 3, gamma=0.5, defenders=2, activation_delay=x
+            ),
+        )
+        p = env.policies()["sapirshtein-2016-sm1"]
+        return (env, p)
+
+    # run simulation assuming 100% efficiency (= 0% orphan rate)
+    env, p = env_with_activation_delay(target)
+    obs = env.reset()
+    done = False
+    n_pow = 0
+    while not done:
+        obs, _, done, info = env.step(p(obs))
+        n_pow += info["reward_n_pows"]
+    observed = info["simulator_clock_rewarded"] / n_pow  # block interval
+
+    # the selfish mining policy causes orphans, hence block interval should be out of tolerance
+    assert not target - eps < observed < target + eps
+
+    # re-run simulation with corrected difficulty
+    env, p = env_with_activation_delay(target * target / observed)
+    obs = env.reset()
+    done = False
+    n_pow = 0
+    while not done:
+        obs, _, done, info = env.step(p(obs))
+        n_pow += info["reward_n_pows"]
+    observed = info["simulator_clock_rewarded"] / n_pow  # block interval
+
+    # observed block interval should be within tolerance now
+    assert target - eps < observed < target + eps

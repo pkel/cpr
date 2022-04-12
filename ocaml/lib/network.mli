@@ -65,6 +65,7 @@ module T : sig
       defenders]. *)
   val selfish_mining
     :  alpha:float
+    -> activation_delay:float
     -> gamma:float
     -> propagation_delay:float
     -> defenders:int

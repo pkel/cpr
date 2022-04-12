@@ -102,6 +102,7 @@ let of_module
     ~alpha
     ~gamma
     ~defenders
+    ~activation_delay
     (type r s)
     (module M : M with type state = s and type data = r)
     : ( r
@@ -123,7 +124,12 @@ let of_module
       end)
   in
   let network =
-    Network.T.selfish_mining ~gamma ~alpha ~defenders ~propagation_delay:0.00001
+    Network.T.selfish_mining
+      ~activation_delay
+      ~gamma
+      ~alpha
+      ~defenders
+      ~propagation_delay:0.00001
   in
   let init () =
     let open Simulator in
@@ -377,6 +383,7 @@ let default_n_steps = 1000
 
 let default =
   nakamoto
+    ~activation_delay:1.
     ~n_steps:default_n_steps
     ~alpha:0.25
     ~gamma:0.5

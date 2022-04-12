@@ -72,7 +72,12 @@ let two_agents ~alpha protocol attack =
    certain gamma. *)
 let selfish_mining ?(msg_delay = 1. /. 10000.) ~defenders ~alpha gamma protocol attack =
   let net =
-    Network.T.selfish_mining ~gamma ~propagation_delay:msg_delay ~defenders ~alpha
+    Network.T.selfish_mining
+      ~gamma
+      ~activation_delay:1.
+      ~propagation_delay:msg_delay
+      ~defenders
+      ~alpha
   in
   let it () =
     let sim = Simulator.all_honest net protocol in

@@ -58,7 +58,7 @@ module T = struct
     }
   ;;
 
-  let selfish_mining ~alpha ~gamma ~propagation_delay ~defenders =
+  let selfish_mining ~alpha ~activation_delay ~gamma ~propagation_delay ~defenders =
     let defender_compute =
       if defenders < 1
       then raise (Invalid_argument "defenders must be greater zero.")
@@ -101,7 +101,7 @@ module T = struct
             then (* attacker *)
               { compute = alpha; links }
             else (* defender *) { compute = defender_compute; links })
-    ; activation_delay = 1.
+    ; activation_delay
     }
   ;;
 end
