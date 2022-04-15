@@ -8,6 +8,86 @@ import torch
 import numpy as np
 
 from .abstract_game import AbstractGame
+import re
+import gym
+import numpy as np
+from gym.spaces import Tuple, MultiDiscrete
+
+
+class SparseRelativeRewardWrapper(gym.Wrapper):
+    def __init__(self, env, alpha):
+        super().__init__(env)
+        self.alpha = alpha
+        self.sum_attacker = 0
+        self.sum_defender = 0
+        self.current_relative_reward = 0
+        self.last_relative_reward = 0
+
+    def reset(self):
+        obs = self.env.reset()
+        self.sum_attacker = 0
+        self.sum_defender = 0
+        self.current_relative_reward = 0
+        self.last_relative_reward = 0
+        return obs
+
+    def step(self, action):
+        next_state, reward, done, info = self.env.step(action)
+        self.sum_attacker += info["reward_attacker"]
+        self.sum_defender += info["reward_defender"]
+        if done:
+            reward = (
+                (self.sum_attacker) / (self.sum_defender + self.sum_attacker + 1e-8)
+            ) - self.alpha
+        else:
+            reward = 0
+        return next_state, reward * 100, done, info
+
+
+class RelativeRewardWrapper(gym.Wrapper):
+    def __init__(self, env, alpha, max_steps=1000):
+        super().__init__(env)
+        self.alpha = alpha
+        self.max_steps = max_steps
+        self.sum_attacker = 0
+        self.sum_defender = 0
+        self.current_relative_reward = 0
+        self.last_relative_reward = 0
+
+    def reset(self):
+        obs = self.env.reset()
+        self.sum_attacker = 0
+        self.sum_defender = 0
+        self.current_relative_reward = 0
+        self.last_relative_reward = 0
+        return obs
+
+    def step(self, action):
+        next_state, reward, done, info = self.env.step(action)
+        self.sum_attacker += info["reward_attacker"]
+        self.sum_defender += info["reward_defender"]
+        self.last_relative_reward = self.current_relative_reward
+        self.current_relative_reward = self.sum_attacker / (
+            self.sum_defender + self.sum_attacker + 1e-8
+        )
+        reward = self.current_relative_reward - self.last_relative_reward
+        return next_state, reward, done, info
+
+
+class ExplorationRewardWrapper(gym.Wrapper):
+    def __init__(self, env, alpha, max_steps=1000, scaling=0.5):
+        super().__init__(env)
+        self.alpha = alpha
+        self.max_steps = max_steps
+        self.scaling = scaling
+
+    def step(self, action):
+        next_state, reward, done, info = self.env.step(action)
+        exploration_reward = (
+            int(action != 0) * (self.alpha / self.max_steps) * self.scaling
+        )
+        reward += exploration_reward
+        return next_state, reward, done, info
 
 
 class MuZeroConfig:
@@ -33,15 +113,15 @@ class MuZeroConfig:
 
 
         ### Self-Play
-        self.num_workers = 1  # Number of simultaneous threads/workers self-playing to feed the replay buffer
+        self.num_workers = 8  # Number of simultaneous threads/workers self-playing to feed the replay buffer
         self.selfplay_on_gpu = False
         self.max_moves = 100  # Maximum number of moves if game is not finished before
-        self.num_simulations = 50  # Number of future moves self-simulated
-        self.discount = 0.997  # Chronological discount of the reward
+        self.num_simulations = 100  # Number of future moves self-simulated
+        self.discount = 0.997 # Chronological discount of the reward
         self.temperature_threshold = None  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
 
         # Root prior exploration noise
-        self.root_dirichlet_alpha = 0.25
+        self.root_dirichlet_alpha = 0.1
         self.root_exploration_fraction = 0.25
 
         # UCB formula
@@ -66,7 +146,7 @@ class MuZeroConfig:
         self.resnet_fc_policy_layers = []  # Define the hidden layers in the policy head of the prediction network
 
         # Fully Connected Network
-        self.encoding_size = 100
+        self.encoding_size = 50
         self.fc_representation_layers = []  # Define the hidden layers in the representation network
         self.fc_dynamics_layers = [100]  # Define the hidden layers in the dynamics network
         self.fc_reward_layers = [100]  # Define the hidden layers in the reward network
@@ -78,29 +158,29 @@ class MuZeroConfig:
         ### Training
         self.results_path = pathlib.Path(__file__).resolve().parents[1] / "results" / pathlib.Path(__file__).stem / datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
-        self.training_steps = 10000  # Total number of training steps (ie weights update according to a batch)
-        self.batch_size = 2048  # Number of parts of games to train on at each training step
+        self.training_steps = 1_000_000  # Total number of training steps (ie weights update according to a batch)
+        self.batch_size = 10_000  # Number of parts of games to train on at each training step
         self.checkpoint_interval = 10  # Number of training steps before using the model for self-playing
-        self.value_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
+        self.value_loss_weight = 0.25  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
         self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD
         self.weight_decay = 1e-4  # L2 weights regularization
         self.momentum = 0.9  # Used only if optimizer is SGD
-
+        self.min_games_played = self.batch_size / 100
         # Exponential learning rate schedule
-        self.lr_init = 0.0001  # Initial learning rate
-        self.lr_decay_rate = 0.8  # Set it to 1 to use a constant learning rate
-        self.lr_decay_steps = 1000
+        self.lr_init = 0.0005  # Initial learning rate
+        self.lr_decay_rate = 0.1  # Set it to 1 to use a constant learning rate
+        self.lr_decay_steps = 100_000
 
 
 
         ### Replay Buffer
-        self.replay_buffer_size = 500  # Number of self-play games to keep in the replay buffer
-        self.num_unroll_steps = 10  # Number of game moves to keep for every batch element
-        self.td_steps = 50  # Number of steps in the future to take into account for calculating the target value
+        self.replay_buffer_size = 1000  # Number of self-play games to keep in the replay buffer
+        self.num_unroll_steps = 100  # Number of game moves to keep for every batch element
+        self.td_steps = 100  # Number of steps in the future to take into account for calculating the target value
         self.PER = True  # Prioritized Replay (See paper appendix Training), select in priority the elements in the replay buffer which are unexpected for the network
-        self.PER_alpha = 0.5  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
+        self.PER_alpha = 1  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
 
         # Reanalyze (See paper appendix Reanalyse)
         self.use_last_model_value = True  # Use the last model to provide a fresher, stable n-step value (See paper appendix Reanalyze)
@@ -139,9 +219,12 @@ class Game(AbstractGame):
         alpha = np.random.normal(0.3, 0.1)
         alpha = min(alpha, 0.49)
         alpha = max(alpha, 0.25)
-        spec = specs.nakamoto(alpha=alpha)
+        spec = specs.nakamoto(alpha=alpha, n_steps=100)
 
         self.env = gym.make("cpr-v0", spec=spec)
+        self.env = SparseRelativeRewardWrapper(self.env, alpha=alpha)
+
+        # self.env = ExplorationRewardWrapper(self.env, alpha=alpha, max_steps=1000)
         if seed is not None:
             self.env.seed(seed)
 
@@ -181,8 +264,12 @@ class Game(AbstractGame):
         alpha = np.random.normal(0.3, 0.1)
         alpha = min(alpha, 0.49)
         alpha = max(alpha, 0.25)
-        spec = specs.nakamoto(alpha=alpha)
+        spec = specs.nakamoto(alpha=alpha, n_steps=100)
+
         self.env = gym.make("cpr-v0", spec=spec)
+        self.env = SparseRelativeRewardWrapper(self.env, alpha=alpha)
+
+        # self.env = ExplorationRewardWrapper(self.env, alpha=alpha, max_steps=1000)
         return numpy.array([[self.env.reset()]])
 
     def close(self):

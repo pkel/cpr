@@ -15,10 +15,12 @@ class Core(gym.Env):
         self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
 
     def reset(self):
+
         return engine.reset(self.env)
 
     def step(self, a):
-        return engine.step(self.env, a)
+        s, r, d, i = engine.step(self.env, a)
+        return s, r, d, i
 
     def render(self, mode="ascii"):
         print(engine.to_string(self.env))

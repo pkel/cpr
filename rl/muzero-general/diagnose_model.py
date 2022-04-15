@@ -112,7 +112,7 @@ class DiagnoseModel:
                     trajectory_divergence_index = i
                     real_trajectory_end_reason = f"Virtual trajectory reached an illegal move at timestep {trajectory_divergence_index}."
 
-            observation, reward, done = game.step(action)
+            observation, reward, done, info = game.step(action)
             root, mcts_info = MCTS(self.config).run(
                 self.model,
                 observation,

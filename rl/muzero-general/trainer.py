@@ -60,7 +60,10 @@ class Trainer:
 
     def continuous_update_weights(self, replay_buffer, shared_storage):
         # Wait for the replay buffer to be filled
-        while ray.get(shared_storage.get_info.remote("num_played_games")) < 1:
+        while (
+            ray.get(shared_storage.get_info.remote("num_played_games"))
+            < self.config.min_games_played
+        ):
             time.sleep(0.1)
 
         next_batch = replay_buffer.get_batch.remote()

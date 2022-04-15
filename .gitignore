@@ -13,3 +13,5 @@ rl/muzero-general/results/
 *.wandb
 
 .DS_Store
+
+rl/muzero-general/wandb/

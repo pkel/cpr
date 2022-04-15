@@ -7,8 +7,10 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+ALPHA = 0.25
+env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=ALPHA))
 
-env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=0.26))
+model = PPO.load(f"ppo_nakamoto_alpha_{ALPHA}")
 
 sum_rs = []
 sum_attacker_rs = []
