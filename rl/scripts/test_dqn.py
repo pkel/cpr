@@ -1,3 +1,7 @@
+import sys, os
+
+sys.path.append(os.getcwd())
+
 import numpy as np
 
 import gym
@@ -6,9 +10,63 @@ from stable_baselines3 import A2C, PPO, DQN
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
+from rl.wrappers.exploration_reward_wrapper import ExplorationRewardWrapper
+from rl.wrappers.excess_reward_wrapper import (
+    RelativeRewardWrapper,
+    SparseRelativeRewardWrapper,
+)
+from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 
 
-env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=0.26))
+def lr_schedule(remaining):
+    return 10e-5 * remaining + 10e-7 * (1 - remaining)
+
+
+config = dict(
+    # ALPHA=0.35,
+    ALGO="DQN",
+    TOTAL_TIMESTEPS=10e6,
+    STEPS_PER_ROLLOUT=10,
+    LR_SCHEDULE=lr_schedule,
+    BATCH_SIZE=64000,
+    ALPHA_SCHEDULE_CUTOFF=0,
+    LAYER_SIZE=100,
+    N_LAYERS=2,
+)
+ALPHA = 0.25
+
+
+def env_fn(alpha):
+    return gym.make(
+        "cpr-v0", spec=specs.nakamoto(alpha=alpha, n_steps=config["STEPS_PER_ROLLOUT"])
+    )
+
+
+def alpha_schedule(step):
+    progress = step / (config["TOTAL_TIMESTEPS"] / config["STEPS_PER_ROLLOUT"])
+    if progress >= config["ALPHA_SCHEDULE_CUTOFF"]:
+        alpha = np.random.normal(0.3, 0.1)
+        alpha = min(alpha, 0.49)
+        alpha = max(alpha, 0.25)
+    else:
+        alpha = 0.25 * progress + 0.5 * (1 - progress)
+    return alpha
+
+
+env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=ALPHA))
+env = AlphaScheduleWrapper(env, env_fn, alpha_schedule)
+env = SparseRelativeRewardWrapper(env)
+
+obs = env.reset()
+while True:
+    action = env.action_space.sample()
+    obs, reward, done, info = env.step(action)
+    env.render()
+    if done:
+        obs = env.reset()
+        print(env.alpha)
+
+model = PPO.load(f"ppo_nakamoto_alpha_{ALPHA}")
 
 sum_rs = []
 sum_attacker_rs = []

@@ -17,10 +17,12 @@ class Core(gym.Env):
         self.policies = engine.policies(self.env)
 
     def reset(self):
+
         return engine.reset(self.env)
 
     def step(self, a):
-        return engine.step(self.env, a)
+        s, r, d, i = engine.step(self.env, a)
+        return s, r, d, i
 
     def render(self, mode="ascii"):
         print(engine.to_string(self.env))

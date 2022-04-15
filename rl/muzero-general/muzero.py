@@ -6,12 +6,12 @@ import pathlib
 import pickle
 import sys
 import time
-
+from uuid import uuid4
+import os
 import nevergrad
 import numpy
 import ray
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
 import diagnose_model
 import models
@@ -21,6 +21,14 @@ import shared_storage
 import trainer
 import numpy as np
 import pandas as pd
+from games import nakamoto
+import wandb
+
+# wandb.init(
+#     project="muzero",
+#     entity="bglick13",
+#     config=nakamoto.MuZeroConfig().__dict__,
+# )
 
 
 class MuZero:
@@ -230,8 +238,6 @@ class MuZero:
         )
 
         # Write everything in TensorBoard
-        writer = SummaryWriter(self.config.results_path)
-
         print(
             "\nTraining...\nRun tensorboard --logdir ./results and go to http://localhost:6006/ to see in real time the training performance.\n"
         )
@@ -240,15 +246,6 @@ class MuZero:
         hp_table = [
             f"| {key} | {value} |" for key, value in self.config.__dict__.items()
         ]
-        writer.add_text(
-            "Hyperparameters",
-            "| Parameter | Value |\n|-------|-------|\n" + "\n".join(hp_table),
-        )
-        # Save model representation
-        writer.add_text(
-            "Model summary",
-            self.summary,
-        )
         # Loop for updating the training performance
         counter = 0
         keys = [
@@ -273,61 +270,10 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
-                writer.add_scalar(
-                    "1.Total_reward/1.Total_reward",
-                    info["total_reward"],
-                    counter,
-                )
-                writer.add_scalar(
-                    "1.Total_reward/2.Mean_value",
-                    info["mean_value"],
-                    counter,
-                )
-                writer.add_scalar(
-                    "1.Total_reward/3.Episode_length",
-                    info["episode_length"],
-                    counter,
-                )
-                writer.add_scalar(
-                    "1.Total_reward/4.MuZero_reward",
-                    info["muzero_reward"],
-                    counter,
-                )
-                writer.add_scalar(
-                    "1.Total_reward/5.Opponent_reward",
-                    info["opponent_reward"],
-                    counter,
-                )
-                writer.add_scalar(
-                    "2.Workers/1.Self_played_games",
-                    info["num_played_games"],
-                    counter,
-                )
-                writer.add_scalar(
-                    "2.Workers/2.Training_steps", info["training_step"], counter
-                )
-                writer.add_scalar(
-                    "2.Workers/3.Self_played_steps", info["num_played_steps"], counter
-                )
-                writer.add_scalar(
-                    "2.Workers/4.Reanalysed_games",
-                    info["num_reanalysed_games"],
-                    counter,
-                )
-                writer.add_scalar(
-                    "2.Workers/5.Training_steps_per_self_played_step_ratio",
-                    info["training_step"] / max(1, info["num_played_steps"]),
-                    counter,
-                )
-                writer.add_scalar("2.Workers/6.Learning_rate", info["lr"], counter)
-                writer.add_scalar(
-                    "3.Loss/1.Total_weighted_loss", info["total_loss"], counter
-                )
-                writer.add_scalar("3.Loss/Value_loss", info["value_loss"], counter)
-                writer.add_scalar("3.Loss/Reward_loss", info["reward_loss"], counter)
-                writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
+                for key in keys:
+                    wandb.log({key: info[key]})
                 print(
-                    f'Last relative reward: {info["relative_reward"]:.2f} Last alpha: {info["alpha"]:.2f} Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}',
+                    f'Last relative reward: {info["total_reward"]:.2f} Last alpha: {info["alpha"]:.2f} Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}, LR: {info["lr"]:.5f}',
                     end="\r",
                 )
                 counter += 1
@@ -397,9 +343,15 @@ class MuZero:
         self_play_worker = self_play.SelfPlay.options(
             num_cpus=0,
             num_gpus=num_gpus,
-        ).remote(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        ).remote(
+            self.checkpoint,
+            self.Game,
+            self.config,
+            numpy.random.randint(10000),
+            test_mode=True,
+        )
         results = []
-        for i in range(num_tests):
+        for i in range(int(num_tests)):
             print(f"Testing {i+1}/{num_tests}")
             results.append(
                 ray.get(
@@ -419,15 +371,11 @@ class MuZero:
                 {
                     "alpha": [np.round(history.alpha, 2) for history in results],
                     "relative_reward": (
-                        sum(history.attacker_rewards)
-                        / (
-                            sum(history.attacker_rewards)
-                            + sum(history.defender_rewards)
-                        )
+                        sum(history.reward_history) - history.alpha
                         for history in results
                     ),
                     "total_reward": [
-                        sum(history.attacker_rewards) for history in results
+                        sum(history.reward_history) for history in results
                     ],
                 }
             )
@@ -465,21 +413,29 @@ class MuZero:
 
         # Load replay buffer
         if replay_buffer_path:
-            replay_buffer_path = pathlib.Path(replay_buffer_path)
-            with open(replay_buffer_path, "rb") as f:
-                replay_buffer_infos = pickle.load(f)
-            self.replay_buffer = replay_buffer_infos["buffer"]
-            self.checkpoint["num_played_steps"] = replay_buffer_infos[
-                "num_played_steps"
-            ]
-            self.checkpoint["num_played_games"] = replay_buffer_infos[
-                "num_played_games"
-            ]
-            self.checkpoint["num_reanalysed_games"] = replay_buffer_infos[
-                "num_reanalysed_games"
-            ]
+            try:
+                replay_buffer_path = pathlib.Path(replay_buffer_path)
+                with open(replay_buffer_path, "rb") as f:
+                    replay_buffer_infos = pickle.load(f)
+                self.replay_buffer = replay_buffer_infos["buffer"]
+                self.checkpoint["num_played_steps"] = replay_buffer_infos[
+                    "num_played_steps"
+                ]
+                self.checkpoint["num_played_games"] = replay_buffer_infos[
+                    "num_played_games"
+                ]
+                self.checkpoint["num_reanalysed_games"] = replay_buffer_infos[
+                    "num_reanalysed_games"
+                ]
 
-            print(f"\nInitializing replay buffer with {replay_buffer_path}")
+                print(f"\nInitializing replay buffer with {replay_buffer_path}")
+            except:
+                print(f"Using empty buffer.")
+                self.replay_buffer = {}
+                self.checkpoint["training_step"] = 0
+                self.checkpoint["num_played_steps"] = 0
+                self.checkpoint["num_played_games"] = 0
+                self.checkpoint["num_reanalysed_games"] = 0
         else:
             print(f"Using empty buffer.")
             self.replay_buffer = {}
@@ -713,7 +669,7 @@ if __name__ == "__main__":
                     muzero_player=None,
                     num_tests=num_tests,
                 )
-                print(f"Result: {res}")
+                print(f"Result:\n{res}")
             elif choice == 4:
                 muzero.test(render=True, opponent="human", muzero_player=0)
             elif choice == 5:
@@ -724,8 +680,10 @@ if __name__ == "__main__":
                 done = False
                 while not done:
                     action = env.human_to_action()
-                    observation, reward, done = env.step(action)
-                    print(f"\nAction: {env.action_to_string(action)}\nReward: {reward}")
+                    observation, reward, done, info = env.step(action)
+                    print(
+                        f"\nAction: {env.action_to_string(action)}\nReward: {reward}\nInfo: {info}"
+                    )
                     env.render()
             elif choice == 6:
                 # Define here the parameters to tune

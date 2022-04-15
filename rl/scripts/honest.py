@@ -5,7 +5,7 @@ from cpr_gym import specs
 from stable_baselines3 import A2C
 from tqdm import tqdm
 
-env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=0.49))
+env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=0.35, n_steps=100))
 # model = A2C("MlpPolicy", env, verbose=1)
 # model.learn(total_timesteps=10000)
 p = env.policies()["honest"]
@@ -15,7 +15,7 @@ sum_defender_rs = []
 relative_rs = []
 actions = []
 _is = []
-for _ in tqdm(range(100)):
+for _ in tqdm(range(1)):
     obs = env.reset()
     rs = []
     attacker_rs = []
@@ -24,10 +24,10 @@ for _ in tqdm(range(100)):
     i = 0
     while not done:
         action = p(np.array(obs))
-        obs, r, done, info = env.step(action)
+        obs, r, done, info = env.step(0)
         rs.append(r)
-        attacker_rs.append(info["attacker_reward"])
-        defender_rs.append(info["defender_reward"])
+        attacker_rs.append(info["reward_attacker"])
+        defender_rs.append(info["reward_defender"])
         actions.append(action)
         i += 1
     _is.append(i)
