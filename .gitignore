@@ -8,3 +8,8 @@ _opam/
 _venv/
 *.pyc
 rl/muzero-general/results/
+*.log
+
+*.wandb
+
+.DS_Store
