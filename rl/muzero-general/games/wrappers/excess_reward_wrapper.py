@@ -31,9 +31,9 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
             except:
                 reward = 0
             if self.relative:
-                # reward -= self.env.alpha
-                # reward /= self.env.alpha
-                reward = 1 if reward > self.env.alpha else 0
+                reward -= self.env.alpha
+                reward /= self.env.alpha
+                # reward = 1 if reward > self.env.alpha else 0
         else:
             reward = 0
         return next_state, reward, done, info
