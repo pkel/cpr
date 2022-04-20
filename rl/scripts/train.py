@@ -97,7 +97,7 @@ log_dir = wandb.run.dir
 # os.makedirs(log_dir, exist_ok=True)
 env = gym.make(
     "cpr-v0",
-    spec=specs.nakamoto(alpha=0, n_steps=config["STEPS_PER_ROLLOUT"]),
+    spec=specs.nakamoto(alpha=0, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0),
 )
 env = AlphaScheduleWrapper(env, env_fn, alpha_schedule)
 env = SparseRelativeRewardWrapper(env)
