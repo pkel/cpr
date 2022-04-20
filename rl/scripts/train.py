@@ -55,7 +55,8 @@ def clip_schedule(remaining):
 
 def env_fn(alpha):
     return gym.make(
-        "cpr-v0", spec=specs.nakamoto(alpha=alpha, n_steps=config["STEPS_PER_ROLLOUT"])
+        "cpr-v0",
+        spec=specs.nakamoto(alpha=alpha, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0),
     )
 
 
