@@ -45,7 +45,7 @@ class MuZeroConfig:
         self.max_moves = MAX_STEPS  # Maximum number of moves if game is not finished before
         self.num_simulations = self.max_moves * 5 # Number of future moves self-simulated
         self.discount = 0.997 # Chronological discount of the reward
-        self.temperature_threshold = 0  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
+        self.temperature_threshold = None  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
         self.use_honest_for = 0
         # Root prior exploration noise
         self.root_dirichlet_alpha = 0.15
@@ -96,7 +96,7 @@ class MuZeroConfig:
         self.momentum = 0.9  # Used only if optimizer is SGD
         self.min_games_played = 10
         # Exponential learning rate schedule
-        self.lr_init = 0.005  # Initial learning rate
+        self.lr_init = 0.0005  # Initial learning rate
         self.lr_decay_rate = 1  # Set it to 1 to use a constant learning rate
         self.lr_decay_steps = 1000
 
@@ -153,7 +153,7 @@ def test_alpha_schedule(step):
 def env_fn(alpha):
     return gym.make(
         "cpr-v0",
-        spec=specs.nakamoto(alpha=alpha, n_steps=MAX_STEPS),
+        spec=specs.nakamoto(alpha=alpha, n_steps=MAX_STEPS, gamma=0, defenders=1),
     )
 
 
