@@ -140,7 +140,7 @@ class MuZeroConfig:
 def alpha_schedule(step):
     alpha = np.random.normal(0.3, 0.15)
     alpha = min(alpha, 0.49)
-    alpha = max(alpha, 0.01)
+    alpha = max(alpha, 0.05)
     return alpha
 
 
