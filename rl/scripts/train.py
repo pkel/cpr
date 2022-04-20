@@ -56,7 +56,9 @@ def clip_schedule(remaining):
 def env_fn(alpha):
     return gym.make(
         "cpr-v0",
-        spec=specs.nakamoto(alpha=alpha, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0),
+        spec=specs.nakamoto(
+            alpha=alpha, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0, defenders=1
+        ),
     )
 
 
@@ -97,7 +99,9 @@ log_dir = wandb.run.dir
 # os.makedirs(log_dir, exist_ok=True)
 env = gym.make(
     "cpr-v0",
-    spec=specs.nakamoto(alpha=0, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0),
+    spec=specs.nakamoto(
+        alpha=0, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0, defenders=1
+    ),
 )
 env = AlphaScheduleWrapper(env, env_fn, alpha_schedule)
 env = SparseRelativeRewardWrapper(env)
