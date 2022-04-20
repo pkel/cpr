@@ -15,3 +15,11 @@ rl/muzero-general/results/
 .DS_Store
 
 rl/muzero-general/wandb/
+
+logs/
+
+*.pkl
+
+*.pdf
+
+wandb/

@@ -14,9 +14,9 @@ class SelfPlay:
     Class which run in a dedicated thread to play games and save them to the replay-buffer.
     """
 
-    def __init__(self, initial_checkpoint, Game, config, seed):
+    def __init__(self, initial_checkpoint, Game, config, seed, test_mode=False):
         self.config = config
-        self.game = Game(seed)
+        self.game = Game(seed, test_mode)
 
         # Fix random generator seed
         numpy.random.seed(seed)
@@ -37,6 +37,10 @@ class SelfPlay:
             self.model.set_weights(ray.get(shared_storage.get_info.remote("weights")))
 
             if not test_mode:
+                use_honest = (
+                    ray.get(shared_storage.get_info.remote("training_step"))
+                    < self.config.use_honest_for
+                )
                 game_history = self.play_game(
                     self.config.visit_softmax_temperature_fn(
                         trained_steps=ray.get(
@@ -47,6 +51,7 @@ class SelfPlay:
                     False,
                     "self",
                     0,
+                    use_honest,
                 )
 
                 replay_buffer.save_game.remote(game_history, shared_storage)
@@ -119,7 +124,13 @@ class SelfPlay:
         self.close_game()
 
     def play_game(
-        self, temperature, temperature_threshold, render, opponent, muzero_player
+        self,
+        temperature,
+        temperature_threshold,
+        render,
+        opponent,
+        muzero_player,
+        use_honest=False,
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.
@@ -171,6 +182,8 @@ class SelfPlay:
 
                     if render:
                         print(f'Tree depth: {mcts_info["max_tree_depth"]}')
+                        print(f"Info: {mcts_info}")
+                        print(f"Root: {root}")
                         print(
                             f"Root value for player {self.game.to_play()}: {root.value():.2f}"
                         )
@@ -178,7 +191,13 @@ class SelfPlay:
                     action, root = self.select_opponent_action(
                         opponent, stacked_observations
                     )
-
+                if use_honest:
+                    if observation[0][0][1] > observation[0][0][0]:
+                        action = 1
+                    elif observation[0][0][1] < observation[0][0][0]:
+                        action = 0
+                    else:
+                        action = 3
                 observation, reward, done, info = self.game.step(action)
 
                 if render:

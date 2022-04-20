@@ -5,12 +5,13 @@ from gym.spaces import Tuple, MultiDiscrete
 
 
 class SparseRelativeRewardWrapper(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, relative=True):
         super().__init__(env)
         self.sum_attacker = 0
         self.sum_defender = 0
         self.current_relative_reward = 0
         self.last_relative_reward = 0
+        self.relative = relative
 
     def reset(self):
         obs = self.env.reset()
@@ -25,7 +26,14 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
         self.sum_attacker += info["reward_attacker"]
         self.sum_defender += info["reward_defender"]
         if done:
-            reward = (((self.sum_attacker) / (self.sum_defender + self.sum_attacker + 1e-8)) - self.env.alpha) / self.env.alpha
+            try:
+                reward = (self.sum_attacker) / (self.sum_defender + self.sum_attacker)
+            except:
+                reward = 0
+            if self.relative:
+                # reward -= self.env.alpha
+                # reward /= self.env.alpha
+                reward = 1 if reward > self.env.alpha else 0
         else:
             reward = 0
         return next_state, reward, done, info

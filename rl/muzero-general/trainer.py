@@ -6,6 +6,7 @@ import ray
 import torch
 
 import models
+import pickle
 
 
 @ray.remote
@@ -72,6 +73,7 @@ class Trainer:
             shared_storage.get_info.remote("terminate")
         ):
             index_batch, batch = ray.get(next_batch)
+
             next_batch = replay_buffer.get_batch.remote()
             self.update_lr()
             (
@@ -128,7 +130,6 @@ class Trainer:
         """
         Perform one training step.
         """
-
         (
             observation_batch,
             action_batch,
@@ -294,10 +295,11 @@ class Trainer:
         target_reward,
         target_policy,
     ):
+
         # Cross-entropy seems to have a better convergence than MSE
+        policy_softmax = torch.nn.LogSoftmax(dim=1)(policy_logits)
         value_loss = (-target_value * torch.nn.LogSoftmax(dim=1)(value)).sum(1)
         reward_loss = (-target_reward * torch.nn.LogSoftmax(dim=1)(reward)).sum(1)
-        policy_loss = (-target_policy * torch.nn.LogSoftmax(dim=1)(policy_logits)).sum(
-            1
-        )
+        policy_loss = (-target_policy * policy_softmax).sum(1)
+
         return value_loss, reward_loss, policy_loss

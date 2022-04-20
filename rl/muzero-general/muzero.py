@@ -6,7 +6,8 @@ import pathlib
 import pickle
 import sys
 import time
-
+from uuid import uuid4
+import os
 import nevergrad
 import numpy
 import ray
@@ -21,12 +22,13 @@ import trainer
 import numpy as np
 import pandas as pd
 from games import nakamoto
-
 import wandb
 
-wandb.init(project="muzero", entity="bglick13")
-
-wandb.config = nakamoto.MuZeroConfig.__dict__
+# wandb.init(
+#     project="muzero",
+#     entity="bglick13",
+#     config=nakamoto.MuZeroConfig().__dict__,
+# )
 
 
 class MuZero:
@@ -341,7 +343,13 @@ class MuZero:
         self_play_worker = self_play.SelfPlay.options(
             num_cpus=0,
             num_gpus=num_gpus,
-        ).remote(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        ).remote(
+            self.checkpoint,
+            self.Game,
+            self.config,
+            numpy.random.randint(10000),
+            test_mode=True,
+        )
         results = []
         for i in range(int(num_tests)):
             print(f"Testing {i+1}/{num_tests}")
