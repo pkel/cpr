@@ -106,6 +106,18 @@ let () =
   let open Definitions in
   let m = Py_module.create "specs" in
   let alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
+  and activation_delay =
+    keyword
+      "activation_delay"
+      float
+      ~docstring:"expected delay between two consecutive puzzle solutions"
+      ~default:1.
+  and gamma =
+    keyword
+      "gamma"
+      float
+      ~docstring:"similar to gamma parameter in selfish mining literature"
+  and defenders = keyword "defenders" int ~docstring:"number of defending agents"
   and n_steps =
     keyword
       "n_steps"
@@ -118,7 +130,10 @@ let () =
     m
     "nakamoto"
     (let%map alpha = alpha
+     and activation_delay = activation_delay
      and n_steps = n_steps
+     and gamma = gamma
+     and defenders = defenders
      and reward =
        keyword
          "reward"
@@ -133,13 +148,17 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (nakamoto ~n_steps ~alpha ~reward) |> python_of_penv);
+     PEnv (nakamoto ~alpha ~activation_delay ~gamma ~defenders ~n_steps ~reward)
+     |> python_of_penv);
   Py_module.set
     m
     "bk"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and alpha = alpha
+     and activation_delay = activation_delay
      and n_steps = n_steps
+     and gamma = gamma
+     and defenders = defenders
      and reward =
        keyword
          "reward"
@@ -158,13 +177,17 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk ~n_steps ~k ~alpha ~reward) |> python_of_penv);
+     PEnv (bk ~activation_delay ~gamma ~defenders ~n_steps ~k ~alpha ~reward)
+     |> python_of_penv);
   Py_module.set
     m
     "bk_ll"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and alpha = alpha
+     and activation_delay = activation_delay
      and n_steps = n_steps
+     and gamma = gamma
+     and defenders = defenders
      and reward =
        keyword
          "reward"
@@ -183,13 +206,17 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk_ll ~n_steps ~k ~alpha ~reward) |> python_of_penv);
+     PEnv (bk_ll ~gamma ~defenders ~n_steps ~k ~alpha ~activation_delay ~reward)
+     |> python_of_penv);
   Py_module.set
     m
     "george"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and alpha = alpha
+     and activation_delay = activation_delay
      and n_steps = n_steps
+     and gamma = gamma
+     and defenders = defenders
      and reward =
        keyword
          "reward"
@@ -237,5 +264,6 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (george ~n_steps ~k ~alpha ~reward) |> python_of_penv)
+     PEnv (george ~alpha ~activation_delay ~gamma ~defenders ~n_steps ~k ~reward)
+     |> python_of_penv)
 ;;
