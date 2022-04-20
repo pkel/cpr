@@ -322,7 +322,7 @@ let%test "convergence" =
   let open Simulator in
   let propagation_delay = Distributions.exponential ~ev:1. in
   let test (activation_delay, height) =
-    let network = Network.homogeneous ~activation_delay ~propagation_delay 32 in
+    let network = Network.T.symmetric_clique ~activation_delay ~propagation_delay 32 in
     let env = all_honest network protocol |> init in
     loop ~activations:1000 env;
     Array.to_seq env.nodes

@@ -100,6 +100,9 @@ let augment_observation
 let of_module
     ~n_steps
     ~alpha
+    ~gamma
+    ~defenders
+    ~activation_delay
     (type r s)
     (module M : M with type state = s and type data = r)
     : ( r
@@ -120,15 +123,13 @@ let of_module
         type data = r
       end)
   in
-  let network : Network.t =
-    let delay = Distributions.constant 0. in
-    { dissemination = Simple
-    ; nodes =
-        [| { compute = alpha; links = [ { dest = 1; delay } ] }
-         ; { compute = 1. -. alpha; links = [ { dest = 0; delay } ] }
-        |]
-    ; activation_delay = 1.
-    }
+  let network =
+    Network.T.selfish_mining
+      ~activation_delay
+      ~gamma
+      ~alpha
+      ~defenders
+      ~propagation_delay:0.00001
   in
   let init () =
     let open Simulator in
@@ -219,7 +220,10 @@ let of_module
               ~assign:(fun x n ->
                 match (Dag.data n).appended_by with
                 | None -> ()
-                | Some i -> cf.(i) <- cf.(i) +. x)
+                | Some i ->
+                  (* accumulate all defender rewards in cf.(1) *)
+                  let i = min i 1 in
+                  cf.(i) <- cf.(i) +. x)
               n;
             iter seq
         in
@@ -376,4 +380,13 @@ let george ~k ~reward =
 ;;
 
 let default_n_steps = 1000
-let default = bk ~n_steps:default_n_steps ~k:51 ~alpha:0.25 ~reward:(B_k.constant_pow 1.)
+
+let default =
+  nakamoto
+    ~activation_delay:1.
+    ~n_steps:default_n_steps
+    ~alpha:0.25
+    ~gamma:0.5
+    ~defenders:10
+    ~reward:(Nakamoto.constant 1.)
+;;
