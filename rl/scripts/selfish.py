@@ -1,86 +1,76 @@
-import numpy as np
+import sys, os
+from uuid import uuid4
 
+
+sys.path.append(os.getcwd())
+
+import numpy as np
+import pandas as pd
 import gym
 from cpr_gym import specs
 from stable_baselines3 import A2C
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-all_relative_rs = []
-all_adjusment_rs = []
-for alpha in np.arange(0.05, 0.5, 0.05):
-    env = gym.make("cpr-v0", spec=specs.nakamoto(alpha=alpha))
-    # model = A2C("MlpPolicy", env, verbose=1)
-    # model.learn(total_timesteps=10000)
-    p = env.policies()["honest"]
-    sum_rs = []
-    sum_attacker_rs = []
-    sum_defender_rs = []
-    sum_adjusted_attacker_rs = []
-    sum_adjusted_defender_rs = []
-    relative_rs = []
-    adjusted_relative_rs = []
-    actions = []
-    _is = []
-    for _ in tqdm(range(100)):
-        obs = env.reset()
-        rs = []
-        attacker_rs = []
-        defender_rs = []
-        adjusted_attacker_rs = []
-        adjusted_defender_rs = []
-        done = False
-        i = 0
-        while not done:
-            action = p(np.array(obs))
-            obs, r, done, info = env.step(action)
-            rs.append(r)
-            attacker_rs.append(info["reward_attacker"])
-            defender_rs.append(info["reward_defender"])
-            adjusted_attacker_rs.append(
-                info["reward_attacker"] * info["reward_time_elapsed"]
-            )
-            adjusted_defender_rs.append(
-                info["reward_defender"] * info["reward_time_elapsed"]
-            )
-            actions.append(action)
-            i += 1
-        sum_rs.append(np.sum(rs))
-        sum_attacker_rs.append(np.sum(attacker_rs))
-        sum_defender_rs.append(np.sum(defender_rs))
-        sum_adjusted_attacker_rs.append(np.sum(adjusted_attacker_rs))
-        sum_adjusted_defender_rs.append(np.sum(adjusted_defender_rs))
-        relative_rs.append(
-            np.sum(attacker_rs) / (np.sum(defender_rs) + np.sum(attacker_rs))
-        )
-        adjusted_relative_rs.append(
-            np.sum(adjusted_attacker_rs)
-            / (np.sum(adjusted_defender_rs) + np.sum(adjusted_attacker_rs))
-        )
-        _is.append(i)
-    unique, unique_counts = np.unique(actions, return_counts=True)
-    unique_counts = dict(zip(unique, unique_counts))
-    print(f"Average reward: {np.mean(sum_rs)}, Std: {np.std(sum_rs)}")
-    print(
-        f"Average relative reward: {np.mean(relative_rs)}, Std: {np.std(relative_rs)}"
-    )
-    print(
-        f"Average adjusted relative reward: {np.mean(adjusted_relative_rs)}, Std: {np.std(adjusted_relative_rs)}"
-    )
-    print(f"Unique actions: {unique_counts}")
-    print(f"Average steps: {np.mean(_is)}, Std: {np.std(_is)}")
-    all_relative_rs.append(np.mean(relative_rs))
-    all_adjusment_rs.append(np.mean(adjusted_relative_rs))
-fig, ax = plt.subplots()
-ax.scatter(np.arange(0.05, 0.5, 0.05), all_relative_rs, label="Relative reward")
-ax.scatter(
-    np.arange(0.05, 0.5, 0.05), all_adjusment_rs, label="Adjusted relative reward"
+from rl.wrappers.excess_reward_wrapper import (
+    RelativeRewardWrapper,
+    SparseRelativeRewardWrapper,
+    WastedBlocksRewardWrapper,
 )
-ax.plot(np.arange(0.05, 0.5, 0.05), np.arange(0.05, 0.5, 0.05), label="Ideal")
-plt.legend()
+from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 
+
+for n_steps in [50, 100, 250, 500]:
+    alphas = []
+    rewards = []
+    for alpha in np.arange(0.05, 0.5, 0.05):
+
+        def alpha_schedule(step):
+            return alpha
+
+        def env_fn(alpha):
+            return gym.make(
+                "cpr-v0",
+                spec=specs.nakamoto(alpha=alpha, n_steps=n_steps, gamma=0, defenders=1),
+            )
+
+        env = env_fn(alpha)
+        env = AlphaScheduleWrapper(env, env_fn, alpha_schedule)
+        env = WastedBlocksRewardWrapper(env)
+
+        # model = A2C("MlpPolicy", env, verbose=1)
+        # model.learn(total_timesteps=10000)
+        p = env.policies()["sapirshtein-2016-sm1"]
+        # p = env.policies()["honest"]
+
+        for _ in tqdm(range(1000)):
+            obs = env.reset()
+            done = False
+            ep_r = 0
+            while not done:
+                action = p(np.array(obs))
+                obs, r, done, info = env.step(action)
+                ep_r += r
+            rewards.append(ep_r)
+            alphas.append(alpha)
+
+    df = pd.DataFrame({"alpha": alphas, "reward": rewards})
+    gb_mean = df.groupby("alpha").mean().reset_index()
+    gb_std = df.groupby("alpha").std().reset_index()
+    fig, ax = plt.subplots()
+    ax.scatter(gb_mean["alpha"], gb_mean["reward"], c="b")
+    ax.errorbar(
+        gb_mean["alpha"],
+        gb_mean["reward"],
+        yerr=gb_std["reward"],
+        fmt="none",
+        ecolor="b",
+    )
+    ax.scatter(gb_mean["alpha"], gb_mean["alpha"], c="r")
+    plt.xticks(np.arange(0.05, 0.5, 0.05))
+    plt.title("alpha vs reward for n_steps={}".format(n_steps))
 plt.show()
+
 
 """
 Average reward: 2721.0071208567556, Std: 150.17074259685518
