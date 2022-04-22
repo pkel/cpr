@@ -4,9 +4,34 @@ import numpy as np
 from gym.spaces import Tuple, MultiDiscrete
 
 
-class SparseRelativeRewardWrapper(gym.Wrapper):
+class WastedBlocksRewardWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
+        self.current_obs = None
+        
+        # r = alpha, penalty = 1 - alpha
+
+    def reset(self):
+        obs = self.env.reset()
+        self.current_obs = obs
+        return obs
+
+    def step(self, action):
+        next_state, reward, done, info = self.env.step(action)
+        # Attacker succeeds in overriding
+        if info['reward_attacker'] > 0: # and info['reward_attacker'] == self.current_obs[1]:
+            reward = self.env.alpha * self.current_obs[0]
+        elif info['reward_defender'] > 0: # and info['reward_defender'] == self.current_obs[0]:
+            reward = -1 * (1 - self.env.alpha)* self.current_obs[1]
+        else:
+            reward = 0
+        self.current_obs = next_state
+        return next_state, reward, done, info
+
+class SparseRelativeRewardWrapper(gym.Wrapper):
+    def __init__(self, env, relative=True):
+        super().__init__(env)
+        self.relative = relative
         self.sum_attacker = 0
         self.sum_defender = 0
         self.current_relative_reward = 0
@@ -25,7 +50,14 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
         self.sum_attacker += info["reward_attacker"]
         self.sum_defender += info["reward_defender"]
         if done:
-            reward = (((self.sum_attacker) / (self.sum_defender + self.sum_attacker + 1e-8)) - self.env.alpha) / self.env.alpha
+            try:
+                reward = self.sum_attacker / (self.sum_defender + self.sum_attacker)
+            except:
+                reward = 0
+            if self.relative:
+                reward -= self.env.alpha
+                reward /= self.env.alpha
+                # reward = 1 if reward > self.env.alpha else 0
         else:
             reward = 0
         return next_state, reward, done, info

@@ -16,6 +16,7 @@ from rl.wrappers.exploration_reward_wrapper import ExplorationRewardWrapper
 from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
     SparseRelativeRewardWrapper,
+    WastedBlocksRewardWrapper,
 )
 from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 
@@ -66,7 +67,7 @@ config = dict(
     # ALPHA=0.35,
     ALGO="DQN",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=20,
+    STEPS_PER_ROLLOUT=250,
     STARTING_LR=10e-4,
     ENDING_LR=10e-7,
     BATCH_SIZE=100000,
@@ -75,7 +76,7 @@ config = dict(
     N_LAYERS=2,
     N_STEPS_MULTIPLE=10,
     HONEST_STEPS_FRACTION=0.1,
-    STARTING_EPS=0.5,
+    STARTING_EPS=0.99,
     ENDING_EPS=0.01,
 )
 
@@ -92,6 +93,7 @@ def alpha_schedule(step):
         alpha = max(alpha, 0.05)
     else:
         alpha = 0.25 * progress + 0.5 * (1 - progress)
+    return 0.35
     return alpha
 
 
@@ -104,8 +106,8 @@ env = gym.make(
     ),
 )
 env = AlphaScheduleWrapper(env, env_fn, alpha_schedule)
-env = SparseRelativeRewardWrapper(env)
-env = IllegalMoveWrapper(env)
+env = WastedBlocksRewardWrapper(env)
+# env = IllegalMoveWrapper(env)
 # env = HonestPolicyWrapper(
 #     env, int(config["HONEST_STEPS_FRACTION"] * config["TOTAL_TIMESTEPS"])
 # )
