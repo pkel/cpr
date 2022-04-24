@@ -91,7 +91,7 @@ class WandbCallback(BaseCallback):
             if self.model_save_path is not None:
                 if self.n_calls % self.model_save_freq == 0:
                     self.save_model()
-            x, y = ts2xy(load_results(self.log_dir), "timesteps")
+            x, y = ts2xy(load_results(self.model_save_path), "timesteps")
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-1000:])
