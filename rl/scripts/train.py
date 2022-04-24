@@ -131,8 +131,8 @@ def alpha_schedule(step):
     return alpha
 
 
-log_dir = wandb.run.dir
-# os.makedirs(log_dir, exist_ok=True)
+log_dir = f"saved_models/{wandb.run.id}"
+os.makedirs(log_dir, exist_ok=True)
 env = gym.make(
     "cpr-v0",
     spec=specs.nakamoto(
@@ -193,7 +193,7 @@ model.learn(
         check_freq=1000, log_dir=log_dir, verbose=0
     ),
 )
-model.save(os.path.join(wandb.run.dir, f"{config['ALGO']}_nakamoto"))
+model.save(os.path.join(log_dir, f"{config['ALGO']}_nakamoto"))
 
 # env = gym.make(
 #     "cpr-v0",
