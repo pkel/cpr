@@ -28,6 +28,92 @@ from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_r
 from stable_baselines3.common.monitor import Monitor
 
 import wandb
+from wandb.sdk.lib import telemetry as wb_telemetry
+
+
+class WandbCallback(BaseCallback):
+    """Log SB3 experiments to Weights and Biases
+        - Added model tracking and uploading
+        - Added complete hyperparameters recording
+        - Added gradient logging
+        - Note that `wandb.init(...)` must be called before the WandbCallback can be used
+
+    Args:
+        verbose: The verbosity of sb3 output
+        model_save_path: Path to the folder where the model will be saved, The default value is `None` so the model is not logged
+        model_save_freq: Frequency to save the model
+        gradient_save_freq: Frequency to log gradient. The default value is 0 so the gradients are not logged
+    """
+
+    def __init__(
+        self,
+        verbose: int = 0,
+        model_save_path: str = None,
+        model_save_freq: int = 0,
+        gradient_save_freq: int = 0,
+    ):
+        super(WandbCallback, self).__init__(verbose)
+        if wandb.run is None:
+            raise wandb.Error("You must call wandb.init() before WandbCallback()")
+        with wb_telemetry.context() as tel:
+            tel.feature.sb3 = True
+        self.model_save_freq = model_save_freq
+        self.model_save_path = model_save_path
+        self.gradient_save_freq = gradient_save_freq
+        self.best_mean_reward = -np.inf
+
+        # Create folder if needed
+        if self.model_save_path is not None:
+            os.makedirs(self.model_save_path, exist_ok=True)
+            self.path = os.path.join(self.model_save_path, "model.zip")
+        else:
+            assert (
+                self.model_save_freq == 0
+            ), "to use the `model_save_freq` you have to set the `model_save_path` parameter"
+
+    def _init_callback(self) -> None:
+        d = {}
+        if "algo" not in d:
+            d["algo"] = type(self.model).__name__
+        for key in self.model.__dict__:
+            if key in wandb.config:
+                continue
+            if type(self.model.__dict__[key]) in [float, int, str]:
+                d[key] = self.model.__dict__[key]
+            else:
+                d[key] = str(self.model.__dict__[key])
+        if self.gradient_save_freq > 0:
+            wandb.watch(self.model.policy, log_freq=self.gradient_save_freq, log="all")
+        wandb.config.setdefaults(d)
+
+    def _on_step(self) -> bool:
+        if self.model_save_freq > 0:
+            if self.model_save_path is not None:
+                if self.n_calls % self.model_save_freq == 0:
+                    self.save_model()
+            x, y = ts2xy(load_results(self.log_dir), "timesteps")
+            if len(x) > 0:
+                # Mean training reward over the last 100 episodes
+                mean_reward = np.mean(y[-1000:])
+                # wandb.log({"mean_reward": mean_reward})
+
+                # New best model, you could save the agent here
+                if mean_reward > self.best_mean_reward:
+                    self.best_mean_reward = mean_reward
+                    # Example for saving best model
+
+                    path = os.path.join(self.model_save_path, "best_model.zip")
+                    self.model.save(path)
+                    wandb.save(path, base_path=self.model_save_path)
+        return True
+
+    def _on_training_end(self) -> None:
+        if self.model_save_path is not None:
+            self.save_model()
+
+    def save_model(self) -> None:
+        self.model.save(self.path)
+        wandb.save(self.path, base_path=self.model_save_path)
 
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
@@ -61,7 +147,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-1000:])
-                wandb.log({"mean_reward": mean_reward})
+                # wandb.log({"mean_reward": mean_reward})
 
                 if self.verbose > 0:
                     print(f"Num timesteps: {self.num_timesteps}")
@@ -116,7 +202,7 @@ config = dict(
 
 
 wandb.init(project="dqn", entity="bglick13", config=config)
-config = wandb.config
+# config = wandb.config
 
 
 def alpha_schedule(step):
@@ -132,6 +218,8 @@ def alpha_schedule(step):
 
 
 log_dir = f"saved_models/{wandb.run.id}"
+# log_dir = f"saved_models/test"
+
 os.makedirs(log_dir, exist_ok=True)
 env = gym.make(
     "cpr-v0",
@@ -189,8 +277,11 @@ elif config["ALGO"] == "DQN":
     )
 model.learn(
     total_timesteps=config["TOTAL_TIMESTEPS"],
-    callback=SaveOnBestTrainingRewardCallback(
-        check_freq=1000, log_dir=log_dir, verbose=0
+    callback=WandbCallback(
+        gradient_save_freq=1000,
+        model_save_path=f"saved_models/{wandb.run.id}",
+        model_save_freq=1000,
+        verbose=0,
     ),
 )
 model.save(os.path.join(log_dir, f"{config['ALGO']}_nakamoto"))
