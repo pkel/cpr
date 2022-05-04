@@ -18,7 +18,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.target = target
         self.difficulties = dict((a, self.target) for a in alpha_schedule)
         self.n_pow = 0
-        self.observed = 0
+        self.observed = self.target
 
     
     def update_difficulties(self):
