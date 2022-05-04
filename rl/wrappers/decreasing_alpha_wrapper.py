@@ -35,7 +35,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         if self.run_daa:
             self.update_difficulties()
 
-        self.env = self.env_fn(alpha=alpha, activation_delay=self.difficulties[alpha])
+        self.env = self.env_fn(alpha=alpha, target=self.difficulties[alpha])
         self.alpha = alpha
         
         obs = self.env.reset()
