@@ -23,3 +23,9 @@ logs/
 *.pdf
 
 wandb/
+
+*.png
+
+*.zip
+
+*.csv

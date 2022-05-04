@@ -125,21 +125,24 @@ def clip_schedule(remaining):
     return 0.1
 
 
-def env_fn(alpha):
+def env_fn(alpha, target):
     return gym.make(
         "cpr-v0",
         spec=specs.nakamoto(
-            alpha=alpha, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0, defenders=1
+            alpha=alpha,
+            n_steps=config["STEPS_PER_ROLLOUT"],
+            gamma=0,
+            defenders=1,
+            activation_delay=target,
         ),
     )
 
 
 config = dict(
-    # ALPHA=0.35,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
     STEPS_PER_ROLLOUT=250,
-    STARTING_LR=10e-4,
+    STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
     ALPHA_SCHEDULE_CUTOFF=0,
@@ -149,24 +152,12 @@ config = dict(
     HONEST_STEPS_FRACTION=0.1,
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
+    ALPHA_SCHEDULE=[0.15, 0.25, 0.35, 0.45],
 )
 
 
 wandb.init(project="dqn", entity="bglick13", config=config)
 # config = wandb.config
-
-
-def alpha_schedule(step):
-    progress = step / (config["TOTAL_TIMESTEPS"] / config["STEPS_PER_ROLLOUT"])
-    if progress >= config["ALPHA_SCHEDULE_CUTOFF"]:
-        alpha = np.random.normal(0.3, 0.15)
-        alpha = min(alpha, 0.49)
-        alpha = max(alpha, 0.05)
-    else:
-        alpha = 0.25 * progress + 0.5 * (1 - progress)
-    # return 0.35
-    return alpha
-
 
 log_dir = f"saved_models/{wandb.run.id}"
 # log_dir = f"saved_models/test"
@@ -175,10 +166,14 @@ os.makedirs(log_dir, exist_ok=True)
 env = gym.make(
     "cpr-v0",
     spec=specs.nakamoto(
-        alpha=0, n_steps=config["STEPS_PER_ROLLOUT"], gamma=0, defenders=1
+        alpha=0,
+        n_steps=config["STEPS_PER_ROLLOUT"],
+        gamma=0,
+        defenders=1,
+        activation_delay=600,
     ),
 )
-env = AlphaScheduleWrapper(env, env_fn, alpha_schedule)
+env = AlphaScheduleWrapper(env, env_fn, config["ALPHA_SCHEDULE"], run_daa=True)
 env = WastedBlocksRewardWrapper(env)
 # env = IllegalMoveWrapper(env)
 # env = HonestPolicyWrapper(
@@ -230,7 +225,7 @@ model.learn(
     total_timesteps=config["TOTAL_TIMESTEPS"],
     callback=WandbCallback(
         gradient_save_freq=1000,
-        model_save_path=f"saved_models/{wandb.run.id}",
+        model_save_path=log_dir,
         model_save_freq=1000,
         verbose=0,
     ),

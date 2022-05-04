@@ -77,7 +77,7 @@ for _ in tqdm(range(100)):
     obs = env.reset()
     actions = []
     while not done:
-        action, _state = model.predict(np.array(obs))
+        action, _state = model.predict(np.array(obs), deterministic=True)
         next_obs, reward, done, info = env.step(action)
         obs = next_obs
         actions.append(action)
