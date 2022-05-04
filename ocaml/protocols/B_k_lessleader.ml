@@ -116,7 +116,7 @@ let update_head v ~preferred ~consider =
   if compare_blocks v consider preferred > 0 then consider else preferred
 ;;
 
-let honest ~k v actions preferred =
+let honest_handler ~k v actions preferred =
   let pow_hash_exn n = v.pow_hash n |> Option.get in
   function
   | Activate pow ->
@@ -153,7 +153,7 @@ let honest ~k v actions preferred =
 ;;
 
 let honest ~k v =
-  let handler = honest ~k (extend_view v)
+  let handler = honest_handler ~k (extend_view v)
   and preferred x = x in
   { init; handler; preferred }
 ;;
@@ -172,7 +172,134 @@ let reward_functions =
 ;;
 
 module PrivateAttack = struct
-  open PrivateAttack
+  type 'env state =
+    { public : 'env Dag.vertex (* defender's preferred block *)
+    ; private_ : 'env Dag.vertex (* attacker's preferred block *)
+    ; common : 'env Dag.vertex (* common chain *)
+    ; use_defender_votes : bool
+          (* if this flag is set to true, the attacker considers the defender's votes that
+             extend on his preferred block when building a new block.
+
+             If this flag is set to false, the attacker prolongs the current epoch until
+             he can form a block that does not reference any defender votes. *)
+    }
+
+  (* call this whenever public or private_ changes *)
+  let set_common (v : _ local_view) state =
+    let common = Dag.common_ancestor v.view state.public state.private_ in
+    assert (Option.is_some common) (* all our protocols maintain this invariant *);
+    { state with common = Option.get common }
+  ;;
+
+  (* the attacker emulates a defending node. This is the local_view of the defender *)
+  let public_view _state (v : _ local_view) =
+    let visible = v.released in
+    { v with
+      view = Dag.filter visible v.view
+    ; appended_by_me =
+        (* The attacker simulates an honest node on the public view. This node should not
+           interpret attacker vertices as own vertices. *)
+        (fun _ -> false)
+    }
+    |> extend_view
+  ;;
+
+  (* the attacker emulates a defending node. This describes the defender node *)
+  let handle_public ~k v actions state event =
+    let view = public_view state v
+    and drop_messages = { actions with share = (fun _n -> ()) } in
+    let public = honest_handler ~k view drop_messages state.public event in
+    set_common v { state with public }
+  ;;
+
+  (* the attacker works on a subset of the total information: he ignores new defender
+     blocks *)
+  let private_view state (v : _ local_view) =
+    let visible vertex =
+      (state.use_defender_votes
+      && v.data vertex |> is_vote
+      && last_block (extend_view v) vertex $== state.private_)
+      (* defender votes for the attacker's preferred block *)
+      || v.appended_by_me vertex
+      (* anything mined by the attacker *)
+      || Dag.partial_order state.common vertex >= 0
+      (* anything on the common chain *)
+    in
+    { v with view = Dag.filter visible v.view } |> extend_view
+  ;;
+
+  let handle_private ~k v actions state event =
+    let view = private_view state v
+    and drop_messages = { actions with share = (fun _n -> ()) } in
+    let private_ = honest_handler ~k view drop_messages state.private_ event in
+    set_common v { state with private_ }
+  ;;
+
+  let handler ~k v actions state event =
+    match event with
+    | Activate _ ->
+      (* work on private chain *)
+      handle_private ~k v actions state event
+    | Deliver _ ->
+      (* simulate defender *)
+      handle_public ~k v actions state event
+  ;;
+
+  (* passive node w/o tactic *)
+  let withhold ~k (v : _ local_view) =
+    let handler = handler ~k v
+    and preferred x = x.private_
+    and init ~roots =
+      let v = (honest ~k v).init ~roots in
+      { public = v; private_ = v; common = v; use_defender_votes = true }
+    in
+    { init; handler; preferred }
+  ;;
+
+  type 'env action =
+    { release : 'env Dag.vertex list (* release these vertices and all dependencies *)
+    ; adopt : bool (* adopt public chain and discard private blocks *)
+    ; use_defender_votes : bool (* control mining behaviour *)
+    }
+
+  type ('env, 'dag_data) tactic =
+    ('env, 'dag_data) local_view -> 'env state -> 'env action
+
+  (* release a given vertex and all its dependencies recursively *)
+  let rec release_recursive v release ns =
+    List.iter
+      (fun n ->
+        if not (v.released n)
+        then (
+          release n;
+          release_recursive v release (Dag.parents v.view n)))
+      ns
+  ;;
+
+  let apply_tactic ~k (tactic : ('env, 'dag_data) tactic) (v : _ local_view) actions state
+    =
+    let { release; adopt; use_defender_votes } = tactic v state in
+    let state =
+      (* release information and simulate defender *)
+      let () = release_recursive (extend_view v) actions.share release in
+      List.fold_left
+        (fun acc el -> handle_public ~k v actions acc (Deliver el))
+        state
+        release
+    in
+    (* adopt defender chain (or don't) *)
+    if adopt
+    then { state with private_ = state.public; common = state.public; use_defender_votes }
+    else state
+  ;;
+
+  let node ~k (tactic : ('env, 'dag_data) tactic) (v : _ local_view) =
+    let node = withhold ~k v in
+    let handler actions state event =
+      node.handler actions state event |> apply_tactic ~k tactic v actions
+    in
+    { node with handler }
+  ;;
 
   module Observation = struct
     type t =
@@ -189,7 +316,7 @@ module PrivateAttack = struct
 
     let observe v s =
       let private_view = extend_view v
-      and public_view = extend_view (public_view v) in
+      and public_view = public_view s v in
       let private_votes = Dag.children private_view.votes_only s.private_ |> List.length
       and public_votes = Dag.children public_view.votes_only s.public |> List.length in
       let v = private_view in
@@ -299,22 +426,14 @@ module PrivateAttack = struct
 
   module Action = struct
     type t =
-      | Release
-          (** Release up to preferred private block and all withheld votes for this block.
-              Used to model honest strategy. *)
-      | Override
-          (** Publish just enough information to make the defender adopt the chain just
-              released. The attacker continues mining the private chain.
-
-              If override is impossible, this still results in a release of withheld
-              information. *)
-      | Match
-          (** Publish just enough information such that the defender observes a tie
-              between two chains. The attacker continues mining the private chain.
-
-              If override is impossible, this still results in a release of withheld
-              information. *)
-      | Wait (** Continue withholding. Always possible. *)
+      | Adopt_Prolong
+      | Override_Prolong
+      | Match_Prolong
+      | Wait_Prolong
+      | Adopt_Proceed
+      | Override_Proceed
+      | Match_Proceed
+      | Wait_Proceed
     [@@deriving variants]
 
     let to_string = Variants.to_name
@@ -322,7 +441,16 @@ module PrivateAttack = struct
 
     let table =
       let add acc var = var.Variantslib.Variant.constructor :: acc in
-      Variants.fold ~init:[] ~override:add ~match_:add ~wait:add ~release:add
+      Variants.fold
+        ~init:[]
+        ~adopt_prolong:add
+        ~override_prolong:add
+        ~match_prolong:add
+        ~wait_prolong:add
+        ~adopt_proceed:add
+        ~override_proceed:add
+        ~match_proceed:add
+        ~wait_proceed:add
       |> List.rev
       |> Array.of_list
     ;;
@@ -331,45 +459,40 @@ module PrivateAttack = struct
     let n = Array.length table
   end
 
-  let honest_policy _o = Action.Release
-
-  let selfish_policy o =
+  let honest_policy o =
     let open Observation in
     let open Action in
-    if o.private_blocks = 0 && o.public_blocks = 0
-    then Wait
+    if o.private_blocks < o.public_blocks then Adopt_Proceed else Override_Proceed
+  ;;
+
+  let selfish_policy o =
+    (* Ad-hoc strategy. This is probably not optimal. *)
+    let open Observation in
+    let open Action in
+    if o.private_blocks < o.public_blocks
+    then Adopt_Proceed
+    else if o.private_blocks = 0 && o.public_blocks = 0
+    then Wait_Prolong
     else if o.public_blocks = 0
-    then Wait
-    else Override
+    then Wait_Proceed
+    else Override_Proceed
   ;;
 
   let policies = [ "honest", honest_policy; "selfish", selfish_policy ]
 
-  let selfish_policy' v state =
-    let v = extend_view v in
-    let open Action in
-    if state.private_ $== state.public
-    then Wait
-    else (
-      let ca =
-        Dag.common_ancestor v.blocks_only state.private_ state.public |> Option.get
-      in
-      if ca $== state.public then Wait else Override)
-  ;;
-
-  let apply_action ~k v ~release state =
+  let apply_action ~k v state action =
     let parent_block v n =
       match Dag.parents v.view n with
       | hd :: _ when v.data hd |> is_block -> Some hd
       | _ -> None
     in
-    let match_ ~and_override () =
+    let match_ offset =
       let height, nvotes =
-        let v = public_view v |> extend_view in
+        let v = public_view state v in
         let target =
           (block_height_exn v state.public * k)
           + List.length (Dag.children v.votes_only state.public)
-          + if and_override then 1 else 0
+          + offset
         in
         target / k, target mod k
       in
@@ -387,38 +510,31 @@ module PrivateAttack = struct
       in
       let votes = Dag.children ev.votes_only block in
       match first Compare.(by float v.delivered_at) nvotes votes with
-      | Some subset -> release_recursive v release (block :: subset)
+      | Some subset -> block :: subset
       | None ->
         (* not enough votes, release all *)
-        release_recursive v release (block :: votes)
+        block :: votes
     in
-    fun a ->
-      match (a : Action.t) with
-      | Wait -> `PreferPrivate
-      | Match ->
-        match_ ~and_override:false ();
-        `PreferPrivate
-      | Override ->
-        match_ ~and_override:true ();
-        `PreferPrivate
-      | Release ->
-        release_recursive v release [ state.private_ ];
-        Dag.children v.view state.private_ |> List.iter release;
-        `PreferPrivate
+    let use_defender_votes =
+      match (action : Action.t) with
+      | Adopt_Proceed | Match_Proceed | Override_Proceed | Wait_Proceed -> true
+      | Adopt_Prolong | Match_Prolong | Override_Prolong | Wait_Prolong -> false
+    in
+    match (action : Action.t) with
+    | Adopt_Proceed | Adopt_Prolong -> { release = []; adopt = true; use_defender_votes }
+    | Match_Proceed | Match_Prolong ->
+      { release = match_ 0; adopt = false; use_defender_votes }
+    | Override_Proceed | Override_Prolong ->
+      { release = match_ 1; adopt = false; use_defender_votes }
+    | Wait_Proceed | Wait_Prolong -> { release = []; adopt = false; use_defender_votes }
   ;;
 
   let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
+  let tactic_of_policy ~k p v state = (lift_policy p) v state |> apply_action ~k v state
+  let tactic_of_policy' ~k p v state = p v state |> apply_action ~k v state
 
-  let tactic_of_policy ~k p v ~release state =
-    (lift_policy p) v state |> apply_action ~k v ~release state
-  ;;
-
-  let tactic_of_policy' ~k p v ~release state =
-    p v state |> apply_action ~k v ~release state
-  ;;
-
-  let attack ~k p = Node (attack (honest ~k) (tactic_of_policy ~k p))
-  and attack' ~k p = Node (attack (honest ~k) (tactic_of_policy' ~k p))
+  let attack ~k p = Node (node ~k (tactic_of_policy ~k p))
+  and attack' ~k p = Node (node ~k (tactic_of_policy' ~k p))
 end
 
 let attacks ~k =
@@ -432,10 +548,6 @@ let attacks ~k =
        ~info:"Private attack with selfish policy"
        "private-selfish"
        PrivateAttack.(attack ~k selfish_policy)
-  |> add
-       ~info:"Private attack with selfish policy (alternative policy implementation)"
-       "private-selfish-alt"
-       PrivateAttack.(attack' ~k selfish_policy')
 ;;
 
 let protocol ~k =
