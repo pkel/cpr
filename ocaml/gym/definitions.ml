@@ -333,23 +333,34 @@ let bk_ll ~k ~reward =
   of_module
     (module struct
       type data = B_k_lessleader.dag_data
-      type state = data Simulator.data PrivateAttack.state
+      type state = data Simulator.data B_k_lessleader.PrivateAttack.state
+
+      open B_k_lessleader.PrivateAttack
 
       let description = Printf.sprintf "Bₖ/ll with k=%d" k
       let protocol = B_k_lessleader.protocol ~k
       let reward_function = reward
+      let node = withhold ~k
+      let policies = policies
 
-      include B_k_lessleader.PrivateAttack
-
-      let node = PrivateAttack.withhold protocol.honest
+      module Action = Action
+      module Observation = Observation
 
       let apply_action v a state action =
         let tactic = tactic_of_policy ~k (fun _ -> action) in
-        PrivateAttack.apply_tactic tactic v a state
+        apply_tactic ~k tactic v a state
       ;;
 
-      let shutdown _v _a state =
-        (* TODO: implement shutdown for non-Nakamoto protocols *) state
+      let shutdown v a state =
+        let tactic _ _ =
+          let release =
+            (* last block plus all confirming votes *)
+            state.private_
+            :: (Dag.iterate_descendants v.view [ state.private_ ] |> List.of_seq)
+          in
+          { release; adopt = true; use_defender_votes = true }
+        in
+        apply_tactic ~k tactic v a state
       ;;
     end)
 ;;
