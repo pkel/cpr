@@ -4,6 +4,15 @@ import numpy as np
 from gym.spaces import Tuple, MultiDiscrete
 
 
+class AbsoluteRewardWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+    
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        reward = info["reward_attacker"]
+        return obs, reward, done, info
+        
 class WastedBlocksRewardWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)

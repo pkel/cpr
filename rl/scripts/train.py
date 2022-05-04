@@ -17,6 +17,7 @@ from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
     SparseRelativeRewardWrapper,
     WastedBlocksRewardWrapper,
+    AbsoluteRewardWrapper,
 )
 from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 
@@ -153,6 +154,7 @@ config = dict(
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
     ALPHA_SCHEDULE=[0.15, 0.25, 0.35, 0.45],
+    USE_DAA=True,
 )
 
 
@@ -173,8 +175,13 @@ env = gym.make(
         activation_delay=600,
     ),
 )
-env = AlphaScheduleWrapper(env, env_fn, config["ALPHA_SCHEDULE"], run_daa=True)
-env = WastedBlocksRewardWrapper(env)
+env = AlphaScheduleWrapper(
+    env, env_fn, config["ALPHA_SCHEDULE"], run_daa=config["USE_DAA"]
+)
+if config["USE_DAA"]:
+    env = AbsoluteRewardWrapper(env)
+else:
+    env = WastedBlocksRewardWrapper(env)
 # env = IllegalMoveWrapper(env)
 # env = HonestPolicyWrapper(
 #     env, int(config["HONEST_STEPS_FRACTION"] * config["TOTAL_TIMESTEPS"])
