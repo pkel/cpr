@@ -15,10 +15,11 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
         # DAA
         self.run_daa = run_daa
-        self.target = target
-        self.difficulties = dict((a, self.target) for a in alpha_schedule)
-        self.n_pow = 0
-        self.observed = self.target
+        if self.run_daa:
+            self.target = target
+            self.difficulties = dict((a, self.target) for a in alpha_schedule)
+            self.n_pow = 0
+            self.observed = self.target
 
     
     def update_difficulties(self):
@@ -35,7 +36,9 @@ class AlphaScheduleWrapper(gym.Wrapper):
         if self.run_daa:
             self.update_difficulties()
 
-        self.env = self.env_fn(alpha=alpha, target=self.difficulties[alpha])
+            self.env = self.env_fn(alpha=alpha, target=self.difficulties[alpha])
+        else:
+            self.env = self.env_fn(alpha=alpha, target=None)
         self.alpha = alpha
         
         obs = self.env.reset()
@@ -44,8 +47,9 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        self.n_pow += info["reward_n_pows"]
-        if done:
+        if self.run_daa:
+            self.n_pow += info["reward_n_pows"]
+        if done and self.run_daa:
             self.observed = info['simulator_clock_rewarded'] / self.n_pow
         return obs, reward, done, info
 
