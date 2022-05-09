@@ -20,24 +20,33 @@ from rl.wrappers.excess_reward_wrapper import (
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 from stable_baselines3 import A2C, PPO, DQN
 
-GAMMA = 0.9
-DEFENDERS = 20
+SM1_RESULTS = {
+    0: {
+        1 / 3.0: 1 / 3.0,
+        0.35: 0.36650,
+        0.375: 0.42118,
+        0.4: 0.48372,
+        0.425: 0.55801,
+        0.45: 0.65177,
+        0.475: 0.78254,
+    }
+}
+
+GAMMA = 0
+DEFENDERS = 1
 env = gym.make(
     "cpr-v0",
     spec=specs.nakamoto(alpha=0.1, n_steps=250, gamma=GAMMA, defenders=DEFENDERS),
 )
 env = SparseRelativeRewardWrapper(env, relative=False)
 
-p = PPO.load(f"saved_models/best_model_gamma_1.zip", env=env)
+p = PPO.load(f"saved_models/best_model.zip", env=env)
 for n_steps in [250]:
     alphas = []
     rewards = []
-    for alpha in np.arange(0.05, 0.5, 0.05):
+    for alpha in SM1_RESULTS[GAMMA].keys():
 
-        def alpha_schedule(step):
-            return alpha
-
-        def env_fn(alpha):
+        def env_fn(alpha, target):
             return gym.make(
                 "cpr-v0",
                 spec=specs.nakamoto(
@@ -45,8 +54,8 @@ for n_steps in [250]:
                 ),
             )
 
-        env = env_fn(alpha)
-        env = AlphaScheduleWrapper(env, env_fn, alpha_schedule)
+        env = env_fn(alpha, None)
+        env = AlphaScheduleWrapper(env, env_fn, [alpha])
         env = SparseRelativeRewardWrapper(env, relative=False)
         # env = WastedBlocksRewardWrapper(env)
 
@@ -62,8 +71,7 @@ for n_steps in [250]:
             while not done:
                 sm1_action = sm1(np.array(obs))
                 action, _state = p.predict(np.array(obs))
-                if sm1_action != action:
-                    print(f"obs: {obs}, action: {action}, sm1_action: {sm1_action}")
+
                 obs, r, done, info = env.step(action)
 
                 ep_r += r
@@ -82,9 +90,13 @@ for n_steps in [250]:
         fmt="none",
         ecolor="b",
     )
+    ax.scatter(
+        list(SM1_RESULTS[GAMMA].keys()), list(SM1_RESULTS[GAMMA].values()), c="green"
+    )
     ax.scatter(gb_mean["alpha"], gb_mean["alpha"], c="r")
-    plt.xticks(np.arange(0.05, 0.5, 0.05))
+    plt.xticks(list(SM1_RESULTS[GAMMA].keys()))
     plt.title("alpha vs reward for n_steps={}".format(n_steps))
+    plt.legend(["RL", "SM1", "Honest"])
 plt.show()
 
 

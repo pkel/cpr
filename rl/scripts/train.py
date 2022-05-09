@@ -93,20 +93,20 @@ class WandbCallback(BaseCallback):
             if self.model_save_path is not None:
                 if self.n_calls % self.model_save_freq == 0:
                     self.save_model()
-            x, y = ts2xy(load_results(self.model_save_path), "timesteps")
-            if len(x) > 0:
-                # Mean training reward over the last 100 episodes
-                mean_reward = np.mean(y[-1000:])
-                wandb.log({"mean_reward": mean_reward})
+                    x, y = ts2xy(load_results(self.model_save_path), "timesteps")
+                    if len(x) > 0:
+                        # Mean training reward over the last 100 episodes
+                        mean_reward = np.mean(y[-5000:])
+                        wandb.log({"mean_reward": mean_reward})
 
-                # New best model, you could save the agent here
-                if mean_reward > self.best_mean_reward:
-                    self.best_mean_reward = mean_reward
-                    # Example for saving best model
+                        # New best model, you could save the agent here
+                        if mean_reward > self.best_mean_reward:
+                            self.best_mean_reward = mean_reward
+                            # Example for saving best model
 
-                    path = os.path.join(self.model_save_path, "best_model.zip")
-                    self.model.save(path)
-                    wandb.save(path, base_path=self.model_save_path)
+                            path = os.path.join(self.model_save_path, "best_model.zip")
+                            self.model.save(path)
+                            wandb.save(path, base_path=self.model_save_path)
         return True
 
     def _on_training_end(self) -> None:
@@ -153,8 +153,18 @@ config = dict(
     HONEST_STEPS_FRACTION=0.1,
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
-    ALPHA_SCHEDULE=[0.15, 0.25, 0.35, 0.45],
-    USE_DAA=True,
+    ALPHA_SCHEDULE=[
+        1 / 3.0,
+        0.35,
+        0.375,
+        0.4,
+        0.425,
+        0.45,
+        0.475,
+    ],
+    USE_DAA=False,
+    GAMMA=0,
+    DEFENDERS=1,
 )
 
 
