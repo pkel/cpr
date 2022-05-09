@@ -15,7 +15,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.config = config
 
         # DAA
-        self.run_daa = config["RUN_DAA"]
+        self.run_daa = config["USE_DAA"]
         if self.run_daa:
             self.target = config["ACTIVATION_DELAY"]
             self.difficulties = dict((a, self.target) for a in config["ALPHA_SCHEDULE"])
