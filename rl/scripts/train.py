@@ -132,8 +132,8 @@ def env_fn(alpha, target):
         spec=specs.nakamoto(
             alpha=alpha,
             n_steps=config["STEPS_PER_ROLLOUT"],
-            gamma=0,
-            defenders=1,
+            gamma=config["GAMMA"],
+            defenders=config["DEFENDERS"],
             activation_delay=target,
         ),
     )
@@ -165,6 +165,7 @@ config = dict(
     USE_DAA=False,
     GAMMA=0,
     DEFENDERS=1,
+    ACTIVATION_DELAY=None,
 )
 
 
@@ -180,9 +181,9 @@ env = gym.make(
     spec=specs.nakamoto(
         alpha=0,
         n_steps=config["STEPS_PER_ROLLOUT"],
-        gamma=0,
-        defenders=1,
-        activation_delay=600,
+        gamma=config["GAMMA"],
+        defenders=config["DEFENDERS"],
+        activation_delay=config["ACTIVATION_DELAY"],
     ),
 )
 env = AlphaScheduleWrapper(

@@ -6,18 +6,19 @@ from typing import List
 
 
 class AlphaScheduleWrapper(gym.Wrapper):
-    def __init__(self, env, env_fn, alpha_schedule: List, run_daa=False, target=600):
+    def __init__(self, env, env_fn, config):
         super().__init__(env)
-        self.alpha_schedule = alpha_schedule
+        self.alpha_schedule = config["ALPHA_SCHEDULE"]
         self.env_fn = env_fn
         self.current_step = 0
         self.alpha = None
+        self.config = config
 
         # DAA
-        self.run_daa = run_daa
+        self.run_daa = config["RUN_DAA"]
         if self.run_daa:
-            self.target = target
-            self.difficulties = dict((a, self.target) for a in alpha_schedule)
+            self.target = config["ACTIVATION_DELAY"]
+            self.difficulties = dict((a, self.target) for a in config["ALPHA_SCHEDULE"])
             self.n_pow = 0
             self.observed = self.target
 
@@ -36,9 +37,9 @@ class AlphaScheduleWrapper(gym.Wrapper):
         if self.run_daa:
             self.update_difficulties()
 
-            self.env = self.env_fn(alpha=alpha, target=self.difficulties[alpha])
+            self.env = self.env_fn(alpha=alpha, target=self.difficulties[alpha], config=self.config)
         else:
-            self.env = self.env_fn(alpha=alpha, target=None)
+            self.env = self.env_fn(alpha=alpha, target=None, config=self.config)
         self.alpha = alpha
         
         obs = self.env.reset()
