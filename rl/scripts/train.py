@@ -126,7 +126,7 @@ def clip_schedule(remaining):
     return 0.1
 
 
-def env_fn(alpha, target):
+def env_fn(alpha, target, config):
     return gym.make(
         "cpr-v0",
         spec=specs.nakamoto(
@@ -186,9 +186,7 @@ env = gym.make(
         activation_delay=config["ACTIVATION_DELAY"],
     ),
 )
-env = AlphaScheduleWrapper(
-    env, env_fn, config["ALPHA_SCHEDULE"], run_daa=config["USE_DAA"]
-)
+env = AlphaScheduleWrapper(env, env_fn, config)
 if config["USE_DAA"]:
     env = AbsoluteRewardWrapper(env)
 else:
