@@ -165,7 +165,7 @@ config = dict(
     USE_DAA=False,
     GAMMA=0,
     DEFENDERS=1,
-    ACTIVATION_DELAY=None,
+    ACTIVATION_DELAY=1,
 )
 
 
