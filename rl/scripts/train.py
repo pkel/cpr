@@ -154,6 +154,8 @@ config = dict(
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
     ALPHA_SCHEDULE=[
+        0.15,
+        0.25,
         1 / 3.0,
         0.35,
         0.375,
