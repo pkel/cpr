@@ -129,7 +129,8 @@ def clip_schedule(remaining):
 def env_fn(alpha, target, config):
     return gym.make(
         "cpr-v0",
-        spec=specs.nakamoto(
+        spec=specs.bk_ll(
+            k=config["K"],
             alpha=alpha,
             n_steps=config["STEPS_PER_ROLLOUT"],
             gamma=config["GAMMA"],
@@ -140,6 +141,8 @@ def env_fn(alpha, target, config):
 
 
 config = dict(
+    PROTOCOL="bk_ll",
+    K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
     STEPS_PER_ROLLOUT=250,
@@ -180,7 +183,8 @@ log_dir = f"saved_models/{wandb.run.id}"
 os.makedirs(log_dir, exist_ok=True)
 env = gym.make(
     "cpr-v0",
-    spec=specs.nakamoto(
+    spec=specs.bk_ll(
+        k=config["K"],
         alpha=0,
         n_steps=config["STEPS_PER_ROLLOUT"],
         gamma=config["GAMMA"],
