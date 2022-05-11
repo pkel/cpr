@@ -252,7 +252,7 @@ model.learn(
         verbose=0,
     ),
 )
-model.save(os.path.join(log_dir, f"{config['ALGO']}_nakamoto"))
+model.save(os.path.join(log_dir, f"{config['ALGO']}_bkll"))
 
 # env = gym.make(
 #     "cpr-v0",
