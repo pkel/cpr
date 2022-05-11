@@ -33,6 +33,8 @@ from stable_baselines3 import A2C, PPO, DQN
 # }
 
 config = dict(
+    PROTOCOL="bk_ll",
+    K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
     STEPS_PER_ROLLOUT=250,
@@ -56,14 +58,18 @@ config = dict(
     #     0.475,
     # ],
     USE_DAA=False,
-    GAMMA=0.9,
-    DEFENDERS=20,
+    GAMMA=0,
+    DEFENDERS=1,
     ACTIVATION_DELAY=1,
 )
 env = gym.make(
     "cpr-v0",
-    spec=specs.nakamoto(
-        alpha=0.1, n_steps=250, gamma=config["GAMMA"], defenders=config["DEFENDERS"]
+    spec=specs.bk_ll(
+        k=config["K"],
+        alpha=0.1,
+        n_steps=250,
+        gamma=config["GAMMA"],
+        defenders=config["DEFENDERS"],
     ),
 )
 env = SparseRelativeRewardWrapper(env, relative=False)
@@ -79,9 +85,10 @@ for n_steps in [250]:
         def env_fn(alpha, target, config):
             return gym.make(
                 "cpr-v0",
-                spec=specs.nakamoto(
-                    alpha=alpha,
-                    n_steps=n_steps,
+                spec=specs.bk_ll(
+                    k=config["K"],
+                    alpha=0.1,
+                    n_steps=250,
                     gamma=config["GAMMA"],
                     defenders=config["DEFENDERS"],
                 ),
@@ -97,7 +104,7 @@ for n_steps in [250]:
 
         # model = A2C("MlpPolicy", env, verbose=1)
         # model.learn(total_timesteps=10000)
-        sm1 = env.policies()["sapirshtein-2016-sm1"]
+        sm1 = env.policies()["selfish"]
         # p = env.policies()["honest"]
 
         for _ in tqdm(range(1000)):
@@ -113,7 +120,6 @@ for n_steps in [250]:
                 ep_r += r
             rewards.append(ep_r)
             alphas.append(alpha)
-            print(info["simulator_clock_rewarded"])
         for _ in tqdm(range(1000)):
             obs = env.reset()
             done = False
@@ -141,8 +147,10 @@ for n_steps in [250]:
     ax.scatter(gb_mean["alpha"], gb_mean["sm1_reward"], c="green")
     ax.scatter(gb_mean["alpha"], gb_mean["alpha"], c="r")
     plt.xticks(ALPHAS)
-    plt.title(f"alpha vs reward for n_steps={n_steps} Gamma={config['GAMMA']}")
-    plt.legend(["RL", "SM1", "Honest"])
+    plt.title(
+        f"Protocol: Bk_ll alpha vs reward for n_steps={n_steps} Gamma={config['GAMMA']}"
+    )
+    plt.legend(["RL", "Selfish", "Honest"])
 plt.show()
 
 
