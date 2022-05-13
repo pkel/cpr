@@ -51,10 +51,22 @@ let () =
          int
          ~docstring:"maximum number of attacker steps before terminating the simulation"
          ~default:1000
+     and max_time =
+       keyword
+         "max_time"
+         float
+         ~docstring:"maximum simulated time before terminating the simulation"
+         ~default:Float.infinity
      in
      let (Proto p) = proto in
      let config =
-       Definitions.Parameters.t ~alpha ~gamma ~defenders ~activation_delay ~max_steps
+       Definitions.Parameters.t
+         ~alpha
+         ~gamma
+         ~defenders
+         ~activation_delay
+         ~max_steps
+         ~max_time
      in
      let t = p config in
      IEnv (t, t.create ()) |> python_of_ienv);

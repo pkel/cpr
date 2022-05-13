@@ -44,3 +44,23 @@ def test_simple_daa():
 
     # observed block interval should be within tolerance now
     assert target - eps < observed < target + eps
+
+
+def test_max_time():
+    target = 10000.0
+    env = gym.make(
+        "cpr-v0",
+        proto=protocols.nakamoto(),
+        max_time=target,
+        max_steps=int(target * 2),  # set high enough such that max_time takes effect
+        activation_delay=1,
+    )
+    p = env.policies()["honest"]
+
+    obs = env.reset()
+    done = False
+    while not done:
+        obs, _, done, info = env.step(p(obs))
+
+    assert info["simulator_clock_now"] >= target
+    assert info["simulator_clock_rewarded"] >= target - 10

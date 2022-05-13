@@ -109,6 +109,7 @@ module Parameters : sig
     ; defenders : int (** number of defenders; 1 <= x *)
     ; activation_delay : float (** difficulty; 0 < x *)
     ; max_steps : int (** termination criterion, number of attacker steps; 1 <= x *)
+    ; max_time : float (** termination criterion, simulated time; 0 < x *)
     }
 
   (** raises Failure for invalid parameter combinations *)
@@ -118,6 +119,7 @@ module Parameters : sig
     -> defenders:int
     -> activation_delay:float
     -> max_steps:int
+    -> max_time:float
     -> t
 end = struct
   type t =
@@ -126,17 +128,19 @@ end = struct
     ; defenders : int
     ; activation_delay : float
     ; max_steps : int
+    ; max_time : float
     }
 
-  let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps =
+  let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_time =
     let () =
       if alpha < 0. || alpha > 1. then failwith "alpha < 0 || alpha > 1";
       if gamma < 0. || gamma > 1. then failwith "gamma < 0 || gamma > 1";
       if defenders < 1 then failwith "defenders < 0";
       if activation_delay <= 0. then failwith "activation_delay <= 0";
-      if max_steps <= 0 then failwith "max_steps <= 0"
+      if max_steps <= 0 then failwith "max_steps <= 0";
+      if max_time <= 0. then failwith "max_time <= 0"
     in
-    { alpha; gamma; defenders; activation_delay; max_steps }
+    { alpha; gamma; defenders; activation_delay; max_steps; max_time }
   ;;
 end
 
@@ -218,7 +222,7 @@ let of_module
     skip_to_interaction t.sim;
     (* End simulation? *)
     let done_ =
-      if t.steps < p.max_steps
+      if t.steps < p.max_steps && t.sim.clock.now < p.max_time
       then false
       else (
         n.state <- M.shutdown v a n.state;
