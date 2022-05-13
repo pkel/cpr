@@ -127,13 +127,23 @@ def clip_schedule(remaining):
 
 
 def env_fn(alpha, target, config):
+    if config["PROTOCOL"] == "nakamoto":
+        proto = protocols.nakamoto()
+    elif config["PROTOCOL"] == "bk_ll":
+        proto = protocols.bk_ll(k=config["K"])
+
+    if config["USE_DAA"]:
+        max_steps = config["STEPS_PER_ROLLOUT"] * 10
+        max_time = config["STEPS_PER_ROLLOUT"]
+    else:
+        max_steps = config["STEPS_PER_ROLLOUT"]
+        max_time = config["STEPS_PER_ROLLOUT"] * 10
     return gym.make(
         "cpr-v0",
-        proto=protocols.bk_ll(
-            k=config["K"],
-        ),
+        proto=proto,
         alpha=alpha,
-        max_steps=config["STEPS_PER_ROLLOUT"],
+        max_steps=max_steps,
+        max_time=max_time,
         gamma=config["GAMMA"],
         defenders=config["DEFENDERS"],
         activation_delay=target,
@@ -141,7 +151,7 @@ def env_fn(alpha, target, config):
 
 
 config = dict(
-    PROTOCOL="bk_ll",
+    PROTOCOL="nakamoto",
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
@@ -167,7 +177,7 @@ config = dict(
         0.45,
         0.475,
     ],
-    USE_DAA=False,
+    USE_DAA=True,
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
@@ -181,26 +191,13 @@ log_dir = f"saved_models/{wandb.run.id}"
 # log_dir = f"saved_models/test"
 
 os.makedirs(log_dir, exist_ok=True)
-env = gym.make(
-    "cpr-v0",
-    proto=protocols.bk_ll(
-        k=config["K"],
-    ),
-    alpha=0,
-    max_steps=config["STEPS_PER_ROLLOUT"],
-    gamma=config["GAMMA"],
-    defenders=config["DEFENDERS"],
-    activation_delay=config["ACTIVATION_DELAY"],
-)
+env = env_fn(0, 1, config)
 env = AlphaScheduleWrapper(env, env_fn, config)
 if config["USE_DAA"]:
     env = AbsoluteRewardWrapper(env)
 else:
     env = WastedBlocksRewardWrapper(env)
-# env = IllegalMoveWrapper(env)
-# env = HonestPolicyWrapper(
-#     env, int(config["HONEST_STEPS_FRACTION"] * config["TOTAL_TIMESTEPS"])
-# )
+
 env = Monitor(env, log_dir)
 print(env.action_space)
 if config["ALGO"] == "PPO":
