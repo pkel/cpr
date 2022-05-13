@@ -19,7 +19,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          depth: 0 # get complete history, including tags for CPR_VERSION env
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
@@ -34,7 +36,7 @@ jobs:
       - name: Run tests
         working-directory: ocaml
         run: |
-          export CPR_VERSION=github_ci-$(git describe --tags --dirty || git describe --all --long --dirty)
+          export CPR_VERSION=github_ci-${{ matrix.os }}-$(git describe --tags --dirty || git describe --all --long --dirty)
           opam exec -- dune build @fmt
           opam exec -- dune build
           opam exec -- dune runtest
