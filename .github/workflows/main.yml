@@ -34,6 +34,7 @@ jobs:
       - name: Run tests
         working-directory: ocaml
         run: |
+          export CPR_VERSION=github_ci-$(git describe --tags --dirty || git describe --all --long --dirty)
           opam exec -- dune build @fmt
           opam exec -- dune build
           opam exec -- dune runtest

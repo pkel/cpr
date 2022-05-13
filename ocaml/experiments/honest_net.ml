@@ -30,7 +30,6 @@ let tasks ~n_activations =
 ;;
 
 open Cmdliner
-open Common
 
 let info =
   let doc = "simulate honest networks running proof-of-work protocols" in

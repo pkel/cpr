@@ -13,6 +13,8 @@ class Core(gym.Env):
         low = engine.observation_low(self.env)
         high = engine.observation_high(self.env)
         self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
+        self.version = engine.cpr_lib_version
+        self.policies = engine.policies(self.env)
 
     def reset(self):
         return engine.reset(self.env)
@@ -22,6 +24,3 @@ class Core(gym.Env):
 
     def render(self, mode="ascii"):
         print(engine.to_string(self.env))
-
-    def policies(self):
-        return engine.policies(self.env)

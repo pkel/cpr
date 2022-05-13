@@ -4,6 +4,12 @@ import gym
 from cpr_gym import protocols
 
 
+def test_version():
+    env = gym.make("cpr-v0")
+    assert isinstance(env.version, str)
+    assert len(env.version) > 0
+
+
 def test_default(capsys):
     env = gym.make("cpr-v0")
     env.render()
@@ -24,7 +30,7 @@ def test_policies_honest():
     env = gym.make(
         "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
     )
-    p = env.policies()["honest"]
+    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -34,7 +40,7 @@ def test_policies_selfish():
     env = gym.make(
         "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.5, defenders=3
     )
-    p = env.policies()["selfish"]
+    p = env.policies["selfish"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -48,12 +54,12 @@ def test_nakamoto(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Protocol Nakamoto against α=0.33 attacker"
 
-    p = env.policies()["honest"]
+    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies()["eyal-sirer-2014"]
+    p = env.policies["eyal-sirer-2014"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -67,12 +73,12 @@ def test_bk_ll(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Protocol Bₖ/ll with k=17 against α=0.33 attacker"
 
-    p = env.policies()["honest"]
+    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies()["selfish"]
+    p = env.policies["selfish"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -90,12 +96,12 @@ def test_george(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Protocol George with k=13 against α=0.33 attacker"
 
-    p = env.policies()["honest"]
+    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies()["override_block"]
+    p = env.policies["override_block"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))

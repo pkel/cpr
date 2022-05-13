@@ -1,4 +1,5 @@
 export CPR_MALFORMED_DAG_TO_FILE=/tmp/malformed.dot
+export CPR_VERSION=local-$(shell git describe --tags --dirty || git describe --all --long --dirty)
 
 build:
 	cd ocaml && opam exec dune build

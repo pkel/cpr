@@ -26,6 +26,7 @@ let () =
   if not (Py.is_initialized ()) then Py.initialize ();
   Random.self_init ();
   let m = Py_module.create "engine" in
+  Py_module.set_value m "cpr_lib_version" (Py.String.of_string Cpr_lib.version);
   Py_module.set
     m
     "create"

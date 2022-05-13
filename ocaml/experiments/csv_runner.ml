@@ -99,7 +99,7 @@ let prepare_row (Task { activations; network; protocol; attack; sim }) =
   ; ca_height = 0
   ; machine_duration_s = Float.nan
   ; error = ""
-  ; version = Common.version
+  ; version = Cpr_lib.version
   }
 ;;
 

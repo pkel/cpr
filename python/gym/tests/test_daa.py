@@ -16,7 +16,7 @@ def test_simple_daa():
             defenders=2,
             activation_delay=x,
         )
-        p = env.policies()["sapirshtein-2016-sm1"]
+        p = env.policies["sapirshtein-2016-sm1"]
         return (env, p)
 
     # run simulation assuming 100% efficiency (= 0% orphan rate)
@@ -55,7 +55,7 @@ def test_max_time():
         max_steps=int(target * 2),  # set high enough such that max_time takes effect
         activation_delay=1,
     )
-    p = env.policies()["honest"]
+    p = env.policies["honest"]
 
     obs = env.reset()
     done = False

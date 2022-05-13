@@ -1,3 +1,5 @@
+let version = Version.t
+
 include Intf
 module Collection = Collection
 module Dag = Dag

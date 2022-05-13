@@ -8,17 +8,6 @@ let root =
   |> R.failwith_error_msg
 ;;
 
-let version =
-  Cmd.(v "git" % "describe" % "--tags" % "--dirty")
-  |> OS.Cmd.run_out
-  |> OS.Cmd.to_string
-  |> R.kignore_error ~use:(fun _ ->
-         Cmd.(v "git" % "describe" % "--all" % "--long" % "--dirty")
-         |> OS.Cmd.run_out
-         |> OS.Cmd.to_string)
-  |> R.failwith_error_msg
-;;
-
 let progress_bar n =
   let open Progress.Line in
   list [ brackets (elapsed ()); bar n; count_to n; parens (const "eta: " ++ eta n) ]
