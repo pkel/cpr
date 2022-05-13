@@ -45,6 +45,10 @@ bridge python/gym/cpr_gym/bridge.so:
 	rm -f python/gym/cpr_gym/bridge.so
 	cp _build/default/ocaml/gym/bridge.so python/gym/cpr_gym/bridge.so
 
+update-bridge-from-ci:
+	_venv/bin/python -m cpr_gym --update
+	_venv/bin/python -m cpr_gym --version
+
 # long-running simulations
 
 simulate:
