@@ -6,7 +6,7 @@ sys.path.append(os.getcwd())
 import numpy as np
 
 import gym
-from cpr_gym import specs
+from cpr_gym import protocols
 from stable_baselines3 import A2C, PPO, DQN
 from stable_baselines3.ppo.policies import MlpPolicy
 from tqdm import tqdm
@@ -129,14 +129,14 @@ def clip_schedule(remaining):
 def env_fn(alpha, target, config):
     return gym.make(
         "cpr-v0",
-        spec=specs.bk_ll(
+        proto=protocols.bk_ll(
             k=config["K"],
-            alpha=alpha,
-            n_steps=config["STEPS_PER_ROLLOUT"],
-            gamma=config["GAMMA"],
-            defenders=config["DEFENDERS"],
-            activation_delay=target,
         ),
+        alpha=alpha,
+        max_steps=config["STEPS_PER_ROLLOUT"],
+        gamma=config["GAMMA"],
+        defenders=config["DEFENDERS"],
+        activation_delay=target,
     )
 
 
@@ -183,14 +183,14 @@ log_dir = f"saved_models/{wandb.run.id}"
 os.makedirs(log_dir, exist_ok=True)
 env = gym.make(
     "cpr-v0",
-    spec=specs.bk_ll(
+    proto=protocols.bk_ll(
         k=config["K"],
-        alpha=0,
-        n_steps=config["STEPS_PER_ROLLOUT"],
-        gamma=config["GAMMA"],
-        defenders=config["DEFENDERS"],
-        activation_delay=config["ACTIVATION_DELAY"],
     ),
+    alpha=0,
+    max_steps=config["STEPS_PER_ROLLOUT"],
+    gamma=config["GAMMA"],
+    defenders=config["DEFENDERS"],
+    activation_delay=config["ACTIVATION_DELAY"],
 )
 env = AlphaScheduleWrapper(env, env_fn, config)
 if config["USE_DAA"]:
@@ -253,43 +253,3 @@ model.learn(
     ),
 )
 model.save(os.path.join(log_dir, f"{config['ALGO']}_bkll"))
-
-# env = gym.make(
-#     "cpr-v0",
-#     spec=specs.nakamoto(alpha=config["ALPHA"], n_steps=config["STEPS_PER_ROLLOUT"]),
-# )
-# env = SparseRelativeRewardWrapper(env, alpha=config["ALPHA"])
-# sum_rs = []
-# sum_attacker_rs = []
-# sum_defender_rs = []
-# relative_rs = []
-# actions = []
-# for i in tqdm(range(100)):
-#     done = False
-#     rs = []
-#     attacker_rs = []
-#     defender_rs = []
-#     obs = env.reset()
-#     while not done:
-#         action, _state = model.predict(obs, deterministic=True)
-#         obs, reward, done, info = env.step(action)
-#         rs.append(reward)
-#         attacker_rs.append(info["reward_attacker"])
-#         defender_rs.append(info["reward_defender"])
-#         actions.append(action)
-#     sum_rs.append(np.sum(rs))
-#     sum_attacker_rs.append(np.sum(attacker_rs))
-#     sum_defender_rs.append(np.sum(defender_rs))
-#     relative_rs.append(
-#         np.sum(attacker_rs) / (np.sum(defender_rs) + np.sum(attacker_rs))
-#     )
-# unique, unique_counts = np.unique(actions, return_counts=True)
-# unique_counts = dict(zip(unique, unique_counts))
-# print(f"Average reward: {np.mean(sum_rs)}, Std: {np.std(sum_rs)}")
-# print(f"Average relative reward: {np.mean(relative_rs)}, Std: {np.std(relative_rs)}")
-# print(f"Unique actions: {unique_counts}")
-"""
-Average reward: 46700.37878937397, Std: 176872.9906061578
-Average relative reward: 0.48934404059594044, Std: 0.005359245320997703
-Unique actions: {0: 489368, 1: 510632}
-"""
