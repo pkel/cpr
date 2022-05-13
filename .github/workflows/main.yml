@@ -21,7 +21,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          depth: 0 # get complete history, including tags for CPR_VERSION env
+          fetch-depth: 0 # get complete history, including tags for CPR_VERSION env
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
