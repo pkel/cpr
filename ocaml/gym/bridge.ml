@@ -11,26 +11,65 @@ let encapsulate : type a. string -> a capsule =
   a, b, c
 ;;
 
-type packed_env = PEnv : 'instance env -> packed_env
+type protocol = Proto : (Definitions.Parameters.t -> 'instance env) -> protocol
 type instantiated_env = IEnv : 'instance env * 'instance -> instantiated_env
 
 let (ienv, python_of_ienv, _python_to_ienv) =
   (encapsulate "ocaml.instantiated_env" : instantiated_env capsule)
 ;;
 
-let (penv, python_of_penv, _python_to_penv) =
-  (encapsulate "ocaml.packed_env" : packed_env capsule)
+let (penv, python_of_protocol, _python_to_protocol) =
+  (encapsulate "ocaml.protocol" : protocol capsule)
 ;;
 
 let () =
   if not (Py.is_initialized ()) then Py.initialize ();
   Random.self_init ();
   let m = Py_module.create "engine" in
+  Py_module.set_value m "cpr_lib_version" (Py.String.of_string Cpr_lib.version);
   Py_module.set
     m
     "create"
-    (let%map penv = positional "env" penv ~docstring:"OCaml gym environment spec" in
-     let (PEnv t) = penv in
+    (let%map proto = positional "proto" penv ~docstring:"OCaml gym protocol spec"
+     and alpha =
+       keyword "alpha" float ~docstring:"attacker's relative compute" ~default:0.25
+     and gamma =
+       keyword
+         "gamma"
+         float
+         ~docstring:"similar to gamma parameter in selfish mining literature"
+         ~default:0.5
+     and defenders = keyword "defenders" int ~docstring:"number of defenders" ~default:2
+     and activation_delay =
+       keyword
+         "activation_delay"
+         float
+         ~docstring:"expected delay between two consecutive puzzle solutions"
+         ~default:1.
+     and max_steps =
+       keyword
+         "max_steps"
+         int
+         ~docstring:"maximum number of attacker steps before terminating the simulation"
+         ~default:1000
+     and max_time =
+       keyword
+         "max_time"
+         float
+         ~docstring:"maximum simulated time before terminating the simulation"
+         ~default:Float.infinity
+     in
+     let (Proto p) = proto in
+     let config =
+       Definitions.Parameters.t
+         ~alpha
+         ~gamma
+         ~defenders
+         ~activation_delay
+         ~max_steps
+         ~max_time
+     in
+     let t = p config in
      IEnv (t, t.create ()) |> python_of_ienv);
   Py_module.set
     m
@@ -104,37 +143,11 @@ let () =
 
 let () =
   let open Definitions in
-  let m = Py_module.create "specs" in
-  let alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
-  and activation_delay =
-    keyword
-      "activation_delay"
-      float
-      ~docstring:"expected delay between two consecutive puzzle solutions"
-      ~default:1.
-  and gamma =
-    keyword
-      "gamma"
-      float
-      ~docstring:"similar to gamma parameter in selfish mining literature"
-  and defenders = keyword "defenders" int ~docstring:"number of defending agents"
-  and n_steps =
-    keyword
-      "n_steps"
-      int
-      ~docstring:"number of steps before terminating the simulation"
-      ~default:default_n_steps
-  in
-  Py_module.set_value m "default" (PEnv default |> python_of_penv);
+  let m = Py_module.create "protocols" in
   Py_module.set
     m
     "nakamoto"
-    (let%map alpha = alpha
-     and activation_delay = activation_delay
-     and n_steps = n_steps
-     and gamma = gamma
-     and defenders = defenders
-     and reward =
+    (let%map reward =
        keyword
          "reward"
          string
@@ -148,17 +161,11 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (nakamoto ~alpha ~activation_delay ~gamma ~defenders ~n_steps ~reward)
-     |> python_of_penv);
+     Proto (nakamoto ~reward) |> python_of_protocol);
   Py_module.set
     m
     "bk"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and alpha = alpha
-     and activation_delay = activation_delay
-     and n_steps = n_steps
-     and gamma = gamma
-     and defenders = defenders
      and reward =
        keyword
          "reward"
@@ -177,17 +184,11 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk ~activation_delay ~gamma ~defenders ~n_steps ~k ~alpha ~reward)
-     |> python_of_penv);
+     Proto (bk ~k ~reward) |> python_of_protocol);
   Py_module.set
     m
     "bk_ll"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and alpha = alpha
-     and activation_delay = activation_delay
-     and n_steps = n_steps
-     and gamma = gamma
-     and defenders = defenders
      and reward =
        keyword
          "reward"
@@ -206,17 +207,11 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (bk_ll ~gamma ~defenders ~n_steps ~k ~alpha ~activation_delay ~reward)
-     |> python_of_penv);
+     Proto (bk_ll ~k ~reward) |> python_of_protocol);
   Py_module.set
     m
     "george"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and alpha = alpha
-     and activation_delay = activation_delay
-     and n_steps = n_steps
-     and gamma = gamma
-     and defenders = defenders
      and reward =
        keyword
          "reward"
@@ -264,6 +259,5 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     PEnv (george ~alpha ~activation_delay ~gamma ~defenders ~n_steps ~k ~reward)
-     |> python_of_penv)
+     Proto (george ~k ~reward) |> python_of_protocol)
 ;;

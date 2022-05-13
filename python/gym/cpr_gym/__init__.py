@@ -36,9 +36,8 @@ except OSError:
         )
     raise
 
-import engine, specs  # noqa
-
+import engine, protocols  # noqa
 
 #  Register gym environment
 
-gym.envs.register(id="cpr-v0", entry_point="cpr_gym.envs:Core", max_episode_steps=10000)
+gym.envs.register(id="cpr-v0", entry_point="cpr_gym.envs:Core")

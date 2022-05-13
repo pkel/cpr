@@ -1,5 +1,5 @@
 import gym
-from cpr_gym import specs
+from cpr_gym import protocols
 
 
 def test_simple_daa():
@@ -9,11 +9,14 @@ def test_simple_daa():
     def env_with_activation_delay(x):
         env = gym.make(
             "cpr-v0",
-            spec=specs.nakamoto(
-                n_steps=10000, alpha=1 / 3, gamma=0.5, defenders=2, activation_delay=x
-            ),
+            proto=protocols.nakamoto(),
+            max_steps=10000,
+            alpha=1 / 3,
+            gamma=0.5,
+            defenders=2,
+            activation_delay=x,
         )
-        p = env.policies()["sapirshtein-2016-sm1"]
+        p = env.policies["sapirshtein-2016-sm1"]
         return (env, p)
 
     # run simulation assuming 100% efficiency (= 0% orphan rate)
@@ -41,3 +44,23 @@ def test_simple_daa():
 
     # observed block interval should be within tolerance now
     assert target - eps < observed < target + eps
+
+
+def test_max_time():
+    target = 10000.0
+    env = gym.make(
+        "cpr-v0",
+        proto=protocols.nakamoto(),
+        max_time=target,
+        max_steps=int(target * 2),  # set high enough such that max_time takes effect
+        activation_delay=1,
+    )
+    p = env.policies["honest"]
+
+    obs = env.reset()
+    done = False
+    while not done:
+        obs, _, done, info = env.step(p(obs))
+
+    assert info["simulator_clock_now"] >= target
+    assert info["simulator_clock_rewarded"] >= target - 10
