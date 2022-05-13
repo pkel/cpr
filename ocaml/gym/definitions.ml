@@ -2,6 +2,7 @@ open Intf
 open Cpr_lib
 open Cpr_protocols
 
+(* state of a running simulation *)
 type ('a, 'b) instance =
   { sim : 'a Simulator.state
   ; attacker : 'b
@@ -24,6 +25,7 @@ module type Observation = sig
   val to_string : t -> string
 end
 
+(* interface to simulated protocols *)
 module type M = sig
   type data
   type state
@@ -63,6 +65,9 @@ module type M = sig
     -> state
 end
 
+(* It's useful on the RL side to have the alpha parameter in the observation. This enables
+   to train one policy for multiple alphas in one go. This function augments an
+   observation space with a constant alpha. *)
 let augment_observation
     ~alpha
     (type r s t)
@@ -97,14 +102,48 @@ let augment_observation
      and type data = r)
 ;;
 
+module Parameters : sig
+  type t = private
+    { alpha : float (** attacker compute; 0 <= x <= 1 *)
+    ; gamma : float (** attacker connection; 0 <= x <= 1 *)
+    ; defenders : int (** number of defenders; 1 <= x *)
+    ; activation_delay : float (** difficulty; 0 < x *)
+    ; max_steps : int (** termination criterion, number of attacker steps; 1 <= x *)
+    }
+
+  (** raises Failure for invalid parameter combinations *)
+  val t
+    :  alpha:float
+    -> gamma:float
+    -> defenders:int
+    -> activation_delay:float
+    -> max_steps:int
+    -> t
+end = struct
+  type t =
+    { alpha : float
+    ; gamma : float
+    ; defenders : int
+    ; activation_delay : float
+    ; max_steps : int
+    }
+
+  let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps =
+    let () =
+      if alpha < 0. || alpha > 1. then failwith "alpha < 0 || alpha > 1";
+      if gamma < 0. || gamma > 1. then failwith "gamma < 0 || gamma > 1";
+      if defenders < 1 then failwith "defenders < 0";
+      if activation_delay <= 0. then failwith "activation_delay <= 0";
+      if max_steps <= 0 then failwith "max_steps <= 0"
+    in
+    { alpha; gamma; defenders; activation_delay; max_steps }
+  ;;
+end
+
 let of_module
-    ~n_steps
-    ~alpha
-    ~gamma
-    ~defenders
-    ~activation_delay
     (type r s)
     (module M : M with type state = s and type data = r)
+    (p : Parameters.t)
     : ( r
       , (r Simulator.data, r) local_view
         * (r Simulator.data, r, Simulator.pow) actions
@@ -115,7 +154,7 @@ let of_module
   =
   let (module O) =
     augment_observation
-      ~alpha
+      ~alpha:p.alpha
       (module struct
         include M.Observation
 
@@ -125,10 +164,10 @@ let of_module
   in
   let network =
     Network.T.selfish_mining
-      ~activation_delay
-      ~gamma
-      ~alpha
-      ~defenders
+      ~activation_delay:p.activation_delay
+      ~gamma:p.gamma
+      ~alpha:p.alpha
+      ~defenders:p.defenders
       ~propagation_delay:0.00001
   in
   let init () =
@@ -179,7 +218,7 @@ let of_module
     skip_to_interaction t.sim;
     (* End simulation? *)
     let done_ =
-      if t.steps < n_steps
+      if t.steps < p.max_steps
       then false
       else (
         n.state <- M.shutdown v a n.state;
@@ -257,7 +296,7 @@ let of_module
     Printf.sprintf
       "Protocol %s against α=%.2f attacker\n%s\nActions: %s"
       M.description
-      alpha
+      p.alpha
       (observe !t |> O.to_string)
       actions_hum
   and policies =
@@ -388,16 +427,4 @@ let george ~k ~reward =
         (* TODO: implement shutdown for non-Nakamoto protocols *) state
       ;;
     end)
-;;
-
-let default_n_steps = 1000
-
-let default =
-  nakamoto
-    ~activation_delay:1.
-    ~n_steps:default_n_steps
-    ~alpha:0.25
-    ~gamma:0.5
-    ~defenders:10
-    ~reward:(Nakamoto.constant 1.)
 ;;

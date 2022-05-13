@@ -1,5 +1,5 @@
 import gym
-from cpr_gym import specs
+from cpr_gym import protocols
 
 
 def test_simple_daa():
@@ -9,9 +9,12 @@ def test_simple_daa():
     def env_with_activation_delay(x):
         env = gym.make(
             "cpr-v0",
-            spec=specs.nakamoto(
-                n_steps=10000, alpha=1 / 3, gamma=0.5, defenders=2, activation_delay=x
-            ),
+            proto=protocols.nakamoto(),
+            max_steps=10000,
+            alpha=1 / 3,
+            gamma=0.5,
+            defenders=2,
+            activation_delay=x,
         )
         p = env.policies()["sapirshtein-2016-sm1"]
         return (env, p)
