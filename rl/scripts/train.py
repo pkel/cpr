@@ -202,7 +202,7 @@ else:
 #     env, int(config["HONEST_STEPS_FRACTION"] * config["TOTAL_TIMESTEPS"])
 # )
 env = Monitor(env, log_dir)
-
+print(env.action_space)
 if config["ALGO"] == "PPO":
     policy_kwargs = dict(
         activation_fn=torch.nn.ReLU,
