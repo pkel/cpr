@@ -375,36 +375,22 @@ let bk ~k ~reward =
 let bk_ll ~k ~reward =
   of_module
     (module struct
-      type data = B_k_lessleader.dag_data
-      type state = data Simulator.data B_k_lessleader.PrivateAttack.state
-
       open B_k_lessleader.PrivateAttack
+
+      type data = B_k_lessleader.dag_data
+      type state = data Simulator.data State.t
 
       let description = Printf.sprintf "Bₖ/ll with k=%d" k
       let protocol = B_k_lessleader.protocol ~k
       let reward_function = reward
-      let node = withhold ~k
-      let policies = policies
+      let node = staging_agent ~k
+      let policies = Collection.map_to_list (fun e -> e.key, e.it) Policies.collection
 
       module Action = Action
       module Observation = Observation
 
-      let apply_action v a state action =
-        let tactic = tactic_of_policy ~k (fun _ -> action) in
-        apply_tactic ~k tactic v a state
-      ;;
-
-      let shutdown v a state =
-        let tactic _ _ =
-          let release =
-            (* last block plus all confirming votes *)
-            state.private_
-            :: (Dag.iterate_descendants v.view [ state.private_ ] |> List.of_seq)
-          in
-          { release; adopt = true; use_defender_votes = true }
-        in
-        apply_tactic ~k tactic v a state
-      ;;
+      let apply_action v a s x = interpret_action ~k v s x |> conclude_action ~k v a
+      let shutdown = shutdown ~k
     end)
 ;;
 
