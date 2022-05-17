@@ -1,3 +1,4 @@
+(* OCaml gym <> Python gym interface *)
 (* TODO consider using ocaml class for gym env interface *)
 type 'instance env =
   { n_actions : int

@@ -126,7 +126,7 @@ module PrivateAttack = struct
     State.update v ~private_ s
   ;;
 
-  let stage_action v actions state event =
+  let prepare v actions state event =
     match event with
     | Activate _ ->
       (* work on private chain *)
@@ -134,16 +134,6 @@ module PrivateAttack = struct
     | Deliver _ ->
       (* simulate defender *)
       handle_public v actions state event
-  ;;
-
-  let staging_agent (v : _ local_view) =
-    let handler = stage_action v
-    and preferred (x : _ State.t) = x.private_
-    and init ~roots =
-      let x = (honest v).init ~roots in
-      State.init x
-    in
-    { init; handler; preferred }
   ;;
 
   module Observation = struct
@@ -218,6 +208,8 @@ module PrivateAttack = struct
       List.init 50 run |> List.for_all (fun x -> x)
     ;;
   end
+
+  let observe = Observation.observe (* TODO move implementation here *)
 
   module Action = struct
     type t =
@@ -325,18 +317,19 @@ module PrivateAttack = struct
       | h, a when h = a - 1 && h >= 1 -> Override
       | _ (* Otherwise *) -> Wait
     ;;
-
-    let collection =
-      let open Collection in
-      empty
-      |> add ~info:"emulate honest behaviour" "honest" honest
-      |> add ~info:"simple withholding policy" "simple" simple
-      |> add ~info:"Eyal and Sirer 2014" "eyal-sirer-2014" es_2014
-      |> add ~info:"Sapirshtein et al. 2016, SM1" "sapirshtein-2016-sm1" ssz_2016_sm1
-    ;;
   end
 
-  let interpret_action v (s : _ State.t) action =
+  let policies =
+    let open Collection in
+    let open Policies in
+    empty
+    |> add ~info:"emulate honest behaviour" "honest" honest
+    |> add ~info:"simple withholding policy" "simple" simple
+    |> add ~info:"Eyal and Sirer 2014" "eyal-sirer-2014" es_2014
+    |> add ~info:"Sapirshtein et al. 2016, SM1" "sapirshtein-2016-sm1" ssz_2016_sm1
+  ;;
+
+  let interpret_action v _a (s : _ State.t) action =
     let parent v n =
       match Dag.parents v.view n with
       | [ x ] -> Some x
@@ -362,23 +355,34 @@ module PrivateAttack = struct
     | Wait -> [], s
   ;;
 
-  let conclude_action v a (to_release, s) =
+  let conclude v a (to_release, s) =
     let () = List.iter (a.share ~recursive:true) to_release in
     List.fold_left (fun acc el -> handle_public v a acc (Deliver el)) s to_release
   ;;
 
+  let apply v a s action = interpret_action v a s action |> conclude v a
+
   let shutdown (v : _ local_view) a (s : _ State.t) =
     let to_release = [ s.private_ ] in
-    let s = conclude_action v a (to_release, s) in
+    let s = conclude v a (to_release, s) in
     State.update v ~private_:s.public s
   ;;
 
+  let noop_node (v : _ local_view) =
+    let handler _ s _ = s
+    and preferred (x : _ State.t) = x.private_
+    and init ~roots =
+      let x = (honest v).init ~roots in
+      State.init x
+    in
+    { init; handler; preferred }
+  ;;
+
   let agent' policy (v : _ local_view) =
-    let node = staging_agent v in
+    let node = noop_node v in
     let handler a s e =
-      let action = policy (Observation.observe v s) in
-      let s = stage_action v a s e in
-      interpret_action v s action |> conclude_action v a
+      let s = prepare v a s e in
+      Observation.observe v s |> policy |> apply v a s
     in
     { node with handler }
   ;;
@@ -393,7 +397,7 @@ let attacks =
       ; info = "PrivateAttack; " ^ info
       ; it = PrivateAttack.agent it
       })
-    PrivateAttack.Policies.collection
+    PrivateAttack.policies
 ;;
 
 let protocol : _ protocol =

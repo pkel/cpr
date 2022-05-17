@@ -11,7 +11,7 @@ let encapsulate : type a. string -> a capsule =
   a, b, c
 ;;
 
-type protocol = Proto : (Definitions.Parameters.t -> 'instance env) -> protocol
+type protocol = Proto : (Engine.Parameters.t -> 'instance env) -> protocol
 type instantiated_env = IEnv : 'instance env * 'instance -> instantiated_env
 
 let (ienv, python_of_ienv, _python_to_ienv) =
@@ -61,13 +61,7 @@ let () =
      in
      let (Proto p) = proto in
      let config =
-       Definitions.Parameters.t
-         ~alpha
-         ~gamma
-         ~defenders
-         ~activation_delay
-         ~max_steps
-         ~max_time
+       Engine.Parameters.t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_time
      in
      let t = p config in
      IEnv (t, t.create ()) |> python_of_ienv);
