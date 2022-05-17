@@ -323,27 +323,22 @@ let of_module
 let nakamoto ~reward =
   of_module
     (module struct
-      type data = Nakamoto.dag_data
-      type state = data Simulator.data Ssz16compat.state
+      open Nakamoto.PrivateAttack
 
-      let description = Printf.sprintf "Nakamoto"
+      type data = Nakamoto.dag_data
+      type state = data Simulator.data State.t
+
+      let description = "Nakamoto"
       let protocol = Nakamoto.protocol
       let reward_function = reward
+      let node = staging_agent
+      let policies = Collection.map_to_list (fun e -> e.key, e.it) Policies.collection
 
-      include Nakamoto.Ssz16compat
+      module Action = Action
+      module Observation = Observation
 
-      let node = Ssz16compat.withhold ~honest:protocol.honest
-
-      let apply_action v a state action =
-        let tactic = tactic_of_policy (fun _ -> action) in
-        Ssz16compat.apply_tactic ~honest:protocol.honest tactic v a state
-      ;;
-
-      let shutdown v a state =
-        let open Ssz16compat in
-        let tactic _ _ = { release = Some state.private_; adopt = true } in
-        Ssz16compat.apply_tactic ~honest:protocol.honest tactic v a state
-      ;;
+      let apply_action v a s x = interpret_action v s x |> conclude_action v a
+      let shutdown = shutdown
     end)
 ;;
 

@@ -23,7 +23,7 @@ let init ~roots =
 
 let block_height v vtx = (v.data vtx).height
 
-let handler v actions preferred = function
+let honest_handler v actions preferred = function
   | Activate pow ->
     let head = v.data preferred in
     let head' = actions.extend_dag ~pow [ preferred ] { height = head.height + 1 } in
@@ -37,7 +37,7 @@ let handler v actions preferred = function
 
 let honest v =
   let preferred x = x in
-  { handler = handler v; init; preferred }
+  { handler = honest_handler v; init; preferred }
 ;;
 
 let constant c : ('env, dag_data) reward_function = fun ~view:_ ~assign n -> assign c n
@@ -47,8 +47,104 @@ let reward_functions =
   empty |> add ~info:"1 per confirmed block" "block" (constant 1.)
 ;;
 
-module Ssz16compat = struct
-  open Ssz16compat
+module PrivateAttack = struct
+  module State : sig
+    type 'env t = private
+      { public : 'env Dag.vertex (* defender's preferred block *)
+      ; private_ : 'env Dag.vertex (* attacker's preferred block *)
+      ; common : 'env Dag.vertex (* common chain *)
+      }
+
+    val init : 'env Dag.vertex -> 'env t
+
+    (* Set fields in state; updates common chain *)
+    val update
+      :  ('env, 'b) local_view
+      -> ?public:'env Dag.vertex
+      -> ?private_:'env Dag.vertex
+      -> 'env t
+      -> 'env t
+  end = struct
+    type 'env t =
+      { public : 'env Dag.vertex
+      ; private_ : 'env Dag.vertex
+      ; common : 'env Dag.vertex
+      }
+
+    let init x = { public = x; private_ = x; common = x }
+
+    (* call this whenever public or private_ changes *)
+    let set_common (v : _ local_view) state =
+      let common = Dag.common_ancestor v.view state.public state.private_ in
+      assert (Option.is_some common) (* all our protocols maintain this invariant *);
+      { state with common = Option.get common }
+    ;;
+
+    let update v ?public ?private_ t =
+      set_common
+        v
+        { public = Option.value ~default:t.public public
+        ; private_ = Option.value ~default:t.private_ private_
+        ; common = t.common
+        }
+    ;;
+  end
+
+  (* the attacker emulates a defending node. This is the local_view of the defender *)
+  let public_view (s : _ State.t) (v : _ local_view) =
+    let visible x = Dag.partial_order s.common x >= 0 || not (v.appended_by_me x) in
+    { v with
+      view = Dag.filter visible v.view
+    ; appended_by_me =
+        (* The attacker simulates an honest node on the public view. This node should not
+           interpret attacker vertices as own vertices. *)
+        (fun _ -> false)
+    }
+  ;;
+
+  (* the attacker emulates a defending node. This describes the defender node *)
+  let handle_public v actions (s : _ State.t) event =
+    let view = public_view s v
+    and drop_messages = { actions with share = (fun _n -> ()) } in
+    let public = honest_handler view drop_messages s.public event in
+    State.update v ~public s
+  ;;
+
+  (* the attacker works on a subset of the total information: he ignores new defender
+     blocks *)
+  let private_view (s : _ State.t) (v : _ local_view) =
+    let visible vertex =
+      Dag.partial_order s.common vertex >= 0 || v.appended_by_me vertex
+    in
+    { v with view = Dag.filter visible v.view }
+  ;;
+
+  let handle_private v actions (s : _ State.t) event =
+    let node = honest (private_view s v)
+    and drop_messages = { actions with share = (fun _n -> ()) } in
+    let private_ = node.handler drop_messages s.private_ event in
+    State.update v ~private_ s
+  ;;
+
+  let stage_action v actions state event =
+    match event with
+    | Activate _ ->
+      (* work on private chain *)
+      handle_private v actions state event
+    | Deliver _ ->
+      (* simulate defender *)
+      handle_public v actions state event
+  ;;
+
+  let staging_agent (v : _ local_view) =
+    let handler = stage_action v
+    and preferred (x : _ State.t) = x.private_
+    and init ~roots =
+      let x = (honest v).init ~roots in
+      State.init x
+    in
+    { init; handler; preferred }
+  ;;
 
   module Observation = struct
     type t =
@@ -60,7 +156,7 @@ module Ssz16compat = struct
 
     let length = List.length Fields.names
 
-    let observe v s =
+    let observe v (s : _ State.t) =
       let ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
       let () = assert (ca $== s.common) (* TODO. Eliminate call of common_ancestor *) in
       let ca_height = block_height v ca
@@ -163,93 +259,95 @@ module Ssz16compat = struct
     let n = Array.length table
   end
 
-  let honest_policy o =
-    let open Observation in
-    let open Action in
-    if o.private_blocks > o.public_blocks
-    then Override
-    else if o.private_blocks < o.public_blocks
-    then Adopt
-    else Wait
-  ;;
+  module Policies = struct
+    let honest o =
+      let open Observation in
+      let open Action in
+      if o.private_blocks > o.public_blocks
+      then Override
+      else if o.private_blocks < o.public_blocks
+      then Adopt
+      else Wait
+    ;;
 
-  (* Patrik's ad-hoc strategy *)
-  let simple o =
-    let open Observation in
-    let open Action in
-    if o.public_blocks > 0
-    then if o.private_blocks < o.public_blocks then Adopt else Override
-    else Wait
-  ;;
-
-  (* Eyal and Sirer. Majority is not enough: Bitcoin mining is vulnerable. 2014. *)
-  let es_2014 o =
-    (* I interpret this from the textual description of the strategy. There is an
-       algorithmic version in the paper, but it depends on the observation whether the
-       last mined block is honest or not. *)
-    let open Observation in
-    let open Action in
-    if o.private_blocks < o.public_blocks
-    then (* 1. *) Adopt
-    else if o.public_blocks = 0 && o.private_blocks = 1
-    then (* 2. *) Wait
-    else if o.public_blocks = 1 && o.private_blocks = 1
-    then (* 3. *) Match
-    else if o.public_blocks = 1 && o.private_blocks = 2
-    then (* 4. *) Override
-    else if o.public_blocks = 2 && o.private_blocks = 1
-    then (* 5. Redundant: included in 1. *)
-      Adopt
-    else (
-      (* The attacker established a lead of more than two before: *)
-      let _ = () in
+    (* Patrik's ad-hoc strategy *)
+    let simple o =
+      let open Observation in
+      let open Action in
       if o.public_blocks > 0
-      then
-        if o.private_blocks - o.public_blocks = 1
-        then (* 6. *) Override
-        else (* 7. *) Match
-      else Wait)
+      then if o.private_blocks < o.public_blocks then Adopt else Override
+      else Wait
+    ;;
+
+    (* Eyal and Sirer. Majority is not enough: Bitcoin mining is vulnerable. 2014. *)
+    let es_2014 o =
+      (* I interpret this from the textual description of the strategy. There is an
+         algorithmic version in the paper, but it depends on the observation whether the
+         last mined block is honest or not. *)
+      let open Observation in
+      let open Action in
+      if o.private_blocks < o.public_blocks
+      then (* 1. *) Adopt
+      else if o.public_blocks = 0 && o.private_blocks = 1
+      then (* 2. *) Wait
+      else if o.public_blocks = 1 && o.private_blocks = 1
+      then (* 3. *) Match
+      else if o.public_blocks = 1 && o.private_blocks = 2
+      then (* 4. *) Override
+      else if o.public_blocks = 2 && o.private_blocks = 1
+      then (* 5. Redundant: included in 1. *)
+        Adopt
+      else (
+        (* The attacker established a lead of more than two before: *)
+        let _ = () in
+        if o.public_blocks > 0
+        then
+          if o.private_blocks - o.public_blocks = 1
+          then (* 6. *) Override
+          else (* 7. *) Match
+        else Wait)
+    ;;
+
+    (* Sapirshtein, Sompolinsky, Zohar. Optimal Selfish Mining Strategies in Bitcoin.
+       2016. *)
+    let ssz_2016_sm1 o =
+      (* The authors rephrase the policy of ES'14 and call it SM1. Their version is much
+         shorter.
+
+         The authors define an MDP to find better strategies for various parameters alpha
+         and gamma. We cannot reproduce this here in this module. Our RL framework should
+         be able to find these policies, though. *)
+      let open Observation in
+      let open Action in
+      match o.public_blocks, o.private_blocks with
+      | h, a when h > a -> Adopt
+      | 1, 1 -> Match
+      | h, a when h = a - 1 && h >= 1 -> Override
+      | _ (* Otherwise *) -> Wait
+    ;;
+
+    let collection =
+      let open Collection in
+      empty
+      |> add ~info:"emulate honest behaviour" "honest" honest
+      |> add ~info:"simple withholding policy" "simple" simple
+      |> add ~info:"Eyal and Sirer 2014" "eyal-sirer-2014" es_2014
+      |> add ~info:"Sapirshtein et al. 2016, SM1" "sapirshtein-2016-sm1" ssz_2016_sm1
+    ;;
+  end
+
+  (* release a given vertex and all its dependencies recursively *)
+  let rec release_recursive (v : _ local_view) release ns =
+    List.iter
+      (fun n ->
+        if not (v.released n)
+        then (
+          release n;
+          release_recursive v release (Dag.parents v.view n)))
+      ns
   ;;
 
-  (* Sapirshtein, Sompolinsky, Zohar. Optimal Selfish Mining Strategies in Bitcoin. 2016. *)
-  let ssz_2016_sm1 o =
-    (* The authors rephrase the policy of ES'14 and call it SM1. Their version is much
-       shorter.
-
-       The authors define an MDP to find better strategies for various parameters alpha
-       and gamma. We cannot reproduce this here in this module. Our RL framework should be
-       able to find these policies, though. *)
-    let open Observation in
-    let open Action in
-    match o.public_blocks, o.private_blocks with
-    | h, a when h > a -> Adopt
-    | 1, 1 -> Match
-    | h, a when h = a - 1 && h >= 1 -> Override
-    | _ (* Otherwise *) -> Wait
-  ;;
-
-  (* TODO: check GKWGRC'16 for better strategies *)
-
-  let policies =
-    [ "honest", honest_policy
-    ; "simple", simple
-    ; "eyal-sirer-2014", es_2014
-    ; "sapirshtein-2016-sm1", ssz_2016_sm1
-    ]
-  ;;
-
-  (* This strategy was designed for the PrivateAttack module. It does not work for
-     Ssz16compat!*)
-  let _selfish_policy' v state =
-    let open Action in
-    if state.private_ $== state.public
-    then Wait
-    else (
-      let ca = Dag.common_ancestor v.view state.private_ state.public |> Option.get in
-      if ca $== state.public then Wait else Override)
-  ;;
-
-  let apply_action v state action =
+  let interpret_action v (s : _ State.t) action =
     let parent v n =
       match Dag.parents v.view n with
       | [ x ] -> Some x
@@ -258,50 +356,55 @@ module Ssz16compat = struct
     let match_ offset =
       let height =
         (* height of to be released block *)
-        let v = public_view state v in
-        block_height v state.public + offset
+        let v = public_view s v in
+        block_height v s.public + offset
       in
       (* look for to be released block backwards from private head *)
       let rec h b =
         if block_height v b <= height then b else parent v b |> Option.get |> h
       in
-      Some (h state.private_)
+      [ h s.private_ ]
       (* NOTE: if private height is smaller target height, then private head is released. *)
     in
     match (action : Action.t) with
-    | Adopt -> { release = None; adopt = true }
-    | Match -> { release = match_ 0; adopt = false }
-    | Override -> { release = match_ 1; adopt = false }
-    | Wait -> { release = None; adopt = false }
+    | Adopt -> [], State.update v ~private_:s.public s
+    | Match -> match_ 0, s
+    | Override -> match_ 1, s
+    | Wait -> [], s
   ;;
 
-  let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
-  let tactic_of_policy p v state = (lift_policy p) v state |> apply_action v state
-  let tactic_of_policy' p v state = p v state |> apply_action v state
+  let conclude_action v a (to_release, s) =
+    let () = release_recursive v a.share to_release in
+    List.fold_left (fun acc el -> handle_public v a acc (Deliver el)) s to_release
+  ;;
 
-  let attack p = Node (attack ~honest (tactic_of_policy p))
-  and attack' p = Node (attack ~honest (tactic_of_policy' p))
+  let shutdown (v : _ local_view) a (s : _ State.t) =
+    let to_release = [ s.private_ ] in
+    let s = conclude_action v a (to_release, s) in
+    State.update v ~private_:s.public s
+  ;;
+
+  let agent' policy (v : _ local_view) =
+    let node = staging_agent v in
+    let handler a s e =
+      let action = policy (Observation.observe v s) in
+      let s = stage_action v a s e in
+      interpret_action v s action |> conclude_action v a
+    in
+    { node with handler }
+  ;;
+
+  let agent p = Node (agent' p)
 end
 
 let attacks =
-  let open Collection in
-  empty
-  |> add
-       ~info:"SSZ'16 compatible attack model with honest policy"
-       "private-honest"
-       Ssz16compat.(attack honest_policy)
-  |> add
-       ~info:"SSZ'16 compatible attack model with simple selfish mining policy"
-       "private-simple"
-       Ssz16compat.(attack simple)
-  |> add
-       ~info:"SSZ'16 compatible attack model with ES'14 selfish mining policy"
-       "private-eyal-sirer-2014"
-       Ssz16compat.(attack es_2014)
-  |> add
-       ~info:"SSZ'16 compatible attack model with SSZ'16 SM1 policy"
-       "private-sapirshtein-2016-sm1"
-       Ssz16compat.(attack ssz_2016_sm1)
+  Collection.map
+    (fun { key; info; it } ->
+      { key = "private-" ^ key
+      ; info = "PrivateAttack; " ^ info
+      ; it = PrivateAttack.agent it
+      })
+    PrivateAttack.Policies.collection
 ;;
 
 let protocol : _ protocol =

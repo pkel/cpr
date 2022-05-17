@@ -7,10 +7,6 @@ module Distributions = Distributions
 module GraphML = GraphML
 module Network = Network
 module PrivateAttack = PrivateAttack
-module Ssz16compat = Ssz16compat
-
-(* Sapirshtein, Sompolinsky, Zohar '16 compatible attacker *)
-
 module Simulator = Simulator
 module ResultSyntax = ResultSyntax
 
