@@ -9,17 +9,6 @@ let public_view (v : _ local_view) =
   }
 ;;
 
-(* release a given node and all it's dependencies recursively *)
-let rec release_recursive v release ns =
-  List.iter
-    (fun n ->
-      if not (v.released n)
-      then (
-        release n;
-        release_recursive v release (Dag.parents v.view n)))
-    ns
-;;
-
 type 'env state =
   { public : 'env Dag.vertex (* private/withheld tip of chain *)
   ; private_ : 'env Dag.vertex (* public/defender tip of chain *)
@@ -29,7 +18,7 @@ let withhold (honest : ('env, 'dag_data, 'pow, 'state) node) (v : _ local_view) 
   let public = honest (public_view v)
   and private_ = honest v in
   let handler actions state event =
-    let withhold = { actions with share = (fun _n -> ()) } in
+    let withhold = { actions with share = (fun ?recursive:_ _n -> ()) } in
     match event with
     | Activate _ ->
       (* work on private chain *)
@@ -46,14 +35,19 @@ let withhold (honest : ('env, 'dag_data, 'pow, 'state) node) (v : _ local_view) 
   { init; handler; preferred }
 ;;
 
-type ('env, 'dag_data) tactic =
+type ('env, 'dag_data, 'pow) tactic =
   ('env, 'dag_data) local_view
-  -> release:('env Dag.vertex -> unit)
+  -> ('env, 'dag_data, 'pow) actions
   -> 'env state
   -> [ `PreferPublic | `PreferPrivate ]
 
-let apply_tactic (tactic : ('env, 'dag_data) tactic) (v : _ local_view) actions state =
-  tactic v ~release:actions.share state
+let apply_tactic
+    (tactic : ('env, 'dag_data, 'pow) tactic)
+    (v : _ local_view)
+    actions
+    state
+  =
+  tactic v actions state
   |> function
   | `PreferPrivate -> state
   | `PreferPublic -> { state with private_ = state.public }
@@ -61,7 +55,7 @@ let apply_tactic (tactic : ('env, 'dag_data) tactic) (v : _ local_view) actions 
 
 let attack
     (honest : ('env, 'dag_data, 'pow, 'state) node)
-    (tactic : ('env, 'dag_data) tactic)
+    (tactic : ('env, 'dag_data, 'pow) tactic)
     (v : _ local_view)
   =
   let node = withhold honest v in

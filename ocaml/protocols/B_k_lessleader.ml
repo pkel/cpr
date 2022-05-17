@@ -239,7 +239,7 @@ module PrivateAttack = struct
   (* the attacker emulates a defending node. This describes the defender node *)
   let handle_public ~k v actions (s : _ State.t) event =
     let view = public_view s v
-    and drop_messages = { actions with share = (fun _n -> ()) } in
+    and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
     let public = honest_handler ~k view drop_messages s.public event in
     State.update v ~public s
   ;;
@@ -262,7 +262,7 @@ module PrivateAttack = struct
 
   let handle_private ~k v actions (s : _ State.t) event =
     let view = private_view s v
-    and drop_messages = { actions with share = (fun _n -> ()) } in
+    and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
     let private_ = honest_handler ~k view drop_messages s.private_ event in
     State.update v ~private_ s
   ;;
@@ -473,17 +473,6 @@ module PrivateAttack = struct
     ;;
   end
 
-  (* release a given vertex and all its dependencies recursively *)
-  let rec release_recursive (v : _ local_view) release ns =
-    List.iter
-      (fun n ->
-        if not (v.released n)
-        then (
-          release n;
-          release_recursive v release (Dag.parents v.view n)))
-      ns
-  ;;
-
   let interpret_action ~k v (s : _ State.t) action =
     let parent_block v n =
       match Dag.parents v.view n with
@@ -531,7 +520,7 @@ module PrivateAttack = struct
   ;;
 
   let conclude_action ~k v a (to_release, s) =
-    let () = release_recursive v a.share to_release in
+    let () = List.iter (a.share ~recursive:true) to_release in
     List.fold_left (fun acc el -> handle_public ~k v a acc (Deliver el)) s to_release
   ;;
 

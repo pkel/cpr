@@ -449,7 +449,7 @@ module PrivateAttack = struct
       if ca $== publ then Wait else Override)
   ;;
 
-  let apply_action ~k:_ (v : _ local_view) ~release state =
+  let apply_action ~k:_ (v : _ local_view) a state =
     let ev = extend_view v in
     let parent n =
       match Dag.parents v.view n with
@@ -473,10 +473,10 @@ module PrivateAttack = struct
         (* NOTE: if private height is smaller public height, then private head is marked
            for release. *)
       in
-      release_recursive v release [ x ]
+      a.share ~recursive:true x
     in
-    fun a ->
-      match (a : Action.t) with
+    fun action ->
+      match (action : Action.t) with
       | Wait -> `PreferPrivate
       | Match ->
         match_ ~and_override:false ();
@@ -485,19 +485,18 @@ module PrivateAttack = struct
         match_ ~and_override:true ();
         `PreferPrivate
       | Release ->
-        Dag.leaves v.view (last_block ev state.private_) |> release_recursive v release;
+        Dag.leaves v.view (last_block ev state.private_)
+        |> List.iter (a.share ~recursive:true);
         `PreferPrivate
   ;;
 
   let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
 
-  let tactic_of_policy ~k p v ~release state =
-    (lift_policy p) v state |> apply_action ~k v ~release state
+  let tactic_of_policy ~k p v a state =
+    (lift_policy p) v state |> apply_action ~k v a state
   ;;
 
-  let tactic_of_policy' ~k p v ~release state =
-    p v state |> apply_action ~k v ~release state
-  ;;
+  let tactic_of_policy' ~k p v a state = p v state |> apply_action ~k v a state
 
   let attack ~k p = Node (attack (honest ~k) (tactic_of_policy ~k p))
   and attack' ~k p = Node (attack (honest ~k) (tactic_of_policy' ~k p))

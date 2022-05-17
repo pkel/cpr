@@ -120,16 +120,21 @@ let all_honest (network : Network.t) (protocol : _ Intf.protocol)
   in
   let views_actions =
     Array.init n_nodes (fun node ->
-        let view =
-          Dag.filter
-            (fun x -> Float.Array.get (Dag.data x).delivered_at node <= clock.now)
-            global.view
+        let visible x = Float.Array.get (Dag.data x).delivered_at node <= clock.now in
+        let view = Dag.filter visible global.view
         and delivered_at n = Float.Array.get (Dag.data n).delivered_at node
-        and appended_by_me n = (Dag.data n).appended_by = Some node
-        and share n =
-          let d = Dag.data n in
-          d.released_at <- min d.released_at clock.now;
-          disseminate network clock node n
+        and appended_by_me n = (Dag.data n).appended_by = Some node in
+        let share ?(recursive = false) =
+          let rec f x =
+            assert (visible x);
+            let d = Dag.data x in
+            if d.released_at > clock.now
+            then (
+              d.released_at <- min d.released_at clock.now;
+              disseminate network clock node x;
+              if recursive then List.iter f (Dag.parents view x))
+          in
+          f
         and released n = (Dag.data n).released_at <= clock.now
         and extend_dag ?pow ?(sign = false) parents child =
           let pow_hash =

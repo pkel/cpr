@@ -1,7 +1,10 @@
 type ('env, 'dag_data, 'pow) actions =
-  { share : 'env Dag.vertex -> unit
+  { share : ?recursive:bool -> 'env Dag.vertex -> unit
         (** Instruct the simulator to make the DAG vertex visible to other network nodes.
-            The simulator might apply network delays depending on its configuration. *)
+            The simulator might apply network delays depending on its configuration.
+
+            The recursive flag controls whether the dependencies are released as well;
+            default: false. *)
   ; extend_dag :
       ?pow:'pow -> ?sign:bool -> 'env Dag.vertex list -> 'dag_data -> 'env Dag.vertex
         (** [extend_dag ~pow ~sign parents data] adds a vertex with [data] to the
@@ -37,7 +40,9 @@ type ('env, 'dag_data) local_view =
   ; pow_hash : 'env Dag.vertex -> (int * int) option
         (** Return PoW hash of vertex, if vertex was attached with PoW authorization. *)
   ; delivered_at : 'env Dag.vertex -> float (** Get time of delivery of DAG vertices. *)
-  ; released : 'env Dag.vertex -> bool (** Was this vertex already shared? *)
+  ; released : 'env Dag.vertex -> bool
+        (* TODO: remove this field after getting of the old PrivateAttack module *)
+        (** Was this vertex already shared? *)
   ; appended_by_me : 'env Dag.vertex -> bool (** Recognize own DAG vertices. *)
   }
 

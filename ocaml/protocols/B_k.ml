@@ -452,7 +452,7 @@ module PrivateAttack = struct
       if ca $== state.public then Wait else Override)
   ;;
 
-  let apply_action ~k v ~release state =
+  let apply_action ~k v a state =
     let parent_block v n =
       match Dag.parents v.view n with
       | hd :: _ when v.data hd |> is_block -> Some hd
@@ -482,13 +482,13 @@ module PrivateAttack = struct
       in
       let votes = Dag.children ev.votes_only block in
       match first Compare.(by float v.delivered_at) nvotes votes with
-      | Some subset -> release_recursive v release (block :: subset)
+      | Some subset -> List.iter (a.share ~recursive:true) (block :: subset)
       | None ->
         (* not enough votes, release all *)
-        release_recursive v release (block :: votes)
+        List.iter (a.share ~recursive:true) (block :: votes)
     in
-    fun a ->
-      match (a : Action.t) with
+    fun action ->
+      match (action : Action.t) with
       | Wait -> `PreferPrivate
       | Match ->
         match_ ~and_override:false ();
@@ -497,20 +497,18 @@ module PrivateAttack = struct
         match_ ~and_override:true ();
         `PreferPrivate
       | Release ->
-        release_recursive v release [ state.private_ ];
-        Dag.children v.view state.private_ |> List.iter release;
+        a.share ~recursive:true state.private_;
+        Dag.children v.view state.private_ |> List.iter (a.share ~recursive:true);
         `PreferPrivate
   ;;
 
   let lift_policy p (v : _ local_view) state : Action.t = Observation.observe v state |> p
 
-  let tactic_of_policy ~k p v ~release state =
-    (lift_policy p) v state |> apply_action ~k v ~release state
+  let tactic_of_policy ~k p v a state =
+    (lift_policy p) v state |> apply_action ~k v a state
   ;;
 
-  let tactic_of_policy' ~k p v ~release state =
-    p v state |> apply_action ~k v ~release state
-  ;;
+  let tactic_of_policy' ~k p v a state = p v state |> apply_action ~k v a state
 
   let attack ~k p = Node (attack (honest ~k) (tactic_of_policy ~k p))
   and attack' ~k p = Node (attack (honest ~k) (tactic_of_policy' ~k p))
