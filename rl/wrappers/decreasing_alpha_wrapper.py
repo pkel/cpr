@@ -50,6 +50,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         obs, reward, done, info = self.env.step(action)
         if self.run_daa:
             self.n_pow += info["reward_n_pows"]
+            info['difficulties'] = self.difficulties
         if done and self.run_daa:
             self.observed = info['simulator_clock_rewarded'] / self.n_pow
         return obs, reward, done, info

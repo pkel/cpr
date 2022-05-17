@@ -92,6 +92,9 @@ class WandbCallback(BaseCallback):
         if self.model_save_freq > 0:
             if self.model_save_path is not None:
                 if self.n_calls % self.model_save_freq == 0:
+                    difficulties = self.locals["infos"][0]["difficulties"]
+                    if difficulties is not None:
+                        wandb.log({"difficulties": difficulties})
                     self.save_model()
                     x, y = ts2xy(load_results(self.model_save_path), "timesteps")
                     if len(x) > 0:
@@ -184,7 +187,7 @@ config = dict(
 )
 
 
-wandb.init(project="dqn", entity="bglick13", config=config)
+wandb.init(project="dqn", entity="tailstorm", config=config)
 # config = wandb.config
 
 log_dir = f"saved_models/{wandb.run.id}"
