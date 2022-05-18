@@ -255,18 +255,19 @@ module PrivateAttack = struct
 
   (* the attacker works on a subset of the total information: he ignores new defender
      blocks *)
+  let private_visible (s : _ State.t) (v : _ local_view) vertex =
+    (* defender votes for the attacker's preferred block *)
+    (* || anything mined by the attacker *)
+    (* || anything on the common chain *)
+    (s.epoch = `Proceed
+    && v.data vertex |> is_vote
+    && last_block (extend_view v) vertex $== s.private_)
+    || v.appended_by_me vertex
+    || Dag.partial_order s.common vertex >= 0
+  ;;
+
   let private_view (s : _ State.t) (v : _ local_view) =
-    let visible vertex =
-      (s.epoch = `Proceed
-      && v.data vertex |> is_vote
-      && last_block (extend_view v) vertex $== s.private_)
-      (* defender votes for the attacker's preferred block *)
-      || v.appended_by_me vertex
-      (* anything mined by the attacker *)
-      || Dag.partial_order s.common vertex >= 0
-      (* anything on the common chain *)
-    in
-    { v with view = Dag.filter visible v.view } |> extend_view
+    { v with view = Dag.filter (private_visible s v) v.view } |> extend_view
   ;;
 
   module Observation = struct
@@ -447,9 +448,13 @@ module PrivateAttack = struct
       | Activate _ ->
         (* work on private chain *)
         handle_private v actions state event
-      | Deliver _ ->
-        (* simulate defender *)
-        handle_public v actions state event
+      | Deliver x ->
+        let state =
+          (* simulate defender *)
+          handle_public v actions state event
+        in
+        (* deliver visible (not ignored) messages *)
+        if private_visible state v x then handle_private v actions state event else state
     ;;
 
     let observe = Observation.observe (* TODO move implementation here *)
@@ -460,29 +465,37 @@ module PrivateAttack = struct
         | hd :: _ when v.data hd |> is_block -> Some hd
         | _ -> None
       in
-      let match_ offset =
+      let pubv = public_view s v
+      and priv = private_view s v in
+      let release kind =
         let height, nvotes =
-          let v = public_view s v in
-          let target =
-            (block_height_exn v s.public * A.k)
-            + List.length (Dag.children v.votes_only s.public)
-            + offset
-          in
-          target / A.k, target mod A.k
+          let height = block_height_exn pubv s.public
+          and nvotes = List.length (Dag.children pubv.votes_only s.public) in
+          match kind with
+          | `Match -> height, nvotes
+          | `Override -> if nvotes >= A.k then height + 1, 0 else height, nvotes + 1
         in
-        let ev = extend_view v in
         let block =
           (* find block to be released backwards from private head *)
           let rec h b =
-            if block_height_exn ev b <= height
+            if block_height_exn priv b <= height
             then b
-            else parent_block ev b |> Option.get |> h
+            else parent_block priv b |> Option.get |> h
           in
           h s.private_
           (* NOTE: if private height is smaller public height, then private head is marked
              for release. *)
         in
-        let votes = Dag.children ev.votes_only block in
+        (* include proposal if attacker was able to produce one *)
+        let block, nvotes =
+          if nvotes >= A.k
+          then (
+            match Dag.children priv.blocks_only block with
+            | proposal :: _ -> proposal, 0
+            | [] -> block, nvotes)
+          else block, nvotes
+        in
+        let votes = Dag.children priv.votes_only block in
         match first Compare.(by float v.delivered_at) nvotes votes with
         | Some subset -> block :: subset
         | None ->
@@ -492,10 +505,10 @@ module PrivateAttack = struct
       match (action : Action.t) with
       | Adopt_Proceed -> [], State.update v ~epoch:`Proceed ~private_:s.public s
       | Adopt_Prolong -> [], State.update v ~epoch:`Prolong ~private_:s.public s
-      | Match_Proceed -> match_ 0, State.update v ~epoch:`Proceed s
-      | Match_Prolong -> match_ 0, State.update v ~epoch:`Prolong s
-      | Override_Proceed -> match_ 1, State.update v ~epoch:`Proceed s
-      | Override_Prolong -> match_ 1, State.update v ~epoch:`Prolong s
+      | Match_Proceed -> release `Match, State.update v ~epoch:`Proceed s
+      | Match_Prolong -> release `Match, State.update v ~epoch:`Prolong s
+      | Override_Proceed -> release `Override, State.update v ~epoch:`Proceed s
+      | Override_Prolong -> release `Override, State.update v ~epoch:`Prolong s
       | Wait_Proceed -> [], State.update v ~epoch:`Proceed s
       | Wait_Prolong -> [], State.update v ~epoch:`Prolong s
     ;;
@@ -543,7 +556,7 @@ module PrivateAttack = struct
     let honest o =
       let open Observation in
       let open Action in
-      if o.private_blocks < o.public_blocks then Adopt_Proceed else Override_Proceed
+      if o.public_blocks > 0 then Adopt_Proceed else Override_Proceed
     ;;
 
     let selfish o =

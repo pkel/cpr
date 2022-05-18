@@ -123,7 +123,11 @@ let all_honest (network : Network.t) (protocol : _ Intf.protocol)
         let visible x = Float.Array.get (Dag.data x).delivered_at node <= clock.now in
         let view = Dag.filter visible global.view
         and delivered_at n = Float.Array.get (Dag.data n).delivered_at node
-        and appended_by_me n = (Dag.data n).appended_by = Some node in
+        and appended_by_me n = (Dag.data n).appended_by = Some node
+        and data x =
+          (* assert (visible x); TODO investigate why this fails*)
+          global.data x
+        in
         let share ?(recursive = false) =
           let rec f x =
             assert (visible x);
@@ -185,7 +189,7 @@ let all_honest (network : Network.t) (protocol : _ Intf.protocol)
         let view : _ Intf.local_view =
           { my_id = node
           ; view
-          ; data = global.data
+          ; data
           ; signed_by = global.signed_by
           ; pow_hash = global.pow_hash
           ; delivered_at

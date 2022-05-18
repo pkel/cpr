@@ -530,7 +530,7 @@ module PrivateAttack = struct
     let honest o =
       let open Observation in
       let open Action in
-      if o.private_blocks < o.public_blocks then Adopt_Proceed else Override_Proceed
+      if o.public_blocks > 0 then Adopt_Proceed else Override_Proceed
     ;;
 
     let selfish o =
