@@ -224,10 +224,12 @@ module PrivateAttack = struct
   end
 
   (* the attacker emulates a defending node. This is the local_view of the defender *)
-  let public_view _state (v : _ local_view) =
-    let visible = v.released in
+
+  let public_visibility _state (v : _ local_view) x = v.released x
+
+  let public_view s (v : _ local_view) =
     { v with
-      view = Dag.filter visible v.view
+      view = Dag.filter (public_visibility s v) v.view
     ; appended_by_me =
         (* The attacker simulates an honest node on the public view. This node should not
            interpret attacker vertices as own vertices. *)
@@ -238,18 +240,20 @@ module PrivateAttack = struct
 
   (* the attacker works on a subset of the total information: he ignores new defender
      blocks *)
+
+  let private_visibility (s : _ State.t) (v : _ local_view) vertex =
+    (* defender votes for the attacker's preferred block *)
+    (* || anything mined by the attacker *)
+    (* || anything on the common chain *)
+    (s.epoch = `Proceed
+    && v.data vertex |> is_vote
+    && last_block (extend_view v) vertex $== s.private_)
+    || v.appended_by_me vertex
+    || Dag.partial_order s.common vertex >= 0
+  ;;
+
   let private_view (s : _ State.t) (v : _ local_view) =
-    let visible vertex =
-      (s.epoch = `Proceed
-      && v.data vertex |> is_vote
-      && last_block (extend_view v) vertex $== s.private_)
-      (* defender votes for the attacker's preferred block *)
-      || v.appended_by_me vertex
-      (* anything mined by the attacker *)
-      || Dag.partial_order s.common vertex >= 0
-      (* anything on the common chain *)
-    in
-    { v with view = Dag.filter visible v.view } |> extend_view
+    { v with view = Dag.filter (private_visibility s v) v.view } |> extend_view
   ;;
 
   module Observation = struct
@@ -434,9 +438,15 @@ module PrivateAttack = struct
       | Activate _ ->
         (* work on private chain *)
         handle_private v actions state event
-      | Deliver _ ->
-        (* simulate defender *)
-        handle_public v actions state event
+      | Deliver x ->
+        let state =
+          (* simulate defender *)
+          handle_public v actions state event
+        in
+        (* deliver visible (not ignored) messages *)
+        if private_visibility state v x
+        then handle_private v actions state event
+        else state
     ;;
 
     let observe = Observation.observe (* TODO move implementation here *)

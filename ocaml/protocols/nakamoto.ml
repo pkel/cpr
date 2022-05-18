@@ -90,27 +90,6 @@ module PrivateAttack = struct
     ;;
   end
 
-  (* the attacker emulates a defending node. This is the local_view of the defender *)
-  let public_view (s : _ State.t) (v : _ local_view) =
-    let visible x = Dag.partial_order s.common x >= 0 || not (v.appended_by_me x) in
-    { v with
-      view = Dag.filter visible v.view
-    ; appended_by_me =
-        (* The attacker simulates an honest node on the public view. This node should not
-           interpret attacker vertices as own vertices. *)
-        (fun _ -> false)
-    }
-  ;;
-
-  (* the attacker works on a subset of the total information: he ignores new defender
-     blocks *)
-  let private_view (s : _ State.t) (v : _ local_view) =
-    let visible vertex =
-      Dag.partial_order s.common vertex >= 0 || v.appended_by_me vertex
-    in
-    { v with view = Dag.filter visible v.view }
-  ;;
-
   module Observation = struct
     type t =
       { public_blocks : int (** number of blocks after common ancestor *)
@@ -122,9 +101,7 @@ module PrivateAttack = struct
     let length = List.length Fields.names
 
     let observe v (s : _ State.t) =
-      let ca = Dag.common_ancestor v.view s.private_ s.public |> Option.get in
-      let () = assert (ca $== s.common) (* TODO. Eliminate call of common_ancestor *) in
-      let ca_height = block_height v ca
+      let ca_height = block_height v s.common
       and private_height = block_height v s.private_
       and public_height = block_height v s.public in
       { private_blocks = private_height - ca_height
@@ -224,6 +201,33 @@ module PrivateAttack = struct
     let n = Array.length table
   end
 
+  (* the attacker emulates a defending node. This is the local_view of the defender *)
+
+  let public_visibility (s : _ State.t) v x =
+    Dag.partial_order s.common x >= 0 || not (v.appended_by_me x)
+  ;;
+
+  let public_view (s : _ State.t) (v : _ local_view) =
+    { v with
+      view = Dag.filter (public_visibility s v) v.view
+    ; appended_by_me =
+        (* The attacker simulates an honest node on the public view. This node should not
+           interpret attacker vertices as own vertices. *)
+        (fun _ -> false)
+    }
+  ;;
+
+  (* the attacker works on a subset of the total information: he ignores new defender
+     blocks *)
+
+  let private_visibility (s : _ State.t) v x =
+    Dag.partial_order s.common x >= 0 || v.appended_by_me x
+  ;;
+
+  let private_view (s : _ State.t) (v : _ local_view) =
+    { v with view = Dag.filter (private_visibility s v) v.view }
+  ;;
+
   (* the attacker emulates a defending node. This describes the defender node *)
   let handle_public v actions (s : _ State.t) event =
     let view = public_view s v
@@ -232,10 +236,11 @@ module PrivateAttack = struct
     State.update v ~public s
   ;;
 
+  (* the attacker emulates a another node. This describes the defender node *)
   let handle_private v actions (s : _ State.t) event =
-    let node = honest (private_view s v)
+    let view = private_view s v
     and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
-    let private_ = node.handler drop_messages s.private_ event in
+    let private_ = honest_handler view drop_messages s.private_ event in
     State.update v ~private_ s
   ;;
 
@@ -244,9 +249,13 @@ module PrivateAttack = struct
     | Activate _ ->
       (* work on private chain *)
       handle_private v actions state event
-    | Deliver _ ->
-      (* simulate defender *)
-      handle_public v actions state event
+    | Deliver x ->
+      let state =
+        (* simulate defender *)
+        handle_public v actions state event
+      in
+      (* deliver visible (not ignored) messages *)
+      if private_visibility state v x then handle_private v actions state event else state
   ;;
 
   let observe = Observation.observe (* TODO move implementation here *)
