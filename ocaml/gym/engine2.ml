@@ -9,7 +9,6 @@ module type AttackSpace = sig
   type agent_state
   type honest_state
 
-  val description : string
   val protocol : (env, data, pow, honest_state) protocol
 
   module Observation : sig
@@ -241,7 +240,7 @@ let of_module
   and to_string t =
     Printf.sprintf
       "Protocol %s against α=%.2f attacker\n%s\nActions: %s"
-      M.description
+      M.protocol.info
       p.alpha
       (observe !t |> M.Observation.to_string)
       actions_hum

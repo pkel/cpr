@@ -34,10 +34,9 @@ let nakamoto2 =
       type data = Nakamoto.dag_data
       type env = data Simulator.data
       type pow = Simulator.pow
-      type honest_state = data Simulator.data Dag.vertex
+      type honest_state = env Dag.vertex
 
       let protocol = Nakamoto.protocol
-      let description = "Nakamoto"
 
       include Nakamoto.PrivateAttack
 
@@ -79,17 +78,46 @@ let bk_ll ~k ~reward =
       type data = B_k_lessleader.dag_data
       type state = data Simulator.data State.t
 
-      let description = Printf.sprintf "Bₖ/ll with k=%d" k
       let protocol = B_k_lessleader.protocol ~k
+      let description = protocol.info
       let reward_function = reward
-      let node = staging_agent ~k
-      let policies = Collection.map_to_list (fun e -> e.key, e.it) Policies.collection
+      let policies = Collection.map_to_list (fun e -> e.key, e.it) policies
 
       module Action = Action
       module Observation = Observation
 
-      let apply_action v a s x = interpret_action ~k v s x |> conclude_action ~k v a
-      let shutdown = shutdown ~k
+      open Agent (struct
+        let k = k
+      end)
+
+      let node v =
+        let handler = prepare v in
+        { (noop_node v) with handler }
+      ;;
+
+      let apply_action v a s x = apply v a s x
+      let shutdown v a s = shutdown v a s
+    end)
+;;
+
+let bk_ll2 ~k =
+  Engine2.of_module
+    (module struct
+      type data = B_k_lessleader.dag_data
+      type env = data Simulator.data
+      type pow = Simulator.pow
+      type honest_state = env Dag.vertex
+
+      let protocol = B_k_lessleader.protocol ~k
+
+      include B_k_lessleader.PrivateAttack
+
+      type agent_state = env State.t
+      type pre_action = env State.t
+
+      include Agent (struct
+        let k = k
+      end)
     end)
 ;;
 

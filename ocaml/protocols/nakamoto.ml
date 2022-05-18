@@ -102,14 +102,6 @@ module PrivateAttack = struct
     }
   ;;
 
-  (* the attacker emulates a defending node. This describes the defender node *)
-  let handle_public v actions (s : _ State.t) event =
-    let view = public_view s v
-    and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
-    let public = honest_handler view drop_messages s.public event in
-    State.update v ~public s
-  ;;
-
   (* the attacker works on a subset of the total information: he ignores new defender
      blocks *)
   let private_view (s : _ State.t) (v : _ local_view) =
@@ -117,23 +109,6 @@ module PrivateAttack = struct
       Dag.partial_order s.common vertex >= 0 || v.appended_by_me vertex
     in
     { v with view = Dag.filter visible v.view }
-  ;;
-
-  let handle_private v actions (s : _ State.t) event =
-    let node = honest (private_view s v)
-    and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
-    let private_ = node.handler drop_messages s.private_ event in
-    State.update v ~private_ s
-  ;;
-
-  let prepare v actions state event =
-    match event with
-    | Activate _ ->
-      (* work on private chain *)
-      handle_private v actions state event
-    | Deliver _ ->
-      (* simulate defender *)
-      handle_public v actions state event
   ;;
 
   module Observation = struct
@@ -209,8 +184,6 @@ module PrivateAttack = struct
     ;;
   end
 
-  let observe = Observation.observe (* TODO move implementation here *)
-
   module Action = struct
     type t =
       | Adopt
@@ -250,6 +223,94 @@ module PrivateAttack = struct
     let of_int i = table.(i)
     let n = Array.length table
   end
+
+  (* the attacker emulates a defending node. This describes the defender node *)
+  let handle_public v actions (s : _ State.t) event =
+    let view = public_view s v
+    and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
+    let public = honest_handler view drop_messages s.public event in
+    State.update v ~public s
+  ;;
+
+  let handle_private v actions (s : _ State.t) event =
+    let node = honest (private_view s v)
+    and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
+    let private_ = node.handler drop_messages s.private_ event in
+    State.update v ~private_ s
+  ;;
+
+  let prepare v actions state event =
+    match event with
+    | Activate _ ->
+      (* work on private chain *)
+      handle_private v actions state event
+    | Deliver _ ->
+      (* simulate defender *)
+      handle_public v actions state event
+  ;;
+
+  let observe = Observation.observe (* TODO move implementation here *)
+
+  let interpret v (s : _ State.t) action =
+    let parent v n =
+      match Dag.parents v.view n with
+      | [ x ] -> Some x
+      | _ -> None
+    in
+    let match_ offset =
+      let height =
+        (* height of to be released block *)
+        let v = public_view s v in
+        block_height v s.public + offset
+      in
+      (* look for to be released block backwards from private head *)
+      let rec h b =
+        if block_height v b <= height then b else parent v b |> Option.get |> h
+      in
+      [ h s.private_ ]
+      (* NOTE: if private height is smaller target height, then private head is released. *)
+    in
+    match (action : Action.t) with
+    | Adopt -> [], State.update v ~private_:s.public s
+    | Match -> match_ 0, s
+    | Override -> match_ 1, s
+    | Wait -> [], s
+  ;;
+
+  let conclude v a (to_release, s) =
+    let () = List.iter (a.share ~recursive:true) to_release in
+    List.fold_left (fun acc el -> handle_public v a acc (Deliver el)) s to_release
+  ;;
+
+  let apply v a s action = interpret v s action |> conclude v a
+
+  let shutdown (v : _ local_view) a (s : _ State.t) =
+    let to_release = [ s.private_ ] in
+    let s = conclude v a (to_release, s) in
+    State.update v ~private_:s.public s
+  ;;
+
+  (* TODO: expose State.init and State.preferred, but not noop_agent *)
+  let noop_node (v : _ local_view) =
+    let handler _ s _ = s
+    and preferred (x : _ State.t) = x.private_
+    and init ~roots =
+      let x = (honest v).init ~roots in
+      State.init x
+    in
+    { init; handler; preferred }
+  ;;
+
+  let agent' policy (v : _ local_view) =
+    let node = noop_node v in
+    let handler a s e =
+      let s = prepare v a s e in
+      Observation.observe v s |> policy |> apply v a s
+    in
+    { node with handler }
+  ;;
+
+  let agent p = Node (agent' p)
 
   module Policies = struct
     let honest o =
@@ -328,66 +389,6 @@ module PrivateAttack = struct
     |> add ~info:"Eyal and Sirer 2014" "eyal-sirer-2014" es_2014
     |> add ~info:"Sapirshtein et al. 2016, SM1" "sapirshtein-2016-sm1" ssz_2016_sm1
   ;;
-
-  let interpret_action v _a (s : _ State.t) action =
-    let parent v n =
-      match Dag.parents v.view n with
-      | [ x ] -> Some x
-      | _ -> None
-    in
-    let match_ offset =
-      let height =
-        (* height of to be released block *)
-        let v = public_view s v in
-        block_height v s.public + offset
-      in
-      (* look for to be released block backwards from private head *)
-      let rec h b =
-        if block_height v b <= height then b else parent v b |> Option.get |> h
-      in
-      [ h s.private_ ]
-      (* NOTE: if private height is smaller target height, then private head is released. *)
-    in
-    match (action : Action.t) with
-    | Adopt -> [], State.update v ~private_:s.public s
-    | Match -> match_ 0, s
-    | Override -> match_ 1, s
-    | Wait -> [], s
-  ;;
-
-  let conclude v a (to_release, s) =
-    let () = List.iter (a.share ~recursive:true) to_release in
-    List.fold_left (fun acc el -> handle_public v a acc (Deliver el)) s to_release
-  ;;
-
-  let apply v a s action = interpret_action v a s action |> conclude v a
-
-  let shutdown (v : _ local_view) a (s : _ State.t) =
-    let to_release = [ s.private_ ] in
-    let s = conclude v a (to_release, s) in
-    State.update v ~private_:s.public s
-  ;;
-
-  let noop_node (v : _ local_view) =
-    let handler _ s _ = s
-    and preferred (x : _ State.t) = x.private_
-    and init ~roots =
-      let x = (honest v).init ~roots in
-      State.init x
-    in
-    { init; handler; preferred }
-  ;;
-
-  let agent' policy (v : _ local_view) =
-    let node = noop_node v in
-    let handler a s e =
-      let s = prepare v a s e in
-      Observation.observe v s |> policy |> apply v a s
-    in
-    { node with handler }
-  ;;
-
-  let agent p = Node (agent' p)
 end
 
 let attacks =
