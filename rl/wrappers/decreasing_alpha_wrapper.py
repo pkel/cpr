@@ -23,19 +23,23 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.observed = self.target
 
     
-    def update_difficulties(self):
-        difficulty = self.target * self.target / self.observed
-        self.difficulties[self.alpha] = difficulty
-        self.n_pow = 0
-        self.observed = 0
+    def update_difficulties(self, reset_difficulties):
+        if reset_difficulties:
+            self.difficulties = dict((a, self.target) for a in self.alpha_schedule)
+        else:
+            if self.alpha:
+                difficulty = self.difficulties[self.alpha] * (self.target / self.observed)
+                self.difficulties[self.alpha] = difficulty
+                self.n_pow = 0
+                self.observed = 0
         
 
-    def reset(self):
+    def reset(self, reset_difficulties=False):
         self.current_step += 1
         alpha = np.random.choice(self.alpha_schedule)
 
         if self.run_daa:
-            self.update_difficulties()
+            self.update_difficulties(reset_difficulties)
 
             self.env = self.env_fn(alpha=alpha, target=self.difficulties[alpha], config=self.config)
         else:

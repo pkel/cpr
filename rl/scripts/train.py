@@ -94,7 +94,8 @@ class WandbCallback(BaseCallback):
                 if self.n_calls % self.model_save_freq == 0:
                     difficulties = self.locals["infos"][0]["difficulties"]
                     if difficulties is not None:
-                        wandb.log({"difficulties": difficulties})
+                        for key, value in difficulties.items():
+                            wandb.log({f"difficulty/{key}": value})
                     self.save_model()
                     x, y = ts2xy(load_results(self.model_save_path), "timesteps")
                     if len(x) > 0:
