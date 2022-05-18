@@ -275,9 +275,7 @@ module PrivateAttack = struct
       let private_votes = Dag.children private_view.votes_only s.private_ |> List.length
       and public_votes = Dag.children public_view.votes_only s.public |> List.length in
       let v = private_view in
-      let ca =
-        Dag.common_ancestor v.view s.private_ s.public |> Option.get |> last_block v
-      in
+      let ca = last_block v s.common in
       let ca_height = block_height_exn v ca
       and private_height = block_height_exn v s.private_
       and public_height = block_height_exn v s.public in
