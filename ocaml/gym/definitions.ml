@@ -48,25 +48,51 @@ let nakamoto2 =
 let bk ~k ~reward =
   Engine.of_module
     (module struct
-      type data = B_k.dag_data
-      type state = data Simulator.data PrivateAttack.state
+      open B_k.PrivateAttack
 
-      let description = Printf.sprintf "Bₖ with k=%d" k
+      type data = B_k.dag_data
+      type state = data Simulator.data State.t
+
       let protocol = B_k.protocol ~k
+      let description = protocol.info
       let reward_function = reward
+      let policies = Collection.map_to_list (fun e -> e.key, e.it) policies
+
+      module Action = Action
+      module Observation = Observation
+
+      open Agent (struct
+        let k = k
+      end)
+
+      let node v =
+        let handler = prepare v in
+        { (noop_node v) with handler }
+      ;;
+
+      let apply_action v a s x = apply v a s x
+      let shutdown v a s = shutdown v a s
+    end)
+;;
+
+let bk2 ~k =
+  Engine2.of_module
+    (module struct
+      type data = B_k.dag_data
+      type env = data Simulator.data
+      type pow = Simulator.pow
+      type honest_state = env Dag.vertex
+
+      let protocol = B_k.protocol ~k
 
       include B_k.PrivateAttack
 
-      let node = PrivateAttack.withhold protocol.honest
+      type agent_state = env State.t
+      type pre_action = env State.t
 
-      let apply_action v a state action =
-        let tactic = tactic_of_policy ~k (fun _ -> action) in
-        PrivateAttack.apply_tactic tactic v a state
-      ;;
-
-      let shutdown _v _a state =
-        (* TODO: implement shutdown for non-Nakamoto protocols *) state
-      ;;
+      include Agent (struct
+        let k = k
+      end)
     end)
 ;;
 
