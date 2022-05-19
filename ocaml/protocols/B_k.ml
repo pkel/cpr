@@ -237,8 +237,10 @@ let reward_functions =
   |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.)
 ;;
 
-module PrivateAttack = struct
-  module State = B_k_lessleader.PrivateAttack.State
+module SszLikeAttack = struct
+  let info = "SSZ'16-like attack space"
+
+  module State = B_k_lessleader.SszLikeAttack.State
 
   (* the attacker emulates a defending node. This is the local_view of the defender *)
 
@@ -423,7 +425,7 @@ module PrivateAttack = struct
     ;;
   end
 
-  module Action = B_k_lessleader.PrivateAttack.Action
+  module Action = B_k_lessleader.SszLikeAttack.Action
 
   module Agent (A : sig
     val k : int
@@ -587,14 +589,14 @@ end
 
 let attacks ~k =
   let module A =
-    PrivateAttack.Agent (struct
+    SszLikeAttack.Agent (struct
       let k = k
     end)
   in
   Collection.map
     (fun { key; info; it } ->
-      { key = "private-" ^ key; info = "PrivateAttack; " ^ info; it = A.agent it })
-    PrivateAttack.policies
+      { key = "ssz-" ^ key; info = SszLikeAttack.info ^ "; " ^ info; it = A.agent it })
+    SszLikeAttack.policies
 ;;
 
 let protocol ~k =

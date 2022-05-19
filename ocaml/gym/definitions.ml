@@ -4,7 +4,7 @@ open Cpr_protocols
 let nakamoto ~reward =
   Engine.of_module
     (module struct
-      open Nakamoto.PrivateAttack
+      open Nakamoto.SszAttack
 
       type data = Nakamoto.dag_data
       type state = data Simulator.data State.t
@@ -38,7 +38,7 @@ let nakamoto2 =
 
       let protocol = Nakamoto.protocol
 
-      include Nakamoto.PrivateAttack
+      include Nakamoto.SszAttack
 
       type agent_state = env State.t
       type pre_action = env State.t
@@ -48,7 +48,7 @@ let nakamoto2 =
 let bk ~k ~reward =
   Engine.of_module
     (module struct
-      open B_k.PrivateAttack
+      open B_k.SszLikeAttack
 
       type data = B_k.dag_data
       type state = data Simulator.data State.t
@@ -85,7 +85,7 @@ let bk2 ~k =
 
       let protocol = B_k.protocol ~k
 
-      include B_k.PrivateAttack
+      include B_k.SszLikeAttack
 
       type agent_state = env State.t
       type pre_action = env State.t
@@ -99,7 +99,7 @@ let bk2 ~k =
 let bk_ll ~k ~reward =
   Engine.of_module
     (module struct
-      open B_k_lessleader.PrivateAttack
+      open B_k_lessleader.SszLikeAttack
 
       type data = B_k_lessleader.dag_data
       type state = data Simulator.data State.t
@@ -136,7 +136,7 @@ let bk_ll2 ~k =
 
       let protocol = B_k_lessleader.protocol ~k
 
-      include B_k_lessleader.PrivateAttack
+      include B_k_lessleader.SszLikeAttack
 
       type agent_state = env State.t
       type pre_action = env State.t

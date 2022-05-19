@@ -10,6 +10,7 @@ module type AttackSpace = sig
   type honest_state
 
   val protocol : (env, data, pow, honest_state) protocol
+  val info : string
 
   module Observation : sig
     type t
@@ -239,8 +240,9 @@ let of_module
   and high = M.Observation.(high |> to_floatarray)
   and to_string t =
     Printf.sprintf
-      "Protocol %s against α=%.2f attacker\n%s\nActions: %s"
+      "Protocol %s; %s; α=%.2f attacker\n%s\nActions: %s"
       M.protocol.info
+      M.info
       p.alpha
       (observe !t |> M.Observation.to_string)
       actions_hum

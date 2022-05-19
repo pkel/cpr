@@ -171,7 +171,9 @@ let reward_functions =
   |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.)
 ;;
 
-module PrivateAttack = struct
+module SszLikeAttack = struct
+  let info = "SSZ'16-like attack space"
+
   module State : sig
     type 'env t = private
       { public : 'env Dag.vertex (* defender's preferred block *)
@@ -566,14 +568,14 @@ end
 
 let attacks ~k =
   let module A =
-    PrivateAttack.Agent (struct
+    SszLikeAttack.Agent (struct
       let k = k
     end)
   in
   Collection.map
     (fun { key; info; it } ->
-      { key = "private-" ^ key; info = "PrivateAttack; " ^ info; it = A.agent it })
-    PrivateAttack.policies
+      { key = "ssz-" ^ key; info = SszLikeAttack.info ^ "; " ^ info; it = A.agent it })
+    SszLikeAttack.policies
 ;;
 
 let protocol ~k =

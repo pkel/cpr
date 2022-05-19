@@ -47,7 +47,9 @@ let reward_functions =
   empty |> add ~info:"1 per confirmed block" "block" (constant 1.)
 ;;
 
-module PrivateAttack = struct
+module SszAttack = struct
+  let info = "SSZ'16 attack space"
+
   module State : sig
     type 'env t = private
       { public : 'env Dag.vertex (* defender's preferred block *)
@@ -403,11 +405,8 @@ end
 let attacks =
   Collection.map
     (fun { key; info; it } ->
-      { key = "private-" ^ key
-      ; info = "PrivateAttack; " ^ info
-      ; it = PrivateAttack.agent it
-      })
-    PrivateAttack.policies
+      { key = "ssz-" ^ key; info = SszAttack.info ^ "; " ^ info; it = SszAttack.agent it })
+    SszAttack.policies
 ;;
 
 let protocol : _ protocol =

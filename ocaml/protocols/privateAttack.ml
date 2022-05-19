@@ -1,4 +1,4 @@
-open Intf
+open Cpr_lib
 
 let public_view (v : _ local_view) =
   { v with

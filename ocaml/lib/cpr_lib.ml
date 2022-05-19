@@ -6,7 +6,6 @@ module Dag = Dag
 module Distributions = Distributions
 module GraphML = GraphML
 module Network = Network
-module PrivateAttack = PrivateAttack
 module Simulator = Simulator
 module ResultSyntax = ResultSyntax
 
