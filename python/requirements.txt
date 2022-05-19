@@ -1,6 +1,6 @@
 pandas
 numpy
-black
+black[jupyter]
 flake8
 pytest
 jupyter
