@@ -14,7 +14,7 @@ def test_default(capsys):
     env = gym.make("cpr-v0")
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Protocol Nakamoto against α=0.25 attacker"
+    assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.25 attacker"
 
 
 def test_config(capsys):
@@ -23,7 +23,7 @@ def test_config(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Protocol Bₖ with k=8 against α=0.33 attacker"
+    assert captured == "Bₖ with k=8; SSZ'16-like attack space; α=0.33 attacker"
 
 
 def test_policies_honest():
@@ -52,7 +52,7 @@ def test_nakamoto(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Protocol Nakamoto against α=0.33 attacker"
+    assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.33 attacker"
 
     p = env.policies["honest"]
     obs = env.reset()
@@ -71,7 +71,7 @@ def test_bk_ll(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Protocol Bₖ/ll with k=17 against α=0.33 attacker"
+    assert captured == "Bₖ/ll with k=17; SSZ'16-like attack space; α=0.33 attacker"
 
     p = env.policies["honest"]
     obs = env.reset()
@@ -94,14 +94,17 @@ def test_george(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Protocol George with k=13 against α=0.33 attacker"
+    assert (
+        captured
+        == "George's protocol with k=13; SSZ'16-like attack space; α=0.33 attacker"
+    )
 
     p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies["override_block"]
+    p = env.policies["selfish"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))

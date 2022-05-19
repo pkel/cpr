@@ -13,3 +13,4 @@ val add : info:string -> string -> 'a -> 'a t -> 'a t
 val iter : ('a entry -> unit) -> 'a t -> unit
 val map : ('a entry -> 'b entry) -> 'a t -> 'b t
 val map_to_list : ('a entry -> 'b) -> 'a t -> 'b list
+val concat : 'a t -> 'a t -> 'a t

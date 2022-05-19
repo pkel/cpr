@@ -299,7 +299,8 @@ let of_module
   and high = O.(high |> to_floatarray)
   and to_string t =
     Printf.sprintf
-      "Protocol %s against α=%.2f attacker\n%s\nActions: %s"
+      "%s; %s; α=%.2f attacker\n%s\nActions: %s"
+      M.protocol.info
       M.description
       p.alpha
       (observe !t |> O.to_string)

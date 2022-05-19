@@ -21,3 +21,4 @@ let map f t =
 ;;
 
 let map_to_list f = List.map (fun (_, e) -> f e)
+let concat = ( @ )

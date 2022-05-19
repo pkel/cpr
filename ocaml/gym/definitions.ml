@@ -9,7 +9,7 @@ let nakamoto ~reward =
       type data = Nakamoto.dag_data
       type state = data Simulator.data State.t
 
-      let description = "Nakamoto"
+      let description = info
       let protocol = Nakamoto.protocol
       let reward_function = reward
 
@@ -54,7 +54,7 @@ let bk ~k ~reward =
       type state = data Simulator.data State.t
 
       let protocol = B_k.protocol ~k
-      let description = protocol.info
+      let description = info
       let reward_function = reward
       let policies = Collection.map_to_list (fun e -> e.key, e.it) policies
 
@@ -105,7 +105,7 @@ let bk_ll ~k ~reward =
       type state = data Simulator.data State.t
 
       let protocol = B_k_lessleader.protocol ~k
-      let description = protocol.info
+      let description = info
       let reward_function = reward
       let policies = Collection.map_to_list (fun e -> e.key, e.it) policies
 
@@ -150,10 +150,61 @@ let bk_ll2 ~k =
 let george ~k ~reward =
   Engine.of_module
     (module struct
+      open George.SszLikeAttack
+
+      type data = George.dag_data
+      type state = data Simulator.data State.t
+
+      let protocol = George.protocol ~k
+      let description = info
+      let reward_function = reward
+      let policies = Collection.map_to_list (fun e -> e.key, e.it) policies
+
+      module Action = Action
+      module Observation = Observation
+
+      open Agent (struct
+        let k = k
+      end)
+
+      let node v =
+        let handler = prepare v in
+        { (noop_node v) with handler }
+      ;;
+
+      let apply_action v a s x = apply v a s x
+      let shutdown v a s = shutdown v a s
+    end)
+;;
+
+let george2 ~k =
+  Engine2.of_module
+    (module struct
+      type data = George.dag_data
+      type env = data Simulator.data
+      type pow = Simulator.pow
+      type honest_state = env Dag.vertex
+
+      let protocol = George.protocol ~k
+
+      include George.SszLikeAttack
+
+      type agent_state = env State.t
+      type pre_action = env State.t
+
+      include Agent (struct
+        let k = k
+      end)
+    end)
+;;
+
+let george_deprecated ~k ~reward =
+  Engine.of_module
+    (module struct
       type data = George.dag_data
       type state = data Simulator.data PrivateAttack.state
 
-      let description = Printf.sprintf "George with k=%d" k
+      let description = "Deprecated PrivateAttack space"
       let protocol = George.protocol ~k
       let reward_function = reward
 

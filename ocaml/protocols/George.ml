@@ -144,7 +144,7 @@ let quorum ~k v for_block =
                 d.vote, hash)))
 ;;
 
-let honest ~k v actions preferred = function
+let honest_handler ~k v actions preferred = function
   | Activate pow ->
     let head = last_block v preferred in
     (match quorum ~k v head with
@@ -170,7 +170,7 @@ let honest ~k v actions preferred = function
 
 let honest ~k v =
   let v = extend_view v in
-  let handler = honest ~k v
+  let handler = honest_handler ~k v
   and preferred x = last_block v x in
   { init; handler; preferred }
 ;;
@@ -502,31 +502,349 @@ module PrivateAttack = struct
   and attack' ~k p = Node (attack (honest ~k) (tactic_of_policy' ~k p))
 end
 
+module SszLikeAttack = struct
+  let info = "SSZ'16-like attack space"
+
+  module State = B_k_lessleader.SszLikeAttack.State
+
+  (* the attacker emulates a defending node. This is the local_view of the defender *)
+
+  let public_visibility _state (v : _ local_view) x = v.released x
+
+  let public_view s (v : _ local_view) =
+    { v with
+      view = Dag.filter (public_visibility s v) v.view
+    ; appended_by_me =
+        (* The attacker simulates an honest node on the public view. This node should not
+           interpret attacker vertices as own vertices. *)
+        (fun _ -> false)
+    }
+    |> extend_view
+  ;;
+
+  (* the attacker works on a subset of the total information: he ignores new defender
+     blocks *)
+
+  let private_visibility (s : _ State.t) (v : _ local_view) vertex =
+    let ev = extend_view v in
+    (* defender votes for the attacker's preferred block *)
+    (* || anything mined by the attacker *)
+    (* || anything on the common chain *)
+    (s.epoch = `Proceed
+    && v.data vertex |> is_vote
+    && last_block ev vertex $== last_block ev s.private_)
+    || v.appended_by_me vertex
+    || Dag.partial_order s.common vertex >= 0
+  ;;
+
+  let private_view (s : _ State.t) (v : _ local_view) =
+    { v with view = Dag.filter (private_visibility s v) v.view } |> extend_view
+  ;;
+
+  module Observation = struct
+    type t =
+      { public_blocks : int (** number of blocks after common ancestor *)
+      ; public_depth : int (** number of votes confirming the leading block *)
+      ; private_blocks : int (** number of blocks after common ancestor *)
+      ; private_depth : int (** number of votes confirming the leading block *)
+      ; diff_blocks : int (** private_blocks - public_blocks *)
+      ; diff_depth : int (** private_votes - public_votes *)
+      }
+    [@@deriving fields]
+
+    let length = List.length Fields.names
+
+    let observe v (s : _ State.t) =
+      let private_view = extend_view v in
+      let private_depth = (private_view.data s.private_).vote
+      and public_depth = (private_view.data s.public).vote in
+      let v = private_view in
+      let ca = s.common |> last_block v in
+      let ca_height = block_height v ca
+      and private_height = block_height v s.private_
+      and public_height = block_height v s.public in
+      { private_blocks = private_height - ca_height
+      ; public_blocks = public_height - ca_height
+      ; diff_blocks = private_height - public_height
+      ; private_depth
+      ; public_depth
+      ; diff_depth = private_depth - public_depth
+      }
+    ;;
+
+    let low =
+      { public_blocks = 0
+      ; public_depth = 0
+      ; private_blocks = 0
+      ; private_depth = 0
+      ; diff_blocks = min_int
+      ; diff_depth = min_int
+      }
+    ;;
+
+    let high =
+      { public_blocks = max_int
+      ; public_depth = max_int
+      ; private_blocks = max_int
+      ; private_depth = max_int
+      ; diff_blocks = max_int
+      ; diff_depth = max_int
+      }
+    ;;
+
+    let to_floatarray t =
+      let a = Float.Array.make length Float.nan in
+      let set conv i field =
+        Float.Array.set a i (Fieldslib.Field.get field t |> conv);
+        i + 1
+      in
+      let int = set float_of_int in
+      let _ =
+        Fields.fold
+          ~init:0
+          ~public_blocks:int
+          ~public_depth:int
+          ~private_blocks:int
+          ~private_depth:int
+          ~diff_blocks:int
+          ~diff_depth:int
+      in
+      a
+    ;;
+
+    let of_floatarray =
+      let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
+      let int = get int_of_float in
+      fst
+        (Fields.make_creator
+           0
+           ~public_blocks:int
+           ~public_depth:int
+           ~private_blocks:int
+           ~private_depth:int
+           ~diff_blocks:int
+           ~diff_depth:int)
+    ;;
+
+    let to_string t =
+      let conv to_s field =
+        Printf.sprintf
+          "%s: %s"
+          (Fieldslib.Field.name field)
+          (to_s (Fieldslib.Field.get field t))
+      in
+      let int = conv string_of_int in
+      Fields.to_list
+        ~public_blocks:int
+        ~public_depth:int
+        ~private_blocks:int
+        ~private_depth:int
+        ~diff_blocks:int
+        ~diff_depth:int
+      |> String.concat "\n"
+    ;;
+
+    let%test _ =
+      let run _i =
+        let t =
+          { public_blocks = Random.bits ()
+          ; public_depth = Random.bits ()
+          ; private_blocks = Random.bits ()
+          ; private_depth = Random.bits ()
+          ; diff_blocks = Random.bits ()
+          ; diff_depth = Random.bits ()
+          }
+        in
+        t = (to_floatarray t |> of_floatarray)
+      in
+      List.init 50 run |> List.for_all (fun x -> x)
+    ;;
+  end
+
+  module Action = B_k_lessleader.SszLikeAttack.Action
+
+  module Agent (A : sig
+    val k : int
+  end) =
+  struct
+    (* the attacker emulates a defending node. This describes the defender node *)
+    let handle_public v actions (s : _ State.t) event =
+      let view = public_view s v
+      and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
+      let public = honest_handler ~k:A.k view drop_messages s.public event in
+      State.update v ~public s
+    ;;
+
+    let handle_private v actions (s : _ State.t) event =
+      let view = private_view s v
+      and drop_messages = { actions with share = (fun ?recursive:_ _n -> ()) } in
+      let private_ = honest_handler ~k:A.k view drop_messages s.private_ event in
+      State.update v ~private_ s
+    ;;
+
+    let prepare v actions state event =
+      match event with
+      | Activate _ ->
+        (* work on private chain *)
+        handle_private v actions state event
+      | Deliver x ->
+        let state =
+          (* simulate defender *)
+          handle_public v actions state event
+        in
+        (* deliver visible (not ignored) messages *)
+        if private_visibility state v x
+        then handle_private v actions state event
+        else state
+    ;;
+
+    let observe = Observation.observe (* TODO move implementation here *)
+
+    let interpret (v : _ local_view) (s : _ State.t) action =
+      let parent n =
+        match Dag.parents v.view n with
+        | hd :: _ -> Some hd
+        | _ -> None
+      in
+      let release kind =
+        let cmp =
+          Compare.(
+            by (tuple int int) (fun x ->
+                let x = v.data x in
+                x.block, x.vote))
+        in
+        (* find node to be released backwards from private head *)
+        let rec h x x' =
+          let d = cmp x s.public in
+          if d <= 0
+          then (
+            match kind with
+            | `Override -> x'
+            | `Match -> x)
+          else h (parent x |> Option.get) x
+        in
+        [ h s.private_ s.private_ ]
+        (* NOTE: if private height is smaller public height, then private head is marked
+           for release. *)
+      in
+      match (action : Action.t) with
+      | Adopt_Proceed -> [], State.update v ~epoch:`Proceed ~private_:s.public s
+      | Adopt_Prolong -> [], State.update v ~epoch:`Prolong ~private_:s.public s
+      | Match_Proceed -> release `Match, State.update v ~epoch:`Proceed s
+      | Match_Prolong -> release `Match, State.update v ~epoch:`Prolong s
+      | Override_Proceed -> release `Override, State.update v ~epoch:`Proceed s
+      | Override_Prolong -> release `Override, State.update v ~epoch:`Prolong s
+      | Wait_Proceed -> [], State.update v ~epoch:`Proceed s
+      | Wait_Prolong -> [], State.update v ~epoch:`Prolong s
+    ;;
+
+    let conclude v a (to_release, s) =
+      let () = List.iter (a.share ~recursive:true) to_release in
+      List.fold_left (fun acc el -> handle_public v a acc (Deliver el)) s to_release
+    ;;
+
+    let apply v a s action = interpret v s action |> conclude v a
+
+    let shutdown (v : _ local_view) a (s : _ State.t) =
+      let to_release =
+        (* last block plus all confirming votes *)
+        s.private_ :: (Dag.iterate_descendants v.view [ s.private_ ] |> List.of_seq)
+      in
+      let s = conclude v a (to_release, s) in
+      State.update v ~private_:s.public s
+    ;;
+
+    (* TODO: expose State.init and State.preferred, but not noop_agent *)
+    let noop_node (v : _ local_view) =
+      let handler _ s _ = s
+      and preferred (x : _ State.t) = x.private_
+      and init ~roots =
+        let x = (honest ~k:A.k v).init ~roots in
+        State.init ~epoch:`Prolong x
+      in
+      { init; handler; preferred }
+    ;;
+
+    let agent' policy (v : _ local_view) =
+      let node = noop_node v in
+      let handler a s e =
+        let s = prepare v a s e in
+        observe v s |> policy |> apply v a s
+      in
+      { node with handler }
+    ;;
+
+    let agent p = Node (agent' p)
+  end
+
+  module Policies = struct
+    let honest o =
+      let open Observation in
+      let open Action in
+      if o.public_blocks > 0 then Adopt_Proceed else Override_Proceed
+    ;;
+
+    let selfish o =
+      (* Ad-hoc strategy. This is probably not optimal. *)
+      let open Observation in
+      let open Action in
+      if o.private_blocks < o.public_blocks
+      then Adopt_Proceed
+      else if o.private_blocks = 0 && o.public_blocks = 0
+      then Wait_Prolong
+      else if o.public_blocks = 0
+      then Wait_Proceed
+      else Override_Proceed
+    ;;
+  end
+
+  let policies =
+    let open Collection in
+    let open Policies in
+    empty
+    |> add ~info:"emulate honest behaviour" "honest" honest
+    |> add ~info:"ad-hoc selfish policy" "selfish" selfish
+  ;;
+end
+
 let attacks ~k =
-  let open Collection in
-  empty
-  |> add
-       ~info:"Private attack with honest policy"
-       "private-honest"
-       PrivateAttack.(attack ~k honest_policy)
-  |> add
-       ~info:"Private attack: release private block a.s.a.p."
-       "private-release-block"
-       PrivateAttack.(attack ~k release_block_policy)
-  |> add
-       ~info:"Private attack: override public block a.s.a.p."
-       "private-override-block"
-       PrivateAttack.(attack ~k override_block_policy)
-  |> add
-       ~info:
-         "Private attack: override public block a.s.a.p. (alternative policy \
-          implementation)"
-       "private-override-block-alt"
-       PrivateAttack.(attack' ~k override_block_policy')
-  |> add
-       ~info:"Private attack: override public head just before defender catches up"
-       "private-override-catchup"
-       PrivateAttack.(attack ~k override_catchup_policy)
+  let a =
+    let open Collection in
+    empty
+    |> add
+         ~info:"Private attack with honest policy"
+         "private-honest"
+         PrivateAttack.(attack ~k honest_policy)
+    |> add
+         ~info:"Private attack: release private block a.s.a.p."
+         "private-release-block"
+         PrivateAttack.(attack ~k release_block_policy)
+    |> add
+         ~info:"Private attack: override public block a.s.a.p."
+         "private-override-block"
+         PrivateAttack.(attack ~k override_block_policy)
+    |> add
+         ~info:
+           "Private attack: override public block a.s.a.p. (alternative policy \
+            implementation)"
+         "private-override-block-alt"
+         PrivateAttack.(attack' ~k override_block_policy')
+    |> add
+         ~info:"Private attack: override public head just before defender catches up"
+         "private-override-catchup"
+         PrivateAttack.(attack ~k override_catchup_policy)
+  and b =
+    let module A =
+      SszLikeAttack.Agent (struct
+        let k = k
+      end)
+    in
+    Collection.map
+      (fun { key; info; it } ->
+        { key = "ssz-" ^ key; info = SszLikeAttack.info ^ "; " ^ info; it = A.agent it })
+      SszLikeAttack.policies
+  in
+  Collection.concat a b
 ;;
 
 let protocol ~k =
