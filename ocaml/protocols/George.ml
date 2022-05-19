@@ -416,7 +416,7 @@ module PrivateAttack = struct
     then Wait
     else if o.private_depth = 0 && o.private_blocks = o.public_blocks + 1
     then Override
-    else if o.public_blocks = o.private_blocks && o.private_depth = o.private_depth + 1
+    else if o.public_blocks = o.private_blocks && o.private_depth = o.public_depth + 1
     then Override
     else if o.private_blocks - o.public_blocks > 10
             (* fork can become really deep for strong attackers. Cut-off shortens time
@@ -784,17 +784,46 @@ module SszLikeAttack = struct
       if o.public_blocks > 0 then Adopt_Proceed else Override_Proceed
     ;;
 
-    let selfish o =
-      (* Ad-hoc strategy. This is probably not optimal. *)
+    let release_block o =
+      let open Observation in
+      let open Action in
+      if o.private_blocks < o.public_blocks
+      then Adopt_Proceed
+      else if o.private_blocks > o.public_blocks
+      then Override_Proceed
+      else Wait_Proceed
+    ;;
+
+    let override_block o =
       let open Observation in
       let open Action in
       if o.private_blocks < o.public_blocks
       then Adopt_Proceed
       else if o.private_blocks = 0 && o.public_blocks = 0
-      then Wait_Prolong
+      then Wait_Proceed
       else if o.public_blocks = 0
       then Wait_Proceed
       else Override_Proceed
+    ;;
+
+    let override_catchup o =
+      let open Observation in
+      let open Action in
+      if o.private_blocks < o.public_blocks
+      then Adopt_Proceed
+      else if o.private_blocks = 0 && o.public_blocks = 0
+      then Wait_Proceed
+      else if o.public_blocks = 0
+      then Wait_Proceed
+      else if o.private_depth = 0 && o.private_blocks = o.public_blocks + 1
+      then Override_Proceed
+      else if o.public_blocks = o.private_blocks && o.private_depth = o.public_depth + 1
+      then Override_Proceed
+      else if o.private_blocks - o.public_blocks > 10
+              (* fork can become really deep for strong attackers. Cut-off shortens time
+                 spent in common ancestor computation. *)
+      then Override_Proceed
+      else Wait_Proceed
     ;;
   end
 
@@ -803,7 +832,20 @@ module SszLikeAttack = struct
     let open Policies in
     empty
     |> add ~info:"emulate honest behaviour" "honest" honest
-    |> add ~info:"ad-hoc selfish policy" "selfish" selfish
+    |> add
+         ~info:"release private block a.s.a.p., inspired from PrivateAttack"
+         "release-block"
+         release_block
+    |> add
+         ~info:"override public block a.s.a.p., inspired from PrivateAttack"
+         "override-block"
+         override_block
+    |> add
+         ~info:
+           "override public head just before defender catches up, inspired from \
+            PrivateAttack"
+         "override-catchup"
+         override_catchup
   ;;
 end
 
