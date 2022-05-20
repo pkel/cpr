@@ -26,7 +26,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=250,
+    STEPS_PER_ROLLOUT=2016,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
@@ -74,76 +74,74 @@ if config["USE_DAA"]:
 else:
     env = SparseRelativeRewardWrapper(env, relative=False)
 
-p = PPO.load(f"saved_models/best_model.zip", env=env)
+p = PPO.load(f"saved_models/best_model_nakamoto_gamma_0.zip", env=env)
 ALPHAS = list(np.arange(0.05, 0.5, 0.05))
-for n_steps in [250]:
-    alphas = []
-    rewards = []
-    sm1_rewards = []
-    for alpha in ALPHAS:
+alphas = []
+rewards = []
+sm1_rewards = []
+for alpha in ALPHAS:
 
-        config["ALPHA_SCHEDULE"] = [alpha]
-        env = env_fn(alpha, 1, config)
+    config["ALPHA_SCHEDULE"] = [alpha]
+    env = env_fn(alpha, 1, config)
 
-        env = AlphaScheduleWrapper(env, env_fn, config)
-        if config["USE_DAA"]:
-            env = AbsoluteRewardWrapper(env)
-        else:
-            env = SparseRelativeRewardWrapper(env, relative=False)
+    env = AlphaScheduleWrapper(env, env_fn, config)
+    if config["USE_DAA"]:
+        env = AbsoluteRewardWrapper(env)
+    else:
+        env = SparseRelativeRewardWrapper(env, relative=False)
 
-        # env = WastedBlocksRewardWrapper(env)
+    sm1 = env.policies["sapirshtein-2016-sm1"]
 
-        # model = A2C("MlpPolicy", env, verbose=1)
-        # model.learn(total_timesteps=10000)
-        sm1 = env.policies["sapirshtein-2016-sm1"]
-        # p = env.policies()["honest"]
+    for i in tqdm(range(1000)):
+        obs = env.reset()
+        done = False
+        ep_r = 0
+        while not done:
+            sm1_action = sm1(np.array(obs))
+            action, _state = p.predict(np.array(obs), deterministic=True)
 
-        for i in tqdm(range(1000)):
-            obs = env.reset()
-            done = False
-            ep_r = 0
-            while not done:
-                sm1_action = sm1(np.array(obs))
-                action, _state = p.predict(np.array(obs), deterministic=True)
+            obs, r, done, info = env.step(action)
 
-                obs, r, done, info = env.step(action)
+            ep_r += r
+        if not config["USE_DAA"] or (config["USE_DAA"] and i > 100):
+            rewards.append(ep_r)
+            alphas.append(alpha)
+    obs = env.reset(reset_difficulties=True)
+    for i in tqdm(range(1000)):
+        obs = env.reset()
+        done = False
+        ep_r = 0
+        while not done:
+            sm1_action = sm1(np.array(obs))
 
-                ep_r += r
-            if not config["USE_DAA"] or (config["USE_DAA"] and i > 100):
-                rewards.append(ep_r)
-                alphas.append(alpha)
-        for i in tqdm(range(1000)):
-            obs = env.reset(reset_difficulties=True)
-            done = False
-            ep_r = 0
-            while not done:
-                sm1_action = sm1(np.array(obs))
+            obs, r, done, info = env.step(sm1_action)
 
-                obs, r, done, info = env.step(sm1_action)
+            ep_r += r
+        if not config["USE_DAA"] or (config["USE_DAA"] and i > 100):
+            sm1_rewards.append(ep_r)
 
-                ep_r += r
-            if not config["USE_DAA"] or (config["USE_DAA"] and i > 100):
-                sm1_rewards.append(ep_r)
-
-    df = pd.DataFrame({"alpha": alphas, "reward": rewards, "sm1_reward": sm1_rewards})
-    gb_mean = df.groupby("alpha").mean().reset_index()
-    gb_std = df.groupby("alpha").std().reset_index()
-    fig, ax = plt.subplots()
-    ax.scatter(gb_mean["alpha"], gb_mean["reward"], c="b")
-    ax.errorbar(
-        gb_mean["alpha"],
-        gb_mean["reward"],
-        yerr=gb_std["reward"],
-        fmt="none",
-        ecolor="b",
-    )
-    ax.scatter(gb_mean["alpha"], gb_mean["sm1_reward"], c="green")
+df = pd.DataFrame({"alpha": alphas, "reward": rewards, "sm1_reward": sm1_rewards})
+gb_mean = df.groupby("alpha").mean().reset_index()
+gb_std = df.groupby("alpha").std().reset_index()
+fig, ax = plt.subplots()
+ax.scatter(gb_mean["alpha"], gb_mean["reward"], c="b")
+ax.errorbar(
+    gb_mean["alpha"],
+    gb_mean["reward"],
+    yerr=gb_std["reward"],
+    fmt="none",
+    ecolor="b",
+)
+ax.scatter(gb_mean["alpha"], gb_mean["sm1_reward"], c="green")
+if not config["USE_DAA"]:
     ax.scatter(gb_mean["alpha"], gb_mean["alpha"], c="r")
-    plt.xticks(ALPHAS)
-    plt.title(
-        f"Protocol: Bk_ll alpha vs reward for n_steps={n_steps} Gamma={config['GAMMA']}"
-    )
-    plt.legend(["RL", "Selfish", "Honest"])
+else:
+    ax.scatter(gb_mean["alpha"], gb_mean["alpha"] * config["STEPS_PER_ROLLOUT"], c="r")
+plt.xticks(ALPHAS)
+plt.title(
+    f"Protocol: {config['PROTOCOL']} alpha vs reward for n_steps={config['STEPS_PER_ROLLOUT']} Gamma={config['GAMMA']}"
+)
+plt.legend(["RL", "Selfish", "Honest"])
 plt.show()
 
 

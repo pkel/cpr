@@ -96,6 +96,10 @@ class WandbCallback(BaseCallback):
                     if difficulties is not None:
                         for key, value in difficulties.items():
                             wandb.log({f"difficulty/{key}": value})
+                    rewards_per_alpha = self.locals["infos"][0]["rewards_per_alpha"]
+                    if rewards_per_alpha is not None:
+                        for key, value in rewards_per_alpha.items():
+                            wandb.log({f"rewards_per_alpha/{key}": np.mean(value)})
                     self.save_model()
                     x, y = ts2xy(load_results(self.model_save_path), "timesteps")
                     if len(x) > 0:
@@ -159,7 +163,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=250,
+    STEPS_PER_ROLLOUT=2016,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
