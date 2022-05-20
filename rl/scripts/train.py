@@ -194,6 +194,41 @@ config = dict(
 )
 
 
+class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper):
+    def __init__(self, venv: stable_baselines3.common.vec_env.base_vec_env.VecEnv, every: int = 10000):
+        self.every = every
+        self.i = every
+        super().__init__(venv=venv)
+
+    def reset(self) -> np.ndarray:
+        obs = self.venv.reset()
+        return obs
+
+    def step_async(self, actions: np.ndarray) -> None:
+        self.venv.step_async(actions)
+
+    def step_wait(self) -> stable_baselines3.common.vec_env.base_vec_env.VecEnvStepReturn:
+        obs, reward, done, info = self.venv.step_wait()
+        self.i = self.i - 1
+        if self.i <= 1:
+            self.i = self.every
+            # log daa difficulties
+            d = [ x['difficulties'] for x in info ]
+            d = {f"difficulty|α={a:.2f}" : np.mean([x[a] for x in d]) for a in d[0].keys()}
+            wandb.log(d)
+            # log mean rewards
+            d = {}
+            for i in info:
+                for alpha, value in i['rewards_per_alpha'].items():
+                    if alpha in d.keys():
+                        d[alpha].extend(value)
+                    else:
+                        d[alpha] = value
+            d = {f"reward|α={a:.2f}" : np.mean(l) for a, l in d.items()}
+            wandb.log(d)
+        return obs, reward, done, info
+
+
 if __name__ == "__main__":
     wandb.init(project="dqn", entity="tailstorm", config=config)
     # config = wandb.config
@@ -218,6 +253,7 @@ if __name__ == "__main__":
     )  # count physical cores; hyper-threading does not help us here.
     env = stable_baselines3.common.vec_env.SubprocVecEnv([vec_env_fn] * n_envs)
     env = stable_baselines3.common.vec_env.VecMonitor(env)
+    env = VecWandbLogger(env)
     print(env.action_space)
     if config["ALGO"] == "PPO":
         policy_kwargs = dict(
