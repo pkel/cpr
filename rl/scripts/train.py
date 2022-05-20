@@ -40,7 +40,7 @@ from wandb.integration.sb3 import WandbCallback
 #         - Added complete hyperparameters recording
 #         - Added gradient logging
 #         - Note that `wandb.init(...)` must be called before the WandbCallback can be used
-# 
+#
 #     Args:
 #         verbose: The verbosity of sb3 output
 #         model_save_path: Path to the folder where the model will be saved, The default value is `None` so the model is not log
@@ -48,7 +48,7 @@ from wandb.integration.sb3 import WandbCallback
 #         model_save_freq: Frequency to save the model
 #         gradient_save_freq: Frequency to log gradient. The default value is 0 so the gradients are not logged
 #     """
-# 
+#
 #     def __init__(
 #         self,
 #         verbose: int = 0,
@@ -65,7 +65,7 @@ from wandb.integration.sb3 import WandbCallback
 #         self.model_save_path = model_save_path
 #         self.gradient_save_freq = gradient_save_freq
 #         self.best_mean_reward = -np.inf
-# 
+#
 #         # Create folder if needed
 #         if self.model_save_path is not None:
 #             os.makedirs(self.model_save_path, exist_ok=True)
@@ -74,7 +74,7 @@ from wandb.integration.sb3 import WandbCallback
 #             assert (
 #                 self.model_save_freq == 0
 #             ), "to use the `model_save_freq` you have to set the `model_save_path` parameter"
-# 
+#
 #     def _init_callback(self) -> None:
 #         d = {}
 #         if "algo" not in d:
@@ -89,7 +89,7 @@ from wandb.integration.sb3 import WandbCallback
 #         if self.gradient_save_freq > 0:
 #             wandb.watch(self.model.policy, log_freq=self.gradient_save_freq, log="all")
 #         wandb.config.setdefaults(d)
-# 
+#
 #     def _on_step(self) -> bool:
 #         if self.model_save_freq > 0:
 #             if self.model_save_path is not None:
@@ -98,27 +98,31 @@ from wandb.integration.sb3 import WandbCallback
 #                     if difficulties is not None:
 #                         for key, value in difficulties.items():
 #                             wandb.log({f"difficulty/{key}": value})
+#                     rewards_per_alpha = self.locals["infos"][0]["rewards_per_alpha"]
+# if rewards_per_alpha is not None:
+#     for key, value in rewards_per_alpha.items():
+#         wandb.log({f"rewards_per_alpha/{key}": np.mean(value)})
 #                     self.save_model()
 #                     x, y = ts2xy(load_results(self.model_save_path), "timesteps")
 #                     if len(x) > 0:
 #                         # Mean training reward over the last 100 episodes
 #                         mean_reward = np.mean(y[-5000:])
 #                         wandb.log({"mean_reward": mean_reward})
-# 
+#
 #                         # New best model, you could save the agent here
 #                         if mean_reward > self.best_mean_reward:
 #                             self.best_mean_reward = mean_reward
 #                             # Example for saving best model
-# 
+#
 #                             path = os.path.join(self.model_save_path, "best_model.zip")
 #                             self.model.save(path)
 #                             wandb.save(path, base_path=self.model_save_path)
 #         return True
-# 
+#
 #     def _on_training_end(self) -> None:
 #         if self.model_save_path is not None:
 #             self.save_model()
-# 
+#
 #     def save_model(self) -> None:
 #         self.model.save(self.path)
 #         wandb.save(self.path, base_path=self.model_save_path)
@@ -161,7 +165,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=250,
+    STEPS_PER_ROLLOUT=2016,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
@@ -189,6 +193,7 @@ config = dict(
     ACTIVATION_DELAY=1,
 )
 
+
 def single_env_fn():
     env = env_fn(0, 1, config)
     env = AlphaScheduleWrapper(env, env_fn, config)
@@ -199,6 +204,7 @@ def single_env_fn():
     env = Monitor(env, log_dir)
     return env
 
+
 if __name__ == "__main__":
     wandb.init(project="dqn", entity="tailstorm", config=config)
     # config = wandb.config
@@ -208,7 +214,9 @@ if __name__ == "__main__":
 
     os.makedirs(log_dir, exist_ok=True)
 
-    n_envs = psutil.cpu_count(logical=False) # count physical cores; hyper-threading does not help us here.
+    n_envs = psutil.cpu_count(
+        logical=False
+    )  # count physical cores; hyper-threading does not help us here.
     env = stable_baselines3.common.vec_env.SubprocVecEnv([single_env_fn] * n_envs)
     print(env.action_space)
     if config["ALGO"] == "PPO":

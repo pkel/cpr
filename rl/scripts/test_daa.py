@@ -68,6 +68,14 @@ def env_fn(alpha, target, config):
     )
 
 
+env = env_fn(0.1, 1, config)
+if config["USE_DAA"]:
+    env = AbsoluteRewardWrapper(env)
+else:
+    env = SparseRelativeRewardWrapper(env, relative=False)
+
+p = PPO.load(f"saved_models/best_model.zip", env=env)
+
 ALPHAS = list(np.arange(0.05, 0.5, 0.05))
 difficulties = dict((alpha, []) for alpha in ALPHAS)
 for n_steps in [2016]:
@@ -85,15 +93,16 @@ for n_steps in [2016]:
         else:
             env = SparseRelativeRewardWrapper(env, relative=False)
 
-        sm1 = env.policies["honest"]
+        sm1 = env.policies["sapirshtein-2016-sm1"]
         for i in tqdm(range(1000)):
             obs = env.reset()
             done = False
             ep_r = 0
             while not done:
-                sm1_action = sm1(np.array(obs))
+                # action = sm1(np.array(obs))
+                action, _state = p.predict(np.array(obs), deterministic=True)
 
-                obs, r, done, info = env.step(sm1_action)
+                obs, r, done, info = env.step(action)
                 ep_r += r
             difficulties[alpha].append(info["difficulties"][alpha])
 
@@ -103,30 +112,4 @@ for n_steps in [2016]:
     plt.legend(list(difficulties.keys()))
     plt.title(f"Difficulties for sm1")
 
-    # df = pd.DataFrame({"alpha": alphas, "reward": rewards, "sm1_reward": sm1_rewards})
-    # gb_mean = df.groupby("alpha").mean().reset_index()
-    # gb_std = df.groupby("alpha").std().reset_index()
-    # fig, ax = plt.subplots()
-    # ax.scatter(gb_mean["alpha"], gb_mean["reward"], c="b")
-    # ax.errorbar(
-    #     gb_mean["alpha"],
-    #     gb_mean["reward"],
-    #     yerr=gb_std["reward"],
-    #     fmt="none",
-    #     ecolor="b",
-    # )
-    # ax.scatter(gb_mean["alpha"], gb_mean["sm1_reward"], c="green")
-    # ax.scatter(gb_mean["alpha"], gb_mean["alpha"], c="r")
-    # plt.xticks(ALPHAS)
-    # plt.title(
-    #     f"Protocol: Bk_ll alpha vs reward for n_steps={n_steps} Gamma={config['GAMMA']}"
-    # )
-    # plt.legend(["RL", "Selfish", "Honest"])
 plt.show()
-
-
-"""
-Average reward: 2721.0071208567556, Std: 150.17074259685518
-Average relative reward: 0.5960710882917148, Std: 0.012208569807294437
-Unique actions: {1: 533091, 3: 466909}
-"""

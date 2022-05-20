@@ -7,17 +7,31 @@ from gym.spaces import Tuple, MultiDiscrete
 class AbsoluteRewardWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
+        self.rolling_reward = dict()
+        self.current_ep_reward = 0
     
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         reward = info["reward_attacker"]
+        self.current_ep_reward += reward
+        if done:
+            if self.env.alpha not in self.rolling_reward:
+                self.rolling_reward[self.env.alpha] = []
+            self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
+            # take last 5000 rewards
+            if len(self.rolling_reward[self.env.alpha]) > 5000:
+                self.rolling_reward[self.env.alpha].pop(0)
+            self.current_ep_reward = 0
+        info['rewards_per_alpha'] = self.rolling_reward
+        reward /= self.env.config["STEPS_PER_ROLLOUT"]
         return obs, reward, done, info
         
 class WastedBlocksRewardWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         self.current_obs = None
-        
+        self.rolling_reward = dict()
+        self.current_ep_reward = 0
         # r = alpha, penalty = 1 - alpha
 
     def reset(self):
@@ -35,6 +49,16 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
         else:
             reward = 0
         self.current_obs = next_state
+        self.current_ep_reward += reward
+        if done:
+            if self.env.alpha not in self.rolling_reward:
+                self.rolling_reward[self.env.alpha] = []
+            self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
+            # take last 5000 rewards
+            if len(self.rolling_reward[self.env.alpha]) > 5000:
+                self.rolling_reward[self.env.alpha].pop(0)
+            self.current_ep_reward = 0
+        info['rewards_per_alpha'] = self.rolling_reward
         return next_state, reward, done, info
 
 class SparseRelativeRewardWrapper(gym.Wrapper):
