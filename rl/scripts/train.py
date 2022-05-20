@@ -194,17 +194,6 @@ config = dict(
 )
 
 
-def single_env_fn():
-    env = env_fn(0, 1, config)
-    env = AlphaScheduleWrapper(env, env_fn, config)
-    if config["USE_DAA"]:
-        env = AbsoluteRewardWrapper(env)
-    else:
-        env = WastedBlocksRewardWrapper(env)
-    env = Monitor(env, log_dir)
-    return env
-
-
 if __name__ == "__main__":
     wandb.init(project="dqn", entity="tailstorm", config=config)
     # config = wandb.config
@@ -214,10 +203,21 @@ if __name__ == "__main__":
 
     os.makedirs(log_dir, exist_ok=True)
 
+    def vec_env_fn():
+        env = env_fn(0, 1, config)
+        env = AlphaScheduleWrapper(env, env_fn, config)
+        if config["USE_DAA"]:
+            env = AbsoluteRewardWrapper(env)
+        else:
+            env = WastedBlocksRewardWrapper(env)
+        return env
+
+
     n_envs = psutil.cpu_count(
         logical=False
     )  # count physical cores; hyper-threading does not help us here.
-    env = stable_baselines3.common.vec_env.SubprocVecEnv([single_env_fn] * n_envs)
+    env = stable_baselines3.common.vec_env.SubprocVecEnv([vec_env_fn] * n_envs)
+    env = stable_baselines3.common.vec_env.VecMonitor(env)
     print(env.action_space)
     if config["ALGO"] == "PPO":
         policy_kwargs = dict(
