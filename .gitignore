@@ -1,2 +1,16 @@
-fig/chains
+_build/
+_opam/
+_venv/
+fig/chains/
+
+.DS_Store
+.vscode/
+
 .ipynb_checkpoints
+*.pyc
+
+logs/
+rl/muzero-general/results/
+rl/muzero-general/wandb/
+*.wandb
+wandb/
