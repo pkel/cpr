@@ -32,11 +32,12 @@ dependencies:
 	opam exec dune build ocaml/{cpr,cpr-dev}.opam
 	opam install ./ocaml --deps-only --working-dir
 
-_venv: python/requirements.txt
+_venv: python/requirements.txt rl/requirements.txt
 	rm -rf _venv
 	python -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
 	cd python && ../_venv/bin/pip install -r requirements.txt
+	cd rl && ../_venv/bin/pip install -r requirements.txt
 
 # bridge OCaml and Python
 
@@ -65,6 +66,7 @@ expand: _venv
 visualize:
 	mkdir -p fig/chains/
 	rm -rf fig/chains/*
+	echo '*' > fig/chains/.gitignore
 	dune exec ocaml/experiments/visualize.exe
 	make -j $(shell nproc) visualize.render
 
@@ -73,3 +75,9 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 
 %.png: %.dot
 	dot -Tpng < $^ > $@
+
+# RL
+
+rl-train: _venv
+	_venv/bin/python rl/scripts/train.py
+

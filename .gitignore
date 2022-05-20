@@ -1,7 +1,6 @@
 _build/
 _opam/
 _venv/
-fig/chains/
 
 .DS_Store
 .vscode/
@@ -12,5 +11,6 @@ fig/chains/
 logs/
 rl/muzero-general/results/
 rl/muzero-general/wandb/
+saved_models
 *.wandb
 wandb/

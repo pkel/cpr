@@ -1,13 +1,4 @@
-pandas
-numpy
-black
-flake8
-pytest
-jupyter
-matplotlib
-seaborn
--e ../python/gym
-pytest-forked
-jupyterlab
+# in addition to ../python/requirements.txt
 stable-baselines3
 tqdm
+wandb
