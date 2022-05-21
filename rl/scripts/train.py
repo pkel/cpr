@@ -31,102 +31,6 @@ import wandb
 from wandb.sdk.lib import telemetry as wb_telemetry
 from wandb.integration.sb3 import WandbCallback
 
-# TODO bglick13: This wrapper does not work with the parallel SubprocVecEnv.
-#                The imported one (wandb.integration.sb3) works. Maybe you
-#                can extend on that one?
-# class WandbCallback(BaseCallback):
-#     """Log SB3 experiments to Weights and Biases
-#         - Added model tracking and uploading
-#         - Added complete hyperparameters recording
-#         - Added gradient logging
-#         - Note that `wandb.init(...)` must be called before the WandbCallback can be used
-#
-#     Args:
-#         verbose: The verbosity of sb3 output
-#         model_save_path: Path to the folder where the model will be saved, The default value is `None` so the model is not log
-# ged
-#         model_save_freq: Frequency to save the model
-#         gradient_save_freq: Frequency to log gradient. The default value is 0 so the gradients are not logged
-#     """
-#
-#     def __init__(
-#         self,
-#         verbose: int = 0,
-#         model_save_path: str = None,
-#         model_save_freq: int = 0,
-#         gradient_save_freq: int = 0,
-#     ):
-#         super(WandbCallback, self).__init__(verbose)
-#         if wandb.run is None:
-#             raise wandb.Error("You must call wandb.init() before WandbCallback()")
-#         with wb_telemetry.context() as tel:
-#             tel.feature.sb3 = True
-#         self.model_save_freq = model_save_freq
-#         self.model_save_path = model_save_path
-#         self.gradient_save_freq = gradient_save_freq
-#         self.best_mean_reward = -np.inf
-#
-#         # Create folder if needed
-#         if self.model_save_path is not None:
-#             os.makedirs(self.model_save_path, exist_ok=True)
-#             self.path = os.path.join(self.model_save_path, "model.zip")
-#         else:
-#             assert (
-#                 self.model_save_freq == 0
-#             ), "to use the `model_save_freq` you have to set the `model_save_path` parameter"
-#
-#     def _init_callback(self) -> None:
-#         d = {}
-#         if "algo" not in d:
-#             d["algo"] = type(self.model).__name__
-#         for key in self.model.__dict__:
-#             if key in wandb.config:
-#                 continue
-#             if type(self.model.__dict__[key]) in [float, int, str]:
-#                 d[key] = self.model.__dict__[key]
-#             else:
-#                 d[key] = str(self.model.__dict__[key])
-#         if self.gradient_save_freq > 0:
-#             wandb.watch(self.model.policy, log_freq=self.gradient_save_freq, log="all")
-#         wandb.config.setdefaults(d)
-#
-#     def _on_step(self) -> bool:
-#         if self.model_save_freq > 0:
-#             if self.model_save_path is not None:
-#                 if self.n_calls % self.model_save_freq == 0:
-#                     difficulties = self.locals["infos"][0]["difficulties"]
-#                     if difficulties is not None:
-#                         for key, value in difficulties.items():
-#                             wandb.log({f"difficulty/{key}": value})
-#                     rewards_per_alpha = self.locals["infos"][0]["rewards_per_alpha"]
-# if rewards_per_alpha is not None:
-#     for key, value in rewards_per_alpha.items():
-#         wandb.log({f"rewards_per_alpha/{key}": np.mean(value)})
-#                     self.save_model()
-#                     x, y = ts2xy(load_results(self.model_save_path), "timesteps")
-#                     if len(x) > 0:
-#                         # Mean training reward over the last 100 episodes
-#                         mean_reward = np.mean(y[-5000:])
-#                         wandb.log({"mean_reward": mean_reward})
-#
-#                         # New best model, you could save the agent here
-#                         if mean_reward > self.best_mean_reward:
-#                             self.best_mean_reward = mean_reward
-#                             # Example for saving best model
-#
-#                             path = os.path.join(self.model_save_path, "best_model.zip")
-#                             self.model.save(path)
-#                             wandb.save(path, base_path=self.model_save_path)
-#         return True
-#
-#     def _on_training_end(self) -> None:
-#         if self.model_save_path is not None:
-#             self.save_model()
-#
-#     def save_model(self) -> None:
-#         self.model.save(self.path)
-#         wandb.save(self.path, base_path=self.model_save_path)
-
 
 def lr_schedule(remaining):
     return config["STARTING_LR"] * remaining + config["ENDING_LR"] * (1 - remaining)
@@ -213,8 +117,10 @@ class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper
         if self.i <= 1:
             self.i = self.every
             # log daa difficulties
-            d = [ x['difficulties'] for x in info ]
-            d = {f"difficulty|α={a:.2f}" : np.mean([x[a] for x in d]) for a in d[0].keys()}
+            d = [x["difficulties"] for x in info]
+            d = {
+                f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
+            }
             wandb.log(d)
             # log mean rewards
             d = {}
@@ -224,7 +130,7 @@ class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper
                         d[alpha].extend(value)
                     else:
                         d[alpha] = value
-            d = {f"reward|α={a:.2f}" : np.mean(l) for a, l in d.items()}
+            d = {f"reward/α={a:.2f}": np.mean(l) for a, l in d.items()}
             wandb.log(d)
         return obs, reward, done, info
 
@@ -299,9 +205,9 @@ if __name__ == "__main__":
     model.learn(
         total_timesteps=config["TOTAL_TIMESTEPS"],
         callback=WandbCallback(
-            gradient_save_freq=1000,
+            gradient_save_freq=10000,
             model_save_path=log_dir,
-            model_save_freq=1000,
+            model_save_freq=10000,
             verbose=0,
         ),
     )
