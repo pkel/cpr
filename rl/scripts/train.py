@@ -9,6 +9,12 @@ from cpr_gym import protocols
 import stable_baselines3
 from stable_baselines3 import A2C, PPO, DQN
 from stable_baselines3.ppo.policies import MlpPolicy
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env.base_vec_env import (
+    VecEnv,
+    VecEnvWrapper,
+    VecEnvStepReturn,
+)
 from tqdm import tqdm
 import torch
 from rl.wrappers.exploration_reward_wrapper import ExplorationRewardWrapper
@@ -95,17 +101,20 @@ config = dict(
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
+    N_ENVS=psutil.cpu_count(logical=False),  # hyper-threading does not help us here.
 )
 
 
-class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper):
+class VecWandbLogger(VecEnvWrapper):
     def __init__(
         self,
-        venv: stable_baselines3.common.vec_env.base_vec_env.VecEnv,
+        venv: VecEnv,
         every: int = 10000,
     ):
         self.every = every
         self.i = every
+        self.n_steps = 0
+        self.n_episodes = 0
         super().__init__(venv=venv)
 
     def reset(self) -> np.ndarray:
@@ -117,27 +126,39 @@ class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper
 
     def step_wait(
         self,
-    ) -> stable_baselines3.common.vec_env.base_vec_env.VecEnvStepReturn:
+    ) -> VecEnvStepReturn:
         obs, reward, done, info = self.venv.step_wait()
+        # count a few things
+        self.n_steps += 1
         self.i = self.i - 1
+        for b in done:
+            if b:
+                self.n_episodes += 1
+        # regular logging
         if self.i <= 1:
             self.i = self.every
-            # log daa difficulties
+            # time
+            t = {
+                "step": self.n_steps,
+                "episodes": self.n_episodes,
+                "total_steps": self.n_steps * len(done),
+            }
+            # daa difficulties
             d = [x["difficulties"] for x in info]
             d = {
                 f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
             }
-            wandb.log(d)
-            # log mean rewards
-            d = {}
+            # mean rewards
+            r = {}
             for i in info:
                 for alpha, value in i["rewards_per_alpha"].items():
-                    if alpha in d.keys():
-                        d[alpha].extend(value)
+                    if alpha in r.keys():
+                        r[alpha].extend(value)
                     else:
-                        d[alpha] = value
-            d = {f"reward/α={a:.2f}": np.mean(l) for a, l in d.items()}
-            wandb.log(d)
+                        r[alpha] = value
+            r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
+            # log
+            wandb.log(t | d | r)
         return obs, reward, done, info
 
 
@@ -159,11 +180,8 @@ if __name__ == "__main__":
             env = WastedBlocksRewardWrapper(env)
         return env
 
-    n_envs = psutil.cpu_count(
-        logical=False
-    )  # count physical cores; hyper-threading does not help us here.
-    env = stable_baselines3.common.vec_env.SubprocVecEnv([vec_env_fn] * n_envs)
-    env = stable_baselines3.common.vec_env.VecMonitor(env)
+    env = SubprocVecEnv([vec_env_fn] * config["N_ENVS"])
+    env = VecMonitor(env)
     env = VecWandbLogger(env)
     print(env.action_space)
     if config["ALGO"] == "PPO":
