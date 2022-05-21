@@ -9,7 +9,7 @@ from cpr_gym import protocols
 import stable_baselines3
 from stable_baselines3 import A2C, PPO, DQN
 from stable_baselines3.ppo.policies import MlpPolicy
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.base_vec_env import (
     VecEnv,
     VecEnvWrapper,
@@ -101,7 +101,7 @@ config = dict(
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
-    N_ENVS=psutil.cpu_count(logical=False),  # hyper-threading does not help us here.
+    N_ENVS=psutil.cpu_count(),
 )
 
 
@@ -193,7 +193,10 @@ if __name__ == "__main__":
             env = WastedBlocksRewardWrapper(env)
         return env
 
-    env = SubprocVecEnv([vec_env_fn] * config["N_ENVS"])
+    if config["N_ENVS"] > 1:
+        env = SubprocVecEnv([vec_env_fn] * config["N_ENVS"])
+    else:
+        env = DummyVecEnv([vec_env_fn])
     env = VecMonitor(env)
     env = VecWandbLogger(env)
     print(env.action_space)
