@@ -39,7 +39,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         alpha = np.random.choice(self.alpha_schedule)
 
         if self.run_daa:
-            self.update_difficulties(reset_difficulties)
+            # self.update_difficulties(reset_difficulties)
 
             self.env = self.env_fn(
                 alpha=alpha, target=self.difficulties[alpha], config=self.config

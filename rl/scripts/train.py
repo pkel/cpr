@@ -98,7 +98,7 @@ config = dict(
         0.475,
     ],
     USE_DAA=True,
-    DAA_UPDATE_FREQ=250,
+    DAA_UPDATE_FREQ=2016 // 4,
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
