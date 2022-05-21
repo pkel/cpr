@@ -18,7 +18,8 @@ class ExplorationRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         next_state, reward, done, info = self.env.step(action)
-        exploration_reward = int(action != 0) * (self.alpha / self.max_steps) * self.scaling
+        exploration_reward = (
+            int(action != 0) * (self.alpha / self.max_steps) * self.scaling
+        )
         reward += exploration_reward
         return next_state, reward, done, info
-    

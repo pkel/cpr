@@ -16,10 +16,12 @@ check-format: _venv
 	cd ocaml && opam exec dune build @fmt
 	cd python && ../_venv/bin/black --check .
 	cd python && ../_venv/bin/flake8
+	cd rl && ../_venv/bin/black --check .
 
 format: _venv
-	cd ocaml && opam exec dune -- build @fmt --auto-promote
-	cd python && ../_venv/bin/black .
+	cd ocaml && opam exec dune -- build @fmt --auto-promote || true
+	cd python && ../_venv/bin/black . || true
+	cd rl && ../_venv/bin/black . || true
 
 pre-commit: check-format test
 

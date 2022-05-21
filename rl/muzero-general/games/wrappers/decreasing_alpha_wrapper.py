@@ -11,7 +11,6 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.env_fn = env_fn
         self.current_step = 0
         self.alpha = None
-        
 
     def reset(self):
         self.current_step += 1
@@ -19,7 +18,5 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.env = self.env_fn(alpha=alpha)
         self.alpha = alpha
         obs = self.env.reset()
-        
-        return obs
 
-    
+        return obs

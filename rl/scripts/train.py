@@ -99,7 +99,11 @@ config = dict(
 
 
 class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper):
-    def __init__(self, venv: stable_baselines3.common.vec_env.base_vec_env.VecEnv, every: int = 10000):
+    def __init__(
+        self,
+        venv: stable_baselines3.common.vec_env.base_vec_env.VecEnv,
+        every: int = 10000,
+    ):
         self.every = every
         self.i = every
         super().__init__(venv=venv)
@@ -111,7 +115,9 @@ class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper
     def step_async(self, actions: np.ndarray) -> None:
         self.venv.step_async(actions)
 
-    def step_wait(self) -> stable_baselines3.common.vec_env.base_vec_env.VecEnvStepReturn:
+    def step_wait(
+        self,
+    ) -> stable_baselines3.common.vec_env.base_vec_env.VecEnvStepReturn:
         obs, reward, done, info = self.venv.step_wait()
         self.i = self.i - 1
         if self.i <= 1:
@@ -125,7 +131,7 @@ class VecWandbLogger(stable_baselines3.common.vec_env.base_vec_env.VecEnvWrapper
             # log mean rewards
             d = {}
             for i in info:
-                for alpha, value in i['rewards_per_alpha'].items():
+                for alpha, value in i["rewards_per_alpha"].items():
                     if alpha in d.keys():
                         d[alpha].extend(value)
                     else:
@@ -152,7 +158,6 @@ if __name__ == "__main__":
         else:
             env = WastedBlocksRewardWrapper(env)
         return env
-
 
     n_envs = psutil.cpu_count(
         logical=False

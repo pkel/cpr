@@ -9,7 +9,7 @@ class AbsoluteRewardWrapper(gym.Wrapper):
         super().__init__(env)
         self.rolling_reward = dict()
         self.current_ep_reward = 0
-    
+
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         reward = info["reward_attacker"]
@@ -22,10 +22,11 @@ class AbsoluteRewardWrapper(gym.Wrapper):
             if len(self.rolling_reward[self.env.alpha]) > 5000:
                 self.rolling_reward[self.env.alpha].pop(0)
             self.current_ep_reward = 0
-        info['rewards_per_alpha'] = self.rolling_reward
+        info["rewards_per_alpha"] = self.rolling_reward
         reward /= self.env.config["STEPS_PER_ROLLOUT"]
         return obs, reward, done, info
-        
+
+
 class WastedBlocksRewardWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -42,10 +43,14 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
     def step(self, action):
         next_state, reward, done, info = self.env.step(action)
         # Attacker succeeds in overriding
-        if info['reward_attacker'] > 0: # and info['reward_attacker'] == self.current_obs[1]:
+        if (
+            info["reward_attacker"] > 0
+        ):  # and info['reward_attacker'] == self.current_obs[1]:
             reward = self.env.alpha * self.current_obs[0]
-        elif info['reward_defender'] > 0: # and info['reward_defender'] == self.current_obs[0]:
-            reward = -1 * (1 - self.env.alpha)* self.current_obs[1]
+        elif (
+            info["reward_defender"] > 0
+        ):  # and info['reward_defender'] == self.current_obs[0]:
+            reward = -1 * (1 - self.env.alpha) * self.current_obs[1]
         else:
             reward = 0
         self.current_obs = next_state
@@ -58,8 +63,9 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
             if len(self.rolling_reward[self.env.alpha]) > 5000:
                 self.rolling_reward[self.env.alpha].pop(0)
             self.current_ep_reward = 0
-        info['rewards_per_alpha'] = self.rolling_reward
+        info["rewards_per_alpha"] = self.rolling_reward
         return next_state, reward, done, info
+
 
 class SparseRelativeRewardWrapper(gym.Wrapper):
     def __init__(self, env, relative=True):
@@ -95,6 +101,7 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
             reward = 0
         return next_state, reward, done, info
 
+
 class RelativeRewardWrapper(gym.Wrapper):
     def __init__(self, env, alpha, max_steps=1000):
         super().__init__(env)
@@ -123,4 +130,3 @@ class RelativeRewardWrapper(gym.Wrapper):
         )
         reward = self.current_relative_reward - self.last_relative_reward
         return next_state, reward, done, info
-    

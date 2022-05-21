@@ -22,17 +22,17 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.n_pow = 0
             self.observed = self.target
 
-    
     def update_difficulties(self, reset_difficulties):
         if reset_difficulties:
             self.difficulties = dict((a, self.target) for a in self.alpha_schedule)
         else:
             if self.alpha:
-                difficulty = self.difficulties[self.alpha] * (self.target / self.observed)
+                difficulty = self.difficulties[self.alpha] * (
+                    self.target / self.observed
+                )
                 self.difficulties[self.alpha] = difficulty
                 self.n_pow = 0
                 self.observed = 0
-        
 
     def reset(self, reset_difficulties=False):
         self.current_step += 1
@@ -41,22 +41,24 @@ class AlphaScheduleWrapper(gym.Wrapper):
         if self.run_daa:
             self.update_difficulties(reset_difficulties)
 
-            self.env = self.env_fn(alpha=alpha, target=self.difficulties[alpha], config=self.config)
+            self.env = self.env_fn(
+                alpha=alpha, target=self.difficulties[alpha], config=self.config
+            )
         else:
-            self.env = self.env_fn(alpha=alpha, target=self.config["ACTIVATION_DELAY"], config=self.config)
+            self.env = self.env_fn(
+                alpha=alpha, target=self.config["ACTIVATION_DELAY"], config=self.config
+            )
         self.alpha = alpha
-        
+
         obs = self.env.reset()
-        
+
         return obs
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         if self.run_daa:
             self.n_pow += info["reward_n_pows"]
-            info['difficulties'] = self.difficulties
+            info["difficulties"] = self.difficulties
         if done and self.run_daa:
-            self.observed = info['simulator_clock_rewarded'] / self.n_pow
+            self.observed = info["simulator_clock_rewarded"] / self.n_pow
         return obs, reward, done, info
-
-    

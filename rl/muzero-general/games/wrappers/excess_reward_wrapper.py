@@ -38,6 +38,7 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
             reward = 0
         return next_state, reward, done, info
 
+
 class RelativeRewardWrapper(gym.Wrapper):
     def __init__(self, env, alpha, max_steps=1000):
         super().__init__(env)
@@ -66,4 +67,3 @@ class RelativeRewardWrapper(gym.Wrapper):
         )
         reward = self.current_relative_reward - self.last_relative_reward
         return next_state, reward, done, info
-    
