@@ -1,4 +1,4 @@
-import sys, os, psutil
+import sys, os, psutil, time
 from uuid import uuid4
 
 sys.path.append(os.getcwd())
@@ -112,9 +112,11 @@ class VecWandbLogger(VecEnvWrapper):
         every: int = 10000,
     ):
         self.every = every
-        self.i = every
-        self.n_steps = 0
-        self.n_episodes = 0
+        self.epoch_episodes = 0
+        self.epoch_vec_steps = 0
+        self.total_episodes = 0
+        self.total_vec_steps = 0
+        self.last_epoch = time.time()
         super().__init__(venv=venv)
 
     def reset(self) -> np.ndarray:
@@ -129,19 +131,30 @@ class VecWandbLogger(VecEnvWrapper):
     ) -> VecEnvStepReturn:
         obs, reward, done, info = self.venv.step_wait()
         # count a few things
-        self.n_steps += 1
-        self.i = self.i - 1
+        self.epoch_vec_steps += 1
         for b in done:
             if b:
-                self.n_episodes += 1
+                self.epoch_episodes += 1
         # regular logging
-        if self.i <= 1:
-            self.i = self.every
-            # time
-            t = {
-                "step": self.n_steps,
-                "episodes": self.n_episodes,
-                "total_steps": self.n_steps * len(done),
+        if self.epoch_vec_steps >= self.every:
+            # performance
+            n_envs = config["N_ENVS"]
+            now = time.time()
+            seconds = now - self.last_epoch
+            performance = {
+                "performance/steps_per_second": self.epoch_vec_steps * n_envs / seconds,
+                "performance/epochs_per_second": self.epoch_episodes / seconds,
+            }
+            # reset counters
+            self.total_vec_steps += self.epoch_vec_steps
+            self.total_episodes += self.epoch_episodes
+            self.epoch_vec_steps = 0
+            self.epoch_episodes = 0
+            self.last_epoch = now
+            # progress
+            progress = {
+                "progress/steps": self.total_vec_steps * n_envs,
+                "progress/episodes": self.total_episodes,
             }
             # daa difficulties
             d = [x["difficulties"] for x in info]
@@ -158,7 +171,7 @@ class VecWandbLogger(VecEnvWrapper):
                         r[alpha] = value
             r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
             # log
-            wandb.log(t | d | r)
+            wandb.log(progress | performance | d | r)
         return obs, reward, done, info
 
 
