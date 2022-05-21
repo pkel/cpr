@@ -59,6 +59,8 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.current_step += 1
         if self.run_daa:
             self.n_pow += info["reward_n_pows"]
+            self.observed = info["simulator_clock_rewarded"] / self.n_pow
+
             info["difficulties"] = self.difficulties
             if self.current_step % self.config["DAA_UPDATE_FREQ"] == 0:
                 self.update_difficulties(reset_difficulties=False)
