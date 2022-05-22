@@ -61,12 +61,12 @@ def env_fn(alpha, target, config):
     return gym.make(
         "cprwip-v0",
         proto=proto,
-        alpha=alpha,
+        #  alpha=alpha,
         max_steps=max_steps,
         max_time=max_time,
         gamma=config["GAMMA"],
         defenders=config["DEFENDERS"],
-        activation_delay=target,
+        #  activation_delay=target,
     )
 
 
@@ -74,15 +74,15 @@ config = dict(
     PROTOCOL="nakamoto",
     K=10,
     ALGO="PPO",
-    TOTAL_TIMESTEPS=10e6,
+    TOTAL_TIMESTEPS=1e8,
     STEPS_PER_ROLLOUT=2016,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
-    BATCH_SIZE=2048,
+    BATCH_SIZE=10000,
     ALPHA_SCHEDULE_CUTOFF=0,
     LAYER_SIZE=100,
     N_LAYERS=2,
-    N_STEPS_MULTIPLE=100,
+    N_STEPS_MULTIPLE=10,
     HONEST_STEPS_FRACTION=0.1,
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
@@ -183,19 +183,25 @@ class VecWandbLogger(VecEnvWrapper):
                 l2 += rb.buf.tolist()
             for rb in self.venv.get_attr("rb_reward"):
                 l3 += rb.buf.tolist()
-            data = [[x0, x1, x2, x3] for (x0, x1, x2, x3) in zip(l0, l1, l2, l3)]
+            data = [
+                [x0, x1, x2, x3, x3 * x0] for (x0, x1, x2, x3) in zip(l0, l1, l2, l3)
+            ]
             table = wandb.Table(
                 data=data,
                 columns=[
                     "alpha",
                     "activation_delay",
                     "observed_block_interval",
+                    "reward_per_alpha",
                     "reward",
                 ],
             )
             rb = {
                 "ring_buffers/table": table,
                 "ring_buffers/reward": wandb.plot.line(table, "alpha", "reward"),
+                "ring_buffers/reward_per_alpha": wandb.plot.line(
+                    table, "alpha", "reward_per_alpha"
+                ),
                 "ring_buffers/activation_delay": wandb.plot.line(
                     table, "alpha", "activation_delay"
                 ),

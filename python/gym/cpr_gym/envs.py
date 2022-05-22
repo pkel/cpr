@@ -125,7 +125,7 @@ class Wip(Core):
 
     def reset(self):
         # sample alpha
-        self.alpha = random.uniform(0, 0.5)
+        self.alpha = random.uniform(0.1, 0.5)
         # estimate difficulty
         i = np.abs(self.rb_alpha.buf - self.alpha).argmin()
         ad = self.rb_activation_delay.buf[i]
@@ -175,4 +175,6 @@ class Wip(Core):
             info["daa_extra_reward"] = extra
         # extend observation space
         obs = self.extend_obs(obs)
+        # scale reward by alpha
+        reward = reward / self.alpha
         return obs, reward, done, info
