@@ -94,6 +94,8 @@ class Wip(Core):
             kwargs.pop("alpha", None)
             warnings.warn("spurious argument: alpha")
 
+        kwargs["max_steps"] = 128
+
         super().__init__(proto, **kwargs)
         self.proto = proto
         self.target_block_interval = target_block_interval
@@ -112,7 +114,7 @@ class Wip(Core):
         )
 
         # init ring buffers for DAA and reporting
-        daa_buf_size = 25
+        daa_buf_size = 128
         self.rb_alpha = RingBuffer(daa_buf_size, 0)
         self.rb_activation_delay = RingBuffer(daa_buf_size, target_block_interval)
         self.rb_observed_block_interval = RingBuffer(
@@ -127,10 +129,14 @@ class Wip(Core):
         # sample alpha
         self.alpha = random.uniform(0.1, 0.5)
         # estimate difficulty
-        i = np.abs(self.rb_alpha.buf - self.alpha).argmin()
+        i = np.nonzero(
+            np.abs(self.rb_alpha.buf - self.alpha) < 0.025
+        )  # this picks roughly 1/8 of the observations
+        if len(i[0]) < 1:
+            i = np.abs(self.rb_alpha.buf - self.alpha).argmin()  # pick closest element
         ad = self.rb_activation_delay.buf[i]
         obi = self.rb_observed_block_interval.buf[i]
-        self.activation_delay = ad * self.target_block_interval / obi
+        self.activation_delay = np.mean(ad * self.target_block_interval / obi)
         # create env with new parameters
         self.env = engine.create(
             self.proto,
