@@ -156,8 +156,8 @@ class Wip(Core):
         if done:
             # calculate observed block interval
             obi = info["simulator_clock_now"] / self.episode_pow_confirmed
-            # penalize DAA mismatch
-            error = obi / self.target_block_interval - 1
+            # correct for DAA mismatch
+            error = self.target_block_interval / obi - 1
             extra = self.episode_reward * error
             reward += extra
             self.episode_reward += extra
