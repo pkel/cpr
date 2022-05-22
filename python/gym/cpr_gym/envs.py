@@ -85,7 +85,7 @@ class RingBuffer:
 
 
 class Wip(Core):
-    def __init__(self, proto, target_block_interval=1, **kwargs):
+    def __init__(self, proto, target_runtime=128, target_block_interval=1, **kwargs):
         if "activation_delay" in kwargs.keys():
             kwargs.pop("activation_delay", None)
             warnings.warn("spurious argument: activation_delay")
@@ -94,12 +94,14 @@ class Wip(Core):
             kwargs.pop("alpha", None)
             warnings.warn("spurious argument: alpha")
 
-        kwargs["max_steps"] = 128
-
         super().__init__(proto, **kwargs)
         self.proto = proto
+        self.target_runtime = target_runtime
         self.target_block_interval = target_block_interval
         self.kwargs = kwargs
+
+        self.kwargs["max_time"] = target_runtime
+        self.kwargs["max_steps"] = target_runtime * 10
 
         # extend observation space
         self.observation_space = gym.spaces.Dict(
@@ -162,13 +164,16 @@ class Wip(Core):
         # accumulate reward
         self.episode_reward += reward
         if done:
-            # calculate observed block interval
-            obi = info["simulator_clock_now"] / self.episode_pow_confirmed
-            # correct for DAA mismatch
-            error = self.target_block_interval / obi - 1
+            # we want the episode to run a fixed amount of time
+            # the DAA should get it about right
+            # we correct the remaining error here
+            now = info["simulator_clock_rewarded"]
+            error = self.target_runtime / now - 1
             extra = self.episode_reward * error
             reward += extra
             self.episode_reward += extra
+            # observe block interval
+            obi = now / self.episode_pow_confirmed
             # record data in ring buffers
             self.rb_alpha.write(self.alpha)
             self.rb_activation_delay.write(self.activation_delay)
