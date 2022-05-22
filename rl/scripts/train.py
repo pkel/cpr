@@ -193,7 +193,16 @@ class VecWandbLogger(VecEnvWrapper):
                     "reward",
                 ],
             )
-            rb = {"ring buffers": table}
+            rb = {
+                "ring_buffers/table": table,
+                "ring_buffers/reward": wandb.plot.line(table, "alpha", "reward"),
+                "ring_buffers/activation_delay": wandb.plot.line(
+                    table, "alpha", "activation_delay"
+                ),
+                "ring_buffers/observed_block_interval": wandb.plot.line(
+                    table, "alpha", "observed_block_interval"
+                ),
+            }
             # log
             wandb.log(progress | performance | rb)
         return obs, reward, done, info
