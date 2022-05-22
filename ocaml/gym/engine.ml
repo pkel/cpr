@@ -284,7 +284,7 @@ let of_module
     ( (* observation *)
       observe t |> O.to_floatarray
     , (* reward *)
-      cf.(0) *. reward_time_elapsed
+      cf.(0)
     , done_
     , (* info dict *)
       [ "reward_attacker", Py.Float.of_float cf.(0)
