@@ -149,6 +149,8 @@ class Wip(Core):
 
     def step(self, a):
         obs, reward, done, info = super().step(a)
+        # scale reward by alpha
+        reward = reward / self.alpha
         # count confirmed puzzle solutions
         self.episode_pow_confirmed += info["reward_n_pows"]
         # accumulate reward
@@ -175,6 +177,4 @@ class Wip(Core):
             info["daa_extra_reward"] = extra
         # extend observation space
         obs = self.extend_obs(obs)
-        # scale reward by alpha
-        reward = reward / self.alpha
         return obs, reward, done, info
