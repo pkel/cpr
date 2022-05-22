@@ -183,6 +183,7 @@ class Wip(Core):
             info["alpha"] = self.alpha
             info["activation_delay"] = self.activation_delay
             info["episode_reward"] = self.episode_reward
+            info["observed_runtime"] = now
             info["observed_block_interval"] = obi
             info["daa_error"] = error
             info["daa_extra_reward"] = extra

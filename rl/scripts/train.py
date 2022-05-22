@@ -143,6 +143,7 @@ class VecWandbLogger(VecEnvWrapper):
                     "alpha",
                     "activation_delay",
                     "episode_reward",
+                    "observed_runtime",
                     "observed_block_interval",
                     "daa_error",
                     "daa_extra_reward",
