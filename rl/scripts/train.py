@@ -59,7 +59,7 @@ def env_fn(alpha, target, config):
         max_steps = config["STEPS_PER_ROLLOUT"]
         max_time = config["STEPS_PER_ROLLOUT"] * 10
     return gym.make(
-        "cpr-v0",
+        "cprwip-v0",
         proto=proto,
         alpha=alpha,
         max_steps=max_steps,
@@ -135,6 +135,20 @@ class VecWandbLogger(VecEnvWrapper):
         for b in done:
             if b:
                 self.epoch_episodes += 1
+        # wip logging
+        for i in range(0, len(done)):
+            if done[i]:
+                l = {"episode/i": self.total_episodes + self.epoch_episodes}
+                for k in [
+                    "alpha",
+                    "activation_delay",
+                    "episode_reward",
+                    "observed_block_interval",
+                    "daa_error",
+                    "daa_extra_reward",
+                ]:
+                    l[f"episode/{k}"] = info[i][k]
+                wandb.log(l)
         # regular logging
         if self.epoch_vec_steps >= self.every:
             # performance
@@ -156,22 +170,32 @@ class VecWandbLogger(VecEnvWrapper):
                 "progress/steps": self.total_vec_steps * n_envs,
                 "progress/episodes": self.total_episodes,
             }
-            # daa difficulties
-            d = [x["difficulties"] for x in info]
-            d = {
-                f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
-            }
-            # mean rewards
-            r = {}
-            for i in info:
-                for alpha, value in i["rewards_per_alpha"].items():
-                    if alpha in r.keys():
-                        r[alpha].extend(value)
-                    else:
-                        r[alpha] = value
-            r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
+            # read ring buffers
+            l0 = []
+            l1 = []
+            l2 = []
+            l3 = []
+            for rb in self.venv.get_attr("rb_alpha"):
+                l0 += rb.buf.tolist()
+            for rb in self.venv.get_attr("rb_activation_delay"):
+                l1 += rb.buf.tolist()
+            for rb in self.venv.get_attr("rb_observed_block_interval"):
+                l2 += rb.buf.tolist()
+            for rb in self.venv.get_attr("rb_reward"):
+                l3 += rb.buf.tolist()
+            data = [[x0, x1, x2, x3] for (x0, x1, x2, x3) in zip(l0, l1, l2, l3)]
+            table = wandb.Table(
+                data=data,
+                columns=[
+                    "alpha",
+                    "activation_delay",
+                    "observed_block_interval",
+                    "reward",
+                ],
+            )
+            rb = {"ring buffers": table}
             # log
-            wandb.log(progress | performance | d | r)
+            wandb.log(progress | performance | rb)
         return obs, reward, done, info
 
 
@@ -186,11 +210,11 @@ if __name__ == "__main__":
 
     def vec_env_fn():
         env = env_fn(0, 1, config)
-        env = AlphaScheduleWrapper(env, env_fn, config)
-        if config["USE_DAA"]:
-            env = AbsoluteRewardWrapper(env)
-        else:
-            env = WastedBlocksRewardWrapper(env)
+        # env = AlphaScheduleWrapper(env, env_fn, config)
+        # if config["USE_DAA"]:
+        #     env = AbsoluteRewardWrapper(env)
+        # else:
+        #     env = WastedBlocksRewardWrapper(env)
         return env
 
     if config["N_ENVS"] > 1:
@@ -211,7 +235,7 @@ if __name__ == "__main__":
             ],
         )
         model = PPO(
-            "MlpPolicy",
+            "MultiInputPolicy",
             env,
             verbose=1,
             batch_size=config["BATCH_SIZE"],
