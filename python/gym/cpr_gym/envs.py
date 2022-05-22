@@ -127,7 +127,7 @@ class Wip(Core):
 
     def reset(self):
         # sample alpha
-        self.alpha = random.uniform(0.6, 0.7)
+        self.alpha = random.uniform(0.9, 1)
         # estimate difficulty
         i = np.nonzero(
             np.abs(self.rb_alpha.buf - self.alpha) < 0.025
