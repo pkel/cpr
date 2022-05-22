@@ -130,9 +130,7 @@ class Wip(Core):
         i = np.abs(self.rb_alpha.buf - self.alpha).argmin()
         ad = self.rb_activation_delay.buf[i]
         obi = self.rb_observed_block_interval.buf[i]
-        factor = self.target_block_interval / obi
-        factor = min(1.2, max(0.8, factor))
-        self.activation_delay = ad * factor
+        self.activation_delay = ad * self.target_block_interval / obi
         # create env with new parameters
         self.env = engine.create(
             self.proto,
@@ -160,8 +158,7 @@ class Wip(Core):
             obi = info["simulator_clock_now"] / self.episode_pow_confirmed
             # penalize DAA mismatch
             error = obi / self.target_block_interval - 1
-            factor = min(0.2, max(-0.2, error))
-            extra = self.episode_reward * factor
+            extra = self.episode_reward * error
             reward += extra
             self.episode_reward += extra
             # record data in ring buffers
