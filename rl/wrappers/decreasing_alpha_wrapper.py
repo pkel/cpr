@@ -23,6 +23,8 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.observed = self.target
             self.in_prep_phase = True
 
+        self.observation_space = gym.spaces.Box(-np.inf, np.inf, (5,), dtype=np.float64)
+
     def update_difficulties(self, reset_difficulties):
         if reset_difficulties:
             self.difficulties = dict((a, self.target) for a in self.alpha_schedule)
@@ -51,8 +53,12 @@ class AlphaScheduleWrapper(gym.Wrapper):
             )
         self.alpha = alpha
 
-        obs = self.env.reset()
+        obs = self.observation(self.env.reset())
 
+        return obs
+
+    def observation(self, obs):
+        obs = np.append(obs, int(self.in_prep_phase))
         return obs
 
     def step(self, action):
@@ -70,7 +76,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
             info["difficulties"] = self.difficulties
             info["in_prep_phase"] = self.in_prep_phase
-            obs = np.append(obs, int(self.in_prep_phase))
+            obs = self.observation(obs)
 
         # if done and self.run_daa:
         #     self.observed = info['simulator_clock_rewarded'] / self.n_pow

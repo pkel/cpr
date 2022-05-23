@@ -200,6 +200,7 @@ if __name__ == "__main__":
     env = VecMonitor(env)
     env = VecWandbLogger(env)
     print(env.action_space)
+    print(env.observation_space)
     if config["ALGO"] == "PPO":
         policy_kwargs = dict(
             activation_fn=torch.nn.ReLU,
