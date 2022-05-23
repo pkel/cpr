@@ -21,6 +21,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.difficulties = dict((a, self.target) for a in config["ALPHA_SCHEDULE"])
             self.n_pow = 0
             self.observed = self.target
+            self.in_prep_phase = True
 
     def update_difficulties(self, reset_difficulties):
         if reset_difficulties:
@@ -39,8 +40,8 @@ class AlphaScheduleWrapper(gym.Wrapper):
         alpha = np.random.choice(self.alpha_schedule)
 
         if self.run_daa:
-            # self.update_difficulties(reset_difficulties)
-
+            self.update_difficulties(reset_difficulties)
+            self.in_prep_phase = True
             self.env = self.env_fn(
                 alpha=alpha, target=self.difficulties[alpha], config=self.config
             )
@@ -56,15 +57,21 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+
         self.current_step += 1
         if self.run_daa:
             self.n_pow += info["reward_n_pows"]
             if self.n_pow > 0:
                 self.observed = info["simulator_clock_rewarded"] / self.n_pow
 
+            if self.current_step == self.config["STEPS_PER_ROLLOUT"] // 2:
+                self.update_difficulties()
+                self.in_prep_phase = False
+
             info["difficulties"] = self.difficulties
-            if self.current_step % self.config["DAA_UPDATE_FREQ"] == 0:
-                self.update_difficulties(reset_difficulties=False)
+            info["in_prep_phase"] = self.in_prep_phase
+            obs = np.append(obs, int(self.in_prep_phase))
+
         # if done and self.run_daa:
         #     self.observed = info['simulator_clock_rewarded'] / self.n_pow
         return obs, reward, done, info

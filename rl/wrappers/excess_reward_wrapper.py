@@ -24,6 +24,8 @@ class AbsoluteRewardWrapper(gym.Wrapper):
             self.current_ep_reward = 0
         info["rewards_per_alpha"] = self.rolling_reward
         reward /= self.env.config["STEPS_PER_ROLLOUT"]
+        if info.get("in_prep_phase", False):
+            reward = 0
         return obs, reward, done, info
 
 
