@@ -25,7 +25,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, (5,), dtype=np.float64)
 
-    def update_difficulties(self, reset_difficulties):
+    def update_difficulties(self, reset_difficulties=False):
         if reset_difficulties:
             self.difficulties = dict((a, self.target) for a in self.alpha_schedule)
         else:
