@@ -41,7 +41,7 @@ class Auto(Core):
     def __init__(
         self,
         proto=protocols.nakamoto(),
-        alpha_min=0,
+        alpha_min=0.1,
         alpha_max=1,
         target_runtime=128,
         target_block_interval=1,
@@ -54,6 +54,14 @@ class Auto(Core):
             if k in kwargs.keys():
                 kwargs.pop(k, None)
                 warnings.warn(f"unused argument '{k}'")
+
+        # check compatibility of alpha_min and target runtime
+        if target_block_interval * target_runtime * alpha_min < 10:
+            warnings.warn(
+                "weak attackers won't solve many puzzles per episode "
+                "causing high reward variance. Consider increasing 'alpha_min' "
+                "or 'target_runtime', or decreasing 'target_block_interval'"
+            )
 
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
@@ -174,8 +182,10 @@ class Auto(Core):
 
     def step(self, a):
         obs, reward, done, info = super().step(a)
-        # normalize reward; honest episode reward is 1
-        reward = (1 - self.alpha + reward) / self.target_runtime
+        # normalize reward; honest episode reward is 1; high variance for small alphas
+        reward = reward / self.alpha / self.target_runtime
+        # reduced variance for small alphas
+        # reward = (1 - self.alpha + reward) / self.target_runtime
         # count confirmed puzzle solutions
         self.episode_pow_confirmed += info["reward_n_pows"]
         # accumulate reward
