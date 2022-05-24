@@ -216,7 +216,7 @@ class OnRolloutEnd(EventCallback):
 
 
 if __name__ == "__main__":
-    wandb.init(project="dqn", entity="tailstorm", sync_tensorboard=True, config=config)
+    wandb.init(project="dqn", entity="tailstorm", config=config)
     # config = wandb.config
 
     log_dir = f"saved_models/{wandb.run.id}"
