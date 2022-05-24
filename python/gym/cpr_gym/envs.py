@@ -175,7 +175,7 @@ class Auto(Core):
     def step(self, a):
         obs, reward, done, info = super().step(a)
         # normalize reward; honest episode reward is 1
-        reward = reward / self.alpha / self.target_runtime
+        reward = reward / max(0.01, self.alpha) / self.target_runtime
         # count confirmed puzzle solutions
         self.episode_pow_confirmed += info["reward_n_pows"]
         # accumulate reward
