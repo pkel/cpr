@@ -75,7 +75,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=4000,
+    STEPS_PER_ROLLOUT=250,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
@@ -97,7 +97,7 @@ config = dict(
         0.45,
         0.475,
     ],
-    USE_DAA=True,
+    USE_DAA=False,
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
@@ -157,10 +157,13 @@ class VecWandbLogger(VecEnvWrapper):
                 "progress/episodes": self.total_episodes,
             }
             # daa difficulties
-            d = [x["difficulties"] for x in info]
-            d = {
-                f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
-            }
+            try:
+                d = [x["difficulties"] for x in info]
+                d = {
+                    f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
+                }
+            except:
+                d = {"difficulty": None}
             # mean rewards
             r = {}
             for i in info:

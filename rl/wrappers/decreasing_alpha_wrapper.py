@@ -13,7 +13,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.current_step = 0
         self.alpha = None
         self.config = config
-
+        self.in_prep_phase = False
         # DAA
         self.run_daa = config["USE_DAA"]
         if self.run_daa:
@@ -23,7 +23,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.observed = self.target
             self.in_prep_phase = True
 
-        self.observation_space = gym.spaces.Box(-np.inf, np.inf, (5,), dtype=np.float64)
+            self.observation_space = gym.spaces.Box(-np.inf, np.inf, (5,), dtype=np.float64)
 
     def update_difficulties(self, reset_difficulties=False):
         if reset_difficulties:
@@ -58,7 +58,8 @@ class AlphaScheduleWrapper(gym.Wrapper):
         return obs
 
     def observation(self, obs):
-        obs = np.append(obs, int(self.in_prep_phase))
+        if self.run_daa:
+            obs = np.append(obs, int(self.in_prep_phase))
         return obs
 
     def step(self, action):
