@@ -8,3 +8,4 @@ matplotlib
 seaborn
 -e ./gym
 pytest-forked
+stable-baselines3
