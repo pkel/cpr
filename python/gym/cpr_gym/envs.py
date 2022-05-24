@@ -195,16 +195,21 @@ class Auto(Core):
             # the DAA should get it about right
             # we correct the remaining error here
             now = info["simulator_clock_rewarded"]
-            error = self.target_runtime / now - 1
-            extra = self.episode_reward * error
-            reward += extra
-            self.episode_reward += extra
-            # observe block interval
-            obi = now / self.episode_pow_confirmed
-            # record data in ring buffer
-            self.write_ring_buffer(
-                self.alpha, self.activation_delay, obi, self.episode_reward
-            )
+            if now != 0:
+                error = self.target_runtime / now - 1
+                extra = self.episode_reward * error
+                reward += extra
+                self.episode_reward += extra
+                # observe block interval
+                obi = now / self.episode_pow_confirmed
+                # record data in ring buffer
+                self.write_ring_buffer(
+                    self.alpha, self.activation_delay, obi, self.episode_reward
+                )
+            else:
+                obi = "undefined"
+                error = "undefined"
+                extra = 0
             # report a few metrics
             info["alpha"] = self.alpha
             info["activation_delay"] = self.activation_delay
