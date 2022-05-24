@@ -5,13 +5,13 @@ from cpr_gym import protocols
 
 
 def test_version():
-    env = gym.make("cpr-v0")
+    env = gym.make("cpr_gym:core-v0")
     assert isinstance(env.version, str)
     assert len(env.version) > 0
 
 
 def test_default(capsys):
-    env = gym.make("cpr-v0")
+    env = gym.make("cpr_gym:core-v0")
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.25 attacker"
@@ -19,7 +19,7 @@ def test_default(capsys):
 
 def test_config(capsys):
     env = gym.make(
-        "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.1, defenders=10
+        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.1, defenders=10
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
@@ -28,9 +28,9 @@ def test_config(capsys):
 
 def test_policies_honest():
     env = gym.make(
-        "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
+        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
     )
-    p = env.policies["honest"]
+    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -38,9 +38,9 @@ def test_policies_honest():
 
 def test_policies_selfish():
     env = gym.make(
-        "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.5, defenders=3
+        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.5, defenders=3
     )
-    p = env.policies["selfish"]
+    p = env.policies()["selfish"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -48,18 +48,22 @@ def test_policies_selfish():
 
 def test_nakamoto(capsys):
     env = gym.make(
-        "cpr-v0", proto=protocols.nakamoto(), alpha=0.33, gamma=0.7, defenders=5
+        "cpr_gym:core-v0",
+        proto=protocols.nakamoto(),
+        alpha=0.33,
+        gamma=0.7,
+        defenders=5,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.33 attacker"
 
-    p = env.policies["honest"]
+    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies["eyal-sirer-2014"]
+    p = env.policies()["eyal-sirer-2014"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -67,18 +71,22 @@ def test_nakamoto(capsys):
 
 def test_bk_ll(capsys):
     env = gym.make(
-        "cpr-v0", proto=protocols.bk_ll(k=17), alpha=0.33, gamma=0.3, defenders=4
+        "cpr_gym:core-v0",
+        proto=protocols.bk_ll(k=17),
+        alpha=0.33,
+        gamma=0.3,
+        defenders=4,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Bₖ/ll with k=17; SSZ'16-like attack space; α=0.33 attacker"
 
-    p = env.policies["honest"]
+    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies["selfish"]
+    p = env.policies()["selfish"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
@@ -86,7 +94,7 @@ def test_bk_ll(capsys):
 
 def test_george(capsys):
     env = gym.make(
-        "cpr-v0",
+        "cpr_gym:core-v0",
         proto=protocols.george(k=13, reward="discount"),
         alpha=0.33,
         gamma=0.8,
@@ -99,12 +107,12 @@ def test_george(capsys):
         == "George's protocol with k=13; SSZ'16-like attack space; α=0.33 attacker"
     )
 
-    p = env.policies["honest"]
+    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))
 
-    p = env.policies["override-catchup"]
+    p = env.policies()["override-catchup"]
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(p(np.array(obs)))

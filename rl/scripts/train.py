@@ -3,6 +3,7 @@ from uuid import uuid4
 
 sys.path.append(os.getcwd())
 import numpy as np
+import pandas as pd
 
 import gym
 from cpr_gym import protocols
@@ -59,7 +60,7 @@ def env_fn(alpha, target, config):
         max_steps = config["STEPS_PER_ROLLOUT"]
         max_time = config["STEPS_PER_ROLLOUT"] * 10
     return gym.make(
-        "cprwip-v0",
+        "cpr_gym:auto-v0",
         proto=proto,
         #  alpha=alpha,
         max_steps=max_steps,
@@ -147,6 +148,7 @@ class VecWandbLogger(VecEnvWrapper):
                     "observed_block_interval",
                     "daa_error",
                     "daa_extra_reward",
+                    "daa_input_episodes",
                 ]:
                     l[f"episode/{k}"] = info[i][k]
                 wandb.log(l)
@@ -171,22 +173,10 @@ class VecWandbLogger(VecEnvWrapper):
                 "progress/steps": self.total_vec_steps * n_envs,
                 "progress/episodes": self.total_episodes,
             }
-            # read ring buffers
-            l0 = []
-            l1 = []
-            l2 = []
-            l3 = []
-            for rb in self.venv.get_attr("rb_alpha"):
-                l0 += rb.buf.tolist()
-            for rb in self.venv.get_attr("rb_activation_delay"):
-                l1 += rb.buf.tolist()
-            for rb in self.venv.get_attr("rb_observed_block_interval"):
-                l2 += rb.buf.tolist()
-            for rb in self.venv.get_attr("rb_reward"):
-                l3 += rb.buf.tolist()
-            data = [
-                [x0, x1, x2, x3, x3 * x0] for (x0, x1, x2, x3) in zip(l0, l1, l2, l3)
-            ]
+            # read ring buffer
+            data = pd.concat(self.venv.get_attr("buf"))
+            data["reward_per_alpha"] = data.reward
+            data["reward"] = data.reward * data.alpha
             table = wandb.Table(
                 data=data,
                 columns=[

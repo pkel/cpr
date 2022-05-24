@@ -30,7 +30,7 @@ let () =
   Py_module.set
     m
     "create"
-    (let%map proto = positional "proto" penv ~docstring:"OCaml gym protocol spec"
+    (let%map proto = keyword "proto" penv ~docstring:"OCaml gym protocol spec"
      and alpha =
        keyword "alpha" float ~docstring:"attacker's relative compute" ~default:0.25
      and gamma =

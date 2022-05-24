@@ -1,6 +1,7 @@
+import engine
 import gym
 import numpy as np
-import engine
+import pandas as pd
 import protocols
 import random
 import warnings
@@ -10,7 +11,7 @@ class Core(gym.Env):
     metadata = {"render.modes": ["ascii"]}
 
     def __init__(self, proto=protocols.nakamoto(), **kwargs):
-        self.env = engine.create(proto, **kwargs)
+        self.env = engine.create(proto=proto, **kwargs)
         self.action_space = gym.spaces.Discrete(engine.n_actions(self.env))
         low = engine.observation_low(self.env)
         low = np.array(low)  # for pickling; why doesn't pyml support pickling?
@@ -18,7 +19,9 @@ class Core(gym.Env):
         high = np.array(high)
         self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
         self.version = engine.cpr_lib_version
-        self.policies = engine.policies(self.env)
+
+    def policies(self):
+        return engine.policies(self.env)
 
     def reset(self):
         obs = engine.reset(self.env)
@@ -34,76 +37,46 @@ class Core(gym.Env):
         print(engine.to_string(self.env))
 
 
-class RandomAlpha(Core):
-    def __init__(self, proto, **kwargs):
-        if "alpha" in kwargs.keys():
-            kwargs.pop("alpha", None)
-            warnings.warn("spurious argument: alpha")
+class Auto(Core):
+    def __init__(
+        self,
+        proto=protocols.nakamoto(),
+        alpha_min=0,
+        alpha_max=1,
+        target_runtime=128,
+        target_block_interval=1,
+        buf_size=128,
+        daa_window=2016,
+        **kwargs,
+    ):
+        # filter arguments which are valid for Core but not for this env
+        for k in ["activation_delay", "alpha", "max_steps", "max_time"]:
+            if k in kwargs.keys():
+                kwargs.pop(k, None)
+                warnings.warn(f"unused argument '{k}'")
 
-        super().__init__(proto, **kwargs)
-        self.proto = proto
-        self.kwargs = kwargs
-
-        self.observation_space = gym.spaces.Dict(
-            {
-                "core": self.observation_space,
-                "extra": gym.spaces.Box(
-                    np.array([0], dtype=np.float64),
-                    np.array([1], dtype=np.float64),
-                    dtype=np.float64,
-                ),
-            }
-        )
-
-    def extend_obs(self, obs):
-        return {"core": obs, "extra": np.array([self.alpha], dtype=np.float64)}
-
-    def reset(self):
-        self.alpha = random.uniform(0, 0.5)
-        self.env = engine.create(self.proto, alpha=self.alpha, **self.kwargs)
-        obs = super().reset()
-        obs = self.extend_obs(obs)
-        return obs
-
-    def step(self, a):
-        obs, r, d, i = super().step(a)
-        obs = self.extend_obs(obs)
-        return obs, r, d, i
-
-
-class RingBuffer:
-    def __init__(self, n, init=0.0, dtype=np.float64):
-        self.buf = np.full(n, init, dtype=dtype)
-        self.n = n
-        self.i = 0
-
-    def write(self, x):
-        self.buf[self.i] = x
-        self.i += 1
-        if self.i >= self.n:
-            self.i = 0
-
-
-class Wip(Core):
-    def __init__(self, proto, target_runtime=128, target_block_interval=1, **kwargs):
-        if "activation_delay" in kwargs.keys():
-            kwargs.pop("activation_delay", None)
-            warnings.warn("spurious argument: activation_delay")
-
-        if "alpha" in kwargs.keys():
-            kwargs.pop("alpha", None)
-            warnings.warn("spurious argument: alpha")
-
-        super().__init__(proto, **kwargs)
-        self.proto = proto
+        self.alpha_min = alpha_min
+        self.alpha_max = alpha_max
         self.target_runtime = target_runtime
         self.target_block_interval = target_block_interval
-        self.kwargs = kwargs
+        self.buf_size = buf_size
+        self.daa_window = daa_window
 
-        self.kwargs["max_time"] = target_runtime
-        self.kwargs["max_steps"] = target_runtime * 10
+        self.core_kwargs = kwargs
+        self.core_kwargs["proto"] = proto
+        self.core_kwargs["max_time"] = target_runtime
+        self.core_kwargs["max_steps"] = target_runtime * 10
 
-        # extend observation space
+        # initialize Core env to get observation spaces
+        super().__init__(**self.core_kwargs)
+        # extend observation space with alpha
+        self.extend_observation_space()
+        # initialize ring buffers for DAA and reporting
+        self.init_ring_buffer()
+
+    # extend observation space with alpha
+
+    def extend_observation_space(self):
         self.observation_space = gym.spaces.Dict(
             {
                 "core": self.observation_space,
@@ -115,50 +88,94 @@ class Wip(Core):
             }
         )
 
-        # init ring buffers for DAA and reporting
-        daa_buf_size = 128
-        self.rb_alpha = RingBuffer(daa_buf_size, 0)
-        self.rb_activation_delay = RingBuffer(daa_buf_size, target_block_interval)
-        self.rb_observed_block_interval = RingBuffer(
-            daa_buf_size, target_block_interval
-        )
-        self.rb_reward = RingBuffer(daa_buf_size, 0)
-
-    def extend_obs(self, obs):
+    def extend_observation(self, obs):
         return {"core": obs, "extra": np.array([self.alpha], dtype=np.float64)}
 
+    def policies(self):
+        return {k: lambda obs: p(obs["core"]) for k, p in super().policies().items()}
+
+    # ring buffers for DAA and reporting
+
+    def init_ring_buffer(self):
+        self.buf_loc = 0
+        self.buf = pd.DataFrame(
+            data=dict(
+                alpha=[
+                    random.uniform(self.alpha_min, self.alpha_max)
+                    for _ in range(self.buf_size)
+                ],
+                activation_delay=[
+                    self.target_block_interval for _ in range(self.buf_size)
+                ],
+                observed_block_interval=[
+                    self.target_block_interval for _ in range(self.buf_size)
+                ],
+                reward=[0 for _ in range(self.buf_size)],
+            )
+        )
+        # calculate DAA window
+        buffer_describes = (
+            self.buf_size * self.target_runtime / self.target_block_interval
+        )  # block intervals
+        if self.daa_window > buffer_describes:
+            warnings.warn(
+                "buffer too small to support given 'daa_window'."
+                "DAA will consider the entire buffer."
+            )
+        self.daa_alpha_eps = (
+            (self.alpha_max - self.alpha_min) * self.daa_window / buffer_describes / 2
+        )
+
+    def write_ring_buffer(
+        self, alpha, activation_delay, observed_block_interval, reward
+    ):
+        self.buf.iloc[self.buf_loc] = [
+            alpha,
+            activation_delay,
+            observed_block_interval,
+            reward,
+        ]
+        self.buf_loc += 1
+        if self.buf_loc >= self.buf_size:
+            self.buf_loc = 0
+
+    # DAA
+
+    def estimate_difficulty(self, alpha):
+        i = np.nonzero(np.abs(self.buf.alpha.values - alpha) < self.daa_alpha_eps)[0]
+        if len(i) < 1:  # pick closest alpha if empty
+            i = np.abs(self.buf.alpha.values - alpha).argmin()
+        ad = self.buf.activation_delay.values[i]
+        obi = self.buf.observed_block_interval.values[i]
+        return np.mean(ad * self.target_block_interval / obi), len(i)
+
+    # overwrite step and reset
+
     def reset(self):
-        # sample alpha
-        self.alpha = random.uniform(0.05, 0.75)
-        # estimate difficulty
-        i = np.nonzero(
-            np.abs(self.rb_alpha.buf - self.alpha) < 0.025
-        )  # this picks roughly 1/8 of the observations
-        if len(i[0]) < 1:
-            i = np.abs(self.rb_alpha.buf - self.alpha).argmin()  # pick closest element
-        ad = self.rb_activation_delay.buf[i]
-        obi = self.rb_observed_block_interval.buf[i]
-        self.activation_delay = np.mean(ad * self.target_block_interval / obi)
+        # sample alpha and estimate difficulty
+        self.alpha = random.uniform(self.alpha_min, self.alpha_max)
+        self.activation_delay, self.daa_input_episodes = self.estimate_difficulty(
+            self.alpha
+        )
         # create env with new parameters
         self.env = engine.create(
-            self.proto,
             alpha=self.alpha,
             activation_delay=self.activation_delay,
-            **self.kwargs
+            **self.core_kwargs,
         )
-        # reset env
+        # reset Core env
         obs = super().reset()
-        # reset episode-scoped counter
+        # reset episode-scoped counters
         self.episode_pow_confirmed = 0
         self.episode_reward = 0
         # extend observation space
-        obs = self.extend_obs(obs)
+        obs = self.extend_observation(obs)
         return obs
 
     def step(self, a):
         obs, reward, done, info = super().step(a)
-        # scale reward by alpha
-        reward = reward / self.alpha
+        # normalize reward; honest episode reward is 1
+        reward = reward / self.alpha / self.target_runtime
         # count confirmed puzzle solutions
         self.episode_pow_confirmed += info["reward_n_pows"]
         # accumulate reward
@@ -174,11 +191,10 @@ class Wip(Core):
             self.episode_reward += extra
             # observe block interval
             obi = now / self.episode_pow_confirmed
-            # record data in ring buffers
-            self.rb_alpha.write(self.alpha)
-            self.rb_activation_delay.write(self.activation_delay)
-            self.rb_observed_block_interval.write(obi)
-            self.rb_reward.write(self.episode_reward)
+            # record data in ring buffer
+            self.write_ring_buffer(
+                self.alpha, self.activation_delay, obi, self.episode_reward
+            )
             # report a few metrics
             info["alpha"] = self.alpha
             info["activation_delay"] = self.activation_delay
@@ -187,6 +203,7 @@ class Wip(Core):
             info["observed_block_interval"] = obi
             info["daa_error"] = error
             info["daa_extra_reward"] = extra
+            info["daa_input_episodes"] = self.daa_input_episodes
         # extend observation space
-        obs = self.extend_obs(obs)
+        obs = self.extend_observation(obs)
         return obs, reward, done, info
