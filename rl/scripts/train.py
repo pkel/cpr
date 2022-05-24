@@ -73,8 +73,8 @@ def env_fn(alpha, target, config):
         max_time=max_time,
         gamma=config["GAMMA"],
         defenders=config["DEFENDERS"],
-        min_alpha=0.33,
-        max_alpha=0.475,
+        alpha_min=0.33,
+        alpha_max=0.475,
         #  activation_delay=target,
     )
 
