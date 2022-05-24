@@ -143,11 +143,11 @@ class Auto(Core):
 
     def estimate_difficulty(self, alpha):
         i = np.nonzero(np.abs(self.buf.alpha.values - alpha) < self.daa_alpha_eps)[0]
-        if len(i) < 1:  # pick closest alpha if empty
+        if np.size(i) < 1:  # pick closest alpha if empty
             i = np.abs(self.buf.alpha.values - alpha).argmin()
         ad = self.buf.activation_delay.values[i]
         obi = self.buf.observed_block_interval.values[i]
-        return np.mean(ad * self.target_block_interval / obi), len(i)
+        return np.mean(ad * self.target_block_interval / obi), np.size(i)
 
     # overwrite step and reset
 
