@@ -30,7 +30,13 @@ from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 from rl.wrappers.illegal_move_wrapper import IllegalMoveWrapper
 
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import (
+    BaseCallback,
+    CheckpointCallback,
+    EvalCallback,
+    EventCallback,
+    CallbackList,
+)
 from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results
 from stable_baselines3.common.monitor import Monitor
 
@@ -106,6 +112,42 @@ config = dict(
 )
 
 
+class LogDaaBufferCallback(BaseCallback):
+    def __init__(self, prefix="daa_buffer"):
+        super().__init__()
+        self.prefix = prefix
+
+    def _on_step(self):
+        data = pd.concat(self.training_env.get_attr("buf"))
+        data["reward_per_alpha"] = data.reward
+        data["reward"] = data.reward * data.alpha
+        table = wandb.Table(
+            data=data,
+            columns=[
+                "alpha",
+                "activation_delay",
+                "observed_block_interval",
+                "reward_per_alpha",
+                "reward",
+            ],
+        )
+        rb = {
+            f"{self.prefix}/reward": wandb.plot.line(table, "alpha", "reward"),
+            f"{self.prefix}/reward_per_alpha": wandb.plot.line(
+                table, "alpha", "reward_per_alpha"
+            ),
+            f"{self.prefix}/activation_delay": wandb.plot.line(
+                table, "alpha", "activation_delay"
+            ),
+            f"{self.prefix}/observed_block_interval": wandb.plot.line(
+                table, "alpha", "observed_block_interval"
+            ),
+        }
+        # log
+        wandb.log(rb)
+        return True
+
+
 class VecWandbLogger(VecEnvWrapper):
     def __init__(
         self,
@@ -152,61 +194,27 @@ class VecWandbLogger(VecEnvWrapper):
                 ]:
                     l[f"episode/{k}"] = info[i][k]
                 wandb.log(l)
-        # regular logging
-        if self.epoch_vec_steps >= self.every:
-            # performance
-            n_envs = config["N_ENVS"]
-            now = time.time()
-            seconds = now - self.last_epoch
-            performance = {
-                "performance/steps_per_second": self.epoch_vec_steps * n_envs / seconds,
-                "performance/epochs_per_second": self.epoch_episodes / seconds,
-            }
-            # reset counters
-            self.total_vec_steps += self.epoch_vec_steps
-            self.total_episodes += self.epoch_episodes
-            self.epoch_vec_steps = 0
-            self.epoch_episodes = 0
-            self.last_epoch = now
-            # progress
-            progress = {
-                "progress/steps": self.total_vec_steps * n_envs,
-                "progress/episodes": self.total_episodes,
-            }
-            # read ring buffer
-            data = pd.concat(self.venv.get_attr("buf"))
-            data["reward_per_alpha"] = data.reward
-            data["reward"] = data.reward * data.alpha
-            table = wandb.Table(
-                data=data,
-                columns=[
-                    "alpha",
-                    "activation_delay",
-                    "observed_block_interval",
-                    "reward_per_alpha",
-                    "reward",
-                ],
-            )
-            rb = {
-                "ring_buffers/table": table,
-                "ring_buffers/reward": wandb.plot.line(table, "alpha", "reward"),
-                "ring_buffers/reward_per_alpha": wandb.plot.line(
-                    table, "alpha", "reward_per_alpha"
-                ),
-                "ring_buffers/activation_delay": wandb.plot.line(
-                    table, "alpha", "activation_delay"
-                ),
-                "ring_buffers/observed_block_interval": wandb.plot.line(
-                    table, "alpha", "observed_block_interval"
-                ),
-            }
-            # log
-            wandb.log(progress | performance | rb)
         return obs, reward, done, info
 
 
+class OnRolloutStart(EventCallback):
+    def __init__(self, callback: BaseCallback):
+        super(OnRolloutStart, self).__init__(callback)
+
+    def _on_rollout_start(self):
+        return self._on_event()
+
+
+class OnRolloutEnd(EventCallback):
+    def __init__(self, callback: BaseCallback):
+        super(OnRolloutEnd, self).__init__(callback)
+
+    def _on_rollout_end(self):
+        return self._on_event()
+
+
 if __name__ == "__main__":
-    wandb.init(project="dqn", entity="tailstorm", config=config)
+    wandb.init(project="dqn", entity="tailstorm", sync_tensorboard=True, config=config)
     # config = wandb.config
 
     log_dir = f"saved_models/{wandb.run.id}"
@@ -228,8 +236,39 @@ if __name__ == "__main__":
     else:
         env = DummyVecEnv([vec_env_fn])
     env = VecMonitor(env)
-    env = VecWandbLogger(env)
-    print(env.action_space)
+
+    checkpoint_callback = CheckpointCallback(
+        save_freq=1,
+        save_path=log_dir,
+    )
+
+    eval_callback = EvalCallback(
+        env,  # use training env for evaluation
+        best_model_save_path=log_dir,
+        log_path=log_dir,
+        eval_freq=1,
+        n_eval_episodes=128
+        * config["N_ENVS"],  # flush daa ring buffers with deterministic actions
+        deterministic=True,
+        render=False,
+    )
+
+    rollout_start = OnRolloutStart(
+        CallbackList(
+            [
+                eval_callback,
+                LogDaaBufferCallback("daa_buffer_eval"),
+                checkpoint_callback,
+            ]
+        )
+    )
+    rollout_end = OnRolloutEnd(LogDaaBufferCallback("daa_buffer_rollout"))
+    wandb_callback = WandbCallback(gradient_save_freq=10000)
+
+    callback = CallbackList([wandb_callback, rollout_start, rollout_end])
+
+    #  env = VecWandbLogger(env)
+
     if config["ALGO"] == "PPO":
         policy_kwargs = dict(
             activation_fn=torch.nn.ReLU,
@@ -273,11 +312,6 @@ if __name__ == "__main__":
 
     model.learn(
         total_timesteps=config["TOTAL_TIMESTEPS"],
-        callback=WandbCallback(
-            gradient_save_freq=10000,
-            model_save_path=log_dir,
-            model_save_freq=10000,
-            verbose=0,
-        ),
+        callback=callback,
     )
     model.save(os.path.join(log_dir, f"{config['ALGO']}_bkll"))
