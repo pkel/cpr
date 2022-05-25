@@ -1,6 +1,8 @@
 export CPR_MALFORMED_DAG_TO_FILE=/tmp/malformed.dot
 export CPR_VERSION=local-$(shell git describe --tags --dirty || git describe --all --long --dirty)
 
+python=python3.9
+
 build:
 	cd ocaml && opam exec dune build
 
@@ -36,7 +38,7 @@ dependencies:
 
 _venv: python/requirements.txt rl/requirements.txt
 	rm -rf _venv
-	python -m venv _venv
+	${python} -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
 	cd python && ../_venv/bin/pip install -r requirements.txt
 	cd rl && ../_venv/bin/pip install -r requirements.txt
@@ -81,5 +83,5 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 # RL
 
 rl-train: _venv
-	_venv/bin/python rl/scripts/train.py
+	. _venv/bin/activate && python rl/scripts/train.py
 
