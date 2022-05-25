@@ -282,7 +282,7 @@ if __name__ == "__main__":
             ],
         )
         model = PPO(
-            "MultiInputPolicy",
+            "MlpPolicy",
             env,
             verbose=1,
             batch_size=config["BATCH_SIZE"],
