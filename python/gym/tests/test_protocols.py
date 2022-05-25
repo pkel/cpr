@@ -1,5 +1,3 @@
-import numpy as np
-
 import gym
 from cpr_gym import protocols
 
@@ -30,20 +28,18 @@ def test_policies_honest():
     env = gym.make(
         "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
     )
-    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
 
 def test_policies_selfish():
     env = gym.make(
         "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.5, defenders=3
     )
-    p = env.policies()["selfish"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "selfish"))
 
 
 def test_nakamoto(capsys):
@@ -58,15 +54,13 @@ def test_nakamoto(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.33 attacker"
 
-    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
-    p = env.policies()["eyal-sirer-2014"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "eyal-sirer-2014"))
 
 
 def test_bk_ll(capsys):
@@ -81,15 +75,13 @@ def test_bk_ll(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Bₖ/ll with k=17; SSZ'16-like attack space; α=0.33 attacker"
 
-    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
-    p = env.policies()["selfish"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "selfish"))
 
 
 def test_george(capsys):
@@ -107,12 +99,10 @@ def test_george(capsys):
         == "George's protocol with k=13; SSZ'16-like attack space; α=0.33 attacker"
     )
 
-    p = env.policies()["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
-    p = env.policies()["override-catchup"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "override-catchup"))

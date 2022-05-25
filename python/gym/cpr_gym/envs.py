@@ -21,7 +21,10 @@ class Core(gym.Env):
         self.version = engine.cpr_lib_version
 
     def policies(self):
-        return engine.policies(self.env)
+        return engine.policies(self.env).keys()
+
+    def policy(self, obs, name="honest"):
+        return engine.policies(self.env)[name](obs)
 
     def reset(self):
         obs = engine.reset(self.env)
@@ -85,22 +88,19 @@ class Auto(Core):
     # extend observation space with alpha
 
     def extend_observation_space(self):
-        self.observation_space = gym.spaces.Dict(
-            {
-                "core": self.observation_space,
-                "extra": gym.spaces.Box(
-                    np.array([0], dtype=np.float64),
-                    np.array([1], dtype=np.float64),
-                    dtype=np.float64,
-                ),
-            }
-        )
+        low = self.observation_space.low
+        high = self.observation_space.high
+        low = np.append(low, [0])
+        high = np.append(high, [1])
+        self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
 
     def extend_observation(self, obs):
+        return np.append(obs, [self.alpha])
         return {"core": obs, "extra": np.array([self.alpha], dtype=np.float64)}
 
-    def policies(self):
-        return {k: lambda obs: p(obs["core"]) for k, p in super().policies().items()}
+    def policy(self, obs, name="honest"):
+        obs = obs[:-1]
+        return super().policy(obs, name)
 
     # ring buffers for DAA and reporting
 
