@@ -83,5 +83,5 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 # RL
 
 rl-train: _venv
-	_venv/bin/python rl/scripts/train.py
+	. _venv/bin/activate && python rl/scripts/train.py
 
