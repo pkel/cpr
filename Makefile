@@ -8,7 +8,7 @@ build:
 
 test: build bridge _venv
 	cd ocaml && opam exec dune runtest
-	cd python && ../_venv/bin/pytest
+	cd python && ../_venv/bin/pytest --forked
 
 watch-malformed-dag:
 	echo "$$CPR_MALFORMED_DAG_TO_FILE" \
