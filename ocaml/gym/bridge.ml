@@ -98,7 +98,7 @@ let () =
            in
            let ba = Numpy.to_bigarray Bigarray.Float64 Bigarray.C_layout obj in
            if Bigarray.Genarray.dims ba <> [| t.observation_length |]
-           then failwith "invalid dimensions";
+           then raise Py.(Err (ValueError, "invalid dimensions"));
            let arr =
              Float.Array.init t.observation_length (fun i ->
                  Bigarray.Genarray.get ba [| i |])
