@@ -8,7 +8,7 @@ def test_simple_daa():
 
     def env_with_activation_delay(x):
         env = gym.make(
-            "cpr-v0",
+            "cpr_gym:core-v0",
             proto=protocols.nakamoto(),
             max_steps=10000,
             alpha=1 / 3,
@@ -16,7 +16,10 @@ def test_simple_daa():
             defenders=2,
             activation_delay=x,
         )
-        p = env.policies["sapirshtein-2016-sm1"]
+
+        def p(obs):
+            return env.policy(obs, "sapirshtein-2016-sm1")
+
         return (env, p)
 
     # run simulation assuming 100% efficiency (= 0% orphan rate)
@@ -49,18 +52,17 @@ def test_simple_daa():
 def test_max_time():
     target = 10000.0
     env = gym.make(
-        "cpr-v0",
+        "cpr_gym:core-v0",
         proto=protocols.nakamoto(),
         max_time=target,
         max_steps=int(target * 2),  # set high enough such that max_time takes effect
         activation_delay=1,
     )
-    p = env.policies["honest"]
 
     obs = env.reset()
     done = False
     while not done:
-        obs, _, done, info = env.step(p(obs))
+        obs, _, done, info = env.step(env.policy(obs, "honest"))
 
     assert info["simulator_clock_now"] >= target
     assert info["simulator_clock_rewarded"] >= target - 10

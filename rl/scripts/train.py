@@ -3,6 +3,7 @@ from uuid import uuid4
 
 sys.path.append(os.getcwd())
 import numpy as np
+import pandas as pd
 
 import gym
 from cpr_gym import protocols
@@ -29,7 +30,13 @@ from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 from rl.wrappers.illegal_move_wrapper import IllegalMoveWrapper
 
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import (
+    BaseCallback,
+    CheckpointCallback,
+    EvalCallback,
+    EventCallback,
+    CallbackList,
+)
 from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results
 from stable_baselines3.common.monitor import Monitor
 
@@ -59,14 +66,16 @@ def env_fn(alpha, target, config):
         max_steps = config["STEPS_PER_ROLLOUT"]
         max_time = config["STEPS_PER_ROLLOUT"] * 10
     return gym.make(
-        "cpr-v0",
+        "cpr_gym:auto-v0",
         proto=proto,
-        alpha=alpha,
+        #  alpha=alpha,
         max_steps=max_steps,
         max_time=max_time,
         gamma=config["GAMMA"],
         defenders=config["DEFENDERS"],
-        activation_delay=target,
+        alpha_min=0.33,
+        alpha_max=0.475,
+        #  activation_delay=target,
     )
 
 
@@ -74,7 +83,7 @@ config = dict(
     PROTOCOL="nakamoto",
     K=10,
     ALGO="PPO",
-    TOTAL_TIMESTEPS=10e6,
+    TOTAL_TIMESTEPS=1e7,
     STEPS_PER_ROLLOUT=2016,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
@@ -103,6 +112,42 @@ config = dict(
     ACTIVATION_DELAY=1,
     N_ENVS=psutil.cpu_count(),
 )
+
+
+class LogDaaBufferCallback(BaseCallback):
+    def __init__(self, prefix="daa_buffer"):
+        super().__init__()
+        self.prefix = prefix
+
+    def _on_step(self):
+        data = pd.concat(self.training_env.get_attr("buf"))
+        data["reward_per_alpha"] = data.reward
+        data["reward"] = data.reward * data.alpha
+        table = wandb.Table(
+            data=data,
+            columns=[
+                "alpha",
+                "activation_delay",
+                "observed_block_interval",
+                "reward_per_alpha",
+                "reward",
+            ],
+        )
+        rb = {
+            f"{self.prefix}/reward": wandb.plot.line(table, "alpha", "reward"),
+            f"{self.prefix}/reward_per_alpha": wandb.plot.line(
+                table, "alpha", "reward_per_alpha"
+            ),
+            f"{self.prefix}/activation_delay": wandb.plot.line(
+                table, "alpha", "activation_delay"
+            ),
+            f"{self.prefix}/observed_block_interval": wandb.plot.line(
+                table, "alpha", "observed_block_interval"
+            ),
+        }
+        # log
+        wandb.log(rb)
+        return True
 
 
 class VecWandbLogger(VecEnvWrapper):
@@ -135,44 +180,39 @@ class VecWandbLogger(VecEnvWrapper):
         for b in done:
             if b:
                 self.epoch_episodes += 1
-        # regular logging
-        if self.epoch_vec_steps >= self.every:
-            # performance
-            n_envs = config["N_ENVS"]
-            now = time.time()
-            seconds = now - self.last_epoch
-            performance = {
-                "performance/steps_per_second": self.epoch_vec_steps * n_envs / seconds,
-                "performance/epochs_per_second": self.epoch_episodes / seconds,
-            }
-            # reset counters
-            self.total_vec_steps += self.epoch_vec_steps
-            self.total_episodes += self.epoch_episodes
-            self.epoch_vec_steps = 0
-            self.epoch_episodes = 0
-            self.last_epoch = now
-            # progress
-            progress = {
-                "progress/steps": self.total_vec_steps * n_envs,
-                "progress/episodes": self.total_episodes,
-            }
-            # daa difficulties
-            d = [x["difficulties"] for x in info]
-            d = {
-                f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
-            }
-            # mean rewards
-            r = {}
-            for i in info:
-                for alpha, value in i["rewards_per_alpha"].items():
-                    if alpha in r.keys():
-                        r[alpha].extend(value)
-                    else:
-                        r[alpha] = value
-            r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
-            # log
-            wandb.log(progress | performance | d | r)
+        # wip logging
+        for i in range(0, len(done)):
+            if done[i]:
+                l = {"episode/i": self.total_episodes + self.epoch_episodes}
+                for k in [
+                    "alpha",
+                    "activation_delay",
+                    "episode_reward",
+                    "observed_runtime",
+                    "observed_block_interval",
+                    "daa_error",
+                    "daa_extra_reward",
+                    "daa_input_episodes",
+                ]:
+                    l[f"episode/{k}"] = info[i][k]
+                wandb.log(l)
         return obs, reward, done, info
+
+
+class OnRolloutStart(EventCallback):
+    def __init__(self, callback: BaseCallback):
+        super(OnRolloutStart, self).__init__(callback)
+
+    def _on_rollout_start(self):
+        return self._on_event()
+
+
+class OnRolloutEnd(EventCallback):
+    def __init__(self, callback: BaseCallback):
+        super(OnRolloutEnd, self).__init__(callback)
+
+    def _on_rollout_end(self):
+        return self._on_event()
 
 
 if __name__ == "__main__":
@@ -186,11 +226,11 @@ if __name__ == "__main__":
 
     def vec_env_fn():
         env = env_fn(0, 1, config)
-        env = AlphaScheduleWrapper(env, env_fn, config)
-        if config["USE_DAA"]:
-            env = AbsoluteRewardWrapper(env)
-        else:
-            env = WastedBlocksRewardWrapper(env)
+        # env = AlphaScheduleWrapper(env, env_fn, config)
+        # if config["USE_DAA"]:
+        #     env = AbsoluteRewardWrapper(env)
+        # else:
+        #     env = WastedBlocksRewardWrapper(env)
         return env
 
     if config["N_ENVS"] > 1:
@@ -198,8 +238,39 @@ if __name__ == "__main__":
     else:
         env = DummyVecEnv([vec_env_fn])
     env = VecMonitor(env)
-    env = VecWandbLogger(env)
-    print(env.action_space)
+
+    checkpoint_callback = CheckpointCallback(
+        save_freq=1,
+        save_path=log_dir,
+    )
+
+    eval_callback = EvalCallback(
+        env,  # use training env for evaluation
+        best_model_save_path=log_dir,
+        log_path=log_dir,
+        eval_freq=1,
+        n_eval_episodes=128
+        * config["N_ENVS"],  # flush daa ring buffers with deterministic actions
+        deterministic=True,
+        render=False,
+    )
+
+    rollout_start = OnRolloutStart(
+        CallbackList(
+            [
+                eval_callback,
+                LogDaaBufferCallback("daa_buffer_eval"),
+                checkpoint_callback,
+            ]
+        )
+    )
+    rollout_end = OnRolloutEnd(LogDaaBufferCallback("daa_buffer_rollout"))
+    wandb_callback = WandbCallback(gradient_save_freq=10000)
+
+    callback = CallbackList([wandb_callback, rollout_start, rollout_end])
+
+    #  env = VecWandbLogger(env)
+
     if config["ALGO"] == "PPO":
         policy_kwargs = dict(
             activation_fn=torch.nn.ReLU,
@@ -243,11 +314,6 @@ if __name__ == "__main__":
 
     model.learn(
         total_timesteps=config["TOTAL_TIMESTEPS"],
-        callback=WandbCallback(
-            gradient_save_freq=10000,
-            model_save_path=log_dir,
-            model_save_freq=10000,
-            verbose=0,
-        ),
+        callback=callback,
     )
     model.save(os.path.join(log_dir, f"{config['ALGO']}_bkll"))
