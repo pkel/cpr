@@ -147,15 +147,15 @@ let bk_ll2 ~k =
     end)
 ;;
 
-let george ~k ~reward =
+let tailstorm ~k ~reward =
   Engine.of_module
     (module struct
-      open George.SszLikeAttack
+      open Tailstorm.SszLikeAttack
 
-      type data = George.dag_data
+      type data = Tailstorm.dag_data
       type state = data Simulator.data State.t
 
-      let protocol = George.protocol ~k
+      let protocol = Tailstorm.protocol ~k
       let description = info
       let reward_function = reward
       let policies = Collection.map_to_list (fun e -> e.key, e.it) policies
@@ -177,17 +177,17 @@ let george ~k ~reward =
     end)
 ;;
 
-let george2 ~k =
+let tailstorm2 ~k =
   Engine2.of_module
     (module struct
-      type data = George.dag_data
+      type data = Tailstorm.dag_data
       type env = data Simulator.data
       type pow = Simulator.pow
       type honest_state = env Dag.vertex
 
-      let protocol = George.protocol ~k
+      let protocol = Tailstorm.protocol ~k
 
-      include George.SszLikeAttack
+      include Tailstorm.SszLikeAttack
 
       type agent_state = env State.t
       type pre_action = env State.t
@@ -198,16 +198,16 @@ let george2 ~k =
     end)
 ;;
 
-let george_deprecated ~k ~reward =
+let tailstorm_deprecated ~k ~reward =
   Engine.of_module
     (module struct
-      open George.PrivateAttack
+      open Tailstorm.PrivateAttack
 
-      type data = George.dag_data
-      type state = data Simulator.data George.PrivateAttack.state
+      type data = Tailstorm.dag_data
+      type state = data Simulator.data Tailstorm.PrivateAttack.state
 
       let description = "Deprecated PrivateAttack space"
-      let protocol = George.protocol ~k
+      let protocol = Tailstorm.protocol ~k
       let reward_function = reward
       let policies = policies
 

@@ -84,20 +84,17 @@ def test_bk_ll(capsys):
         obs, _, _, _ = env.step(env.policy(obs, "selfish"))
 
 
-def test_george(capsys):
+def test_tailstorm(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.george(k=13, reward="discount"),
+        proto=protocols.tailstorm(k=13, reward="discount"),
         alpha=0.33,
         gamma=0.8,
         defenders=5,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert (
-        captured
-        == "George's protocol with k=13; SSZ'16-like attack space; α=0.33 attacker"
-    )
+    assert captured == "Tailstorm with k=13; SSZ'16-like attack space; α=0.33 attacker"
 
     obs = env.reset()
     for x in range(600):

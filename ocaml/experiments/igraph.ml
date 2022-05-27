@@ -15,7 +15,7 @@ let protocols =
        (fun k ->
          [ Protocol (B_k.protocol ~k)
          ; Protocol (B_k_lessleader.protocol ~k)
-         ; Protocol (George.protocol ~k)
+         ; Protocol (Tailstorm.protocol ~k)
          ])
        [ 1; 2; 4; 8; 16; 32; 64 ]
 ;;

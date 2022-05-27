@@ -954,8 +954,8 @@ let attacks ~k =
 ;;
 
 let protocol ~k =
-  { key = "george"
-  ; info = "George's protocol with k=" ^ string_of_int k
+  { key = "tailstorm"
+  ; info = "Tailstorm with k=" ^ string_of_int k
   ; pow_per_block = k
   ; honest = honest ~k
   ; dag_validity = dag_validity ~k

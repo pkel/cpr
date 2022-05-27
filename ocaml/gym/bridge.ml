@@ -204,7 +204,7 @@ let () =
      Proto (bk_ll ~k ~reward) |> python_of_protocol);
   Py_module.set
     m
-    "george"
+    "tailstorm"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and reward =
        keyword
@@ -224,27 +224,27 @@ let () =
      in
      let reward =
        match reward with
-       | "block" -> Cpr_protocols.George.constant_block (float_of_int k)
+       | "block" -> Cpr_protocols.Tailstorm.constant_block (float_of_int k)
        | "constant" ->
-         Cpr_protocols.George.reward
+         Cpr_protocols.Tailstorm.reward
            ~max_reward_per_block:1.
            ~punish:false
            ~discount:false
            ~k
        | "punish" ->
-         Cpr_protocols.George.reward
+         Cpr_protocols.Tailstorm.reward
            ~max_reward_per_block:1.
            ~punish:true
            ~discount:false
            ~k
        | "discount" ->
-         Cpr_protocols.George.reward
+         Cpr_protocols.Tailstorm.reward
            ~max_reward_per_block:1.
            ~punish:false
            ~discount:true
            ~k
        | "hybrid" ->
-         Cpr_protocols.George.reward
+         Cpr_protocols.Tailstorm.reward
            ~max_reward_per_block:1.
            ~punish:true
            ~discount:true
@@ -253,5 +253,5 @@ let () =
          let msg = "unknown reward function '" ^ reward ^ "'" in
          failwith msg
      in
-     Proto (george ~k ~reward) |> python_of_protocol)
+     Proto (tailstorm ~k ~reward) |> python_of_protocol)
 ;;

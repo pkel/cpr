@@ -76,9 +76,9 @@ let tasks =
     ; bk_lessleader ~k:8, 100
     ; bk_lessleader ~k:4, 50
     ; bk_lessleader ~k:1, 20
-    ; george ~k:8, 100
-    ; george ~k:4, 50
-    ; george ~k:1, 20
+    ; tailstorm ~k:8, 100
+    ; tailstorm ~k:4, 50
+    ; tailstorm ~k:1, 20
     ]
 ;;
 
