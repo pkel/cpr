@@ -2,7 +2,7 @@ open Cpr_lib
 open Models
 
 let protocols =
-  let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
+  let k = [ 1; 2; 4; 8; 16; 32; 64 ] in
   nakamoto :: List.concat_map (fun k -> [ bk ~k; bk_lessleader ~k; tailstorm ~k ]) k
 ;;
 
