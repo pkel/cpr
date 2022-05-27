@@ -14,6 +14,15 @@ let describe h =
   Printf.sprintf "%s (%i|%i)" ty h.block h.vote
 ;;
 
+let cmp_votes_in_block ~data ~pow_hash =
+  let get x =
+    let d = data x
+    and hash = pow_hash x |> Option.value ~default:(0, 0) in
+    d.vote, hash
+  and ty = Compare.(tuple (neg int) (tuple int int)) in
+  Compare.(by ty get)
+;;
+
 let dag_validity ~k (v : _ global_view) n =
   let child = v.data n in
   child.block >= 0
@@ -33,13 +42,7 @@ let dag_validity ~k (v : _ global_view) n =
       let votes_only = Dag.filter (fun n -> v.data n |> is_vote) v.view in
       Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
     and sorted_votes =
-      List.map
-        (fun x ->
-          let d = v.data x
-          and hash = v.pow_hash x |> Option.value ~default:(0, 0) in
-          d.vote, hash)
-        votes
-      |> is_sorted ~unique:true Compare.(tuple (neg int) (tuple int int))
+      is_sorted ~unique:true (cmp_votes_in_block ~data:v.data ~pow_hash:v.pow_hash) votes
     in
     is_block parent
     && sorted_votes
@@ -100,7 +103,13 @@ module IntSet = Set.Make (struct
   let compare = compare
 end)
 
-let quorum ~k v for_block =
+let quorum_old ~k v for_block =
+  (* look through sub blocks (votes) and assemble quorum if possible. This version picks
+     the longest branches first. If a branches does not fit into the quorum, it is cut
+     down until it fits.
+
+     The chosen sub blocks are not always optimal for the miner of the block. Thus this
+     implementation does not align with George's description of Tailstorm.*)
   let rec f ids n q l =
     if n = k - 1
     then Some (List.rev q)
@@ -142,6 +151,72 @@ let quorum ~k v for_block =
                 let d = v.data x
                 and hash = v.pow_hash x |> Option.value ~default:(0, 0) in
                 d.vote, hash)))
+;;
+
+let quorum ~k v for_block =
+  (* look through the sub blocks (votes) and assemble a quorum if possible. This version
+     tries to select the sub blocks that maximize a miner's own rewards.
+
+     We first find all branches of depth k-1 or less. We then sort the branches by own
+     reward, assuming that the branch will be confirmed in the future. We then add the
+     most valuable branch to the quorum.
+
+     If some (= k') sub blocks are missing after the first iteration, we search for all
+     remaining branches that would add 'k or less sub blocks. We sort the branches by the
+     amount of reward they would add. We add the most valuable branch an reiterate until
+     enough sub blocks are added.
+
+     TODO. For now, we assume constant reward per proof-of-work. Handling the other reward
+     schemes correctly requires a restructuring of the code: reward function must become
+     an argument of the protocol. *)
+  let ht = Hashtbl.create (2 * k)
+  and acc = ref []
+  and n = ref (k - 1) in
+  let included x = Hashtbl.mem ht (Dag.id x) in
+  let include_ x =
+    assert (not (included x));
+    acc := x :: !acc;
+    Dag.iterate_ancestors v.votes_only [ x ]
+    |> Seq.iter (fun x ->
+           if not (included x)
+           then (
+             Hashtbl.replace ht (Dag.id x) true;
+             decr n))
+  and reward ?(all = false) x =
+    let i = ref 0 in
+    let () =
+      Dag.iterate_ancestors v.votes_only [ x ]
+      |> Seq.iter (fun x ->
+             if (not (included x)) && (all || v.appended_by_me x) then incr i)
+    in
+    !i
+  in
+  let rec loop () =
+    assert (!n >= 0);
+    if !n > 0
+    then (
+      Dag.iterate_descendants v.votes_only [ for_block ]
+      |> Seq.filter (Dag.vertex_neq for_block)
+      |> Seq.filter (fun x -> not (included x))
+      |> (* calculate own and overall reward for branch *)
+      Seq.map (fun x -> x, reward x, reward ~all:true x)
+      |> (* ensure branch fits into quorum *) Seq.filter (fun (_, _, x) -> x <= !n)
+      |> List.of_seq
+      |> (* prefer own reward, then overall reward *)
+      List.sort
+        Compare.(
+          by int (fun (_, x, _) -> x) |> neg $ (by int (fun (_, _, x) -> x) |> neg))
+      |> function
+      | [] -> None (* no branches left, not enough votes *)
+      | (x, _, _) :: _ ->
+        (* add best branch, continue *)
+        include_ x;
+        loop ())
+    else
+      (* quorum complete. Ensure that it satisfies quorum validity *)
+      Some (List.sort (cmp_votes_in_block ~data:v.data ~pow_hash:v.pow_hash) !acc)
+  in
+  loop ()
 ;;
 
 let honest_handler ~k v actions preferred = function
