@@ -201,20 +201,24 @@ let george2 ~k =
 let george_deprecated ~k ~reward =
   Engine.of_module
     (module struct
+      open George.PrivateAttack
+
       type data = George.dag_data
-      type state = data Simulator.data PrivateAttack.state
+      type state = data Simulator.data George.PrivateAttack.state
 
       let description = "Deprecated PrivateAttack space"
       let protocol = George.protocol ~k
       let reward_function = reward
+      let policies = policies
 
-      include George.PrivateAttack
+      module Action = Action
+      module Observation = Observation
 
-      let node = PrivateAttack.withhold protocol.honest
+      let node = withhold protocol.honest
 
       let apply_action v a state action =
         let tactic = tactic_of_policy ~k (fun _ -> action) in
-        PrivateAttack.apply_tactic tactic v a state
+        apply_tactic tactic v a state
       ;;
 
       let shutdown _v _a state =
