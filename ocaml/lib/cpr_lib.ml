@@ -7,6 +7,7 @@ module Distributions = Distributions
 module GraphML = GraphML
 module Network = Network
 module Simulator = Simulator
+module Simulator2 = Simulator2
 module ResultSyntax = ResultSyntax
 
 let ( $== ) = Dag.vertex_eq
