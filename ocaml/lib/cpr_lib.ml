@@ -7,8 +7,12 @@ module Distributions = Distributions
 module GraphML = GraphML
 module Network = Network
 module Simulator = Simulator
-module Simulator2 = Simulator2
 module ResultSyntax = ResultSyntax
+
+module Next = struct
+  include Intf2
+  module Simulator = Simulator2
+end
 
 let ( $== ) = Dag.vertex_eq
 let ( $!= ) = Dag.vertex_neq

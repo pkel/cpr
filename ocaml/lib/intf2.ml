@@ -122,6 +122,7 @@ module type Protocol = sig
       Invalid extensions are not delivered to other nodes. *)
   val dag_validity : ('env, data) global_view -> 'env Dag.vertex -> bool
 
+  (** specification for honest participants *)
   val honest : ('env, data) local_view -> ('env, data) node
 
   (** When calculating rewards, the simulator will consider the preferred vertices of all
