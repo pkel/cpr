@@ -6,6 +6,7 @@ type 'a entry =
   ; it : 'a
   }
 
+val keys : 'a t -> string list
 val all : 'a t -> string list
 val get : string -> 'a t -> 'a entry option
 val empty : 'a t

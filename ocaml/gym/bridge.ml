@@ -136,24 +136,14 @@ let () =
 ;;
 
 let () =
+  (* TODO read reward functions from module; choose default and document possible values *)
   let open Definitions in
   let m = Py_module.create "protocols" in
   Py_module.set
     m
     "nakamoto"
     (let%map reward =
-       keyword
-         "reward"
-         string
-         ~default:"block"
-         ~docstring:"Select reward function.\n'block': for 1 per confirmed block"
-     in
-     let reward =
-       match reward with
-       | "block" -> Cpr_protocols.Nakamoto.constant 1.
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
+       keyword "reward" string ~default:"block" ~docstring:"reward function"
      in
      Proto (nakamoto ~reward) |> python_of_protocol);
   Py_module.set
@@ -161,22 +151,7 @@ let () =
     "bk"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and reward =
-       keyword
-         "reward"
-         string
-         ~default:"pow"
-         ~docstring:
-           "Select reward function.\n\
-            'pow': for 1 per confirmed proof-of-work vote\n\
-            'block': for 1 per confirmed block"
-     in
-     let reward =
-       match reward with
-       | "pow" -> Cpr_protocols.B_k.constant_pow 1.
-       | "block" -> Cpr_protocols.B_k.constant_block 1.
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
      Proto (bk ~k ~reward) |> python_of_protocol);
   Py_module.set
@@ -184,22 +159,7 @@ let () =
     "bk_ll"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and reward =
-       keyword
-         "reward"
-         string
-         ~default:"pow"
-         ~docstring:
-           "Select reward function.\n\
-            'pow': for 1 per confirmed proof-of-work vote\n\
-            'block': for 1 per confirmed block"
-     in
-     let reward =
-       match reward with
-       | "pow" -> Cpr_protocols.B_k_lessleader.constant_pow 1.
-       | "block" -> Cpr_protocols.B_k_lessleader.constant_block 1.
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
      Proto (bk_ll ~k ~reward) |> python_of_protocol);
   Py_module.set
@@ -207,51 +167,7 @@ let () =
     "tailstorm"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and reward =
-       keyword
-         "reward"
-         string
-         ~default:"constant"
-         ~docstring:
-           "Select reward function.\n\
-            'block': k per confirmed block\n\
-            'constant': 1 per confirmed pow solution\n\
-            'punish': max k per confirmed block, 1 per pow solution on longest chain of \
-            votes\n\
-            'discount': max k per confirmed block, d/k per pow solution (d ∊ 1..k = \
-            height since last block)\n\
-            'hybrid': max k per confirmed block, d/k per pow solution on longest chain \
-            of votes (d ∊ 1..k = height since last block)"
-     in
-     let reward =
-       match reward with
-       | "block" -> Cpr_protocols.Tailstorm.constant_block (float_of_int k)
-       | "constant" ->
-         Cpr_protocols.Tailstorm.reward
-           ~max_reward_per_block:1.
-           ~punish:false
-           ~discount:false
-           ~k
-       | "punish" ->
-         Cpr_protocols.Tailstorm.reward
-           ~max_reward_per_block:1.
-           ~punish:true
-           ~discount:false
-           ~k
-       | "discount" ->
-         Cpr_protocols.Tailstorm.reward
-           ~max_reward_per_block:1.
-           ~punish:false
-           ~discount:true
-           ~k
-       | "hybrid" ->
-         Cpr_protocols.Tailstorm.reward
-           ~max_reward_per_block:1.
-           ~punish:true
-           ~discount:true
-           ~k
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
      Proto (tailstorm ~k ~reward) |> python_of_protocol)
 ;;
