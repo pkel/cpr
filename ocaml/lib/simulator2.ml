@@ -84,14 +84,9 @@ let init
   =
   let dag = Dag.create () in
   let n_nodes = Array.length network.nodes in
-  let module Env = struct
+  let module GlobalView = struct
     type data = Protocol.data
     type nonrec env = data env
-  end
-  in
-  let module Protocol' = Protocol.Make (Env) in
-  let module GlobalView = struct
-    include Env
 
     let view = Dag.view dag
     let data n = (Dag.data n).value
@@ -117,13 +112,13 @@ let init
           ; signed_by = None
           ; pow_hash = None
           })
-      Protocol'.dag_roots
+      Protocol.dag_roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; c_activations = 0 } in
   let impl =
     match patch with
     | Some f -> f
-    | None -> fun _node_id -> Protocol'.honest
+    | None -> fun _node_id -> Protocol.honest
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
@@ -185,7 +180,7 @@ let init
           in
           let () =
             (* We guarantee that invalid extensions are never delivered elsewhere *)
-            if not (Protocol'.dag_validity (module GlobalView) vertex)
+            if not (Protocol.dag_validity (module GlobalView) vertex)
             then (
               let info x =
                 [ Protocol.describe x.value, ""

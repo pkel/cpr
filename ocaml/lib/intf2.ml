@@ -3,19 +3,12 @@ type 'env event =
   | PuzzleSolved of 'env Dag.vertex
   | Deliver of 'env Dag.vertex
 
-module type EnvTypes = sig
-  (** what the simulator stores on each DAG vertex *)
+module type GlobalView = sig
+  (** what the simulator stores on each DAG vertex. Opaque to the protocol *)
   type env
-end
 
-module type ProtocolTypes = sig
   (** what the protocol stores on each DAG vertex *)
   type data
-end
-
-module type GlobalView = sig
-  include EnvTypes
-  include ProtocolTypes
 
   (** (partial) view on the simulator's DAG *)
   val view : env Dag.view
@@ -89,8 +82,7 @@ module type Node = sig
   val preferred : state -> env Dag.vertex
 end
 
-(** we hide the node's state type using a GADT. This allows to have nodes with different
-    state types in the same simulation. *)
+(** we hide the node's state type from the simulation. *)
 type ('a, 'b) node =
   | Node :
       (module Node with type env = 'a and type data = 'b and type state = 'c)
@@ -112,22 +104,18 @@ module type Protocol = sig
   (** block height *)
   val height : data -> int
 
-  module Make (Env : EnvTypes) : sig
-    open Env
+  (** specify the roots of the DAG. *)
+  val dag_roots : data list
 
-    (** specify the roots of the DAG. *)
-    val dag_roots : data list
+  (** restrict DAG extensions. The simulator checks validity for each appended DAG vertex.
+      Invalid extensions are not delivered to other nodes. *)
+  val dag_validity : ('env, data) global_view -> 'env Dag.vertex -> bool
 
-    (** restrict DAG extensions. The simulator checks validity for each appended DAG
-        vertex. Invalid extensions are not delivered to other nodes. *)
-    val dag_validity : (env, data) global_view -> env Dag.vertex -> bool
+  val honest : ('env, data) local_view -> ('env, data) node
 
-    val honest : (env, data) local_view -> (env, data) node
+  (** TODO, eliminate Intf dependency *)
+  val reward_functions : ('env, data) Intf.reward_function Collection.t
 
-    (** TODO, eliminate Intf dependency *)
-    val reward_functions : (env, data) Intf.reward_function Collection.t
-
-    (** TODO add shutdown functionality to the attacks *)
-    val attacks : ((env, data) local_view -> (env, data) node) Collection.t
-  end
+  (** TODO add shutdown functionality to the attacks *)
+  val attacks : (('env, data) local_view -> ('env, data) node) Collection.t
 end
