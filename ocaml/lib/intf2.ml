@@ -80,8 +80,8 @@ module type Node = sig
       satisfy the DAG invariant specified by the simulated protocol. *)
   val puzzle_payload : state -> (env, data) puzzle_payload
 
-  (** returns a node's preferred tip of the chain. TODO: remove and use
-      puzzle_payload.parents instead. *)
+  (** returns a node's preferred DAG vertex, typically a leave. Rewards are calculated
+      backwards from here *)
   val preferred : state -> env Dag.vertex
 end
 
@@ -95,7 +95,7 @@ type ('a, 'b) node =
     together with {!Dag.iterate_ancestors}. *)
 type ('a, 'b) reward_function =
   view:('a, 'b) global_view
-  -> assign:(float -> 'b Dag.vertex -> unit)
+  -> assign:(float -> 'a Dag.vertex -> unit)
   -> 'a Dag.vertex
   -> unit
 
@@ -123,8 +123,12 @@ module type Protocol = sig
   val dag_validity : ('env, data) global_view -> 'env Dag.vertex -> bool
 
   val honest : ('env, data) local_view -> ('env, data) node
-  val reward_functions : ('env, data) reward_function Collection.t
 
-  (** TODO add shutdown functionality to the attacks *)
+  (** When calculating rewards, the simulator will consider the preferred vertices of all
+      nodes. This functions determines the best vertex. The reward function will be
+      applied from the best vertex backwards to the roots. *)
+  val judge : ('env, data) global_view -> 'env Dag.vertex list -> 'env Dag.vertex
+
+  val reward_functions : ('env, data) reward_function Collection.t
   val attacks : (('env, data) local_view -> ('env, data) node) Collection.t
 end

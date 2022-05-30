@@ -29,6 +29,7 @@ type ('prot_data, 'node_state) node' =
   ; mutable n_activations : int
   ; activate : 'node_state -> 'node_state
   ; deliver : 'node_state -> 'prot_data env Dag.vertex -> 'node_state
+  ; preferred : 'node_state -> 'prot_data env Dag.vertex
   }
 
 type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
@@ -42,6 +43,7 @@ type 'prot_data state =
   ; assign_pow_distr : int Distributions.iid
   ; activation_delay_distr : float Distributions.iid
   ; network : Network.t
+  ; judge : 'prot_data env Dag.vertex list -> 'prot_data env Dag.vertex
   }
 
 let schedule time delay event =
@@ -197,7 +199,13 @@ let init
           Node.handler state (PuzzleSolved vertex) |> share
         in
         let deliver state msg = Node.handler state (Deliver msg) |> share in
-        Node { state = Node.init ~roots; n_activations = 0; activate; deliver })
+        Node
+          { state = Node.init ~roots
+          ; n_activations = 0
+          ; activate
+          ; deliver
+          ; preferred = Node.preferred
+          })
   and assign_pow_distr =
     let weights =
       Array.map (fun x -> Network.(x.compute)) network.nodes |> Array.to_list
@@ -213,6 +221,7 @@ let init
     ; assign_pow_distr
     ; activation_delay_distr
     ; network
+    ; judge = Protocol.judge (module GlobalView)
     }
   in
   schedule_activation state;
@@ -290,6 +299,14 @@ let apply_reward_function' (fn : _ Intf2.reward_function) seq state =
   arr
 ;;
 
-let apply_reward_function (fn : _ Intf2.reward_function) head state =
+let apply_reward_function (fn : _ Intf2.reward_function) state =
+  let head =
+    Array.map
+      (function
+        | Node node -> node.preferred node.state)
+      state.nodes
+    |> Array.to_list
+    |> state.judge
+  in
   apply_reward_function' fn (Dag.iterate_ancestors state.global_view [ head ]) state
 ;;
