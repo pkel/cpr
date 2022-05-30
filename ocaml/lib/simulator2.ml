@@ -37,8 +37,7 @@ type 'prot_data state =
   { clock : 'prot_data clock
   ; dag : 'prot_data env Dag.t
   ; global_view : 'prot_data env Dag.view
-  ; global_compat : ('prot_data env, 'prot_data) Intf.global_view
-        (* TODO remove. used for reward function *)
+  ; global_view_m : ('prot_data env, 'prot_data) Intf2.global_view
   ; nodes : 'prot_data node array
   ; assign_pow_distr : int Distributions.iid
   ; activation_delay_distr : float Distributions.iid
@@ -209,12 +208,7 @@ let init
     { clock
     ; dag
     ; global_view = GlobalView.view
-    ; global_compat =
-        { view = GlobalView.view
-        ; data = GlobalView.data
-        ; signed_by = GlobalView.signed_by
-        ; pow_hash = GlobalView.pow_hash
-        }
+    ; global_view_m = (module GlobalView)
     ; nodes
     ; assign_pow_distr
     ; activation_delay_distr
@@ -285,17 +279,17 @@ let rec loop ~activations state =
     loop ~activations state
 ;;
 
-let apply_reward_function' (fn : _ Intf.reward_function) seq state =
+let apply_reward_function' (fn : _ Intf2.reward_function) seq state =
   let arr = Array.make (Array.length state.nodes) 0. in
   let assign x n =
     match (Dag.data n).appended_by with
     | Some i -> arr.(i) <- arr.(i) +. x
     | None -> ()
-  and view = state.global_compat in
+  and view = state.global_view_m in
   Seq.iter (fn ~view ~assign) seq;
   arr
 ;;
 
-let apply_reward_function (fn : _ Intf.reward_function) head state =
+let apply_reward_function (fn : _ Intf2.reward_function) head state =
   apply_reward_function' fn (Dag.iterate_ancestors state.global_view [ head ]) state
 ;;

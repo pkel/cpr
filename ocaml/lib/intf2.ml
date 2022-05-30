@@ -39,6 +39,9 @@ module type LocalView = sig
 
   (** was the vertex appended locally (true) or by another node (false) *)
   val appended_by_me : env Dag.vertex -> bool
+
+  (* TODO: some protocols extend the DAG without pow. Add extend_dag function here, to
+     support this case *)
 end
 
 type ('a, 'b) local_view = (module LocalView with type env = 'a and type data = 'b)
@@ -88,6 +91,14 @@ type ('a, 'b) node =
       (module Node with type env = 'a and type data = 'b and type state = 'c)
       -> ('a, 'b) node
 
+(** Calculate and assign rewards to a vertex and (potentially) its neighbours. Use this
+    together with {!Dag.iterate_ancestors}. *)
+type ('a, 'b) reward_function =
+  view:('a, 'b) global_view
+  -> assign:(float -> 'b Dag.vertex -> unit)
+  -> 'a Dag.vertex
+  -> unit
+
 module type Protocol = sig
   (** what the protocol stores on each DAG vertex *)
   type data
@@ -112,9 +123,7 @@ module type Protocol = sig
   val dag_validity : ('env, data) global_view -> 'env Dag.vertex -> bool
 
   val honest : ('env, data) local_view -> ('env, data) node
-
-  (** TODO, eliminate Intf dependency *)
-  val reward_functions : ('env, data) Intf.reward_function Collection.t
+  val reward_functions : ('env, data) reward_function Collection.t
 
   (** TODO add shutdown functionality to the attacks *)
   val attacks : (('env, data) local_view -> ('env, data) node) Collection.t
