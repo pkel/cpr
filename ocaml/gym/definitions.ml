@@ -204,25 +204,47 @@ let tailstorm_deprecated ~k ~reward =
       open Tailstorm.PrivateAttack
 
       type data = Tailstorm.dag_data
-      type state = data Simulator.data Tailstorm.PrivateAttack.state
+      type nonrec state = data Simulator.data state
 
-      let description = "Deprecated PrivateAttack space"
       let protocol = Tailstorm.protocol ~k
+      let description = info
       let reward_function = reward
-      let policies = policies
+      let policies = Collection.map_to_list (fun e -> e.key, e.it) policies
 
       module Action = Action
       module Observation = Observation
 
-      let node = withhold protocol.honest
+      open Agent (struct
+        let k = k
+      end)
 
-      let apply_action v a state action =
-        let tactic = tactic_of_policy ~k (fun _ -> action) in
-        apply_tactic tactic v a state
+      let node v =
+        let handler = prepare v in
+        { (noop_node v) with handler }
       ;;
 
-      let shutdown _v _a state =
-        (* TODO: implement shutdown for non-Nakamoto protocols *) state
-      ;;
+      let apply_action v a s x = apply v a s x
+      let shutdown v a s = shutdown v a s
+    end)
+;;
+
+let tailstorm_deprecated2 ~k =
+  Engine2.of_module
+    (module struct
+      type data = Tailstorm.dag_data
+      type env = data Simulator.data
+      type pow = Simulator.pow
+      type honest_state = env Dag.vertex
+
+      let protocol = Tailstorm.protocol ~k
+
+      include Tailstorm.PrivateAttack
+
+      type agent_state = env state
+      type pre_action = env state
+
+      include Agent (struct
+        let k = k
+      end)
     end)
 ;;
