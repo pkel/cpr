@@ -1,29 +1,11 @@
-type ('env, 'dag_data, 'pow) actions = ('env, 'dag_data, 'pow) Intf.actions =
-  { share : ?recursive:bool -> 'env Dag.vertex -> unit
-        (** Instruct the simulator to make the DAG vertex visible to other network nodes.
-            The simulator might apply network delays depending on its configuration.
-
-            The recursive flag controls whether the dependencies are released as well;
-            default: false. *)
-  ; extend_dag :
-      ?pow:'pow -> ?sign:bool -> 'env Dag.vertex list -> 'dag_data -> 'env Dag.vertex
-        (** [extend_dag ~pow ~sign parents data] adds a vertex with [data] to the
-            simulator's DAG. Initially, only the extending network node can see the new
-            vertex. The simulator raises {Invalid_argument} if the proposed extension does
-            not satisfy the DAG invariant specified by the simulated protocol. *)
-  }
-
 (** Simulator events as they are applied to single network nodes *)
-type ('env, 'pow) event = ('env, 'pow) Intf.event =
-  | Activate of 'pow
+type 'env event =
+  | PuzzleSolved of 'env Dag.vertex
   | Deliver of 'env Dag.vertex
 
 module type EnvTypes = sig
   (** what the simulator stores on each DAG vertex *)
   type env
-
-  (** how the simulator models proof-of-work puzzle solutions *)
-  type pow
 end
 
 module type ProtocolTypes = sig
@@ -66,8 +48,22 @@ module type LocalView = sig
   val appended_by_me : env Dag.vertex -> bool
 end
 
-type ('a, 'b, 'c) local_view =
-  (module LocalView with type env = 'a and type data = 'b and type pow = 'c)
+type ('a, 'b) local_view = (module LocalView with type env = 'a and type data = 'b)
+
+(** decisions to be made by a node handler *)
+type ('env, 'data, 'state) handler_return =
+  { state : 'state (** new state *)
+  ; share : 'env Dag.vertex list
+        (** vertices to be shared with the other nodes. All vertices are shared
+            recursively, i.e., including their parents *)
+  }
+
+(** what a node currently mines on *)
+type ('env, 'data) puzzle_payload =
+  { parents : 'env Dag.vertex list (** hash-references to previous DAG vertices *)
+  ; data : 'data (** protocol data attached to the DAG vertices *)
+  ; sign : bool (** whether to include a signature or not *)
+  }
 
 module type Node = sig
   include LocalView
@@ -78,18 +74,27 @@ module type Node = sig
       {protocol.dag_roots}. The roots are visible to all nodes from the beginning. *)
   val init : roots:env Dag.vertex list -> state
 
-  (** event handlers. May trigger side effects via [actions] argument. *)
-  val handler : (env, data, pow) actions -> state -> (env, pow) event -> state
+  (** event handlers *)
+  val handler : state -> env event -> (env, data, state) handler_return
 
-  (* TODO: actions.extend_dag could be part of the local view, actions.share could be
-     replaced by returning to be shared vertices from the hander *)
+  (** [puzzle_payload ~sign state] defines the content and parents of the currently mined
+      vertex. When the node solves a proof-of-work puzzle, the simulator calls
+      [puzzle_payload], constructs a corresponding DAG vertex, and hands it to the mining
+      node. The simulator raises {Invalid_argument} if the proposed extension does not
+      satisfy the DAG invariant specified by the simulated protocol. *)
+  val puzzle_payload : state -> (env, data) puzzle_payload
 
-  (** returns a node's preferred tip of the chain. *)
+  (** returns a node's preferred tip of the chain. TODO: remove and use
+      puzzle_payload.parents instead. *)
   val preferred : state -> env Dag.vertex
 end
 
-type ('a, 'b, 'c, 'd) node =
-  (module Node with type env = 'a and type data = 'b and type pow = 'c and type state = 'd)
+(** we hide the node's state type using a GADT. This allows to have nodes with different
+    state types in the same simulation. *)
+type ('a, 'b) node =
+  | Node :
+      (module Node with type env = 'a and type data = 'b and type state = 'c)
+      -> ('a, 'b) node
 
 module type Protocol = sig
   (** what the protocol stores on each DAG vertex *)
@@ -117,17 +122,12 @@ module type Protocol = sig
         vertex. Invalid extensions are not delivered to other nodes. *)
     val dag_validity : (env, data) global_view -> env Dag.vertex -> bool
 
-    type node' =
-      | Node : (env, data, pow, 'state) node -> node'
-          (** we use this to hide the node's state from the simulator. It also enables
-              different node implementations operating on different local state but in the
-              same simulation. *)
+    val honest : (env, data) local_view -> (env, data) node
 
-    val honest : (env, data, pow) local_view -> node'
+    (** TODO, eliminate Intf dependency *)
     val reward_functions : (env, data) Intf.reward_function Collection.t
 
-    (* TODO, eliminate Intf dependency *)
-
-    val attacks : ((env, data, pow) local_view -> node') Collection.t
+    (** TODO add shutdown functionality to the attacks *)
+    val attacks : ((env, data) local_view -> (env, data) node) Collection.t
   end
 end

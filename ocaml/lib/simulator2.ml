@@ -1,8 +1,3 @@
-(* proof of work -- invalidated on first use *)
-type pow = { mutable fresh : bool }
-
-let pow () = { fresh = true }
-
 (* data attached to each DAG vertex *)
 type 'a env =
   { value : 'a (* protocol data *)
@@ -17,9 +12,11 @@ type 'a env =
   }
 
 type 'prot_data event =
-  { node : int
-  ; event : ('prot_data env, pow) Intf.event
-  }
+  | Activate of { node : int }
+  | Deliver of
+      { node : int
+      ; msg : 'prot_data env Dag.vertex
+      }
 
 type 'prot_data clock =
   { mutable now : float
@@ -30,8 +27,8 @@ type 'prot_data clock =
 type ('prot_data, 'node_state) node' =
   { mutable state : 'node_state
   ; mutable n_activations : int
-  ; handler : 'node_state -> ('prot_data env, pow) Intf.event -> 'node_state
-  ; preferred : 'node_state -> 'prot_data env Dag.vertex
+  ; activate : 'node_state -> 'node_state
+  ; deliver : 'node_state -> 'prot_data env Dag.vertex -> 'node_state
   }
 
 type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
@@ -48,9 +45,6 @@ type 'prot_data state =
   ; network : Network.t
   }
 
-type wrapped_protocol =
-  | Protocol : ('dag_data env, 'dag_data, pow, 'state) Intf.protocol -> wrapped_protocol
-
 let schedule time delay event =
   time.queue <- OrderedQueue.queue (time.now +. delay) event time.queue
 ;;
@@ -58,7 +52,7 @@ let schedule time delay event =
 let schedule_activation state =
   let delay = Distributions.sample state.activation_delay_distr
   and node = Distributions.sample state.assign_pow_distr in
-  schedule state.clock delay { node; event = Activate (pow ()) }
+  schedule state.clock delay (Activate { node })
 ;;
 
 let disseminate network clock source x =
@@ -73,34 +67,26 @@ let disseminate network clock source x =
       then (
         (* only schedule event if it enables faster delivery *)
         Float.Array.set received_at link.dest t';
-        schedule clock delay { node = link.dest; event = Deliver x }))
+        schedule clock delay (Deliver { node = link.dest; msg = x })))
     network.nodes.(source).links
-;;
-
-let spawn (n : _ Intf.node') ~roots actions =
-  { handler = n.handler actions
-  ; state = n.init ~roots
-  ; preferred = n.preferred
-  ; n_activations = 0
-  }
 ;;
 
 let string_of_pow_hash (nonce, _serial) =
   Printf.sprintf "%.3f" (float_of_int nonce /. (2. ** 29.))
 ;;
 
-let all_honest
+let init
     (type a)
     (module Protocol : Intf2.Protocol with type data = a)
+    ?(patch : (int -> (a env, a) Intf2.local_view -> (a env, a) Intf2.node) option)
     (network : Network.t)
-    : _ state * _ Dag.vertex list * (_ Intf2.local_view * _ Intf.actions) array
+    : a state
   =
   let dag = Dag.create () in
   let n_nodes = Array.length network.nodes in
   let module Env = struct
     type data = Protocol.data
     type nonrec env = data env
-    type nonrec pow = pow
   end
   in
   let module Protocol' = Protocol.Make (Env) in
@@ -134,12 +120,18 @@ let all_honest
       Protocol'.dag_roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; c_activations = 0 } in
-  let views_actions =
+  let impl =
+    match patch with
+    | Some f -> f
+    | None -> fun _node_id -> Protocol'.honest
+  in
+  let nodes =
     Array.init n_nodes (fun node_id ->
         (* TODO breakout and reuse for RL gyms *)
         let module LocalView = struct
           include GlobalView
 
+          let my_id = node_id
           let visible x = Float.Array.get (Dag.data x).delivered_at node_id <= clock.now
           let view = Dag.filter visible GlobalView.view
           let delivered_at n = Float.Array.get (Dag.data n).delivered_at node_id
@@ -150,53 +142,51 @@ let all_honest
             data x
           ;;
 
-          let share ?(recursive = false) =
-            let rec f x =
-              assert (visible x);
-              let d = Dag.data x in
-              if d.released_at > clock.now
-              then (
-                d.released_at <- min d.released_at clock.now;
-                disseminate network clock node_id x;
-                if recursive then List.iter f (Dag.parents view x))
-            in
-            f
-          ;;
-
           let released n = (Dag.data n).released_at <= clock.now
-
-          let extend_dag ?pow ?(sign = false) parents child =
-            let pow_hash =
-              (* check pow *)
-              match pow with
-              | Some x when x.fresh ->
-                x.fresh <- false;
-                (* ensure uniqueness of pow hashes *)
-                Some (Random.bits (), Dag.size dag)
-              | Some _ -> raise (Invalid_argument "pow was used before")
-              | None -> None
-            in
-            let vertex =
-              Dag.append
-                dag
-                parents
-                { value = child
-                ; received_at =
-                    Float.Array.init n_nodes (fun i ->
-                        if i = node_id then clock.now else Float.infinity)
-                ; delivered_at =
-                    Float.Array.init n_nodes (fun i ->
-                        if i = node_id then clock.now else Float.infinity)
-                ; appended_at = clock.now
-                ; appended_by = Some node_id
-                ; pow_hash
-                ; signed_by = (if sign then Some node_id else None)
-                ; released_at = Float.infinity
-                }
-            in
+        end
+        in
+        let (Node (module Node)) = impl node_id (module LocalView) in
+        let share_single ?(recursive = false) =
+          let rec f x =
+            assert (LocalView.visible x);
+            let d = Dag.data x in
+            if d.released_at > clock.now
+            then (
+              d.released_at <- min d.released_at clock.now;
+              disseminate network clock node_id x;
+              if recursive then List.iter f (Dag.parents LocalView.view x))
+          in
+          f
+        in
+        let share (r : _ Intf2.handler_return) =
+          List.iter share_single r.share;
+          r.state
+        in
+        let activate state =
+          let payload = Node.puzzle_payload state in
+          let pow_hash = Some (Random.bits (), Dag.size dag) in
+          let vertex =
+            Dag.append
+              dag
+              payload.parents
+              { value = payload.data
+              ; received_at =
+                  Float.Array.init n_nodes (fun i ->
+                      if i = Node.my_id then clock.now else Float.infinity)
+              ; delivered_at =
+                  Float.Array.init n_nodes (fun i ->
+                      if i = Node.my_id then clock.now else Float.infinity)
+              ; appended_at = clock.now
+              ; appended_by = Some Node.my_id
+              ; pow_hash
+              ; signed_by = (if payload.sign then Some Node.my_id else None)
+              ; released_at = Float.infinity
+              }
+          in
+          let () =
+            (* We guarantee that invalid extensions are never delivered elsewhere *)
             if not (Protocol'.dag_validity (module GlobalView) vertex)
             then (
-              (* We guarantee that invalid extensions are never delivered elsewhere *)
               let info x =
                 [ Protocol.describe x.value, ""
                 ; ( "node"
@@ -208,39 +198,18 @@ let all_honest
                     |> Option.value ~default:"n/a" )
                 ]
               in
-              Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append");
-            vertex
-          ;;
-
-          let my_id = node_id
-        end
+              Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
+          in
+          Node.handler state (PuzzleSolved vertex) |> share
         in
-        (* let module _ : Intf2.LocalView = LocalView in *)
-        let local_view : (Env.env, Protocol.data, pow) Intf2.local_view =
-          (module LocalView)
-        in
-        let actions : _ Intf.actions =
-          { share = LocalView.share; extend_dag = LocalView.extend_dag }
-        in
-        local_view, actions)
+        let deliver state msg = Node.handler state (Deliver msg) |> share in
+        Node { state = Node.init ~roots; n_activations = 0; activate; deliver })
   and assign_pow_distr =
     let weights =
       Array.map (fun x -> Network.(x.compute)) network.nodes |> Array.to_list
     in
     Distributions.discrete ~weights
   and activation_delay_distr = Distributions.exponential ~ev:network.activation_delay in
-  let nodes =
-    Array.map
-      (fun (view, actions) ->
-        let (Node (module Honest)) = Protocol'.honest view in
-        Node
-          { handler = Honest.handler actions
-          ; state = Honest.init ~roots
-          ; preferred = Honest.preferred
-          ; n_activations = 0
-          })
-      views_actions
-  in
   let state =
     { clock
     ; dag
@@ -258,58 +227,50 @@ let all_honest
     }
   in
   schedule_activation state;
-  state, roots, views_actions
+  state
 ;;
-
-let patch ~node impl (state, roots, views_actions) =
-  let (view : _ Intf.local_view), (actions : _ Intf.actions) = views_actions.(node) in
-  let n = spawn (impl view) ~roots actions in
-  state.nodes.(node) <- Node n;
-  view, actions, n
-;;
-
-(* TODO hide second and third element *)
-let init (state, _roots, _views_actions) = state
 
 let handle_event ~activations state ev =
-  let (Node node) = state.nodes.(ev.node) in
-  let was_delivered n =
-    Float.Array.get (Dag.data n).delivered_at ev.node <= state.clock.now
-  and was_received n = Float.Array.get (Dag.data n).received_at ev.node <= state.clock.now
-  and disseminate =
-    match state.network.dissemination with
-    | Flooding -> disseminate state.network state.clock ev.node
-    | Simple -> fun _n -> ()
-  in
-  match ev.event with
-  | Activate _pow ->
+  match ev with
+  | Activate x ->
+    let (Node node) = state.nodes.(x.node) in
     state.clock.c_activations <- state.clock.c_activations + 1;
     node.n_activations <- node.n_activations + 1;
     (* check ending condition; schedule next activation *)
     if state.clock.c_activations < activations || activations < 0
     then schedule_activation state;
     (* apply event handler *)
-    node.state <- node.handler node.state ev.event
-  | Deliver n ->
+    node.state <- node.activate node.state
+  | Deliver x ->
+    let was_delivered msg =
+      Float.Array.get (Dag.data msg).delivered_at x.node <= state.clock.now
+    and was_received msg =
+      Float.Array.get (Dag.data msg).received_at x.node <= state.clock.now
+    and disseminate =
+      match state.network.dissemination with
+      | Flooding -> disseminate state.network state.clock x.node
+      | Simple -> fun _ -> ()
+    in
+    let (Node node) = state.nodes.(x.node) in
     (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
        vertices have been delivered *)
-    if was_delivered n
+    if was_delivered x.msg
     then (* n was delivered before *) ()
     else if List.exists
-              (fun n -> was_delivered n |> not)
-              (Dag.parents state.global_view n)
+              (fun dedepency -> was_delivered dedepency |> not)
+              (Dag.parents state.global_view x.msg)
     then (* dependencies are not yet fulfilled *) ()
     else (
       (* deliver; continue broadcast; recurse *)
-      Float.Array.set (Dag.data n).delivered_at ev.node state.clock.now;
-      node.state <- node.handler node.state ev.event;
-      disseminate n;
+      Float.Array.set (Dag.data x.msg).delivered_at x.node state.clock.now;
+      node.state <- node.deliver node.state x.msg;
+      disseminate x.msg;
       (* recursive delivery of now unlocked dependent DAG vertices *)
       List.iter
-        (fun n ->
-          if was_received n && not (was_delivered n)
-          then schedule state.clock 0. { node = ev.node; event = Deliver n })
-        (Dag.children state.global_view n))
+        (fun msg ->
+          if was_received msg && not (was_delivered msg)
+          then schedule state.clock 0. (Deliver { x with msg }))
+        (Dag.children state.global_view x.msg))
 ;;
 
 let dequeue state =
