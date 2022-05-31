@@ -73,7 +73,7 @@ module type Node = sig
   (** event handlers *)
   val handler : state -> env event -> (env, data, state) handler_return
 
-  (** [puzzle_payload ~sign state] defines the content and parents of the currently mined
+  (** [puzzle_payload state] defines the content and parents of the currently mined
       vertex. When the node solves a proof-of-work puzzle, the simulator calls
       [puzzle_payload], constructs a corresponding DAG vertex, and hands it to the mining
       node. The simulator raises {Invalid_argument} if the proposed extension does not
@@ -109,6 +109,10 @@ module type Protocol = sig
   (** a concise description of the protocol *)
   val info : string
 
+  (** some protocols accumulate multiple puzzle solutions into a single block. E.g., Bₖ
+      has k puzzles per block. Nakamoto has one per block. *)
+  val puzzles_per_block : int
+
   (** used for pretty printing protocol DAG vertices. *)
   val describe : data -> string
 
@@ -130,6 +134,6 @@ module type Protocol = sig
       applied from the best vertex backwards to the roots. *)
   val judge : ('env, data) global_view -> 'env Dag.vertex list -> 'env Dag.vertex
 
-  val reward_functions : ('env, data) reward_function Collection.t
-  val attacks : (('env, data) local_view -> ('env, data) node) Collection.t
+  val reward_functions : unit -> ('env, data) reward_function Collection.t
+  val attacks : unit -> (('env, data) local_view -> ('env, data) node) Collection.t
 end

@@ -10,7 +10,7 @@ let _ = OS.Dir.create ~path:true outdir |> R.failwith_error_msg
 let protocols =
   let open Simulator in
   let open Cpr_protocols in
-  Protocol Nakamoto.protocol
+  assert false (* (module Nakamoto) *)
   :: List.concat_map
        (fun k ->
          [ Protocol (B_k.protocol ~k)

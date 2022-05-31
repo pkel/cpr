@@ -9,14 +9,14 @@ module Network = Network
 module Simulator = Simulator
 module ResultSyntax = ResultSyntax
 
-module Next = struct
-  include Intf2
-  module Simulator = Simulator2
+module Infix = struct
+  let ( $== ) = Dag.vertex_eq
+  let ( $!= ) = Dag.vertex_neq
 end
 
-let ( $== ) = Dag.vertex_eq
-let ( $!= ) = Dag.vertex_neq
+include Infix
 
+(* TODO. move this into a separate file *)
 module Compare : sig
   type 'a cmp = 'a -> 'a -> int
 
@@ -130,3 +130,16 @@ let%test "first" =
 ;;
 
 let%test "first" = first Compare.int ~skip_to:(fun x -> x > 10) 2 [ 19; 2; 5; 3 ] = None
+
+module Next = struct
+  include Intf2
+  module Collection = Collection
+  module Dag = Dag
+  module Distributions = Distributions
+  module GraphML = GraphML
+  module Network = Network
+  module Simulator = Simulator2
+  module ResultSyntax = ResultSyntax
+  module Compare = Compare
+  include Infix
+end

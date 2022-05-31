@@ -9,7 +9,8 @@ include struct
 
   open Cpr_protocols
 
-  let nakamoto = P Nakamoto.protocol
+  let nakamoto = P (assert false) (* (module Nakamoto) *)
+
   let bk ~k = P (B_k.protocol ~k)
   let bk_lessleader ~k = P (B_k_lessleader.protocol ~k)
   let tailstorm ~k = P (Tailstorm.protocol ~k)
