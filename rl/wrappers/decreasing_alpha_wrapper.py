@@ -71,7 +71,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
             if self.n_pow > 0:
                 self.observed = info["simulator_clock_now"] / self.n_pow
 
-            if self.current_step == self.config["STEPS_PER_ROLLOUT"] // 2:
+            if info['simulator_clock_now'] >= self.config["STEPS_PER_ROLLOUT"] // 2:
                 self.update_difficulties()
                 self.in_prep_phase = False
 
