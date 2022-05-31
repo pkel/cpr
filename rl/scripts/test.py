@@ -74,7 +74,7 @@ if config["USE_DAA"]:
 else:
     env = SparseRelativeRewardWrapper(env, relative=False)
 
-p = PPO.load(f"saved_models/best_model_nakamoto_gamma_0.zip", env=env)
+p = PPO.load(f"rl/saved_models/model.zip")
 ALPHAS = list(np.arange(0.05, 0.5, 0.05))
 alphas = []
 rewards = []
@@ -93,32 +93,29 @@ for alpha in ALPHAS:
     sm1 = env.policies["sapirshtein-2016-sm1"]
 
     for i in tqdm(range(1000)):
-        obs = env.reset()
+        obs = env.reset(reset_difficulties=True)
         done = False
         ep_r = 0
         while not done:
-            sm1_action = sm1(np.array(obs))
             action, _state = p.predict(np.array(obs), deterministic=True)
 
             obs, r, done, info = env.step(action)
 
-            ep_r += r
-        if not config["USE_DAA"] or (config["USE_DAA"] and i > 100):
-            rewards.append(ep_r)
-            alphas.append(alpha)
+            ep_r += r * config['STEPS_PER_ROLLOUT']
+        rewards.append(ep_r)
+        alphas.append(alpha)
     obs = env.reset(reset_difficulties=True)
     for i in tqdm(range(1000)):
-        obs = env.reset()
+        obs = env.reset(reset_difficulties=True)
         done = False
         ep_r = 0
         while not done:
-            sm1_action = sm1(np.array(obs))
+            sm1_action = sm1(np.array(obs)[:-1])
 
             obs, r, done, info = env.step(sm1_action)
 
-            ep_r += r
-        if not config["USE_DAA"] or (config["USE_DAA"] and i > 100):
-            sm1_rewards.append(ep_r)
+            ep_r += r * config['STEPS_PER_ROLLOUT']
+        sm1_rewards.append(ep_r)
 
 df = pd.DataFrame({"alpha": alphas, "reward": rewards, "sm1_reward": sm1_rewards})
 gb_mean = df.groupby("alpha").mean().reset_index()
@@ -136,7 +133,9 @@ ax.scatter(gb_mean["alpha"], gb_mean["sm1_reward"], c="green")
 if not config["USE_DAA"]:
     ax.scatter(gb_mean["alpha"], gb_mean["alpha"], c="r")
 else:
-    ax.scatter(gb_mean["alpha"], gb_mean["alpha"] * config["STEPS_PER_ROLLOUT"], c="r")
+    ax.scatter(
+        gb_mean["alpha"], gb_mean["alpha"] * config["STEPS_PER_ROLLOUT"] // 2, c="r"
+    )
 plt.xticks(ALPHAS)
 plt.title(
     f"Protocol: {config['PROTOCOL']} alpha vs reward for n_steps={config['STEPS_PER_ROLLOUT']} Gamma={config['GAMMA']}"

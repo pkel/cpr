@@ -87,21 +87,21 @@ config = dict(
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
     ALPHA_SCHEDULE=[
-        0.15,
-        0.25,
-        1 / 3.0,
-        0.35,
-        0.375,
+        # 0.15,
+        # 0.25,
+        # 1 / 3.0,
+        # 0.35,
+        # 0.375,
         0.4,
-        0.425,
-        0.45,
-        0.475,
+        # 0.425,
+        # 0.45,
+        # 0.475,
     ],
-    USE_DAA=False,
+    USE_DAA=True,
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
-    N_ENVS=psutil.cpu_count(),
+    N_ENVS=1,
 )
 
 
@@ -160,7 +160,8 @@ class VecWandbLogger(VecEnvWrapper):
             try:
                 d = [x["difficulties"] for x in info]
                 d = {
-                    f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
+                    f"difficulty/α={a:.2f}": np.mean([x[a] for x in d])
+                    for a in d[0].keys()
                 }
             except:
                 d = {"difficulty": None}

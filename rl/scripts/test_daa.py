@@ -74,7 +74,12 @@ if config["USE_DAA"]:
 else:
     env = SparseRelativeRewardWrapper(env, relative=False)
 
-p = PPO.load(f"rl/saved_models/best_model", env=env)
+
+model = PPO(
+    "MlpPolicy",
+    env,
+)
+# p = PPO.load(f"rl/saved_models/best_model", env=env)
 
 ALPHAS = list(np.arange(0.05, 0.5, 0.05))
 difficulties = dict((alpha, []) for alpha in ALPHAS)

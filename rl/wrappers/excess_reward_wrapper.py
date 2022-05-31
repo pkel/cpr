@@ -13,7 +13,7 @@ class AbsoluteRewardWrapper(gym.Wrapper):
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         reward = info["reward_attacker"]
-        self.current_ep_reward += reward
+
         if done:
             if self.env.alpha not in self.rolling_reward:
                 self.rolling_reward[self.env.alpha] = []
@@ -26,6 +26,7 @@ class AbsoluteRewardWrapper(gym.Wrapper):
         reward /= self.env.config["STEPS_PER_ROLLOUT"]
         if info.get("in_prep_phase", False):
             reward = 0
+        self.current_ep_reward += reward
         return obs, reward, done, info
 
 
