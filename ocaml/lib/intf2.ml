@@ -137,3 +137,5 @@ module type Protocol = sig
   val reward_functions : unit -> ('env, data) reward_function Collection.t
   val attacks : unit -> (('env, data) local_view -> ('env, data) node) Collection.t
 end
+
+type 'a protocol = (module Protocol with type data = 'a)

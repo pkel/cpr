@@ -1,4 +1,5 @@
 open Cpr_lib.Next
+module _ : Protocol = Nakamoto
 
 let%test "nakamoto_progress" =
   let open Simulator in

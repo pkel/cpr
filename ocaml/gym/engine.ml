@@ -1,5 +1,5 @@
 open Intf
-open Cpr_lib
+open Cpr_lib.Next
 
 (* Gym parameters *)
 module Parameters : sig
@@ -51,7 +51,7 @@ module type AttackSpace = sig
   type agent_state
   type honest_state
 
-  val protocol : (env, data, pow, honest_state) protocol
+  val protocol : data protocol
   val info : string
 
   module Observation : sig
@@ -86,22 +86,11 @@ module type AttackSpace = sig
     -> pre_action
 
   val observe : (env, data) local_view -> pre_action -> Observation.t
-
-  val apply
-    :  (env, data) local_view
-    -> (env, data, pow) actions
-    -> pre_action
-    -> Action.t
-    -> agent_state
-
-  val shutdown
-    :  (env, data) local_view
-    -> (env, data, pow) actions
-    -> agent_state
-    -> agent_state
-
+  val apply : (env, data) local_view -> pre_action -> Action.t -> agent_state
   val policies : (Observation.t -> Action.t) Collection.t
 end
+
+module _ : AttackSpace = Cpr_protocols.Nakamoto.SszAttack
 
 (* state of a running simulation *)
 type ('data, 'honest_state, 'agent_state, 'pre_action) instance =
