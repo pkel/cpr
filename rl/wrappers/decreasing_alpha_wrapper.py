@@ -23,7 +23,9 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.observed = self.target
             self.in_prep_phase = True
 
-            self.observation_space = gym.spaces.Box(-np.inf, np.inf, (5,), dtype=np.float64)
+            self.observation_space = gym.spaces.Box(
+                -np.inf, np.inf, (5,), dtype=np.float64
+            )
 
     def update_difficulties(self, reset_difficulties=False):
         if reset_difficulties:
@@ -33,6 +35,10 @@ class AlphaScheduleWrapper(gym.Wrapper):
                 difficulty = self.difficulties[self.alpha] * (
                     self.target / self.observed
                 )
+                if difficulty <= 0:
+                    print(difficulty)
+                    print(self.__dict__)
+                    exit(0)
                 self.difficulties[self.alpha] = difficulty
                 self.n_pow = 0
                 self.observed = self.target
@@ -68,10 +74,14 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.current_step += 1
         if self.run_daa:
             self.n_pow += info["reward_n_pows"]
-            if self.n_pow > 0:
-                self.observed = info["simulator_clock_now"] / self.n_pow
-
-            if info['simulator_clock_now'] >= self.config["STEPS_PER_ROLLOUT"] // 2:
+            if (
+                info["simulator_clock_now"] >= self.config["STEPS_PER_ROLLOUT"] // 2
+                and self.in_prep_phase
+            ):
+                if self.n_pow > 0:
+                    self.observed = info["simulator_clock_now"] / self.n_pow
+                else:
+                    self.observed = 1
                 self.update_difficulties()
                 self.in_prep_phase = False
 

@@ -255,4 +255,4 @@ if __name__ == "__main__":
             verbose=0,
         ),
     )
-    model.save(os.path.join(log_dir, f"{config['ALGO']}_bkll"))
+    model.save(os.path.join(log_dir, f"{config['ALGO']}_{config['PROTOCOL']}"))
