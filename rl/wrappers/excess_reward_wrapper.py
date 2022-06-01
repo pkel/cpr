@@ -1,3 +1,4 @@
+import collections
 import re
 import gym
 import numpy as np
@@ -57,15 +58,13 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
             reward = 0
         self.current_obs = next_state
         self.current_ep_reward += reward
-        # if done:
-        #     if self.env.alpha not in self.rolling_reward:
-        #         self.rolling_reward[self.env.alpha] = []
-        #     self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
-        #     # take last 5000 rewards
-        #     if len(self.rolling_reward[self.env.alpha]) > 5000:
-        #         self.rolling_reward[self.env.alpha].pop(0)
-        #     self.current_ep_reward = 0
-        # info["rewards_per_alpha"] = self.rolling_reward
+        if done:
+            if self.env.alpha not in self.rolling_reward:
+                # take last 5000 rewards
+                self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
+            self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
+            self.current_ep_reward = 0
+        info["rewards_per_alpha"] = self.rolling_reward
         return next_state, reward, done, info
 
 
