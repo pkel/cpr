@@ -64,7 +64,6 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
                 self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
             self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
             self.current_ep_reward = 0
-        info["rewards_per_alpha"] = self.rolling_reward
         return next_state, reward, done, info
 
 

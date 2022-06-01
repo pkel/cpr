@@ -167,13 +167,13 @@ class VecWandbLogger(VecEnvWrapper):
                 d = {"difficulty": None}
             # mean rewards
             r = {}
-            # for i in info:
-            #     for alpha, value in i["rewards_per_alpha"].items():
-            #         if alpha in r.keys():
-            #             r[alpha].extend(value)
-            #         else:
-            #             r[alpha] = value
-            # r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
+            for i in self.venv.get_attr("rolling_reward"):
+                for alpha, value in i.items():
+                    if alpha in r.keys():
+                        r[alpha].extend(value)
+                    else:
+                        r[alpha] = value
+            r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
             # log
             wandb.log(progress | performance | d | r)
         return obs, reward, done, info
