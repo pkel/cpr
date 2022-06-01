@@ -15,8 +15,6 @@ class AbsoluteRewardWrapper(gym.Wrapper):
         reward = info["reward_attacker"]
 
         if done:
-            self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
-            # take last 5000 rewards
             if self.env.alpha not in self.rolling_reward:
                 # take last 5000 rewards
                 self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
