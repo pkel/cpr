@@ -68,9 +68,9 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
 
 
 class SparseRelativeRewardWrapper(gym.Wrapper):
-    def __init__(self, env, relative=True):
+    def __init__(self, env, normalize=True):
         super().__init__(env)
-        self.relative = relative
+        self.normalize = normalize
         self.sum_attacker = 0
         self.sum_defender = 0
         self.current_relative_reward = 0
@@ -94,10 +94,10 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
                 reward = self.sum_attacker / (self.sum_defender + self.sum_attacker)
             except:
                 reward = 0
-            if self.relative:
-                reward -= self.env.alpha
-                reward /= self.env.alpha
-                # reward = 1 if reward > self.env.alpha else 0
+
+            # comparable rewards for different alphas
+            if self.normalize:
+                reward = reward / self.env.alpha if self.env.alpha > 0 else 0
 
             # record last 5000 rewards
             if self.env.alpha not in self.rolling_reward:
