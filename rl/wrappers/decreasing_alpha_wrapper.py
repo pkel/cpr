@@ -35,13 +35,12 @@ class AlphaScheduleWrapper(gym.Wrapper):
                 difficulty = self.difficulties[self.alpha] * (
                     self.target / self.observed
                 )
-                if difficulty <= 0:
-                    print(difficulty)
-                    print(self.__dict__)
-                    exit(0)
                 self.difficulties[self.alpha] = difficulty
                 self.n_pow = 0
                 self.observed = self.target
+        self.env = self.env_fn(
+            alpha=self.alpha, target=self.difficulties[self.alpha], config=self.config
+        )
 
     def reset(self, reset_difficulties=False):
         self.current_step = 0
