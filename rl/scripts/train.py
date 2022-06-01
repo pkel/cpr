@@ -167,8 +167,8 @@ class VecWandbLogger(VecEnvWrapper):
                 d = {"difficulty": None}
             # mean rewards
             r = {}
-            for i in info:
-                for alpha, value in i["rewards_per_alpha"].items():
+            for i in self.venv.get_attr("rolling_reward"):
+                for alpha, value in i.items():
                     if alpha in r.keys():
                         r[alpha].extend(value)
                     else:

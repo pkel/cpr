@@ -1,4 +1,4 @@
-import re
+import collections
 import gym
 import numpy as np
 from gym.spaces import Tuple, MultiDiscrete
@@ -59,14 +59,14 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
         self.current_obs = next_state
         self.current_ep_reward += reward
         if done:
-            if self.env.alpha not in self.rolling_reward:
-                self.rolling_reward[self.env.alpha] = []
             self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
             # take last 5000 rewards
-            if len(self.rolling_reward[self.env.alpha]) > 5000:
-                self.rolling_reward[self.env.alpha].pop(0)
+            if self.env.alpha not in self.rolling_reward:
+                # take last 5000 rewards
+                self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
+            self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
             self.current_ep_reward = 0
-        info["rewards_per_alpha"] = self.rolling_reward
+            self.current_ep_reward = 0
         return next_state, reward, done, info
 
 
@@ -79,8 +79,8 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
         self.current_relative_reward = 0
         self.last_relative_reward = 0
 
-    def reset(self):
-        obs = self.env.reset()
+    def reset(self, *args, **kwargs):
+        obs = self.env.reset(*args, **kwargs)
         self.sum_attacker = 0
         self.sum_defender = 0
         self.current_relative_reward = 0
