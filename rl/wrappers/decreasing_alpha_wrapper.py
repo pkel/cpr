@@ -35,6 +35,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
                 difficulty = self.difficulties[self.alpha] * (
                     self.target / self.observed
                 )
+                print(difficulty)
                 self.difficulties[self.alpha] = difficulty
                 self.n_pow = 0
                 self.observed = self.target
@@ -43,6 +44,8 @@ class AlphaScheduleWrapper(gym.Wrapper):
                     target=self.difficulties.get(self.alpha, self.target),
                     config=self.config,
                 )
+                obs = self.observation(self.env.reset())
+                return obs
 
     def reset(self, reset_difficulties=False):
         self.current_step = 0
@@ -83,7 +86,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
                     self.observed = info["simulator_clock_now"] / self.n_pow
                 else:
                     self.observed = 1
-                self.update_difficulties()
+                obs = self.update_difficulties()
                 self.in_prep_phase = False
 
             info["difficulties"] = self.difficulties

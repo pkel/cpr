@@ -15,14 +15,14 @@ class AbsoluteRewardWrapper(gym.Wrapper):
         reward = info["reward_attacker"]
 
         if done:
-            if self.env.alpha not in self.rolling_reward:
-                self.rolling_reward[self.env.alpha] = []
             self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
             # take last 5000 rewards
-            if len(self.rolling_reward[self.env.alpha]) > 5000:
-                self.rolling_reward[self.env.alpha].pop(0)
+            if self.env.alpha not in self.rolling_reward:
+                # take last 5000 rewards
+                self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
+            self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
             self.current_ep_reward = 0
-        info["rewards_per_alpha"] = self.rolling_reward
+
         reward /= self.env.config["STEPS_PER_ROLLOUT"]
         if info.get("in_prep_phase", False):
             reward = 0
@@ -65,7 +65,6 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
                 # take last 5000 rewards
                 self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
             self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
-            self.current_ep_reward = 0
             self.current_ep_reward = 0
         return next_state, reward, done, info
 
