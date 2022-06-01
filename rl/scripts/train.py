@@ -74,10 +74,10 @@ config = dict(
     PROTOCOL="nakamoto",
     K=10,
     ALGO="PPO",
-    TOTAL_TIMESTEPS=50e7,
+    TOTAL_TIMESTEPS=10e7,
     STEPS_PER_ROLLOUT=4000,
     STARTING_LR=10e-5,
-    ENDING_LR=10e-6,
+    ENDING_LR=10e-7,
     BATCH_SIZE=2048,
     ALPHA_SCHEDULE_CUTOFF=0,
     LAYER_SIZE=100,
@@ -101,7 +101,7 @@ config = dict(
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
-    N_ENVS=1,
+    N_ENVS=16,
 )
 
 
