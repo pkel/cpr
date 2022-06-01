@@ -75,7 +75,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=250,
+    STEPS_PER_ROLLOUT=16,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
@@ -160,19 +160,20 @@ class VecWandbLogger(VecEnvWrapper):
             try:
                 d = [x["difficulties"] for x in info]
                 d = {
-                    f"difficulty/α={a:.2f}": np.mean([x[a] for x in d]) for a in d[0].keys()
+                    f"difficulty/α={a:.2f}": np.mean([x[a] for x in d])
+                    for a in d[0].keys()
                 }
             except:
                 d = {"difficulty": None}
             # mean rewards
             r = {}
-            for i in info:
-                for alpha, value in i["rewards_per_alpha"].items():
-                    if alpha in r.keys():
-                        r[alpha].extend(value)
-                    else:
-                        r[alpha] = value
-            r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
+            # for i in info:
+            #     for alpha, value in i["rewards_per_alpha"].items():
+            #         if alpha in r.keys():
+            #             r[alpha].extend(value)
+            #         else:
+            #             r[alpha] = value
+            # r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
             # log
             wandb.log(progress | performance | d | r)
         return obs, reward, done, info
