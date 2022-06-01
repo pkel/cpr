@@ -59,8 +59,8 @@ class WastedBlocksRewardWrapper(gym.Wrapper):
         self.current_obs = next_state
         self.current_ep_reward += reward
         if done:
+            # record last 5000 rewards
             if self.env.alpha not in self.rolling_reward:
-                # take last 5000 rewards
                 self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
             self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
             self.current_ep_reward = 0
@@ -75,6 +75,7 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
         self.sum_defender = 0
         self.current_relative_reward = 0
         self.last_relative_reward = 0
+        self.rolling_reward = dict()
 
     def reset(self):
         obs = self.env.reset()
@@ -97,6 +98,11 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
                 reward -= self.env.alpha
                 reward /= self.env.alpha
                 # reward = 1 if reward > self.env.alpha else 0
+
+            # record last 5000 rewards
+            if self.env.alpha not in self.rolling_reward:
+                self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
+            self.rolling_reward[self.env.alpha].append(reward)
         else:
             reward = 0
         return next_state, reward, done, info

@@ -194,7 +194,7 @@ if __name__ == "__main__":
         if config["USE_DAA"]:
             env = AbsoluteRewardWrapper(env)
         else:
-            env = WastedBlocksRewardWrapper(env)
+            env = SparseRelativeRewardWrapper(env)
         return env
 
     if config["N_ENVS"] > 1:
