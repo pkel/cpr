@@ -1,4 +1,6 @@
 import gym
+import numpy
+import random
 
 
 class SparseRelativeRewardWrapper(gym.Wrapper):
@@ -64,4 +66,51 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
                 reward = 0
         else:
             reward = 0
+        return obs, reward, done, info
+
+
+class AlphaScheduleWrapper(gym.Wrapper):
+    """
+    Reconfigures alpha on each reset.
+    Extends observation space with current alpha.
+    Reports alpha in the info field.
+    """
+
+    # TODO. Do we need something similar for gamma? Maybe we can generalize
+    # this Wrapper to support arbitrary parameters?
+
+    def __init__(self, env, alpha_schedule=None):
+        super().__init__(env)
+        self.alpha_schedule = alpha_schedule
+        if callable(alpha_schedule):
+            self.asw_fn = alpha_schedule
+        else:
+            self.asw_fn = lambda: random.choice(alpha_schedule)
+
+        # extend observation space
+        low = self.observation_space.low
+        high = self.observation_space.high
+        low = numpy.append(low, [0])
+        high = numpy.append(high, [1])
+        self.observation_space = gym.spaces.Box(low, high, dtype=numpy.float64)
+
+    def observation(self, obs):
+        return numpy.append(obs, [self.asw_alpha])
+
+    # overwrite core env's policy
+    def policy(self, obs, name="honest"):
+        obs = obs[:-1]
+        return self.env.policy(obs, name)
+
+    def reset(self):
+        self.asw_alpha = self.asw_fn()
+        self.env.core_kwargs["alpha"] = self.asw_alpha
+        obs = self.env.reset()
+        obs = AlphaScheduleWrapper.observation(self, obs)
+        return obs
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        info["alpha"] = self.asw_alpha
+        obs = AlphaScheduleWrapper.observation(self, obs)
         return obs, reward, done, info
