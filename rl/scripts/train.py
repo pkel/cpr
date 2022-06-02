@@ -20,12 +20,12 @@ import torch
 from rl.wrappers.exploration_reward_wrapper import ExplorationRewardWrapper
 from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
-    ReleaseOnDoneWrapper,
     SparseDaaRewardWrapper,
     SparseRelativeRewardWrapper,
     WastedBlocksRewardWrapper,
     AbsoluteRewardWrapper,
 )
+from rl.wrappers import RelativeRewardWrapper
 from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
