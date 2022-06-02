@@ -1,6 +1,8 @@
 import sys, os, psutil, time
 from uuid import uuid4
 
+from rl.wrappers.release_on_done_wrapper import ReleaseOnDoneWrapper
+
 sys.path.append(os.getcwd())
 import numpy as np
 
@@ -193,6 +195,7 @@ if __name__ == "__main__":
     def vec_env_fn():
         env = env_fn(0, 1, config)
         env = AlphaScheduleWrapper(env, env_fn, config)
+        env = ReleaseOnDoneWrapper(env)
         if config["USE_DAA"]:
             if config["DAA_METHOD"] == "sparse":
                 env = SparseDaaRewardWrapper(env)
@@ -231,6 +234,7 @@ if __name__ == "__main__":
             learning_rate=lr_schedule,
             # clip_range=clip_schedule,
             policy_kwargs=policy_kwargs,
+            gamma=0.999,
         )
     elif config["ALGO"] == "DQN":
         policy_kwargs = dict(
