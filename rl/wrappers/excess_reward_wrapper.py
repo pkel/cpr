@@ -7,6 +7,7 @@ from gym.spaces import Tuple, MultiDiscrete
 class SparseDaaRewardWrapper(gym.Wrapper):
     def ___init__(self, env):
         super().__init__(env)
+        self.rolling_reward = dict()
         self.n_pow = 0
         self.sum_attacker = 0
 
@@ -22,6 +23,10 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         if done:
             observed = info["simulator_clock_now"] / self.n_pow
             reward = self.sum_attacker * observed
+            if self.env.alpha not in self.rolling_reward:
+                # take last 5000 rewards
+                self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
+            self.rolling_reward[self.env.alpha].append(reward)
         else:
             reward = 0
         return obs, reward, done, info
