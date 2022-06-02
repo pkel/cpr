@@ -1,8 +1,6 @@
 import sys, os, psutil, time
 from uuid import uuid4
 
-from rl.wrappers.release_on_done_wrapper import ReleaseOnDoneWrapper
-
 sys.path.append(os.getcwd())
 import numpy as np
 
@@ -22,6 +20,7 @@ import torch
 from rl.wrappers.exploration_reward_wrapper import ExplorationRewardWrapper
 from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
+    ReleaseOnDoneWrapper,
     SparseDaaRewardWrapper,
     SparseRelativeRewardWrapper,
     WastedBlocksRewardWrapper,
