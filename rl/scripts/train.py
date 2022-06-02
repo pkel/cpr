@@ -25,7 +25,7 @@ from rl.wrappers.excess_reward_wrapper import (
     WastedBlocksRewardWrapper,
     AbsoluteRewardWrapper,
 )
-from rl.wrappers import RelativeRewardWrapper
+from rl.wrappers import ReleaseOnDoneWrapper
 from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
