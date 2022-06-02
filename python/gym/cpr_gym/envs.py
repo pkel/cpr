@@ -11,42 +11,49 @@ class Core(gym.Env):
     metadata = {"render.modes": ["ascii"]}
 
     def __init__(self, proto=protocols.nakamoto(), **kwargs):
-        self.env = engine.create(proto=proto, **kwargs)
-        self.action_space = gym.spaces.Discrete(engine.n_actions(self.env))
-        low = engine.observation_low(self.env)
+        self.core_kwargs = kwargs
+        self.core_kwargs["proto"] = proto
+
+        self.ocaml_env = None
+        Core.reset(self)  # sets self.ocaml_env from self.core_kwargs
+
+        self.action_space = gym.spaces.Discrete(engine.n_actions(self.ocaml_env))
+        low = engine.observation_low(self.ocaml_env)
         low = np.array(low)  # for pickling; why doesn't pyml support pickling?
-        high = engine.observation_high(self.env)
-        high = np.array(high)
+        high = engine.observation_high(self.ocaml_env)
+        high = np.array(high)  # for pickling; why doesn't pyml support pickling?
         self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
+
         self.version = engine.cpr_lib_version
 
     def policies(self):
-        return engine.policies(self.env).keys()
+        return engine.policies(self.ocaml_env).keys()
 
     def policy(self, obs, name="honest"):
-        return engine.policies(self.env)[name](obs)
+        return engine.policies(self.ocaml_env)[name](obs)
 
     def puzzles_per_block(self):
         return engine.puzzles_per_block(self.env)
 
     def reset(self):
-        obs = engine.reset(self.env)
+        # TODO / ocaml: we could expose engine.init that combines create and reset
+        self.ocaml_env = engine.create(**self.core_kwargs)
+        obs = engine.reset(self.ocaml_env)
         obs = np.array(obs)  # for pickling; why doesn't pyml support pickling?
         return obs
 
     def step(self, a):
-        obs, r, d, i = engine.step(self.env, a)
+        obs, r, d, i = engine.step(self.ocaml_env, a)
         obs = np.array(obs)  # for pickling; why doesn't pyml support pickling?
         return obs, r, d, i
 
     def render(self, mode="ascii"):
-        print(engine.to_string(self.env))
+        print(engine.to_string(self.ocaml_env))
 
 
 class Auto(Core):
     def __init__(
         self,
-        proto=protocols.nakamoto(),
         alpha_min=0.1,
         alpha_max=1,
         target_runtime=128,
@@ -76,13 +83,13 @@ class Auto(Core):
         self.buf_size = buf_size
         self.daa_window = daa_window
 
-        self.core_kwargs = kwargs
-        self.core_kwargs["proto"] = proto
-        self.core_kwargs["max_time"] = target_runtime
-        self.core_kwargs["max_steps"] = target_runtime * 10
+        kwargs = kwargs
+        kwargs["max_time"] = target_runtime
+        kwargs["max_steps"] = target_runtime * 10
 
         # initialize Core env to get observation spaces
-        super().__init__(**self.core_kwargs)
+        super().__init__(**kwargs)
+
         # extend observation space with alpha
         self.extend_observation_space()
         # initialize ring buffers for DAA and reporting
@@ -168,13 +175,9 @@ class Auto(Core):
         self.activation_delay, self.daa_input_episodes = self.estimate_difficulty(
             self.alpha
         )
-        # create env with new parameters
-        self.env = engine.create(
-            alpha=self.alpha,
-            activation_delay=self.activation_delay,
-            **self.core_kwargs,
-        )
-        # reset Core env
+        # reset core env with new parameters
+        self.core_kwargs["alpha"] = self.alpha
+        self.core_kwargs["activation_delay"] = self.activation_delay
         obs = super().reset()
         # reset episode-scoped counters
         self.episode_pow_confirmed = 0
