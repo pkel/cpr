@@ -36,8 +36,6 @@ class AlphaScheduleWrapper(gym.Wrapper):
                     self.target / self.observed
                 )
                 self.difficulties[self.alpha] = difficulty
-                self.n_pow = 0
-                self.observed = self.target
                 self.env = self.env_fn(
                     alpha=self.alpha,
                     target=self.difficulties.get(self.alpha, self.target),
@@ -52,10 +50,10 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
         if self.run_daa:
             self.update_difficulties(reset_difficulties)
+            self.observed = self.target
+            self.n_pow = 0
             self.in_prep_phase = True
-            self.env = self.env_fn(
-                alpha=alpha, target=self.difficulties[alpha], config=self.config
-            )
+            self.env = self.env_fn(alpha=alpha, target=1, config=self.config)
         else:
             self.env = self.env_fn(
                 alpha=alpha, target=self.config["ACTIVATION_DELAY"], config=self.config
