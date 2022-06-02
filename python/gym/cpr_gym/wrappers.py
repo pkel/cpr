@@ -1,6 +1,7 @@
 import gym
 import numpy
 import random
+import warnings
 
 
 class SparseRelativeRewardWrapper(gym.Wrapper):
@@ -9,9 +10,6 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
     Calculates relative rewards at the end of the episode.
     One reward per episode.
     """
-
-    def __init__(self, env):
-        super().__init__(env)
 
     def reset(self):
         obs = self.env.reset()
@@ -46,9 +44,6 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
     Tailstorm's 'discount' scheme, this wrapper is better suited.
     """
 
-    def __init__(self, env):
-        super().__init__(env)
-
     def reset(self):
         obs = self.env.reset()
         self.srpbw_acc = 0
@@ -66,6 +61,49 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
                 reward = 0
         else:
             reward = 0
+        return obs, reward, done, info
+
+
+class DenseRewardPerBlockWrapper(gym.Wrapper):
+    """
+    Mimics SparseRewardPerBlockWrapper but with dense rewards.
+    The trick is to end the episode at a given target block height.
+    This way, we know the divisor in SparseRewardPerBlockWrapper in advance.
+    """
+
+    def __init__(self, env, n_pow=128):
+        super().__init__(env)
+
+        self.drpb_stop = n_pow
+
+        for k in ["max_steps", "max_time"]:
+            if k in self.env.core_kwargs.keys():
+                self.env.core_kwargs.pop(k, None)
+                warnings.warn(
+                    f"DenseRewardPerBlockWrapper overwrites argument '{k}' in wrapped env"
+                )
+
+        self.env.core_kwargs["max_steps"] = n_pow * 10
+
+    def reset(self):
+        self.drpb_cnt = 0
+        return self.env.reset()
+
+    def step(self, action):
+        obs, _reward, done, info = self.env.step(action)
+        reward = info["reward_attacker"] / self.drpb_stop
+        if self.drpb_cnt + info["reward_n_pows"] > self.drpb_stop:
+            # we are overshooting self.drpb_stop, resize reward accordingly
+            reward = reward * (self.drpb_cnt - self.drpb_stop) / info["reward_n_pows"]
+
+        self.drpb_cnt += info["reward_n_pows"]
+        if done and self.drpb_cnt < self.drpb_stop:
+            # TODO. This happens when the agent withholds long enough.
+            # I tried to force the agent to release on `done = True` a few
+            # weeks back, but apparently this mechanism does not work.
+            warnings.warn("DenseRewardPerBlockWrapper observed less pows than expected")
+        if self.drpb_cnt >= self.drpb_stop:
+            done = True
         return obs, reward, done, info
 
 
