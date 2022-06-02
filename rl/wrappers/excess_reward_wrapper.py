@@ -22,6 +22,8 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         if done:
             observed = info["simulator_clock_now"] / self.n_pow
             reward = self.sum_attacker * observed
+        else:
+            reward = 0
         return obs, reward, done, info
 
 
