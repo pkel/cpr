@@ -5,7 +5,7 @@ from gym.spaces import Tuple, MultiDiscrete
 
 
 class SparseDaaRewardWrapper(gym.Wrapper):
-    def ___init__(self, env):
+    def __init__(self, env):
         super().__init__(env)
         self.rolling_reward = dict()
         self.n_pow = 0
