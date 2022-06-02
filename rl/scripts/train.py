@@ -20,6 +20,7 @@ import torch
 from rl.wrappers.exploration_reward_wrapper import ExplorationRewardWrapper
 from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
+    SparseDaaRewardWrapper,
     SparseRelativeRewardWrapper,
     WastedBlocksRewardWrapper,
     AbsoluteRewardWrapper,
@@ -53,11 +54,11 @@ def env_fn(alpha, target, config):
         proto = protocols.bk_ll(k=config["K"])
 
     if config["USE_DAA"]:
-        max_steps = config["STEPS_PER_ROLLOUT"] * 10
+        max_steps = config["STEPS_PER_ROLLOUT"] * 1000
         max_time = config["STEPS_PER_ROLLOUT"]
     else:
         max_steps = config["STEPS_PER_ROLLOUT"]
-        max_time = config["STEPS_PER_ROLLOUT"] * 10
+        max_time = config["STEPS_PER_ROLLOUT"] * 1000
     return gym.make(
         "cpr-v0",
         proto=proto,
@@ -75,7 +76,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e7,
-    STEPS_PER_ROLLOUT=4000,
+    STEPS_PER_ROLLOUT=200,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
@@ -98,6 +99,7 @@ config = dict(
         0.475,
     ],
     USE_DAA=True,
+    DAA_METHOD="sparse",
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
@@ -192,7 +194,10 @@ if __name__ == "__main__":
         env = env_fn(0, 1, config)
         env = AlphaScheduleWrapper(env, env_fn, config)
         if config["USE_DAA"]:
-            env = AbsoluteRewardWrapper(env)
+            if config["DAA_METHOD"] == "sparse":
+                env = SparseDaaRewardWrapper(env)
+            else:
+                env = AbsoluteRewardWrapper(env)
         else:
             env = WastedBlocksRewardWrapper(env)
         return env

@@ -15,7 +15,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.config = config
         self.in_prep_phase = False
         # DAA
-        self.run_daa = config["USE_DAA"]
+        self.run_daa = config["USE_DAA"] and config["DAA_METHOD"] != "sparse"
         if self.run_daa:
             self.target = config["ACTIVATION_DELAY"]
             self.difficulties = dict((a, self.target) for a in config["ALPHA_SCHEDULE"])
@@ -75,10 +75,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.current_step += 1
         if self.run_daa:
             self.n_pow += info["reward_n_pows"]
-            if (
-                info["simulator_clock_now"] >= self.config["STEPS_PER_ROLLOUT"] // 2
-                and self.in_prep_phase
-            ):
+            if done and self.in_prep_phase:
                 if self.n_pow > 0:
                     self.observed = info["simulator_clock_now"] / self.n_pow
                 else:
@@ -88,7 +85,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
             info["difficulties"] = self.difficulties
             info["in_prep_phase"] = self.in_prep_phase
-            obs = self.observation(obs)
+        obs = self.observation(obs)
 
         # if done and self.run_daa:
         #     self.observed = info['simulator_clock_rewarded'] / self.n_pow

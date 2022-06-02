@@ -4,11 +4,33 @@ import numpy as np
 from gym.spaces import Tuple, MultiDiscrete
 
 
+class SparseDaaRewardWrapper(gym.Wrapper):
+    def ___init__(self, env):
+        super().__init__(env)
+        self.n_pow = 0
+        self.sum_attacker = 0
+
+    def reset(self):
+        self.n_pow = 0
+        self.sum_attacker = 0
+        return self.env.reset()
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self.n_pow += info["reward_n_pows"]
+        self.sum_attacker += info["reward_attacker"]
+        if done:
+            observed = info["simulator_clock_now"] / self.n_pow
+            reward = self.sum_attacker * observed
+        return obs, reward, done, info
+
+
 class AbsoluteRewardWrapper(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, normalize=True):
         super().__init__(env)
         self.rolling_reward = dict()
         self.current_ep_reward = 0
+        self.normalize = normalize
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
@@ -20,8 +42,8 @@ class AbsoluteRewardWrapper(gym.Wrapper):
                 self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
             self.rolling_reward[self.env.alpha].append(self.current_ep_reward)
             self.current_ep_reward = 0
-
-        reward /= self.env.config["STEPS_PER_ROLLOUT"]
+        if self.normalize:
+            reward /= self.env.config["STEPS_PER_ROLLOUT"]
         if info.get("in_prep_phase", False):
             reward = 0
         self.current_ep_reward += reward
