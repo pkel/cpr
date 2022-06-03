@@ -177,7 +177,7 @@ class VecWandbLogger(VecEnvWrapper):
                     else:
                         r[alpha] = value
             ds = {}
-            for i in self.venv.get_attr("difficultues"):
+            for i in self.venv.get_attr("difficulties"):
                 for alpha, value in i.items():
                     if alpha in ds.keys():
                         ds[alpha].append(value)
