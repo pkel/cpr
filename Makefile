@@ -82,7 +82,7 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 
 # RL
 
-train-online: _venv
+train-online: bridge _venv
 	. _venv/bin/activate && python python/train/ppo.py
 
 train-offline: export WANDB_MODE=offline
