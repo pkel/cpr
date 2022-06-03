@@ -117,8 +117,9 @@ class AlphaScheduleWrapper(gym.Wrapper):
     # TODO. Do we need something similar for gamma? Maybe we can generalize
     # this Wrapper to support arbitrary parameters?
 
-    def __init__(self, env, alpha_schedule=None):
+    def __init__(self, env, alpha_schedule=None, normalize_reward=True):
         super().__init__(env)
+        self.asw_normalize_reward = normalize_reward
         self.alpha_schedule = alpha_schedule
         if callable(alpha_schedule):
             self.asw_fn = alpha_schedule
@@ -151,4 +152,8 @@ class AlphaScheduleWrapper(gym.Wrapper):
         obs, reward, done, info = self.env.step(action)
         info["alpha"] = self.asw_alpha
         obs = AlphaScheduleWrapper.observation(self, obs)
+
+        if self.asw_normalize_reward:
+            reward = reward / self.asw_alpha
+
         return obs, reward, done, info
