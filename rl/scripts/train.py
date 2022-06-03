@@ -160,14 +160,14 @@ class VecWandbLogger(VecEnvWrapper):
                 "progress/episodes": self.total_episodes,
             }
             # daa difficulties
-            try:
-                d = [x["difficulties"] for x in info]
-                d = {
-                    f"difficulty/α={a:.2f}": np.mean([x[a] for x in d])
-                    for a in d[0].keys()
-                }
-            except:
-                d = {"difficulty": None}
+            # try:
+            #     d = [x["difficulties"] for x in info]
+            #     d = {
+            #         f"difficulty/α={a:.2f}": np.mean([x[a] for x in d])
+            #         for a in d[0].keys()
+            #     }
+            # except:
+            #     d = {"difficulty": None}
             # mean rewards
             r = {}
             for i in self.venv.get_attr("rolling_reward"):
@@ -176,9 +176,17 @@ class VecWandbLogger(VecEnvWrapper):
                         r[alpha].extend(value)
                     else:
                         r[alpha] = value
+            ds = {}
+            for i in self.venv.get_attr("difficultues"):
+                for alpha, value in i.items():
+                    if alpha in ds.keys():
+                        ds[alpha].append(value)
+                    else:
+                        ds[alpha] = [value]
             r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
+            ds = {f"difficulty/α={a:.2f}": np.mean(l) for a, l in ds.items()}
             # log
-            wandb.log(progress | performance | d | r)
+            wandb.log(progress | performance | d | r | ds)
         return obs, reward, done, info
 
 
