@@ -107,8 +107,10 @@ def alpha_schedule(eval=False):
         if eval:
             info["n_alphas"] = 1
 
-        def alpha_schedule():
-            return config["main"]["alpha"]
+        if "alpha" in config["main"].keys():
+            alpha_schedule = [config["main"]["alpha"]]
+        else:
+            alpha_schedule = [0.33]
 
     return alpha_schedule, info
 
