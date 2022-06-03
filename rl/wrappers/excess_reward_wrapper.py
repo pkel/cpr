@@ -24,9 +24,9 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         if done:
             observed = info["simulator_clock_now"] / self.n_pow
             self.difficulties[self.env.alpha] = observed
-            reward = (self.sum_attacker * observed) - self.env.config[
-                "STEPS_PER_ROLLOUT"
-            ]
+            reward = (self.sum_attacker * observed) - (
+                self.env.config["STEPS_PER_ROLLOUT"] * self.env.alpha
+            )
             if self.env.alpha not in self.rolling_reward:
                 # take last 5000 rewards
                 self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
