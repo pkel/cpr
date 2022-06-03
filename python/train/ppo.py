@@ -2,6 +2,7 @@ import configparser
 import cpr_gym
 import cpr_gym.wrappers
 import gym
+import numpy
 import os
 import pprint
 import psutil
@@ -51,6 +52,7 @@ cast("ppo", "n_layers", int)
 cast("ppo", "layer_size", int)
 cast("ppo", "starting_lr", float)
 cast("ppo", "ending_lr", float)
+cast("eval", "episodes_per_alpha_per_env", int)
 
 
 ###
@@ -81,7 +83,37 @@ if __name__ == "__main__":
 ###
 
 
-def env_fn():
+def alpha_schedule(eval=False):
+    info = dict()
+    if "alpha_schedule" in config["main"].keys():
+        alpha_schedule = [float(a) for a in config["main"]["alpha_schedule"].split(",")]
+        if eval:
+            info["n_alphas"] = len(alpha_schedule)
+
+    elif "alpha_min" in config["main"].keys():
+        if eval:
+            alpha_schedule = numpy.arange(
+                config["main"]["alpha_min"], config["main"]["alpha_max"], 0.05
+            )
+            info["n_alphas"] = numpy.size(alpha_schedule)
+        else:
+
+            def alpha_schedule():
+                return random.uniform(
+                    config["main"]["alpha_min"], config["main"]["alpha_max"]
+                )
+
+    else:
+        if eval:
+            info["n_alphas"] = 1
+
+        def alpha_schedule():
+            return config["main"]["alpha"]
+
+    return alpha_schedule, info
+
+
+def env_fn(eval=False):
     protocol_fn = getattr(cpr_gym.protocols, config["main"]["protocol"])
     protocol_args = config["protocol_args"]
     env_args = config["env_args"]
@@ -104,37 +136,27 @@ def env_fn():
 
     env = reward[config["main"]["reward"]](env)
 
-    if "alpha_schedule" in config["main"].keys():
-        alpha_schedule = [float(a) for a in config["main"]["alpha_schedule"].split(",")]
-    elif "alpha_min" in config["main"].keys():
-
-        def alpha_schedule():
-            return random.uniform(
-                config["main"]["alpha_min"], config["main"]["alpha_max"]
-            )
-
-    else:
-
-        def alpha_schedule():
-            return config["main"]["alpha"]
-
-    env = cpr_gym.wrappers.AlphaScheduleWrapper(env, alpha_schedule)
+    alpha_f, _ = alpha_schedule(eval=eval)
+    env = cpr_gym.wrappers.AlphaScheduleWrapper(env, alpha_schedule=alpha_f)
 
     return env
 
 
 if __name__ == "__main__":
-    print("## Environment (not vectorized) ##")
+    print("## Environment (before vectorization) ##")
     env_fn().render()
 
 
-def venv_fn():
+def venv_fn(**kwargs):
+    def f():
+        return env_fn(**kwargs)
+
     if config["main"]["n_envs"] > 1:
         env = stable_baselines3.common.vec_env.SubprocVecEnv(
-            [env_fn] * config["main"]["n_envs"]
+            [f] * config["main"]["n_envs"]
         )
     else:
-        env = stable_baselines3.common.vec_env.DummyVecEnv([env_fn])
+        env = stable_baselines3.common.vec_env.DummyVecEnv([f])
 
     env = stable_baselines3.common.vec_env.VecMonitor(env)
     return env
@@ -183,6 +205,10 @@ if __name__ == "__main__":
 
     utils.setWandbLogger(model)
 
+    # we evaluate on a fixed alpha schedule
+    eval_env = venv_fn(eval=True)
+    _, alpha_info = alpha_schedule(eval=True)
+
     model.learn(
         total_timesteps=config["main"]["total_timesteps"],
         callback=[
@@ -193,11 +219,13 @@ if __name__ == "__main__":
                 verbose=0,
             ),
             stable_baselines3.common.callbacks.EvalCallback(
-                venv_fn(),
+                eval_env,
                 best_model_save_path=log_dir,
                 log_path=log_dir,
                 eval_freq=vec_steps_per_rollout,
-                n_eval_episodes=128,
+                n_eval_episodes=alpha_info["n_alphas"]
+                * config["main"]["n_envs"]
+                * config["eval"]["episodes_per_alpha_per_env"],
                 deterministic=True,
                 render=False,
             ),
