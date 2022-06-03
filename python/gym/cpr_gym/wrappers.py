@@ -1,3 +1,4 @@
+import collections
 import gym
 import numpy
 import random
@@ -156,4 +157,24 @@ class AlphaScheduleWrapper(gym.Wrapper):
         if self.asw_normalize_reward:
             reward = reward / self.asw_alpha
 
+        return obs, reward, done, info
+
+
+class EpisodeRecorderWrapper(gym.Wrapper):
+    """
+    Records rewards of the last `n` episodes.
+    """
+
+    def __init__(self, env, n=42, info_keys=[]):
+        super().__init__(env)
+        self.erw_info_keys = info_keys
+        self.erw_history = collections.deque([], maxlen=n)
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        if done:
+            entry = dict(reward=reward)
+            for k in self.erw_info_keys:
+                entry[k] = info[k]
+            self.erw_history.append(entry)
         return obs, reward, done, info

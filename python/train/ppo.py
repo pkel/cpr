@@ -2,8 +2,10 @@ import configparser
 import cpr_gym
 import cpr_gym.wrappers
 import gym
+import itertools
 import numpy
 import os
+import pandas
 import pprint
 import psutil
 import random
@@ -115,7 +117,7 @@ def alpha_schedule(eval=False):
     return alpha_schedule, info
 
 
-def env_fn(eval=False):
+def env_fn(eval=False, n_recordings=42):
     protocol_fn = getattr(cpr_gym.protocols, config["main"]["protocol"])
     protocol_args = config["protocol_args"]
     env_args = config["env_args"]
@@ -141,6 +143,11 @@ def env_fn(eval=False):
     alpha_f, _ = alpha_schedule(eval=eval)
     env = cpr_gym.wrappers.AlphaScheduleWrapper(env, alpha_schedule=alpha_f)
 
+    if eval:
+        env = cpr_gym.wrappers.EpisodeRecorderWrapper(
+            env, n=n_recordings, info_keys=["alpha"]
+        )
+
     return env
 
 
@@ -162,6 +169,46 @@ def venv_fn(**kwargs):
 
     env = stable_baselines3.common.vec_env.VecMonitor(env)
     return env
+
+
+###
+# Evaluation for each alpha
+###
+
+
+class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
+    def __init__(self, eval_env, prefix="eval", **kwargs):
+        super().__init__(eval_env, **kwargs)
+        self.prefix = prefix
+
+    def _on_step(self):
+        r = super()._on_step()
+        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            buffers = self.eval_env.get_attr("erw_history")
+            alpha = [e["alpha"] for e in itertools.chain(*buffers)]
+            reward = [e["reward"] for e in itertools.chain(*buffers)]
+            df = pandas.DataFrame(
+                dict(
+                    alpha=alpha,
+                    reward=reward,
+                )
+            )
+            table = wandb.Table(
+                data=df,
+                columns=[
+                    "alpha",
+                    "reward",
+                ],
+            )
+            d = {
+                f"{self.prefix}/per_alpha_reward": wandb.plot.line(
+                    table, "alpha", "reward"
+                ),
+            }
+            # log
+            wandb.log(d)
+            return True
+        return r
 
 
 ###
@@ -208,8 +255,12 @@ if __name__ == "__main__":
     utils.setWandbLogger(model)
 
     # we evaluate on a fixed alpha schedule
-    eval_env = venv_fn(eval=True)
     _, alpha_info = alpha_schedule(eval=True)
+    eval_env = venv_fn(
+        eval=True,
+        n_recordings=alpha_info["n_alphas"]
+        * config["eval"]["episodes_per_alpha_per_env"],
+    )
 
     model.learn(
         total_timesteps=config["main"]["total_timesteps"],
@@ -220,7 +271,7 @@ if __name__ == "__main__":
                 model_save_freq=vec_steps_per_rollout,
                 verbose=0,
             ),
-            stable_baselines3.common.callbacks.EvalCallback(
+            EvalCallback(
                 eval_env,
                 best_model_save_path=log_dir,
                 log_path=log_dir,
