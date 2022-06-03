@@ -124,7 +124,7 @@ def env_fn():
 
 
 if __name__ == "__main__":
-    print("## Environment (not vectorized)")
+    print("## Environment (not vectorized) ##")
     env_fn().render()
 
 
@@ -145,6 +145,7 @@ def venv_fn():
 ###
 
 if __name__ == "__main__":
+    print("## Training ##")
 
     def lr_schedule(remaining):
         return config["ppo"]["starting_lr"] * remaining + config["ppo"]["ending_lr"] * (
@@ -153,13 +154,18 @@ if __name__ == "__main__":
 
     log_dir = f"saved_models/ppo-{wandb.run.id}"
 
+    vec_steps_per_rollout = (
+        config["ppo"]["batch_size"] * config["ppo"]["n_steps_multiple"]
+    )
+    # rollout buffer is this time n_envs
+
     model = stable_baselines3.PPO(
         "MlpPolicy",
         env=venv_fn(),
         verbose=1,
         batch_size=config["ppo"]["batch_size"],
         gamma=config["ppo"]["gamma"],
-        n_steps=config["ppo"]["batch_size"] * config["ppo"]["n_steps_multiple"],
+        n_steps=vec_steps_per_rollout,
         clip_range=0.1,
         # ent_coef=0.01,
         learning_rate=lr_schedule,
@@ -179,12 +185,23 @@ if __name__ == "__main__":
 
     model.learn(
         total_timesteps=config["main"]["total_timesteps"],
-        callback=wandb.integration.sb3.WandbCallback(
-            gradient_save_freq=10000,
-            model_save_path=log_dir,
-            model_save_freq=10000,
-            verbose=0,
-        ),
+        callback=[
+            wandb.integration.sb3.WandbCallback(
+                gradient_save_freq=vec_steps_per_rollout,
+                model_save_path=log_dir,
+                model_save_freq=vec_steps_per_rollout,
+                verbose=0,
+            ),
+            stable_baselines3.common.callbacks.EvalCallback(
+                venv_fn(),
+                best_model_save_path=log_dir,
+                log_path=log_dir,
+                eval_freq=vec_steps_per_rollout,
+                n_eval_episodes=128,
+                deterministic=True,
+                render=False,
+            ),
+        ],
     )
 
     model.save(log_dir)
