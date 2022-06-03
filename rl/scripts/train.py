@@ -186,7 +186,7 @@ class VecWandbLogger(VecEnvWrapper):
             r = {f"reward/α={a:.2f}": np.mean(l) for a, l in r.items()}
             ds = {f"difficulty/α={a:.2f}": np.mean(l) for a, l in ds.items()}
             # log
-            wandb.log(progress | performance | d | r | ds)
+            wandb.log(progress | performance | r | ds)
         return obs, reward, done, info
 
 
