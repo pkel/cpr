@@ -55,6 +55,8 @@ cast("ppo", "layer_size", int)
 cast("ppo", "starting_lr", float)
 cast("ppo", "ending_lr", float)
 cast("eval", "episodes_per_alpha_per_env", int)
+cast("eval", "n_alphas", int)
+cast("eval", "recorder_multiple", int)
 
 
 ###
@@ -88,16 +90,23 @@ if __name__ == "__main__":
 def alpha_schedule(eval=False):
     info = dict()
     if "alpha_schedule" in config["main"].keys():
-        alpha_schedule = [float(a) for a in config["main"]["alpha_schedule"].split(",")]
+        alphas = [float(a) for a in config["main"]["alpha_schedule"].split(",")]
+
         if eval:
-            info["n_alphas"] = len(alpha_schedule)
+            info["n_alphas"] = len(alphas)
+            alpha_schedule = alphas
+
+        def alpha_schedule():
+            return random.choice(alphas)
 
     elif "alpha_min" in config["main"].keys():
         if eval:
-            alpha_schedule = numpy.arange(
-                config["main"]["alpha_min"], config["main"]["alpha_max"], 0.05
+            alpha_schedule = numpy.linspace(
+                config["main"]["alpha_min"],
+                config["main"]["alpha_max"],
+                config["eval"]["n_alphas"],
             )
-            info["n_alphas"] = numpy.size(alpha_schedule)
+            info["n_alphas"] = config["eval"]["n_alphas"]
         else:
 
             def alpha_schedule():
@@ -145,7 +154,7 @@ def env_fn(eval=False, n_recordings=42):
 
     if eval:
         env = cpr_gym.wrappers.EpisodeRecorderWrapper(
-            env, n=n_recordings, info_keys=["alpha"]
+            env, n=n_recordings, info_keys=["alpha", "simulator_clock_rewarded"]
         )
 
     return env
@@ -185,24 +194,18 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
         r = super()._on_step()
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             buffers = self.eval_env.get_attr("erw_history")
-            alpha = [e["alpha"] for e in itertools.chain(*buffers)]
-            reward = [e["reward"] for e in itertools.chain(*buffers)]
-            df = pandas.DataFrame(
-                dict(
-                    alpha=alpha,
-                    reward=reward,
-                )
-            )
+            columns = buffers[0][0].keys()
+            df = pandas.DataFrame(itertools.chain(*buffers))
             table = wandb.Table(
                 data=df,
-                columns=[
-                    "alpha",
-                    "reward",
-                ],
+                columns=columns,
             )
             d = {
                 f"{self.prefix}/per_alpha_reward": wandb.plot.line(
                     table, "alpha", "reward"
+                ),
+                f"{self.prefix}/per_alpha_runtime": wandb.plot.line(
+                    table, "alpha", "simulator_clock_rewarded"
                 ),
             }
             # log
@@ -259,7 +262,8 @@ if __name__ == "__main__":
     eval_env = venv_fn(
         eval=True,
         n_recordings=alpha_info["n_alphas"]
-        * config["eval"]["episodes_per_alpha_per_env"],
+        * config["eval"]["episodes_per_alpha_per_env"]
+        * config["eval"]["recorder_multiple"],
     )
 
     model.learn(

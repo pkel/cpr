@@ -1,7 +1,7 @@
 import collections
 import gym
+import itertools
 import numpy
-import random
 import warnings
 
 
@@ -125,7 +125,8 @@ class AlphaScheduleWrapper(gym.Wrapper):
         if callable(alpha_schedule):
             self.asw_fn = alpha_schedule
         else:
-            self.asw_fn = lambda: random.choice(alpha_schedule)
+            iterator = itertools.cycle(alpha_schedule)
+            self.asw_fn = lambda: next(iterator)
 
         # extend observation space
         low = self.observation_space.low
