@@ -2,6 +2,7 @@ import gym
 import os
 from ctypes import PyDLL, RTLD_GLOBAL, c_char_p
 import sys
+from . import wrappers  # noqa
 
 # Link Python/OCaml bridge
 

@@ -92,19 +92,28 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, _reward, done, info = self.env.step(action)
-        reward = info["reward_attacker"] / self.drpb_stop
-        if self.drpb_cnt + info["reward_n_pows"] > self.drpb_stop:
-            # we are overshooting self.drpb_stop, resize reward accordingly
-            reward = reward * (self.drpb_cnt - self.drpb_stop) / info["reward_n_pows"]
 
-        self.drpb_cnt += info["reward_n_pows"]
+        if info["reward_n_pows"] < 0:
+            warnings.warn("negative reward_n_pows")
+        if info["reward_attacker"] < 0:
+            warnings.warn("negative reward_attacker")
+
+        reward = info["reward_attacker"] / self.drpb_stop
+        step = info["reward_n_pows"]
+
+        if step > self.drpb_stop - self.drpb_cnt:
+            # we are overshooting self.drpb_stop, resize reward accordingly
+            reward = reward * (self.drpb_stop - self.drpb_cnt) / step
+            step = self.drpb_stop - self.drpb_cnt
+
+        self.drpb_cnt += step
+
         if done and self.drpb_cnt < self.drpb_stop:
-            # TODO. This happens when the agent withholds long enough.
-            # I tried to force the agent to release on `done = True` a few
-            # weeks back, but apparently this mechanism does not work.
-            warnings.warn("DenseRewardPerBlockWrapper observed less pows than expected")
+            warnings.warn("observed less pows than expected")
+
         if self.drpb_cnt >= self.drpb_stop:
             done = True
+
         return obs, reward, done, info
 
 
