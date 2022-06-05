@@ -180,11 +180,15 @@ class EpisodeRecorderWrapper(gym.Wrapper):
         self.erw_info_keys = info_keys
         self.erw_history = collections.deque([], maxlen=n)
 
+    def reset(self):
+        self.erw_episode_reward = 0
+        return self.env.reset()
+
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+        self.erw_episode_reward += reward
         if done:
-            entry = dict(reward=reward)
-            for k in self.erw_info_keys:
-                entry[k] = info[k]
+            entry = {k: info[k] for k in self.erw_info_keys}
+            entry["episode_reward"] = self.erw_episode_reward
             self.erw_history.append(entry)
         return obs, reward, done, info

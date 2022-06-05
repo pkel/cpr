@@ -154,7 +154,9 @@ def env_fn(eval=False, n_recordings=42):
 
     if eval:
         env = cpr_gym.wrappers.EpisodeRecorderWrapper(
-            env, n=n_recordings, info_keys=["alpha", "simulator_clock_rewarded"]
+            env,
+            n=n_recordings,
+            info_keys=["alpha", "simulator_clock_rewarded"],
         )
 
     return env
@@ -202,7 +204,7 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
             )
             d = {
                 f"{self.prefix}/per_alpha_reward": wandb.plot.line(
-                    table, "alpha", "reward"
+                    table, "alpha", "episode_reward"
                 ),
                 f"{self.prefix}/per_alpha_runtime": wandb.plot.line(
                     table, "alpha", "simulator_clock_rewarded"
