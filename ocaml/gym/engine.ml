@@ -45,14 +45,9 @@ end = struct
 end
 
 module type AttackSpace = sig
-  type env
-  type data
-  type pow
-  type agent_state
-  type honest_state
-
-  val protocol : data protocol
   val info : string
+
+  module Protocol : Protocol
 
   module Observation : sig
     type t
@@ -74,33 +69,37 @@ module type AttackSpace = sig
     val of_int : int -> t
   end
 
-  val noop_node : (env, data, pow, agent_state) node
+  module Agent (V : LocalView with type data = Protocol.data) : sig
+    open V
 
-  type pre_action
+    type state
+    type observable_state
 
-  val prepare
-    :  (env, data) local_view
-    -> (env, data, pow) actions
-    -> agent_state
-    -> (env, pow) event
-    -> pre_action
+    val preferred : state -> env Dag.vertex
+    val puzzle_payload : state -> (env, data) puzzle_payload
+    val init : roots:env Dag.vertex list -> state
+    val prepare : state -> env event -> observable_state
+    val observe : observable_state -> Observation.t
+    val apply : observable_state -> Action.t -> (env, data, state) handler_return
+  end
 
-  val observe : (env, data) local_view -> pre_action -> Observation.t
-  val apply : (env, data) local_view -> pre_action -> Action.t -> agent_state
   val policies : (Observation.t -> Action.t) Collection.t
 end
 
-module _ : AttackSpace = Cpr_protocols.Nakamoto.SszAttack
+(* This is just for checking whether the above might actually work *)
+module _ : AttackSpace = struct
+  module Protocol = Cpr_protocols.Nakamoto
+  include Protocol.SszAttack
+end
 
 (* state of a running simulation *)
 type ('data, 'honest_state, 'agent_state, 'pre_action) instance =
   { sim : 'data Simulator.state
-  ; attacker_view : ('data Simulator.data, 'data) local_view
-  ; attacker_actions : ('data Simulator.data, 'data, Simulator.pow) actions
+  ; attacker_view : ('data Simulator.env, 'data) local_view
   ; attacker_node : ('data, 'agent_state) Simulator.node'
-  ; mutable current_event : ('data Simulator.data, Simulator.pow) event option
+  ; mutable current_event : 'data Simulator.env event option
   ; mutable current_state : 'pre_action option
-  ; mutable reward_applied_upto : 'data Simulator.data Dag.vertex option
+  ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex option
   ; mutable last_time : float
   ; mutable steps : int
   }
@@ -118,28 +117,38 @@ let numeration ?(sep = ", ") ?(conj = "and") =
   | x -> f "" x
 ;;
 
+let dummy_node
+    (type env data)
+    (module P : Protocol with type data = data)
+    (view : (env, data) local_view)
+    : (env, data) node
+  =
+  let (Node (module Honest)) = P.honest view in
+  Node
+    (module struct
+      include Honest
+
+      let handler _state _event = failwith "dummy node handler must not be called"
+    end)
+;;
+
 let of_module
     (type data honest_state agent_state pre_action)
-    (module M : AttackSpace
-      with type env = data Simulator.data
-       and type data = data
-       and type pow = Simulator.pow
-       and type honest_state = honest_state
-       and type agent_state = agent_state
-       and type pre_action = pre_action)
+    (module M : AttackSpace)
     ~(reward : string)
     (p : Parameters.t)
     : (data, honest_state, agent_state, pre_action) instance ref env
   =
   let reward_function =
-    match Collection.get reward M.protocol.reward_functions with
+    let collection = M.Protocol.reward_functions () in
+    match Collection.get reward collection with
     | Some x -> x.it
     | None ->
       let msg =
         "unkown reward function '"
         ^ reward
         ^ "'. Try "
-        ^ (Collection.keys M.protocol.reward_functions
+        ^ (Collection.keys collection
           |> List.map (fun s -> "'" ^ s ^ "'")
           |> numeration ~conj:"or")
         ^ "."
@@ -156,14 +165,12 @@ let of_module
   in
   let init () =
     let open Simulator in
-    let setup = all_honest network M.protocol in
-    let attacker_view, attacker_actions, attacker_node =
-      patch ~node:0 M.noop_node setup
+    let patch = function
+      | 0 -> Some (dummy_node (module M.Protocol))
+      | _ -> None
     in
-    { sim = Simulator.init setup
-    ; attacker_view
-    ; attacker_actions
-    ; attacker_node
+    let sim = init ~patch (module M.Protocol) network in
+    { sim
     ; current_event = None
     ; current_state = None
     ; reward_applied_upto = None

@@ -207,6 +207,7 @@ module SszAttack = struct
     end
 
     type state = State.t
+    type observable_state = Observable of state
 
     let preferred (s : state) = s.private_
 
@@ -283,7 +284,9 @@ module SszAttack = struct
         if private_visibility state x then handle_private state event else state
     ;;
 
-    let observe (s : state) =
+    let prepare s e = Observable (prepare s e)
+
+    let observe (Observable s) =
       let open Observation in
       let block_height vertex = height (data vertex) in
       let ca_height = block_height s.common
@@ -324,7 +327,7 @@ module SszAttack = struct
       { share; state = List.fold_left simulate_public state share }
     ;;
 
-    let apply state action = interpret state action |> conclude
+    let apply (Observable state) action = interpret state action |> conclude
   end
 
   let agent (type a) policy ((module V) : (a, data) local_view) : (a, data) node =

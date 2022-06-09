@@ -79,7 +79,8 @@ let string_of_pow_hash (nonce, _serial) =
 let init
     (type a)
     (module Protocol : Intf2.Protocol with type data = a)
-    ?(patch : (int -> (a env, a) Intf2.local_view -> (a env, a) Intf2.node) option)
+    ?(patch :
+       (int -> ((a env, a) Intf2.local_view -> (a env, a) Intf2.node) option) option)
     (network : Network.t)
     : a state
   =
@@ -116,10 +117,11 @@ let init
       Protocol.dag_roots
   in
   let clock = { queue = OrderedQueue.init Float.compare; now = 0.; c_activations = 0 } in
-  let impl =
-    match patch with
+  let patch = Option.value patch ~default:(fun _ -> None) in
+  let impl node_id =
+    match patch node_id with
     | Some f -> f
-    | None -> fun _node_id -> Protocol.honest
+    | None -> Protocol.honest
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
