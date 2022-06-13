@@ -47,7 +47,7 @@ end
 type ('a, 'b) local_view = (module LocalView with type env = 'a and type data = 'b)
 
 (** decisions to be made by a node handler *)
-type ('env, 'data, 'state) handler_return =
+type ('env, 'state) handler_return =
   { state : 'state (** new state *)
   ; share : 'env Dag.vertex list
         (** vertices to be shared with the other nodes. All vertices are shared
@@ -71,7 +71,7 @@ module type Node = sig
   val init : roots:env Dag.vertex list -> state
 
   (** event handlers *)
-  val handler : state -> env event -> (env, data, state) handler_return
+  val handler : state -> env event -> (env, state) handler_return
 
   (** [puzzle_payload state] defines the content and parents of the currently mined
       vertex. When the node solves a proof-of-work puzzle, the simulator calls

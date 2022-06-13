@@ -12,10 +12,14 @@ type 'a env =
   }
 
 type 'prot_data event =
-  | Activate of { node : int }
-  | Deliver of
-      { node : int
+  | StochasticClock
+  | Receive of
+      { dst : int
       ; msg : 'prot_data env Dag.vertex
+      }
+  | ForNode of
+      { node : int
+      ; event : 'prot_data env Intf2.event
       }
 
 type 'prot_data clock =
@@ -26,9 +30,12 @@ type 'prot_data clock =
 
 type ('prot_data, 'node_state) node' =
   { mutable state : 'node_state
-  ; mutable n_activations : int
-  ; activate : 'node_state -> 'node_state
-  ; deliver : 'node_state -> 'prot_data env Dag.vertex -> 'node_state
+  ; visibility : 'prot_data env Dag.vertex -> bool
+  ; handler :
+      'node_state
+      -> 'prot_data env Intf2.event
+      -> ('prot_data env, 'node_state) Intf2.handler_return
+  ; puzzle_payload : 'node_state -> ('prot_data env, 'prot_data) Intf2.puzzle_payload
   ; preferred : 'node_state -> 'prot_data env Dag.vertex
   }
 
@@ -40,20 +47,22 @@ type 'prot_data state =
   ; global_view : 'prot_data env Dag.view
   ; global_view_m : ('prot_data env, 'prot_data) Intf2.global_view
   ; nodes : 'prot_data node array
+  ; activations : int array
   ; assign_pow_distr : int Distributions.iid
   ; activation_delay_distr : float Distributions.iid
   ; network : Network.t
+  ; check_dag : 'prot_data env Dag.vertex -> unit
   ; judge : 'prot_data env Dag.vertex list -> 'prot_data env Dag.vertex
+  ; mutable done_ : bool (* set to true for shutdown *)
   }
 
-let schedule time delay event =
-  time.queue <- OrderedQueue.queue (time.now +. delay) event time.queue
+let schedule clock delay event =
+  clock.queue <- OrderedQueue.queue (clock.now +. delay) event clock.queue
 ;;
 
-let schedule_activation state =
-  let delay = Distributions.sample state.activation_delay_distr
-  and node = Distributions.sample state.assign_pow_distr in
-  schedule state.clock delay (Activate { node })
+let schedule_proof_of_work state =
+  let delay = Distributions.sample state.activation_delay_distr in
+  schedule state.clock delay StochasticClock
 ;;
 
 let disseminate network clock source x =
@@ -68,7 +77,7 @@ let disseminate network clock source x =
       then (
         (* only schedule event if it enables faster delivery *)
         Float.Array.set received_at link.dest t';
-        schedule clock delay (Deliver { node = link.dest; msg = x })))
+        schedule clock delay (Receive { dst = link.dest; msg = x })))
     network.nodes.(source).links
 ;;
 
@@ -125,13 +134,14 @@ let init
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
-        (* TODO breakout and reuse for RL gyms *)
+        let visibility x =
+          Float.Array.get (Dag.data x).delivered_at node_id <= clock.now
+        in
         let module LocalView = struct
           include GlobalView
 
           let my_id = node_id
-          let visible x = Float.Array.get (Dag.data x).delivered_at node_id <= clock.now
-          let view = Dag.filter visible GlobalView.view
+          let view = Dag.filter visibility GlobalView.view
           let delivered_at n = Float.Array.get (Dag.data n).delivered_at node_id
           let appended_by_me n = (Dag.data n).appended_by = Some node_id
 
@@ -144,70 +154,25 @@ let init
         end
         in
         let (Node (module Node)) = impl node_id (module LocalView) in
-        let share_single ?(recursive = false) =
-          let rec f x =
-            assert (LocalView.visible x);
-            let d = Dag.data x in
-            if d.released_at > clock.now
-            then (
-              d.released_at <- min d.released_at clock.now;
-              disseminate network clock node_id x;
-              if recursive then List.iter f (Dag.parents LocalView.view x))
-          in
-          f
-        in
-        let share (r : _ Intf2.handler_return) =
-          List.iter share_single r.share;
-          r.state
-        in
-        let activate state =
-          let payload = Node.puzzle_payload state in
-          let pow_hash = Some (Random.bits (), Dag.size dag) in
-          let vertex =
-            Dag.append
-              dag
-              payload.parents
-              { value = payload.data
-              ; received_at =
-                  Float.Array.init n_nodes (fun i ->
-                      if i = Node.my_id then clock.now else Float.infinity)
-              ; delivered_at =
-                  Float.Array.init n_nodes (fun i ->
-                      if i = Node.my_id then clock.now else Float.infinity)
-              ; appended_at = clock.now
-              ; appended_by = Some Node.my_id
-              ; pow_hash
-              ; signed_by = (if payload.sign then Some Node.my_id else None)
-              ; released_at = Float.infinity
-              }
-          in
-          let () =
-            (* We guarantee that invalid extensions are never delivered elsewhere *)
-            if not (Protocol.dag_validity (module GlobalView) vertex)
-            then (
-              let info x =
-                [ Protocol.describe x.value, ""
-                ; ( "node"
-                  , Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
-                  )
-                ; "time", Printf.sprintf "%.2f" x.appended_at
-                ; ( "hash"
-                  , Option.map string_of_pow_hash x.pow_hash
-                    |> Option.value ~default:"n/a" )
-                ]
-              in
-              Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
-          in
-          Node.handler state (PuzzleSolved vertex) |> share
-        in
-        let deliver state msg = Node.handler state (Deliver msg) |> share in
         Node
           { state = Node.init ~roots
-          ; n_activations = 0
-          ; activate
-          ; deliver
+          ; visibility
+          ; puzzle_payload = Node.puzzle_payload
+          ; handler = Node.handler
           ; preferred = Node.preferred
           })
+  and check_dag vertex =
+    (* We guarantee that invalid extensions are never delivered elsewhere *)
+    if not (Protocol.dag_validity (module GlobalView) vertex)
+    then (
+      let info x =
+        [ Protocol.describe x.value, ""
+        ; "node", Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
+        ; "time", Printf.sprintf "%.2f" x.appended_at
+        ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
+        ]
+      in
+      Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
   and assign_pow_distr =
     let weights =
       Array.map (fun x -> Network.(x.compute)) network.nodes |> Array.to_list
@@ -220,56 +185,103 @@ let init
     ; global_view = GlobalView.view
     ; global_view_m = (module GlobalView)
     ; nodes
+    ; activations = Array.make 0 n_nodes
     ; assign_pow_distr
     ; activation_delay_distr
     ; network
+    ; done_ = false
+    ; check_dag
     ; judge = Protocol.judge (module GlobalView)
     }
   in
-  schedule_activation state;
+  schedule_proof_of_work state;
   state
 ;;
 
-let handle_event ~activations state ev =
+let mine state node_id =
+  let (Node node) = state.nodes.(node_id) in
+  let payload = node.puzzle_payload node.state in
+  let pow_hash = Some (Random.bits (), Dag.size state.dag) in
+  let n_nodes = Array.length state.nodes in
+  Dag.append
+    state.dag
+    payload.parents
+    { value = payload.data
+    ; received_at =
+        Float.Array.init n_nodes (fun i ->
+            if i = node_id then state.clock.now else Float.infinity)
+    ; delivered_at =
+        Float.Array.init n_nodes (fun i ->
+            if i = node_id then state.clock.now else Float.infinity)
+    ; appended_at = state.clock.now
+    ; appended_by = Some node_id
+    ; pow_hash
+    ; signed_by = (if payload.sign then Some node_id else None)
+    ; released_at = Float.infinity
+    }
+;;
+
+let handle_event state ev =
   match ev with
-  | Activate x ->
+  | ForNode x ->
     let (Node node) = state.nodes.(x.node) in
-    state.clock.c_activations <- state.clock.c_activations + 1;
-    node.n_activations <- node.n_activations + 1;
-    (* check ending condition; schedule next activation *)
-    if state.clock.c_activations < activations || activations < 0
-    then schedule_activation state;
-    (* apply event handler *)
-    node.state <- node.activate node.state
-  | Deliver x ->
+    let ret : _ Intf2.handler_return = node.handler node.state x.event in
+    let rec share msg =
+      assert (node.visibility msg);
+      let d = Dag.data msg in
+      if d.released_at > state.clock.now
+      then (
+        d.released_at <- min d.released_at state.clock.now;
+        disseminate state.network state.clock x.node msg;
+        (* recursive *)
+        List.iter share (Dag.parents (Dag.filter node.visibility state.global_view) msg))
+    in
+    List.iter share ret.share;
+    node.state <- ret.state
+  | StochasticClock ->
+    if not state.done_
+    then (
+      let node_id = Distributions.sample state.assign_pow_distr in
+      let vertex = mine state node_id in
+      let () = state.check_dag vertex in
+      schedule
+        state.clock
+        0.
+        (ForNode { node = node_id; event = PuzzleSolved vertex });
+      state.clock.c_activations <- state.clock.c_activations + 1;
+      state.activations.(node_id) <- state.activations.(node_id) + 1;
+      schedule_proof_of_work state)
+  | Receive x ->
+    (* might happen multiple times per message per node; internal to simulator: does not
+       interact with node directly *)
     let was_delivered msg =
-      Float.Array.get (Dag.data msg).delivered_at x.node <= state.clock.now
+      Float.Array.get (Dag.data msg).delivered_at x.dst <= state.clock.now
     and was_received msg =
-      Float.Array.get (Dag.data msg).received_at x.node <= state.clock.now
+      Float.Array.get (Dag.data msg).received_at x.dst <= state.clock.now
     and disseminate =
       match state.network.dissemination with
-      | Flooding -> disseminate state.network state.clock x.node
+      | Flooding -> disseminate state.network state.clock x.dst
       | Simple -> fun _ -> ()
     in
-    let (Node node) = state.nodes.(x.node) in
     (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
        vertices have been delivered *)
     if was_delivered x.msg
-    then (* n was delivered before *) ()
+    then (* x was delivered before, ignore *) ()
     else if List.exists
-              (fun dedepency -> was_delivered dedepency |> not)
+              (fun dep -> was_delivered dep |> not)
               (Dag.parents state.global_view x.msg)
-    then (* dependencies are not yet fulfilled *) ()
+    then (* dependencies are not yet fulfilled, wait *) ()
     else (
-      (* deliver; continue broadcast; recurse *)
-      Float.Array.set (Dag.data x.msg).delivered_at x.node state.clock.now;
-      node.state <- node.deliver node.state x.msg;
+      (* deliver *)
+      Float.Array.set (Dag.data x.msg).delivered_at x.dst state.clock.now;
+      schedule state.clock 0. (ForNode { node = x.dst; event = Deliver x.msg });
+      (* continue broadcast *)
       disseminate x.msg;
-      (* recursive delivery of now unlocked dependent DAG vertices *)
+      (* reconsider now unlocked dependent DAG vertices recursively *)
       List.iter
         (fun msg ->
           if was_received msg && not (was_delivered msg)
-          then schedule state.clock 0. (Deliver { x with msg }))
+          then schedule state.clock 0. (Receive { x with msg }))
         (Dag.children state.global_view x.msg))
 ;;
 
@@ -286,7 +298,8 @@ let rec loop ~activations state =
   match dequeue state with
   | None -> ()
   | Some ev ->
-    handle_event ~activations state ev;
+    handle_event state ev;
+    if state.clock.c_activations >= activations then state.done_ <- true;
     loop ~activations state
 ;;
 
