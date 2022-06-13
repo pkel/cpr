@@ -53,6 +53,10 @@ def env_fn(alpha, target, config):
         proto = protocols.nakamoto()
     elif config["PROTOCOL"] == "bk_ll":
         proto = protocols.bk_ll(k=config["K"])
+    elif config["PROTOCOL"] == "bk_ll":
+        pass
+    elif config["PROTOCOL"] == "tailstorm":
+        proto = (protocols.tailstorm(k=config["K"], reward="discount"),)
 
     if config["USE_DAA"]:
         max_steps = config["STEPS_PER_ROLLOUT"] * 1000
@@ -73,10 +77,10 @@ def env_fn(alpha, target, config):
 
 
 config = dict(
-    PROTOCOL="nakamoto",
+    PROTOCOL="tailstorm",
     K=10,
     ALGO="PPO",
-    TOTAL_TIMESTEPS=10e7,
+    TOTAL_TIMESTEPS=10e8,
     STEPS_PER_ROLLOUT=200,
     STARTING_LR=10e-5,
     ENDING_LR=10e-6,

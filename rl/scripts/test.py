@@ -14,10 +14,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
+    SparseDaaRewardWrapper,
     SparseRelativeRewardWrapper,
     WastedBlocksRewardWrapper,
     AbsoluteRewardWrapper,
 )
+from rl.wrappers import ReleaseOnDoneWrapper
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 from stable_baselines3 import A2C, PPO, DQN
 
@@ -26,7 +28,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=2016,
+    STEPS_PER_ROLLOUT=200,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
@@ -38,6 +40,7 @@ config = dict(
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
     USE_DAA=True,
+    DAA_METHOD="sparse",
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
@@ -79,45 +82,57 @@ ALPHAS = list(np.arange(0.05, 0.5, 0.05))
 alphas = []
 rewards = []
 sm1_rewards = []
+max_withhelds = []
 for alpha in ALPHAS:
 
     config["ALPHA_SCHEDULE"] = [alpha]
     env = env_fn(alpha, 1, config)
-
     env = AlphaScheduleWrapper(env, env_fn, config)
+    env = ReleaseOnDoneWrapper(env)
+
     if config["USE_DAA"]:
-        env = AbsoluteRewardWrapper(env)
+        env = SparseDaaRewardWrapper(env, relative=False)
     else:
         env = SparseRelativeRewardWrapper(env, relative=False)
 
     sm1 = env.policies["sapirshtein-2016-sm1"]
 
-    for i in tqdm(range(1000)):
-        obs = env.reset(reset_difficulties=True)
+    for i in tqdm(range(100)):
+        obs = env.reset()
+        max_withheld = obs[1]
         done = False
         ep_r = 0
+        actions = []
         while not done:
-            action, _state = p.predict(np.array(obs), deterministic=True)
-
+            action, _state = p.predict(np.array(obs), deterministic=False)
+            actions.append(action)
             obs, r, done, info = env.step(action)
-
-            ep_r += r * config['STEPS_PER_ROLLOUT']
+            if obs[1] > max_withheld:
+                max_withheld = obs[1]
+            ep_r += r
         rewards.append(ep_r)
         alphas.append(alpha)
-    obs = env.reset(reset_difficulties=True)
-    for i in tqdm(range(1000)):
-        obs = env.reset(reset_difficulties=True)
+        max_withhelds.append(max_withheld)
+    for i in tqdm(range(100)):
+        obs = env.reset()
         done = False
         ep_r = 0
+        _i = 0
+        in_prep_phases = []
         while not done:
-            sm1_action = sm1(np.array(obs)[:-1])
+            _i += 1
+            sm1_action = sm1(np.array(obs)[:4])
 
             obs, r, done, info = env.step(sm1_action)
-
-            ep_r += r * config['STEPS_PER_ROLLOUT']
+            ep_r += r
         sm1_rewards.append(ep_r)
-
-df = pd.DataFrame({"alpha": alphas, "reward": rewards, "sm1_reward": sm1_rewards})
+df = pd.DataFrame(
+    {
+        "alpha": alphas,
+        "reward": rewards,
+        "sm1_reward": sm1_rewards,
+    }
+)
 gb_mean = df.groupby("alpha").mean().reset_index()
 gb_std = df.groupby("alpha").std().reset_index()
 fig, ax = plt.subplots()
@@ -133,14 +148,18 @@ ax.scatter(gb_mean["alpha"], gb_mean["sm1_reward"], c="green")
 if not config["USE_DAA"]:
     ax.scatter(gb_mean["alpha"], gb_mean["alpha"], c="r")
 else:
-    ax.scatter(
-        gb_mean["alpha"], gb_mean["alpha"] * config["STEPS_PER_ROLLOUT"] // 2, c="r"
-    )
+    ax.scatter(gb_mean["alpha"], gb_mean["alpha"] * config["STEPS_PER_ROLLOUT"], c="r")
 plt.xticks(ALPHAS)
 plt.title(
     f"Protocol: {config['PROTOCOL']} alpha vs reward for n_steps={config['STEPS_PER_ROLLOUT']} Gamma={config['GAMMA']}"
 )
-plt.legend(["RL", "Selfish", "Honest"])
+plt.legend(
+    [
+        "RL",
+        "Selfish",
+        "Honest",
+    ]
+)
 plt.show()
 
 

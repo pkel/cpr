@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
+    SparseDaaRewardWrapper,
     SparseRelativeRewardWrapper,
     WastedBlocksRewardWrapper,
     AbsoluteRewardWrapper,
@@ -26,7 +27,7 @@ config = dict(
     K=10,
     ALGO="PPO",
     TOTAL_TIMESTEPS=10e6,
-    STEPS_PER_ROLLOUT=2016,
+    STEPS_PER_ROLLOUT=2000,
     STARTING_LR=10e-5,
     ENDING_LR=10e-7,
     BATCH_SIZE=2048,
@@ -38,6 +39,7 @@ config = dict(
     STARTING_EPS=0.99,
     ENDING_EPS=0.01,
     USE_DAA=True,
+    DAA_METHOD="sparse",
     GAMMA=0,
     DEFENDERS=1,
     ACTIVATION_DELAY=1,
@@ -70,7 +72,10 @@ def env_fn(alpha, target, config):
 
 env = env_fn(0.1, 1, config)
 if config["USE_DAA"]:
-    env = AbsoluteRewardWrapper(env)
+    if config["DAA_METHOD"] == "sparse":
+        env = SparseDaaRewardWrapper(env)
+    else:
+        env = AbsoluteRewardWrapper(env)
 else:
     env = SparseRelativeRewardWrapper(env, relative=False)
 
@@ -81,7 +86,7 @@ model = PPO(
 )
 # p = PPO.load(f"rl/saved_models/best_model", env=env)
 
-ALPHAS = list(np.arange(0.05, 0.5, 0.05))
+ALPHAS = list(np.arange(0.5, 0.55, 0.05))
 difficulties = dict((alpha, []) for alpha in ALPHAS)
 for n_steps in [2016]:
     alphas = []
@@ -89,27 +94,31 @@ for n_steps in [2016]:
     sm1_rewards = []
     for alpha in ALPHAS:
 
-        config["ALPHA_SCHEDULE"] = [alpha]
-        env = env_fn(alpha, 1, config)
+        config["ALPHA_SCHEDULE"] = [0]
+        env = env_fn(0, 1, config)
 
         env = AlphaScheduleWrapper(env, env_fn, config)
         if config["USE_DAA"]:
-            env = AbsoluteRewardWrapper(env)
+            if config["DAA_METHOD"] == "sparse":
+                env = SparseDaaRewardWrapper(env)
+            else:
+                env = AbsoluteRewardWrapper(env)
         else:
             env = SparseRelativeRewardWrapper(env, relative=False)
 
         sm1 = env.policies["sapirshtein-2016-sm1"]
-        for i in tqdm(range(1000)):
+        for i in tqdm(range(100)):
             obs = env.reset()
             done = False
             ep_r = 0
             while not done:
-                # action = sm1(np.array(obs))
-                action, _state = p.predict(np.array(obs), deterministic=True)
+                action = sm1(np.array(obs)[:4])
+                # action, _state = p.predict(np.array(obs), deterministic=True)
 
-                obs, r, done, info = env.step(action)
+                obs, r, done, info = env.step(3)
                 ep_r += r
-            difficulties[alpha].append(info["difficulties"][alpha])
+            print(ep_r)
+            # difficulties[alpha].append(info["difficulties"][alpha])
 
     fig, ax = plt.subplots()
     for key, value in difficulties.items():
