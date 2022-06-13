@@ -63,7 +63,7 @@ def env_fn(alpha, target, config):
     elif config["PROTOCOL"] == "bk_ll":
         pass
     elif config["PROTOCOL"] == "tailstorm":
-        proto = (protocols.tailstorm(k=config["K"], reward="discount"),)
+        proto = protocols.tailstorm(k=config["K"], reward="discount")
 
     if config["USE_DAA"]:
         max_steps = config["STEPS_PER_ROLLOUT"] * 1000
