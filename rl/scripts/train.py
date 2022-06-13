@@ -3,6 +3,7 @@ from uuid import uuid4
 
 sys.path.append(os.getcwd())
 import numpy as np
+import pandas as pd
 
 import gym
 from cpr_gym import protocols
@@ -31,7 +32,13 @@ from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 from rl.wrappers.illegal_move_wrapper import IllegalMoveWrapper
 
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import (
+    BaseCallback,
+    CheckpointCallback,
+    EvalCallback,
+    EventCallback,
+    CallbackList,
+)
 from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results
 from stable_baselines3.common.monitor import Monitor
 
@@ -65,14 +72,16 @@ def env_fn(alpha, target, config):
         max_steps = config["STEPS_PER_ROLLOUT"]
         max_time = config["STEPS_PER_ROLLOUT"] * 1000
     return gym.make(
-        "cpr-v0",
+        "cpr_gym:auto-v0",
         proto=proto,
-        alpha=alpha,
+        #  alpha=alpha,
         max_steps=max_steps,
         max_time=max_time,
         gamma=config["GAMMA"],
         defenders=config["DEFENDERS"],
-        activation_delay=target,
+        alpha_min=0.33,
+        alpha_max=0.475,
+        #  activation_delay=target,
     )
 
 
@@ -110,6 +119,42 @@ config = dict(
     ACTIVATION_DELAY=1,
     N_ENVS=16,
 )
+
+
+class LogDaaBufferCallback(BaseCallback):
+    def __init__(self, prefix="daa_buffer"):
+        super().__init__()
+        self.prefix = prefix
+
+    def _on_step(self):
+        data = pd.concat(self.training_env.get_attr("buf"))
+        data["reward_per_alpha"] = data.reward
+        data["reward"] = data.reward * data.alpha
+        table = wandb.Table(
+            data=data,
+            columns=[
+                "alpha",
+                "activation_delay",
+                "observed_block_interval",
+                "reward_per_alpha",
+                "reward",
+            ],
+        )
+        rb = {
+            f"{self.prefix}/reward": wandb.plot.line(table, "alpha", "reward"),
+            f"{self.prefix}/reward_per_alpha": wandb.plot.line(
+                table, "alpha", "reward_per_alpha"
+            ),
+            f"{self.prefix}/activation_delay": wandb.plot.line(
+                table, "alpha", "activation_delay"
+            ),
+            f"{self.prefix}/observed_block_interval": wandb.plot.line(
+                table, "alpha", "observed_block_interval"
+            ),
+        }
+        # log
+        wandb.log(rb)
+        return True
 
 
 class VecWandbLogger(VecEnvWrapper):
@@ -194,6 +239,22 @@ class VecWandbLogger(VecEnvWrapper):
         return obs, reward, done, info
 
 
+class OnRolloutStart(EventCallback):
+    def __init__(self, callback: BaseCallback):
+        super(OnRolloutStart, self).__init__(callback)
+
+    def _on_rollout_start(self):
+        return self._on_event()
+
+
+class OnRolloutEnd(EventCallback):
+    def __init__(self, callback: BaseCallback):
+        super(OnRolloutEnd, self).__init__(callback)
+
+    def _on_rollout_end(self):
+        return self._on_event()
+
+
 if __name__ == "__main__":
     wandb.init(project="dqn", entity="tailstorm", config=config)
     # config = wandb.config
@@ -268,11 +329,6 @@ if __name__ == "__main__":
 
     model.learn(
         total_timesteps=config["TOTAL_TIMESTEPS"],
-        callback=WandbCallback(
-            gradient_save_freq=10000,
-            model_save_path=log_dir,
-            model_save_freq=10000,
-            verbose=0,
-        ),
+        callback=callback,
     )
     model.save(os.path.join(log_dir, f"{config['ALGO']}_{config['PROTOCOL']}"))

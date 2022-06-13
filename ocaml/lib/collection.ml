@@ -6,6 +6,7 @@ type 'a entry =
 
 type 'a t = (string * 'a entry) list
 
+let keys t = List.map fst t
 let all t = List.map fst t
 let get = List.assoc_opt
 let empty = []

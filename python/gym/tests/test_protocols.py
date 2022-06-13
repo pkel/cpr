@@ -1,17 +1,15 @@
-import numpy as np
-
 import gym
 from cpr_gym import protocols
 
 
 def test_version():
-    env = gym.make("cpr-v0")
+    env = gym.make("cpr_gym:core-v0")
     assert isinstance(env.version, str)
     assert len(env.version) > 0
 
 
 def test_default(capsys):
-    env = gym.make("cpr-v0")
+    env = gym.make("cpr_gym:core-v0")
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.25 attacker"
@@ -19,7 +17,7 @@ def test_default(capsys):
 
 def test_config(capsys):
     env = gym.make(
-        "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.1, defenders=10
+        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.1, defenders=10
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
@@ -28,83 +26,80 @@ def test_config(capsys):
 
 def test_policies_honest():
     env = gym.make(
-        "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
+        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
     )
-    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
 
 def test_policies_selfish():
     env = gym.make(
-        "cpr-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.5, defenders=3
+        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.5, defenders=3
     )
-    p = env.policies["selfish"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "selfish"))
 
 
 def test_nakamoto(capsys):
     env = gym.make(
-        "cpr-v0", proto=protocols.nakamoto(), alpha=0.33, gamma=0.7, defenders=5
+        "cpr_gym:core-v0",
+        proto=protocols.nakamoto(),
+        alpha=0.33,
+        gamma=0.7,
+        defenders=5,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.33 attacker"
 
-    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
-    p = env.policies["eyal-sirer-2014"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "eyal-sirer-2014"))
 
 
 def test_bk_ll(capsys):
     env = gym.make(
-        "cpr-v0", proto=protocols.bk_ll(k=17), alpha=0.33, gamma=0.3, defenders=4
+        "cpr_gym:core-v0",
+        proto=protocols.bk_ll(k=17),
+        alpha=0.33,
+        gamma=0.3,
+        defenders=4,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Bₖ/ll with k=17; SSZ'16-like attack space; α=0.33 attacker"
 
-    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
-    p = env.policies["selfish"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "selfish"))
 
 
-def test_george(capsys):
+def test_tailstorm(capsys):
     env = gym.make(
-        "cpr-v0",
-        proto=protocols.george(k=13, reward="discount"),
+        "cpr_gym:core-v0",
+        proto=protocols.tailstorm(k=13, reward="discount"),
         alpha=0.33,
         gamma=0.8,
         defenders=5,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert (
-        captured
-        == "George's protocol with k=13; SSZ'16-like attack space; α=0.33 attacker"
-    )
+    assert captured == "Tailstorm with k=13; SSZ'16-like attack space; α=0.33 attacker"
 
-    p = env.policies["honest"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
 
-    p = env.policies["override-catchup"]
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(p(np.array(obs)))
+        obs, _, _, _ = env.step(env.policy(obs, "override-catchup"))

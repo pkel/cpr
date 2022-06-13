@@ -59,7 +59,7 @@ def env_fn(alpha, target, config):
         max_steps = config["STEPS_PER_ROLLOUT"]
         max_time = config["STEPS_PER_ROLLOUT"] * 10
     return gym.make(
-        "cpr-v0",
+        "cpr_gym:core-v0",
         proto=proto,
         alpha=alpha,
         max_steps=max_steps,

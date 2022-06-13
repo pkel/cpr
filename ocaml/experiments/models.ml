@@ -12,7 +12,7 @@ include struct
   let nakamoto = P Nakamoto.protocol
   let bk ~k = P (B_k.protocol ~k)
   let bk_lessleader ~k = P (B_k_lessleader.protocol ~k)
-  let george ~k = P (George.protocol ~k)
+  let tailstorm ~k = P (Tailstorm.protocol ~k)
 end
 
 (** {1} simulated environments *)

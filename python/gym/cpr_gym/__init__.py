@@ -38,6 +38,7 @@ except OSError:
 
 import engine, protocols  # noqa
 
-#  Register gym environment
+#  Register gym environments
 
-gym.envs.register(id="cpr-v0", entry_point="cpr_gym.envs:Core")
+gym.envs.register(id="core-v0", entry_point="cpr_gym.envs:Core")
+gym.envs.register(id="auto-v0", entry_point="cpr_gym.envs:Auto")

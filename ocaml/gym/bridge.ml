@@ -30,7 +30,7 @@ let () =
   Py_module.set
     m
     "create"
-    (let%map proto = positional "proto" penv ~docstring:"OCaml gym protocol spec"
+    (let%map proto = keyword "proto" penv ~docstring:"OCaml gym protocol spec"
      and alpha =
        keyword "alpha" float ~docstring:"attacker's relative compute" ~default:0.25
      and gamma =
@@ -98,7 +98,7 @@ let () =
            in
            let ba = Numpy.to_bigarray Bigarray.Float64 Bigarray.C_layout obj in
            if Bigarray.Genarray.dims ba <> [| t.observation_length |]
-           then failwith "invalid dimensions";
+           then raise Py.(Err (ValueError, "invalid dimensions"));
            let arr =
              Float.Array.init t.observation_length (fun i ->
                  Bigarray.Genarray.get ba [| i |])
@@ -136,24 +136,14 @@ let () =
 ;;
 
 let () =
+  (* TODO read reward functions from module; choose default and document possible values *)
   let open Definitions in
   let m = Py_module.create "protocols" in
   Py_module.set
     m
     "nakamoto"
     (let%map reward =
-       keyword
-         "reward"
-         string
-         ~default:"block"
-         ~docstring:"Select reward function.\n'block': for 1 per confirmed block"
-     in
-     let reward =
-       match reward with
-       | "block" -> Cpr_protocols.Nakamoto.constant 1.
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
+       keyword "reward" string ~default:"block" ~docstring:"reward function"
      in
      Proto (nakamoto ~reward) |> python_of_protocol);
   Py_module.set
@@ -161,22 +151,7 @@ let () =
     "bk"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and reward =
-       keyword
-         "reward"
-         string
-         ~default:"pow"
-         ~docstring:
-           "Select reward function.\n\
-            'pow': for 1 per confirmed proof-of-work vote\n\
-            'block': for 1 per confirmed block"
-     in
-     let reward =
-       match reward with
-       | "pow" -> Cpr_protocols.B_k.constant_pow 1.
-       | "block" -> Cpr_protocols.B_k.constant_block 1.
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
      Proto (bk ~k ~reward) |> python_of_protocol);
   Py_module.set
@@ -184,74 +159,15 @@ let () =
     "bk_ll"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and reward =
-       keyword
-         "reward"
-         string
-         ~default:"pow"
-         ~docstring:
-           "Select reward function.\n\
-            'pow': for 1 per confirmed proof-of-work vote\n\
-            'block': for 1 per confirmed block"
-     in
-     let reward =
-       match reward with
-       | "pow" -> Cpr_protocols.B_k_lessleader.constant_pow 1.
-       | "block" -> Cpr_protocols.B_k_lessleader.constant_block 1.
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
      Proto (bk_ll ~k ~reward) |> python_of_protocol);
   Py_module.set
     m
-    "george"
+    "tailstorm"
     (let%map k = keyword "k" int ~docstring:"number of votes per block"
      and reward =
-       keyword
-         "reward"
-         string
-         ~default:"constant"
-         ~docstring:
-           "Select reward function.\n\
-            'block': k per confirmed block\n\
-            'constant': 1 per confirmed pow solution\n\
-            'punish': max k per confirmed block, 1 per pow solution on longest chain of \
-            votes\n\
-            'discount': max k per confirmed block, d/k per pow solution (d ∊ 1..k = \
-            height since last block)\n\
-            'hybrid': max k per confirmed block, d/k per pow solution on longest chain \
-            of votes (d ∊ 1..k = height since last block)"
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
-     let reward =
-       match reward with
-       | "block" -> Cpr_protocols.George.constant_block (float_of_int k)
-       | "constant" ->
-         Cpr_protocols.George.reward
-           ~max_reward_per_block:1.
-           ~punish:false
-           ~discount:false
-           ~k
-       | "punish" ->
-         Cpr_protocols.George.reward
-           ~max_reward_per_block:1.
-           ~punish:true
-           ~discount:false
-           ~k
-       | "discount" ->
-         Cpr_protocols.George.reward
-           ~max_reward_per_block:1.
-           ~punish:false
-           ~discount:true
-           ~k
-       | "hybrid" ->
-         Cpr_protocols.George.reward
-           ~max_reward_per_block:1.
-           ~punish:true
-           ~discount:true
-           ~k
-       | _ ->
-         let msg = "unknown reward function '" ^ reward ^ "'" in
-         failwith msg
-     in
-     Proto (george ~k ~reward) |> python_of_protocol)
+     Proto (tailstorm ~k ~reward) |> python_of_protocol)
 ;;

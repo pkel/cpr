@@ -3,7 +3,7 @@ open Models
 
 let protocols =
   let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
-  nakamoto :: List.concat_map (fun k -> [ bk ~k; bk_lessleader ~k; george ~k ]) k
+  nakamoto :: List.concat_map (fun k -> [ bk ~k; bk_lessleader ~k; tailstorm ~k ]) k
 ;;
 
 let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
