@@ -13,7 +13,7 @@ type 'a env =
 
 type 'prot_data event =
   | StochasticClock
-  | Receive of
+  | Network of
       { dst : int
       ; msg : 'prot_data env Dag.vertex
       }
@@ -77,7 +77,7 @@ let disseminate network clock source x =
       then (
         (* only schedule event if it enables faster delivery *)
         Float.Array.set received_at link.dest t';
-        schedule clock delay (Receive { dst = link.dest; msg = x })))
+        schedule clock delay (Network { dst = link.dest; msg = x })))
     network.nodes.(source).links
 ;;
 
@@ -172,6 +172,7 @@ let init
         ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
         ]
       in
+      ignore info;
       Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
   and assign_pow_distr =
     let weights =
@@ -185,7 +186,7 @@ let init
     ; global_view = GlobalView.view
     ; global_view_m = (module GlobalView)
     ; nodes
-    ; activations = Array.make 0 n_nodes
+    ; activations = Array.make n_nodes 0
     ; assign_pow_distr
     ; activation_delay_distr
     ; network
@@ -222,6 +223,7 @@ let mine state node_id =
 ;;
 
 let handle_event state ev =
+  let schedule = schedule state.clock in
   match ev with
   | ForNode x ->
     let (Node node) = state.nodes.(x.node) in
@@ -239,19 +241,17 @@ let handle_event state ev =
     List.iter share ret.share;
     node.state <- ret.state
   | StochasticClock ->
+    (* internal to simulator: does not interact with node directly *)
     if not state.done_
     then (
       let node_id = Distributions.sample state.assign_pow_distr in
       let vertex = mine state node_id in
       let () = state.check_dag vertex in
-      schedule
-        state.clock
-        0.
-        (ForNode { node = node_id; event = PuzzleSolved vertex });
+      schedule 0. (ForNode { node = node_id; event = PuzzleSolved vertex });
       state.clock.c_activations <- state.clock.c_activations + 1;
       state.activations.(node_id) <- state.activations.(node_id) + 1;
       schedule_proof_of_work state)
-  | Receive x ->
+  | Network x ->
     (* might happen multiple times per message per node; internal to simulator: does not
        interact with node directly *)
     let was_delivered msg =
@@ -274,14 +274,14 @@ let handle_event state ev =
     else (
       (* deliver *)
       Float.Array.set (Dag.data x.msg).delivered_at x.dst state.clock.now;
-      schedule state.clock 0. (ForNode { node = x.dst; event = Deliver x.msg });
+      schedule 0. (ForNode { node = x.dst; event = Deliver x.msg });
       (* continue broadcast *)
       disseminate x.msg;
       (* reconsider now unlocked dependent DAG vertices recursively *)
       List.iter
         (fun msg ->
           if was_received msg && not (was_delivered msg)
-          then schedule state.clock 0. (Receive { x with msg }))
+          then schedule 0. (Network { x with msg }))
         (Dag.children state.global_view x.msg))
 ;;
 
