@@ -11,16 +11,17 @@ type 'a env =
   ; signed_by : int option
   }
 
+type 'a network_event =
+  | Rx of int * 'a env Dag.vertex
+  | Tx of int * 'a env Dag.vertex
+
+type 'a from_node_event = Share of 'a env Dag.vertex
+
 type 'prot_data event =
   | StochasticClock
-  | Network of
-      { dst : int
-      ; msg : 'prot_data env Dag.vertex
-      }
-  | ForNode of
-      { node : int
-      ; event : 'prot_data env Intf2.event
-      }
+  | Network of 'prot_data network_event
+  | ForNode of int * 'prot_data env Intf2.event
+  | FromNode of int * 'prot_data from_node_event
 
 let string_of_vertex view x =
   let open Printf in
@@ -33,13 +34,16 @@ let string_of_event view =
   let open Printf in
   function
   | StochasticClock -> "StochasticClock"
-  | Network { dst; msg } ->
-    sprintf "Network (dst %i, msg %s)" dst (string_of_vertex view msg)
-  | ForNode { node; event } ->
-    (match event with
-    | PuzzleSolved x ->
-      sprintf "ForNode (node %i, PuzzleSolved %s)" node (string_of_vertex view x)
-    | Deliver x -> sprintf "ForNode (node %i, Deliver %s)" node (string_of_vertex view x))
+  | Network (Rx (dst, msg)) ->
+    sprintf "Network/Rx (dst %i, msg %s)" dst (string_of_vertex view msg)
+  | Network (Tx (src, msg)) ->
+    sprintf "Network/Tx (src %i, msg %s)" src (string_of_vertex view msg)
+  | ForNode (node, PuzzleSolved x) ->
+    sprintf "ForNode (node %i, PuzzleSolved %s)" node (string_of_vertex view x)
+  | ForNode (node, Deliver x) ->
+    sprintf "ForNode (node %i, Deliver %s)" node (string_of_vertex view x)
+  | FromNode (node, Share x) ->
+    sprintf "FromNode (node %i, Share %s)" node (string_of_vertex view x)
 ;;
 
 type 'prot_data clock =
@@ -83,22 +87,6 @@ let schedule clock delay event =
 let schedule_proof_of_work state =
   let delay = Distributions.sample state.activation_delay_distr in
   schedule state.clock delay StochasticClock
-;;
-
-let disseminate network clock source x =
-  let open Network in
-  List.iter
-    (fun link ->
-      let received_at = (Dag.data x).received_at in
-      let t = Float.Array.get received_at link.dest
-      and delay = Distributions.sample link.delay in
-      let t' = clock.now +. delay in
-      if t' < t
-      then (
-        (* only schedule event if it enables faster delivery *)
-        Float.Array.set received_at link.dest t';
-        schedule clock delay (Network { dst = link.dest; msg = x })))
-    network.nodes.(source).links
 ;;
 
 let string_of_pow_hash (nonce, _serial) =
@@ -244,64 +232,80 @@ let mine state node_id =
 let handle_event state ev =
   let schedule = schedule state.clock in
   match ev with
-  | ForNode x ->
-    let (Node node) = state.nodes.(x.node) in
-    let ret : _ Intf2.handler_return = node.handler node.state x.event in
+  | ForNode (id, ev) ->
+    let (Node node) = state.nodes.(id) in
+    let ret : _ Intf2.handler_return = node.handler node.state ev in
+    List.iter (fun m -> schedule 0. (FromNode (id, Share m))) ret.share;
+    node.state <- ret.state
+  | StochasticClock ->
+    if not state.done_
+    then (
+      let node_id = Distributions.sample state.assign_pow_distr in
+      let vertex = mine state node_id in
+      let () = state.check_dag vertex in
+      schedule 0. (ForNode (node_id, PuzzleSolved vertex));
+      state.clock.c_activations <- state.clock.c_activations + 1;
+      state.activations.(node_id) <- state.activations.(node_id) + 1;
+      schedule_proof_of_work state)
+  | FromNode (src, Share msg) ->
+    (* implements recursive sharing *)
+    let (Node node) = state.nodes.(src) in
     let rec share msg =
       assert (node.visibility msg);
       let d = Dag.data msg in
       if d.released_at > state.clock.now
       then (
         d.released_at <- min d.released_at state.clock.now;
-        disseminate state.network state.clock x.node msg;
+        schedule 0. (Network (Tx (src, msg)));
         (* recursive *)
         List.iter share (Dag.parents (Dag.filter node.visibility state.global_view) msg))
     in
-    List.iter share ret.share;
-    node.state <- ret.state
-  | StochasticClock ->
-    (* internal to simulator: does not interact with node directly *)
-    if not state.done_
-    then (
-      let node_id = Distributions.sample state.assign_pow_distr in
-      let vertex = mine state node_id in
-      let () = state.check_dag vertex in
-      schedule 0. (ForNode { node = node_id; event = PuzzleSolved vertex });
-      state.clock.c_activations <- state.clock.c_activations + 1;
-      state.activations.(node_id) <- state.activations.(node_id) + 1;
-      schedule_proof_of_work state)
-  | Network x ->
-    (* might happen multiple times per message per node; internal to simulator: does not
-       interact with node directly *)
-    let was_delivered msg =
-      Float.Array.get (Dag.data msg).delivered_at x.dst <= state.clock.now
-    and was_received msg =
-      Float.Array.get (Dag.data msg).received_at x.dst <= state.clock.now
-    and disseminate =
-      match state.network.dissemination with
-      | Flooding -> disseminate state.network state.clock x.dst
-      | Simple -> fun _ -> ()
+    share msg
+  | Network (Tx (src, msg)) ->
+    List.iter
+      (fun link ->
+        let open Network in
+        let received_at = (Dag.data msg).received_at in
+        let t = Float.Array.get received_at link.dest
+        and delay = Distributions.sample link.delay in
+        let t' = state.clock.now +. delay in
+        if t' < t
+        then (
+          (* only schedule new event if it enables faster delivery *)
+          Float.Array.set received_at link.dest t';
+          schedule delay (Network (Rx (link.dest, msg)))))
+      state.network.nodes.(src).links
+  | Network (Rx (dst, msg)) ->
+    (* implements in-order delivery of vertices and flooding *)
+    let rec h msg =
+      let was_delivered msg =
+        Float.Array.get (Dag.data msg).delivered_at dst <= state.clock.now
+      and was_received msg =
+        Float.Array.get (Dag.data msg).received_at dst <= state.clock.now
+      in
+      (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
+         vertices have been delivered *)
+      if was_delivered msg
+      then (* x was delivered before, ignore *) ()
+      else if List.exists
+                (fun dep -> was_delivered dep |> not)
+                (Dag.parents state.global_view msg)
+      then (* dependencies are not yet fulfilled, wait *) ()
+      else
+        ((* deliver *)
+         Float.Array.set (Dag.data msg).delivered_at dst state.clock.now;
+         schedule 0. (ForNode (dst, Deliver msg));
+         (* continue broadcast *)
+         let () =
+           match state.network.dissemination with
+           | Flooding -> schedule 0. (Network (Tx (dst, msg)))
+           | Simple -> ()
+         in
+         (* reconsider now unlocked dependent DAG vertices recursively *)
+         List.iter (fun msg -> if was_received msg && not (was_delivered msg) then h msg))
+          (Dag.children state.global_view msg)
     in
-    (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
-       vertices have been delivered *)
-    if was_delivered x.msg
-    then (* x was delivered before, ignore *) ()
-    else if List.exists
-              (fun dep -> was_delivered dep |> not)
-              (Dag.parents state.global_view x.msg)
-    then (* dependencies are not yet fulfilled, wait *) ()
-    else (
-      (* deliver *)
-      Float.Array.set (Dag.data x.msg).delivered_at x.dst state.clock.now;
-      schedule 0. (ForNode { node = x.dst; event = Deliver x.msg });
-      (* continue broadcast *)
-      disseminate x.msg;
-      (* reconsider now unlocked dependent DAG vertices recursively *)
-      List.iter
-        (fun msg ->
-          if was_received msg && not (was_delivered msg)
-          then schedule 0. (Network { x with msg }))
-        (Dag.children state.global_view x.msg))
+    h msg
 ;;
 
 let dequeue state =
