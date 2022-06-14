@@ -1,13 +1,14 @@
-open Cpr_lib
+open Cpr_lib.Next
 open Models
 
 let fpath (Csv_runner.Task t) ~rewardfn =
+  let (module Protocol) = t.protocol in
   let l =
     let open Collection in
     [ t.sim.key
     ; Printf.sprintf "d=%g" t.network.activation_delay
-    ; t.protocol.key
-    ; Printf.sprintf "k=%i" t.protocol.pow_per_block
+    ; Protocol.key
+    ; Printf.sprintf "k=%i" Protocol.puzzles_per_block
     ; rewardfn.key
     ]
     @
@@ -19,11 +20,12 @@ let fpath (Csv_runner.Task t) ~rewardfn =
 ;;
 
 let legend (Csv_runner.Task t) ~rewardfn =
+  let (module Protocol) = t.protocol in
   let open Collection in
   [ "Network", t.sim.info
   ; "Activation Delay", string_of_float t.network.activation_delay
-  ; "Protocol", t.protocol.info
-  ; "PoW per Block (k)", string_of_int t.protocol.pow_per_block
+  ; "Protocol", Protocol.info
+  ; "PoW per Block (k)", string_of_int Protocol.puzzles_per_block
   ; "Incentive Scheme", rewardfn.info
   ]
   @
@@ -46,39 +48,40 @@ let node_name (Csv_runner.Task t) =
     | Some i -> "n" ^ string_of_int i
 ;;
 
+let tasks_per_protocol
+    (type a)
+    (module Protocol : Protocol with type data = a)
+    n_activations
+  =
+  let protocol : a protocol = (module Protocol) in
+  List.map
+    (fun activation_delay ->
+      let sim, network = honest_clique ~activation_delay ~n:7 protocol in
+      Csv_runner.Task
+        { activations = n_activations; protocol; attack = None; sim; network })
+    [ 2.; 4. ]
+  @ List.concat_map
+      (fun alpha ->
+        Collection.map_to_list
+          (fun attack ->
+            let sim, network = two_agents ~alpha protocol attack in
+            Csv_runner.Task
+              { activations = n_activations
+              ; protocol
+              ; attack = Some attack
+              ; sim
+              ; network
+              })
+          (Protocol.attacks ()))
+      [ 0.25; 0.33; 0.5 ]
+;;
+
 let tasks =
-  List.concat_map
-    (fun (P protocol, n_activations) ->
-      List.map
-        (fun activation_delay ->
-          let sim, network = honest_clique ~activation_delay ~n:7 protocol in
-          Csv_runner.Task
-            { activations = n_activations; protocol; attack = None; sim; network })
-        [ 2.; 4. ]
-      @ List.concat_map
-          (fun alpha ->
-            Collection.map_to_list
-              (fun attack ->
-                let sim, network = two_agents ~alpha protocol attack in
-                Csv_runner.Task
-                  { activations = n_activations
-                  ; protocol
-                  ; attack = Some attack
-                  ; sim
-                  ; network
-                  })
-              protocol.attacks)
-          [ 0.25; 0.33; 0.5 ])
-    [ nakamoto, 30
-    ; bk ~k:8, 100
-    ; bk ~k:4, 50
-    ; bk ~k:1, 20
-    ; bk_lessleader ~k:8, 100
-    ; bk_lessleader ~k:4, 50
-    ; bk_lessleader ~k:1, 20
-    ; tailstorm ~k:8, 100
-    ; tailstorm ~k:4, 50
-    ; tailstorm ~k:1, 20
+  List.concat
+    [ tasks_per_protocol (module Cpr_protocols.Nakamoto) 30
+      (* ; bk ~k:8, 100 ; bk ~k:4, 50 ; bk ~k:1, 20 ; bk_lessleader ~k:8, 100 ;
+         bk_lessleader ~k:4, 50 ; bk_lessleader ~k:1, 20 ; tailstorm ~k:8, 100 ; tailstorm
+         ~k:4, 50 ; tailstorm ~k:1, 20 *)
     ]
 ;;
 
@@ -103,7 +106,7 @@ let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
   Dag.dot
     (Format.formatter_of_out_channel oc)
     ~legend
-    sim.global.view
+    sim.global_view
     ~node_attr
     (Dag.roots sim.dag)
   |> Result.ok
@@ -112,12 +115,13 @@ let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
 let run (Csv_runner.Task t) =
   (* simulate *)
   let open Simulator in
+  let (module Protocol) = t.protocol in
   let env = t.sim.it () in
   loop ~activations:t.activations env;
   let head =
     Array.to_seq env.nodes
     |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor' env.global.view
+    |> Dag.common_ancestor' env.global_view
     |> Option.get
   in
   let confirmed = Array.make (Dag.size env.dag) false in
@@ -129,10 +133,10 @@ let run (Csv_runner.Task t) =
           (fun n ->
             confirmed.(Dag.id n) <- true;
             rewardfn.it
-              ~view:env.global
+              ~view:env.global_view_m
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
-          (Dag.iterate_ancestors env.global.view [ head ])
+          (Dag.iterate_ancestors env.global_view [ head ])
       in
       let path =
         let open Fpath in
@@ -148,11 +152,11 @@ let run (Csv_runner.Task t) =
             , confirmed
             , rewards
             , legend (Task t) ~rewardfn
-            , t.protocol.describe
+            , Protocol.describe
             , node_name (Task t) ))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
-    t.protocol.reward_functions
+    (Protocol.reward_functions ())
 ;;
 
 let () =
