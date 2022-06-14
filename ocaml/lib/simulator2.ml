@@ -22,6 +22,26 @@ type 'prot_data event =
       ; event : 'prot_data env Intf2.event
       }
 
+let string_of_vertex view x =
+  let open Printf in
+  let id x = Dag.id x |> string_of_int in
+  let parents = List.map id (Dag.parents view x) |> String.concat "|" in
+  sprintf "%i[%s]" (Dag.id x) parents
+;;
+
+let string_of_event view =
+  let open Printf in
+  function
+  | StochasticClock -> "StochasticClock"
+  | Network { dst; msg } ->
+    sprintf "Network (dst %i, msg %s)" dst (string_of_vertex view msg)
+  | ForNode { node; event } ->
+    (match event with
+    | PuzzleSolved x ->
+      sprintf "ForNode (node %i, PuzzleSolved %s)" node (string_of_vertex view x)
+    | Deliver x -> sprintf "ForNode (node %i, Deliver %s)" node (string_of_vertex view x))
+;;
+
 type 'prot_data clock =
   { mutable now : float
   ; mutable queue : (float, 'prot_data event) OrderedQueue.t
@@ -146,7 +166,7 @@ let init
           let appended_by_me n = (Dag.data n).appended_by = Some node_id
 
           let data x =
-            (* assert (visible x); TODO investigate why this fails*)
+            assert (visibility x);
             data x
           ;;
 
@@ -172,7 +192,6 @@ let init
         ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
         ]
       in
-      ignore info;
       Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
   and assign_pow_distr =
     let weights =
@@ -294,10 +313,16 @@ let dequeue state =
          ev)
 ;;
 
+let logger state event =
+  let open Printf in
+  printf "%07.2f: %s\n" state.clock.now (string_of_event state.global_view event)
+;;
+
 let rec loop ~activations state =
   match dequeue state with
   | None -> ()
   | Some ev ->
+    (* ignore (logger state ev); *)
     handle_event state ev;
     if state.clock.c_activations >= activations then state.done_ <- true;
     loop ~activations state
