@@ -64,6 +64,8 @@ let reward_functions () =
 ;;
 
 module SszAttack = struct
+  type nonrec data = data
+
   let info = "SSZ'16 attack space"
 
   module Observation = struct

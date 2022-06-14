@@ -145,29 +145,5 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"block" ~docstring:"reward function"
      in
-     Proto (nakamoto ~reward) |> python_of_protocol);
-  Py_module.set
-    m
-    "bk"
-    (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
-     in
-     Proto (bk ~k ~reward) |> python_of_protocol);
-  Py_module.set
-    m
-    "bk_ll"
-    (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
-     in
-     Proto (bk_ll ~k ~reward) |> python_of_protocol);
-  Py_module.set
-    m
-    "tailstorm"
-    (let%map k = keyword "k" int ~docstring:"number of votes per block"
-     and reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
-     in
-     Proto (tailstorm ~k ~reward) |> python_of_protocol)
+     Proto (nakamoto ~reward) |> python_of_protocol)
 ;;

@@ -54,6 +54,7 @@ type 'prot_data clock =
 
 type ('prot_data, 'node_state) node' =
   { mutable state : 'node_state
+  ; view : ('prot_data env, 'prot_data) Intf2.local_view
   ; visibility : 'prot_data env Dag.vertex -> bool
   ; handler :
       'node_state
@@ -68,6 +69,7 @@ type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
 type 'prot_data state =
   { clock : 'prot_data clock
   ; dag : 'prot_data env Dag.t
+  ; roots : 'prot_data env Dag.vertex list
   ; global_view : 'prot_data env Dag.view
   ; global_view_m : ('prot_data env, 'prot_data) Intf2.global_view
   ; nodes : 'prot_data node array
@@ -164,6 +166,7 @@ let init
         let (Node (module Node)) = impl node_id (module LocalView) in
         Node
           { state = Node.init ~roots
+          ; view = (module LocalView)
           ; visibility
           ; puzzle_payload = Node.puzzle_payload
           ; handler = Node.handler
@@ -189,6 +192,7 @@ let init
   and activation_delay_distr = Distributions.exponential ~ev:network.activation_delay in
   let state =
     { clock
+    ; roots
     ; dag
     ; global_view = GlobalView.view
     ; global_view_m = (module GlobalView)
