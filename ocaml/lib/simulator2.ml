@@ -15,7 +15,9 @@ type 'a network_event =
   | Rx of int * 'a env Dag.vertex
   | Tx of int * 'a env Dag.vertex
 
-type 'a from_node_event = Share of 'a env Dag.vertex
+type 'a from_node_event =
+  | Share of 'a env Dag.vertex
+  | PuzzleProposal of ('a env, 'a) Intf2.puzzle_payload
 
 type 'prot_data event =
   | StochasticClock
@@ -44,6 +46,8 @@ let string_of_event view =
     sprintf "ForNode (node %i, Deliver %s)" node (string_of_vertex view x)
   | FromNode (node, Share x) ->
     sprintf "FromNode (node %i, Share %s)" node (string_of_vertex view x)
+  | FromNode (node, PuzzleProposal _) ->
+    sprintf "FromNode (node %i, PuzzleProposal _)" node
 ;;
 
 type 'prot_data clock =
@@ -210,9 +214,7 @@ let init
   state
 ;;
 
-let mine state node_id =
-  let (Node node) = state.nodes.(node_id) in
-  let payload = node.puzzle_payload node.state in
+let mine state node_id (payload : _ Intf2.puzzle_payload) =
   let pow_hash = Some (Random.bits (), Dag.size state.dag) in
   let n_nodes = Array.length state.nodes in
   Dag.append
@@ -245,12 +247,16 @@ let handle_event state ev =
     if not state.done_
     then (
       let node_id = Distributions.sample state.assign_pow_distr in
-      let vertex = mine state node_id in
-      let () = state.check_dag vertex in
-      schedule 0. (ForNode (node_id, PuzzleSolved vertex));
+      let (Node node) = state.nodes.(node_id) in
+      let payload = node.puzzle_payload node.state in
+      schedule 0. (FromNode (node_id, PuzzleProposal payload));
       state.clock.c_activations <- state.clock.c_activations + 1;
       state.activations.(node_id) <- state.activations.(node_id) + 1;
       schedule_proof_of_work state)
+  | FromNode (node_id, PuzzleProposal payload) ->
+    let vertex = mine state node_id payload in
+    let () = state.check_dag vertex in
+    schedule 0. (ForNode (node_id, PuzzleSolved vertex))
   | FromNode (src, Share msg) ->
     (* implements recursive sharing *)
     let (Node node) = state.nodes.(src) in

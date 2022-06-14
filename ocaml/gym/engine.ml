@@ -44,56 +44,6 @@ end = struct
   ;;
 end
 
-module type AttackSpace = sig
-  type data
-
-  val info : string
-
-  module Protocol : Protocol with type data = data
-
-  module Observation : sig
-    type t
-
-    val length : int
-    val low : t
-    val high : t
-    val to_floatarray : t -> floatarray
-    val of_floatarray : floatarray -> t
-    val to_string : t -> string
-  end
-
-  module Action : sig
-    type t
-
-    val n : int
-    val to_string : t -> string
-    val to_int : t -> int
-    val of_int : int -> t
-  end
-
-  module Agent (V : LocalView with type data = data) : sig
-    open V
-
-    type state
-    type observable_state
-
-    val preferred : state -> env Dag.vertex
-    val puzzle_payload : state -> (env, data) puzzle_payload
-    val init : roots:env Dag.vertex list -> state
-    val prepare : state -> env event -> observable_state
-    val observe : observable_state -> Observation.t
-    val apply : observable_state -> Action.t -> (env, state) handler_return
-  end
-
-  val policies : (Observation.t -> Action.t) Collection.t
-end
-
-(* This is just for checking whether the above might actually work *)
-module _ : AttackSpace = struct
-  module Protocol = Cpr_protocols.Nakamoto
-  include Protocol.SszAttack
-end
-
 type 'data agent =
   | Agent :
       { preferred : 'state -> 'data Simulator.env Dag.vertex
@@ -175,13 +125,19 @@ let of_module
       ~defenders:p.defenders
       ~propagation_delay:0.00001
   in
-  let rec skip_to_interaction sim =
+  let rec skip_to_interaction sim puzzle_payload =
     let open Simulator in
     match dequeue sim with
     | Some (ForNode (0, ev)) -> ev
+    | Some (FromNode (0, PuzzleProposal _)) ->
+      let payload = puzzle_payload () in
+      let vertex = mine sim 0 payload in
+      let () = sim.check_dag vertex in
+      schedule sim.clock 0. (ForNode (0, PuzzleSolved vertex));
+      skip_to_interaction sim puzzle_payload
     | Some ev ->
       handle_event sim ev;
-      skip_to_interaction sim
+      skip_to_interaction sim puzzle_payload
     | None -> failwith "simulation should continue forever"
   in
   let init () =
@@ -204,7 +160,11 @@ let of_module
       let observe s = observe s |> M.Observation.to_floatarray
       and observe_hum s = observe s |> M.Observation.to_string
       and apply s i = apply s (M.Action.of_int i)
-      and state = skip_to_interaction sim |> prepare (init ~roots:sim.roots) in
+      and state =
+        let init = init ~roots:sim.roots in
+        let puzzle_payload () = puzzle_payload init in
+        skip_to_interaction sim puzzle_payload |> prepare init
+      in
       Agent
         { preferred; init; puzzle_payload; observe; observe_hum; apply; prepare; state }
     in
@@ -244,8 +204,10 @@ let of_module
       ret.state
     in
     (* Fast forward simulation till next attacker action. *)
-    let event = skip_to_interaction t.sim in
-    let () = a.state <- a.prepare state event in
+    let () =
+      let event = skip_to_interaction t.sim (fun () -> a.puzzle_payload state) in
+      a.state <- a.prepare state event
+    in
     (* End simulation? *)
     let done_, apply_upto =
       let prefs =

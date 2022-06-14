@@ -139,3 +139,49 @@ module type Protocol = sig
 end
 
 type 'a protocol = (module Protocol with type data = 'a)
+
+module type AttackSpace = sig
+  type data
+
+  val info : string
+
+  module Protocol : Protocol with type data = data
+
+  module Observation : sig
+    type t
+
+    val length : int
+    val low : t
+    val high : t
+    val to_floatarray : t -> floatarray
+    val of_floatarray : floatarray -> t
+    val to_string : t -> string
+  end
+
+  module Action : sig
+    type t
+
+    val n : int
+    val to_string : t -> string
+    val to_int : t -> int
+    val of_int : int -> t
+  end
+
+  module Agent (V : LocalView with type data = data) : sig
+    open V
+
+    type state
+    type observable_state
+
+    val preferred : state -> env Dag.vertex
+    val puzzle_payload : state -> (env, data) puzzle_payload
+    val init : roots:env Dag.vertex list -> state
+    val prepare : state -> env event -> observable_state
+    val observe : observable_state -> Observation.t
+    val apply : observable_state -> Action.t -> (env, state) handler_return
+  end
+
+  val policies : (Observation.t -> Action.t) Collection.t
+end
+
+type 'a attack_space = (module AttackSpace with type data = 'a)
