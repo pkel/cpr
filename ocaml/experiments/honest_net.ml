@@ -1,32 +1,40 @@
-open Cpr_lib
+open Cpr_lib.Next
 open Models
 
 let protocols =
+  (*
+  let open Cpr_lib in
   let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
   nakamoto :: List.concat_map (fun k -> [ bk ~k; bk_lessleader ~k; tailstorm ~k ]) k
+  *)
+  ()
+  [@@ocamlformat "wrap-comments=false"]
 ;;
 
 let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
 
-let activation_delay ~block_interval ~protocol =
-  block_interval /. (protocol.pow_per_block |> float_of_int)
+let activation_delay (type a) ~block_interval ~protocol =
+  let (module Protocol : Protocol with type data = a) = protocol in
+  block_interval /. (Protocol.puzzles_per_block |> float_of_int)
+;;
+
+let tasks_per_protocol protocol n_activations =
+  List.concat_map
+    (fun net ->
+      List.map
+        (fun block_interval ->
+          let activation_delay = activation_delay ~block_interval ~protocol in
+          let sim, network = net ~activation_delay protocol in
+          Csv_runner.Task
+            { activations = n_activations; protocol; attack = None; sim; network })
+        block_intervals)
+    [ honest_clique ~n:10 ]
 ;;
 
 (* Run all combinations of protocol, network and block_interval. *)
 let tasks ~n_activations =
-  List.concat_map
-    (fun (P protocol) ->
-      List.concat_map
-        (fun net ->
-          List.map
-            (fun block_interval ->
-              let activation_delay = activation_delay ~block_interval ~protocol in
-              let sim, network = net ~activation_delay protocol in
-              Csv_runner.Task
-                { activations = n_activations; protocol; attack = None; sim; network })
-            block_intervals)
-        [ honest_clique ~n:10 ])
-    protocols
+  let open Cpr_protocols in
+  List.concat [ tasks_per_protocol (module Nakamoto) n_activations ]
 ;;
 
 open Cmdliner

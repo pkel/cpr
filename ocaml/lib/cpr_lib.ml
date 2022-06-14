@@ -132,6 +132,8 @@ let%test "first" =
 let%test "first" = first Compare.int ~skip_to:(fun x -> x > 10) 2 [ 19; 2; 5; 3 ] = None
 
 module Next = struct
+  let version = Version.t
+
   include Intf2
   module Collection = Collection
   module Dag = Dag

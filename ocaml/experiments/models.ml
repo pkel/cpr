@@ -1,7 +1,5 @@
 open Cpr_lib.Next
 
-(** {1} simulated environments *)
-
 let honest_clique ~activation_delay ~n protocol =
   let propagation_delay = Distributions.uniform ~lower:0.5 ~upper:1.5 in
   let net = Network.T.symmetric_clique ~activation_delay ~propagation_delay n in
