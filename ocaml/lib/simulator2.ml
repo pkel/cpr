@@ -343,14 +343,18 @@ let apply_reward_function' (fn : _ Intf2.reward_function) seq state =
   arr
 ;;
 
+let judge state =
+  Array.map
+    (function
+      | Node node -> node.preferred node.state)
+    state.nodes
+  |> Array.to_list
+  |> state.judge
+;;
+
 let apply_reward_function (fn : _ Intf2.reward_function) state =
-  let head =
-    Array.map
-      (function
-        | Node node -> node.preferred node.state)
-      state.nodes
-    |> Array.to_list
-    |> state.judge
-  in
-  apply_reward_function' fn (Dag.iterate_ancestors state.global_view [ head ]) state
+  apply_reward_function'
+    fn
+    (Dag.iterate_ancestors state.global_view [ judge state ])
+    state
 ;;

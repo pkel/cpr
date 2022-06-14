@@ -11,14 +11,9 @@ let%test_unit "nakamoto_progress" =
     in
     let env = init (module Nakamoto) network in
     loop ~activations:1000 env;
-    Array.to_seq env.nodes
-    |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor' env.global_view
-    |> function
-    | None -> failwith "no common ancestor"
-    | Some n ->
-      let is = (Dag.data n).value.height in
-      if is < height then failwith (Printf.sprintf "not enough progress: %i/%i" is height)
+    let head = judge env in
+    let is = (Dag.data head).value.height in
+    if is < height then failwith (Printf.sprintf "not enough progress: %i/%i" is height)
   in
   List.iter
     test

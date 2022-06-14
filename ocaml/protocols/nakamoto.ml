@@ -20,9 +20,8 @@ let dag_validity (type a) ((module V) : (a, data) global_view) vertex =
 ;;
 
 let judge (type a) ((module V) : (a, data) global_view) l =
-  let open V in
-  (* TODO pick longest chain *)
-  List.to_seq l |> Cpr_lib.Dag.common_ancestor' view |> Option.get
+  let height x = (V.data x).height in
+  List.fold_left (fun acc x -> if height x > height acc then x else acc) (List.hd l) l
 ;;
 
 module Honest (V : LocalView with type data = data) = struct

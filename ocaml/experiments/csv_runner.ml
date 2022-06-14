@@ -117,28 +117,23 @@ let run task =
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
     loop ~activations:t.activations sim;
-    Array.to_seq sim.nodes
-    |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor' sim.global_view
-    |> function
-    | None -> failwith "no common ancestor found"
-    | Some common_chain ->
-      (* incentive stats *)
-      Collection.map_to_list
-        (fun rewardfn ->
-          let reward = apply_reward_function rewardfn.it sim in
-          { row with
-            activations = sim.activations
-          ; compute
-          ; incentive_scheme = rewardfn.key
-          ; incentive_scheme_description = rewardfn.info
-          ; reward
-          ; ca_time = (Dag.data common_chain).appended_at
-          ; ca_height = Protocol.height (Dag.data common_chain).value
-          ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
-          ; error = ""
-          })
-        (Protocol.reward_functions ())
+    let head = judge sim in
+    (* incentive stats *)
+    Collection.map_to_list
+      (fun rewardfn ->
+        let reward = apply_reward_function rewardfn.it sim in
+        { row with
+          activations = sim.activations
+        ; compute
+        ; incentive_scheme = rewardfn.key
+        ; incentive_scheme_description = rewardfn.info
+        ; reward
+        ; ca_time = (Dag.data head).appended_at
+        ; ca_height = Protocol.height (Dag.data head).value
+        ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
+        ; error = ""
+        })
+      (Protocol.reward_functions ())
   with
   | e ->
     let bt = Printexc.get_backtrace () in

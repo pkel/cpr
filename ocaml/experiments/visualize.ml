@@ -118,12 +118,6 @@ let run (Csv_runner.Task t) =
   let (module Protocol) = t.protocol in
   let env = t.sim.it () in
   loop ~activations:t.activations env;
-  let head =
-    Array.to_seq env.nodes
-    |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor' env.global_view
-    |> Option.get
-  in
   let confirmed = Array.make (Dag.size env.dag) false in
   Collection.iter
     (fun rewardfn ->
@@ -136,7 +130,7 @@ let run (Csv_runner.Task t) =
               ~view:env.global_view_m
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
-          (Dag.iterate_ancestors env.global_view [ head ])
+          (Dag.iterate_ancestors env.global_view [ judge env ])
       in
       let path =
         let open Fpath in
