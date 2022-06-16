@@ -75,14 +75,13 @@ type 'prot_data state =
   ; dag : 'prot_data env Dag.t
   ; roots : 'prot_data env Dag.vertex list
   ; global_view : 'prot_data env Dag.view
-  ; global_view_m : ('prot_data env, 'prot_data) Intf2.global_view
+  ; referee : ('prot_data env, 'prot_data) Intf2.referee
   ; nodes : 'prot_data node array
   ; activations : int array
   ; assign_pow_distr : int Distributions.iid
   ; activation_delay_distr : float Distributions.iid
   ; network : Network.t
   ; check_dag : 'prot_data env Dag.vertex -> unit
-  ; judge : 'prot_data env Dag.vertex list -> 'prot_data env Dag.vertex
   ; mutable done_ : bool (* set to true for shutdown *)
   }
 
@@ -129,17 +128,19 @@ let init
   =
   let dag = Dag.create () in
   let n_nodes = Array.length network.nodes in
-  let module GlobalView = struct
-    type data = Protocol.data
-    type nonrec env = data env
+  let (module Ref) =
+    Protocol.referee
+      (module struct
+        type data = Protocol.data
+        type nonrec env = data env
 
-    let view = Dag.view dag
-    let data n = (Dag.data n).value
-    let signed_by n = (Dag.data n).signed_by
-    let pow_hash n = (Dag.data n).pow_hash
-    let max_pow_hash = max_int, max_int
-    let min_pow_hash = min_int, 0
-  end
+        let view = Dag.view dag
+        let data n = (Dag.data n).value
+        let signed_by n = (Dag.data n).signed_by
+        let pow_hash n = (Dag.data n).pow_hash
+        let max_pow_hash = max_int, max_int
+        let min_pow_hash = min_int, 0
+      end)
   in
   (* let module _ : Intf2.GlobalView = GlobalView in *)
   let roots =
@@ -170,7 +171,7 @@ let init
   in
   let check_dag vertex =
     (* We guarantee that invalid extensions are never delivered elsewhere *)
-    if not (Protocol.dag_validity (module GlobalView) vertex)
+    if not (Ref.dag_validity vertex)
     then (
       let info x =
         [ Protocol.describe x.value, ""
@@ -179,7 +180,7 @@ let init
         ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
         ]
       in
-      Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
+      Dag.Exn.raise Ref.view info [ vertex ] "invalid append")
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
@@ -187,10 +188,10 @@ let init
           Float.Array.get (Dag.data x).delivered_at node_id <= clock.now
         in
         let module LocalView = struct
-          include GlobalView
+          include Ref
 
           let my_id = node_id
-          let view = Dag.filter visibility GlobalView.view
+          let view = Dag.filter visibility Ref.view
           let delivered_at n = Float.Array.get (Dag.data n).delivered_at node_id
           let appended_by_me n = (Dag.data n).appended_by = Some node_id
 
@@ -222,8 +223,8 @@ let init
     { clock
     ; roots
     ; dag
-    ; global_view = GlobalView.view
-    ; global_view_m = (module GlobalView)
+    ; global_view = Ref.view
+    ; referee = (module Ref)
     ; nodes
     ; activations = Array.make n_nodes 0
     ; assign_pow_distr
@@ -231,7 +232,6 @@ let init
     ; network
     ; done_ = false
     ; check_dag
-    ; judge = Protocol.judge (module GlobalView)
     }
   in
   schedule_proof_of_work state;
@@ -352,23 +352,21 @@ let apply_reward_function' (fn : _ Intf2.reward_function) seq state =
     match (Dag.data n).appended_by with
     | Some i -> arr.(i) <- arr.(i) +. x
     | None -> ()
-  and view = state.global_view_m in
-  Seq.iter (fn ~view ~assign) seq;
+  in
+  Seq.iter (fn ~assign) seq;
   arr
 ;;
 
-let judge state =
+let head (type a) (state : a state) =
+  let (module Ref) = state.referee in
   Array.map
     (function
       | Node node -> node.preferred node.state)
     state.nodes
   |> Array.to_list
-  |> state.judge
+  |> Ref.winner
 ;;
 
 let apply_reward_function (fn : _ Intf2.reward_function) state =
-  apply_reward_function'
-    fn
-    (Dag.iterate_ancestors state.global_view [ judge state ])
-    state
+  apply_reward_function' fn (Dag.iterate_ancestors state.global_view [ head state ]) state
 ;;

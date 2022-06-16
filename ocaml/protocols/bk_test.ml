@@ -11,7 +11,7 @@ let%test_unit "bk_progress" =
     in
     let env = init (module P) network in
     loop ~activations:(1000 * P.puzzles_per_block) env;
-    let head = judge env in
+    let head = head env in
     let is = P.height (Dag.data head).value in
     if is < height then failwith (Printf.sprintf "not enough progress: %i/%i" is height)
   in

@@ -61,6 +61,7 @@ type 'data agent =
 type 'data instance =
   { sim : 'data Simulator.state
   ; agent : 'data agent
+  ; reward_function : 'data Simulator.env reward_function
   ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex
   ; mutable last_time : float
   ; mutable steps : int
@@ -101,22 +102,6 @@ let of_module
     (p : Parameters.t)
     : data instance ref env
   =
-  let reward_function =
-    let collection = M.Protocol.reward_functions () in
-    match Collection.get reward collection with
-    | Some x -> x.it
-    | None ->
-      let msg =
-        "unkown reward function '"
-        ^ reward
-        ^ "'. Try "
-        ^ (Collection.keys collection
-          |> List.map (fun s -> "'" ^ s ^ "'")
-          |> numeration ~conj:"or")
-        ^ "."
-      in
-      failwith msg
-  in
   let network =
     Network.T.selfish_mining
       ~activation_delay:p.activation_delay
@@ -147,6 +132,22 @@ let of_module
       | _ -> None
     in
     let sim = init ~patch (module M.Protocol) network in
+    let reward_function =
+      let (module Ref) = sim.referee in
+      match Collection.get reward Ref.reward_functions with
+      | Some x -> x.it
+      | None ->
+        let msg =
+          "unkown reward function '"
+          ^ reward
+          ^ "'. Try "
+          ^ (Collection.keys Ref.reward_functions
+            |> List.map (fun s -> "'" ^ s ^ "'")
+            |> numeration ~conj:"or")
+          ^ "."
+        in
+        failwith msg
+    in
     let agent =
       let (Node node) = sim.nodes.(0) in
       let _ = node.view in
@@ -168,7 +169,13 @@ let of_module
       Agent
         { preferred; init; puzzle_payload; observe; observe_hum; apply; prepare; state }
     in
-    { sim; agent; reward_applied_upto = List.hd sim.roots; last_time = 0.; steps = 0 }
+    { sim
+    ; agent
+    ; reward_function
+    ; reward_applied_upto = List.hd sim.roots
+    ; last_time = 0.
+    ; steps = 0
+    }
   in
   let observe t =
     let (Agent a) = t.agent in
@@ -191,7 +198,8 @@ let of_module
   in
   let step ref_t ~action =
     (* env.step () *)
-    let t = !ref_t in
+    let t : data instance = !ref_t in
+    let (module Ref) = t.sim.referee in
     let () = t.steps <- t.steps + 1 in
     let (Agent a) = t.agent in
     (* Apply action i to the simulator state. *)
@@ -223,11 +231,16 @@ let of_module
       in
       if t.steps < p.max_steps && t.sim.clock.now < p.max_time
       then (
+        (* TODO. common_ancenstor on preferred heads is a leaky abstraction. Attacker
+           might change preference and subvert this mechanism. Consider calculating full
+           rewards on each step, then return the delta. If this turns out to be to
+           expensive, add a "safepoint" mechanism to attack space which informs the
+           environment over the finalized block.*)
         let ca =
           List.to_seq prefs |> Dag.common_ancestor' t.sim.global_view |> Option.get
         in
         false, ca)
-      else true, M.Protocol.judge t.sim.global_view_m prefs
+      else true, Ref.winner prefs
     in
     (* Calculate rewards for the new common blocks. *)
     (* 1. find common ancestor *)
@@ -245,8 +258,7 @@ let of_module
           | Cons (n, _seq) when n $== t.reward_applied_upto -> ()
           | Cons (n, seq) ->
             if Option.is_some (Dag.data n).pow_hash then incr pow_cnt else ();
-            reward_function
-              ~view:t.sim.global_view_m
+            t.reward_function
               ~assign:(fun x n ->
                 match (Dag.data n).appended_by with
                 | None -> ()

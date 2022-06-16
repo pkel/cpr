@@ -29,6 +29,27 @@ end
 
 type ('a, 'b) global_view = (module GlobalView with type env = 'a and type data = 'b)
 
+(** Calculate and assign rewards to a vertex and (potentially) its neighbours. Use this
+    together with {!Dag.iterate_ancestors}. *)
+type 'a reward_function = assign:(float -> 'a Dag.vertex -> unit) -> 'a Dag.vertex -> unit
+
+module type Referee = sig
+  include GlobalView
+
+  (** restrict DAG extensions. The simulator checks validity for each appended DAG vertex.
+      Invalid extensions are not delivered to other nodes. *)
+  val dag_validity : env Dag.vertex -> bool
+
+  (** When calculating rewards, the simulator will consider the preferred vertices of all
+      nodes. This functions determines the best vertex. The reward function will be
+      applied from the best vertex backwards to the roots. *)
+  val winner : env Dag.vertex list -> env Dag.vertex
+
+  val reward_functions : env reward_function Collection.t
+end
+
+type ('a, 'b) referee = (module Referee with type env = 'a and type data = 'b)
+
 type ('env, 'data) vertex_proposal =
   { parents : 'env Dag.vertex list (** hash-references to previous DAG vertices *)
   ; data : 'data (** protocol data attached to the DAG vertices *)
@@ -92,14 +113,6 @@ type ('a, 'b) node =
       (module Node with type env = 'a and type data = 'b and type state = 'c)
       -> ('a, 'b) node
 
-(** Calculate and assign rewards to a vertex and (potentially) its neighbours. Use this
-    together with {!Dag.iterate_ancestors}. *)
-type ('a, 'b) reward_function =
-  view:('a, 'b) global_view
-  -> assign:(float -> 'a Dag.vertex -> unit)
-  -> 'a Dag.vertex
-  -> unit
-
 module type Protocol = sig
   (** what the protocol stores on each DAG vertex *)
   type data
@@ -123,19 +136,13 @@ module type Protocol = sig
   (** specify the roots of the DAG. *)
   val dag_roots : data list
 
-  (** restrict DAG extensions. The simulator checks validity for each appended DAG vertex.
-      Invalid extensions are not delivered to other nodes. *)
-  val dag_validity : ('env, data) global_view -> 'env Dag.vertex -> bool
+  (** specification of global truths *)
+  val referee : ('env, data) global_view -> ('env, data) referee
 
   (** specification for honest participants *)
   val honest : ('env, data) local_view -> ('env, data) node
 
-  (** When calculating rewards, the simulator will consider the preferred vertices of all
-      nodes. This functions determines the best vertex. The reward function will be
-      applied from the best vertex backwards to the roots. *)
-  val judge : ('env, data) global_view -> 'env Dag.vertex list -> 'env Dag.vertex
-
-  val reward_functions : unit -> ('env, data) reward_function Collection.t
+  (** TODO: move out of the protocol module type. *)
   val attacks : unit -> (('env, data) local_view -> ('env, data) node) Collection.t
 end
 

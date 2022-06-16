@@ -114,6 +114,7 @@ let run task =
   try
     let open Simulator in
     let sim = t.sim.it () in
+    let (module Ref) = sim.referee in
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
     loop ~activations:t.activations sim;
@@ -133,7 +134,7 @@ let run task =
         ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
         ; error = ""
         })
-      (Protocol.reward_functions ())
+      Ref.reward_functions
   with
   | e ->
     let bt = Printexc.get_backtrace () in

@@ -10,7 +10,7 @@ let%test_unit "nakamoto_progress" =
     in
     let env = init (module Nakamoto) network in
     loop ~activations:1000 env;
-    let head = judge env in
+    let head = head env in
     let is = (Dag.data head).value.height in
     if is < height then failwith (Printf.sprintf "not enough progress: %i/%i" is height)
   in

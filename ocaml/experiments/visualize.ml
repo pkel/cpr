@@ -117,6 +117,7 @@ let run (Csv_runner.Task t) =
   let open Simulator in
   let (module Protocol) = t.protocol in
   let env = t.sim.it () in
+  let (module Ref) = env.referee in
   loop ~activations:t.activations env;
   let confirmed = Array.make (Dag.size env.dag) false in
   Collection.iter
@@ -127,7 +128,6 @@ let run (Csv_runner.Task t) =
           (fun n ->
             confirmed.(Dag.id n) <- true;
             rewardfn.it
-              ~view:env.global_view_m
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
           (Dag.iterate_ancestors env.global_view [ judge env ])
@@ -150,7 +150,7 @@ let run (Csv_runner.Task t) =
             , node_name (Task t) ))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
-    (Protocol.reward_functions ())
+    Ref.reward_functions
 ;;
 
 let () =

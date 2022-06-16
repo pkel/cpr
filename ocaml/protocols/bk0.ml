@@ -16,15 +16,6 @@ module Data = struct
   type data =
     | Vote of vote_data
     | Block of block_data
-end
-
-module Make (P : Parameters) = struct
-  open P
-  include Data
-
-  let key = "bk"
-  let info = "Bₖ"
-  let puzzles_per_block = k
 
   let height = function
     | Vote x -> x.height
@@ -47,56 +38,92 @@ module Make (P : Parameters) = struct
     | Block _ -> true
     | _ -> false
   ;;
+end
 
-  let dag_validity (type a) ((module V) : (a, data) global_view) vertex =
-    let open V in
-    let has_pow x = pow_hash x |> Option.is_some
-    and pow_hash x = pow_hash x |> Option.get in
-    match data vertex, Dag.parents view vertex with
-    | Vote v, [ p ] ->
-      let pd = data p in
-      has_pow vertex && is_block pd && v.height = height pd
-    | Block b, pblock :: vote0 :: votes ->
-      (match data pblock, data vote0 with
-      | Block p, Vote leader ->
-        let ordered_votes, _, nvotes =
-          List.fold_left
-            (fun (ok, h, i) n ->
-              let h' = pow_hash n in
-              data n |> is_vote && h' > h && ok, h', i + 1)
-            (true, pow_hash vote0, 1)
-            votes
-        in
-        p.height + 1 = b.height
-        && nvotes = k
-        && ordered_votes
-        && signed_by vertex = Some leader.id
-      | _ -> false)
-    | _ -> false
-  ;;
+module Make (P : Parameters) = struct
+  open P
+  include Data
 
-  let last_block data view x =
-    match data x with
-    | Block _ -> x
-    | Vote _ ->
-      (match Dag.parents view x with
-      | [ x ] -> x
-      | _ -> failwith "invalid dag")
-  ;;
+  let key = "bk"
+  let info = Printf.sprintf "Bₖ with k = %i" k
+  let puzzles_per_block = k
 
-  let judge (type a) ((module V) : (a, data) global_view) l =
-    let open V in
-    let height x = height (data x) in
-    List.fold_left
-      (fun acc x ->
-        let x = last_block data view x in
-        if height x > height acc then x else acc)
-      (List.hd l)
-      l
+  module Referee (V : GlobalView with type data = data) = struct
+    include V
+
+    let dag_validity vertex =
+      let has_pow x = pow_hash x |> Option.is_some
+      and pow_hash x = pow_hash x |> Option.get in
+      match data vertex, Dag.parents view vertex with
+      | Vote v, [ p ] ->
+        let pd = data p in
+        has_pow vertex && is_block pd && v.height = height pd
+      | Block b, pblock :: vote0 :: votes ->
+        (match data pblock, data vote0 with
+        | Block p, Vote leader ->
+          let ordered_votes, _, nvotes =
+            List.fold_left
+              (fun (ok, h, i) n ->
+                let h' = pow_hash n in
+                data n |> is_vote && h' > h && ok, h', i + 1)
+              (true, pow_hash vote0, 1)
+              votes
+          in
+          p.height + 1 = b.height
+          && nvotes = k
+          && ordered_votes
+          && signed_by vertex = Some leader.id
+        | _ -> false)
+      | _ -> false
+    ;;
+
+    let last_block x =
+      match data x with
+      | Block _ -> x
+      | Vote _ ->
+        (match Dag.parents view x with
+        | [ x ] -> x
+        | _ -> failwith "invalid dag")
+    ;;
+
+    let winner l =
+      let height x = height (data x) in
+      List.fold_left
+        (fun acc x ->
+          let x = last_block x in
+          if height x > height acc then x else acc)
+        (List.hd l)
+        l
+    ;;
+
+    let constant_pow c : env reward_function =
+     fun ~assign x ->
+      match pow_hash x with
+      | Some _ -> assign c x
+      | None -> ()
+   ;;
+
+    let constant_block c : env reward_function =
+     fun ~assign x -> if data x |> is_block then assign c x
+   ;;
+
+    let reward_functions =
+      let open Collection in
+      empty
+      |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
+      |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.)
+    ;;
+  end
+
+  let referee (type a) (module V : GlobalView with type env = a and type data = data)
+      : (a, data) referee
+    =
+    (module Referee (V))
   ;;
 
   module Honest (V : LocalView with type data = data) = struct
     include V
+    open Referee (V)
 
     type state = env Dag.vertex
 
@@ -219,7 +246,7 @@ module Make (P : Parameters) = struct
         | None -> { share = [ v ]; state = preferred })
       | Deliver x ->
         (* We only prefer blocks. For received votes, reconsider parent block. *)
-        let b = last_block data view x in
+        let b = last_block x in
         let consider =
           (* prefer best block of all blocks involved *)
           List.fold_left
@@ -235,26 +262,5 @@ module Make (P : Parameters) = struct
 
   let honest (type a) ((module V) : (a, data) local_view) : (a, data) node =
     Node (module Honest (V))
-  ;;
-
-  let constant_pow c (type a) : (a, data) reward_function =
-   fun ~view:(module View : GlobalView with type env = a and type data = data) ~assign x ->
-    let open View in
-    match pow_hash x with
-    | Some _ -> assign c x
-    | None -> ()
- ;;
-
-  let constant_block c (type a) : (a, data) reward_function =
-   fun ~view:(module View : GlobalView with type env = a and type data = data) ~assign x ->
-    let open View in
-    if data x |> is_block then assign c x
- ;;
-
-  let reward_functions () =
-    let open Collection in
-    empty
-    |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
-    |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.)
   ;;
 end
