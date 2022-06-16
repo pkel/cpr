@@ -293,19 +293,16 @@ let handle_event state ev =
           schedule delay (Network (Rx (link.dest, msg)))))
       state.network.nodes.(src).links
   | Network (Rx (dst, msg)) ->
+    let delivered_at msg = Float.Array.get (Dag.data msg).delivered_at dst
+    and received_at msg = Float.Array.get (Dag.data msg).received_at dst in
     (* implements in-order delivery of vertices and flooding *)
     let rec h msg =
-      let was_delivered msg =
-        Float.Array.get (Dag.data msg).delivered_at dst <= state.clock.now
-      and was_received msg =
-        Float.Array.get (Dag.data msg).received_at dst <= state.clock.now
-      in
       (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
          vertices have been delivered *)
-      if was_delivered msg
-      then (* x was delivered before, ignore *) ()
+      if delivered_at msg <= state.clock.now
+      then (* msg was delivered before, ignore *) ()
       else if List.exists
-                (fun dep -> was_delivered dep |> not)
+                (fun dep -> delivered_at dep > state.clock.now)
                 (Dag.parents state.global_view msg)
       then (* dependencies are not yet fulfilled, wait *) ()
       else
@@ -319,7 +316,7 @@ let handle_event state ev =
            | Simple -> ()
          in
          (* reconsider now unlocked dependent DAG vertices recursively *)
-         List.iter (fun msg -> if was_received msg && not (was_delivered msg) then h msg))
+         List.iter (fun msg -> if received_at msg <= state.clock.now then h msg))
           (Dag.children state.global_view msg)
     in
     h msg
