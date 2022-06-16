@@ -47,7 +47,7 @@ end
 type 'data agent =
   | Agent :
       { preferred : 'state -> 'data Simulator.env Dag.vertex
-      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) puzzle_payload
+      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) vertex_proposal
       ; init : roots:'data Simulator.env Dag.vertex list -> 'state
       ; prepare : 'state -> 'data Simulator.env event -> 'observable
       ; observe : 'observable -> floatarray
@@ -131,7 +131,7 @@ let of_module
     | Some (ForNode (0, ev)) -> ev
     | Some (FromNode (0, PuzzleProposal _)) ->
       let payload = puzzle_payload () in
-      let vertex = mine sim 0 payload in
+      let vertex = extend_dag ~pow:true sim 0 payload in
       let () = sim.check_dag vertex in
       schedule sim.clock 0. (ForNode (0, PuzzleSolved vertex));
       skip_to_interaction sim puzzle_payload

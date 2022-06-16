@@ -144,4 +144,6 @@ module Next = struct
   module ResultSyntax = ResultSyntax
   module Compare = Compare
   include Infix
+
+  let first = first
 end

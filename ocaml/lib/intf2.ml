@@ -22,9 +22,18 @@ module type GlobalView = sig
   (** return the proof-of-work hash of the DAG vertex, if the vertex was attached with
       proof-of-work authorization. *)
   val pow_hash : env Dag.vertex -> (int * int) option
+
+  val max_pow_hash : int * int
+  val min_pow_hash : int * int
 end
 
 type ('a, 'b) global_view = (module GlobalView with type env = 'a and type data = 'b)
+
+type ('env, 'data) vertex_proposal =
+  { parents : 'env Dag.vertex list (** hash-references to previous DAG vertices *)
+  ; data : 'data (** protocol data attached to the DAG vertices *)
+  ; sign : bool (** whether to include a signature or not *)
+  }
 
 module type LocalView = sig
   include GlobalView
@@ -40,8 +49,7 @@ module type LocalView = sig
   (** was the vertex appended locally (true) or by another node (false) *)
   val appended_by_me : env Dag.vertex -> bool
 
-  (* TODO: some protocols extend the DAG without pow. Add extend_dag function here, to
-     support this case *)
+  val extend_dag : (env, data) vertex_proposal -> env Dag.vertex
 end
 
 type ('a, 'b) local_view = (module LocalView with type env = 'a and type data = 'b)
@@ -52,13 +60,6 @@ type ('env, 'state) handler_return =
   ; share : 'env Dag.vertex list
         (** vertices to be shared with the other nodes. All vertices are shared
             recursively, i.e., including their parents *)
-  }
-
-(** what a node currently mines on *)
-type ('env, 'data) puzzle_payload =
-  { parents : 'env Dag.vertex list (** hash-references to previous DAG vertices *)
-  ; data : 'data (** protocol data attached to the DAG vertices *)
-  ; sign : bool (** whether to include a signature or not *)
   }
 
 module type Node = sig
@@ -78,7 +79,7 @@ module type Node = sig
       [puzzle_payload], constructs a corresponding DAG vertex, and hands it to the mining
       node. The simulator raises {Invalid_argument} if the proposed extension does not
       satisfy the DAG invariant specified by the simulated protocol. *)
-  val puzzle_payload : state -> (env, data) puzzle_payload
+  val puzzle_payload : state -> (env, data) vertex_proposal
 
   (** returns a node's preferred DAG vertex, typically a leave. Rewards are calculated
       backwards from here *)
@@ -174,7 +175,7 @@ module type AttackSpace = sig
     type observable_state
 
     val preferred : state -> env Dag.vertex
-    val puzzle_payload : state -> (env, data) puzzle_payload
+    val puzzle_payload : state -> (env, data) vertex_proposal
     val init : roots:env Dag.vertex list -> state
     val prepare : state -> env event -> observable_state
     val observe : observable_state -> Observation.t

@@ -17,7 +17,7 @@ type 'a network_event =
 
 type 'a from_node_event =
   | Share of 'a env Dag.vertex
-  | PuzzleProposal of ('a env, 'a) Intf2.puzzle_payload
+  | PuzzleProposal of ('a env, 'a) Intf2.vertex_proposal
 
 type 'prot_data event =
   | StochasticClock
@@ -64,7 +64,7 @@ type ('prot_data, 'node_state) node' =
       'node_state
       -> 'prot_data env Intf2.event
       -> ('prot_data env, 'node_state) Intf2.handler_return
-  ; puzzle_payload : 'node_state -> ('prot_data env, 'prot_data) Intf2.puzzle_payload
+  ; puzzle_payload : 'node_state -> ('prot_data env, 'prot_data) Intf2.vertex_proposal
   ; preferred : 'node_state -> 'prot_data env Dag.vertex
   }
 
@@ -99,6 +99,26 @@ let string_of_pow_hash (nonce, _serial) =
   Printf.sprintf "%.3f" (float_of_int nonce /. (2. ** 29.))
 ;;
 
+let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf2.vertex_proposal) =
+  let pow_hash = if pow then Some (Random.bits (), Dag.size dag) else None in
+  Dag.append
+    dag
+    x.parents
+    { value = x.data
+    ; received_at =
+        Float.Array.init n_nodes (fun i ->
+            if i = node_id then clock.now else Float.infinity)
+    ; delivered_at =
+        Float.Array.init n_nodes (fun i ->
+            if i = node_id then clock.now else Float.infinity)
+    ; appended_at = clock.now
+    ; appended_by = Some node_id
+    ; pow_hash
+    ; signed_by = (if x.sign then Some node_id else None)
+    ; released_at = Float.infinity
+    }
+;;
+
 let init
     (type a)
     (module Protocol : Intf2.Protocol with type data = a)
@@ -117,6 +137,8 @@ let init
     let data n = (Dag.data n).value
     let signed_by n = (Dag.data n).signed_by
     let pow_hash n = (Dag.data n).pow_hash
+    let max_pow_hash = max_int, max_int
+    let min_pow_hash = min_int, 0
   end
   in
   (* let module _ : Intf2.GlobalView = GlobalView in *)
@@ -146,6 +168,19 @@ let init
     | Some f -> f
     | None -> Protocol.honest
   in
+  let check_dag vertex =
+    (* We guarantee that invalid extensions are never delivered elsewhere *)
+    if not (Protocol.dag_validity (module GlobalView) vertex)
+    then (
+      let info x =
+        [ Protocol.describe x.value, ""
+        ; "node", Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
+        ; "time", Printf.sprintf "%.2f" x.appended_at
+        ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
+        ]
+      in
+      Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
+  in
   let nodes =
     Array.init n_nodes (fun node_id ->
         let visibility x =
@@ -165,6 +200,7 @@ let init
           ;;
 
           let released n = (Dag.data n).released_at <= clock.now
+          let extend_dag x = extend_dag ~pow:false ~n_nodes clock dag node_id x
         end
         in
         let (Node (module Node)) = impl node_id (module LocalView) in
@@ -176,18 +212,6 @@ let init
           ; handler = Node.handler
           ; preferred = Node.preferred
           })
-  and check_dag vertex =
-    (* We guarantee that invalid extensions are never delivered elsewhere *)
-    if not (Protocol.dag_validity (module GlobalView) vertex)
-    then (
-      let info x =
-        [ Protocol.describe x.value, ""
-        ; "node", Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
-        ; "time", Printf.sprintf "%.2f" x.appended_at
-        ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
-        ]
-      in
-      Dag.Exn.raise GlobalView.view info [ vertex ] "invalid append")
   and assign_pow_distr =
     let weights =
       Array.map (fun x -> Network.(x.compute)) network.nodes |> Array.to_list
@@ -214,25 +238,8 @@ let init
   state
 ;;
 
-let mine state node_id (payload : _ Intf2.puzzle_payload) =
-  let pow_hash = Some (Random.bits (), Dag.size state.dag) in
-  let n_nodes = Array.length state.nodes in
-  Dag.append
-    state.dag
-    payload.parents
-    { value = payload.data
-    ; received_at =
-        Float.Array.init n_nodes (fun i ->
-            if i = node_id then state.clock.now else Float.infinity)
-    ; delivered_at =
-        Float.Array.init n_nodes (fun i ->
-            if i = node_id then state.clock.now else Float.infinity)
-    ; appended_at = state.clock.now
-    ; appended_by = Some node_id
-    ; pow_hash
-    ; signed_by = (if payload.sign then Some node_id else None)
-    ; released_at = Float.infinity
-    }
+let extend_dag state =
+  extend_dag ~n_nodes:(Array.length state.nodes) state.clock state.dag
 ;;
 
 let handle_event state ev =
@@ -254,7 +261,7 @@ let handle_event state ev =
       state.activations.(node_id) <- state.activations.(node_id) + 1;
       schedule_proof_of_work state)
   | FromNode (node_id, PuzzleProposal payload) ->
-    let vertex = mine state node_id payload in
+    let vertex = extend_dag ~pow:true state node_id payload in
     let () = state.check_dag vertex in
     schedule 0. (ForNode (node_id, PuzzleSolved vertex))
   | FromNode (src, Share msg) ->
