@@ -97,11 +97,7 @@ let dummy_node
     end)
 ;;
 
-let of_module
-    (type data)
-    (module M : AttackSpace with type Protocol.data = data)
-    ~(reward : string)
-    (p : Parameters.t)
+let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     : instance ref env
   =
   let network =
@@ -153,10 +149,7 @@ let of_module
     let agent =
       let (Node node) = sim.nodes.(0) in
       let _ = node.view in
-      let (module LocalView : LocalView
-            with type env = data Simulator.env
-             and type data = data)
-        =
+      let (module LocalView : LocalView with type env = _ and type data = _) =
         node.view
       in
       let open M.Agent (LocalView) in

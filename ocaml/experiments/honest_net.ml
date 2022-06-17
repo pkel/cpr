@@ -3,17 +3,20 @@ open Models
 
 let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
 
-let activation_delay (type a) ~block_interval ~protocol =
-  let (module Protocol : Protocol with type data = a) = protocol in
-  block_interval /. (Protocol.puzzles_per_block |> float_of_int)
+let activation_delay ~block_interval ~puzzles_per_block =
+  block_interval /. (puzzles_per_block |> float_of_int)
 ;;
 
-let tasks_per_protocol protocol n_activations =
+let tasks_per_protocol (Protocol protocol) n_activations =
+  let (module P) = protocol in
   List.concat_map
     (fun net ->
       List.map
         (fun block_interval ->
-          let activation_delay = activation_delay ~block_interval ~protocol in
+          let activation_delay =
+            let open P in
+            activation_delay ~block_interval ~puzzles_per_block
+          in
           let sim, network = net ~activation_delay protocol in
           Csv_runner.Task
             { activations = n_activations; protocol; attack = None; sim; network })
@@ -26,15 +29,9 @@ let tasks ~n_activations =
   let open Cpr_protocols in
   let bk =
     List.concat_map
-      (fun k ->
-        let module P =
-          Bk.Make (struct
-            let k = k
-          end)
-        in
-        tasks_per_protocol (module P) n_activations)
+      (fun k -> tasks_per_protocol (bk ~k) n_activations)
       [ 1; 2; 4; 8; 16; 32; 64; 128 ]
-  and nakamoto = tasks_per_protocol (module Nakamoto) n_activations in
+  and nakamoto = tasks_per_protocol nakamoto n_activations in
   List.concat [ nakamoto; bk ]
 ;;
 

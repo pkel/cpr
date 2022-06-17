@@ -48,12 +48,8 @@ let node_name (Csv_runner.Task t) =
     | Some i -> "n" ^ string_of_int i
 ;;
 
-let tasks_per_attack_space
-    (type a)
-    (module A : AttackSpace with type Protocol.data = a)
-    n_activations
-  =
-  let protocol = (module A.Protocol : Protocol with type data = a) in
+let tasks_per_attack_space (AttackSpace (module A)) n_activations =
+  let protocol = (module A.Protocol : Protocol with type data = _) in
   List.map
     (fun activation_delay ->
       let sim, network = honest_clique ~activation_delay ~n:7 protocol in
@@ -85,26 +81,11 @@ let tasks_per_attack_space
 
 let tasks =
   let open Cpr_protocols in
-  let module Bk_8 =
-    Bk.Make (struct
-      let k = 8
-    end)
-  in
-  let module Bk_4 =
-    Bk.Make (struct
-      let k = 4
-    end)
-  in
-  let module Bk_1 =
-    Bk.Make (struct
-      let k = 1
-    end)
-  in
   List.concat
-    [ tasks_per_attack_space (module Nakamoto.SSZattack) 30
-    ; tasks_per_attack_space (module Bk_8.SSZattack) 100
-    ; tasks_per_attack_space (module Bk_4.SSZattack) 50
-    ; tasks_per_attack_space (module Bk_1.SSZattack) 20
+    [ tasks_per_attack_space nakamoto_ssz 30
+    ; tasks_per_attack_space (bk_ssz ~k:8) 100
+    ; tasks_per_attack_space (bk_ssz ~k:4) 50
+    ; tasks_per_attack_space (bk_ssz ~k:1) 20
       (* bk_lessleader ~k:8, 100 ; bk_lessleader ~k:4, 50 ; bk_lessleader ~k:1, 20 ;
          tailstorm ~k:8, 100 ; tailstorm ~k:4, 50 ; tailstorm ~k:1, 20 *)
     ]

@@ -143,6 +143,8 @@ module type Protocol = sig
   val honest : ('env, data) local_view -> ('env, data) node
 end
 
+type protocol = Protocol : (module Protocol with type data = 'a) -> protocol
+
 module type AttackSpace = sig
   val key : string
   val info : string
@@ -190,3 +192,6 @@ module type AttackSpace = sig
     -> ('env, Protocol.data) local_view
     -> ('env, Protocol.data) node
 end
+
+type attack_space =
+  | AttackSpace : (module AttackSpace with type Protocol.data = 'a) -> attack_space

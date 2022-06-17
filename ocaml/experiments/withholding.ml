@@ -3,9 +3,8 @@ open Models
 
 let alphas = [ 0.1; 0.2; 0.25; 0.33; 0.4; 0.45; 0.5 ]
 
-let two_agents (type a) (module A : AttackSpace with type Protocol.data = a) n_activations
-  =
-  let protocol = (module A.Protocol : Protocol with type data = a) in
+let two_agents (AttackSpace (module A)) n_activations =
+  let protocol = (module A.Protocol : Protocol with type data = _) in
   List.concat_map
     (fun net ->
       Collection.map_to_list
@@ -24,12 +23,8 @@ let two_agents (type a) (module A : AttackSpace with type Protocol.data = a) n_a
     (List.map (fun alpha -> two_agents ~alpha) alphas)
 ;;
 
-let selfish_mining
-    (type a)
-    (module A : AttackSpace with type Protocol.data = a)
-    n_activations
-  =
-  let protocol = (module A.Protocol : Protocol with type data = a) in
+let selfish_mining (AttackSpace (module A)) n_activations =
+  let protocol = (module A.Protocol : Protocol with type data = _) in
   let gammas = [ 0.; 0.25; 0.5; 0.75; 0.9 ] in
   List.concat_map
     (fun net ->
@@ -57,19 +52,8 @@ let tasks ~n_activations =
   let open Cpr_protocols in
   let k = [ 1; 2; 4; 8; 16; 32; 64 ] in
   let nakamoto =
-    two_agents (module Nakamoto.SSZattack) n_activations
-    @ selfish_mining (module Nakamoto.SSZattack) n_activations
-  and bk =
-    List.concat_map
-      (fun k ->
-        let module P =
-          Bk.Make (struct
-            let k = k
-          end)
-        in
-        two_agents (module P.SSZattack) n_activations)
-      k
-  in
+    two_agents nakamoto_ssz n_activations @ selfish_mining nakamoto_ssz n_activations
+  and bk = List.concat_map (fun k -> two_agents (bk_ssz ~k) n_activations) k in
   List.concat [ nakamoto; bk ]
 ;;
 

@@ -137,7 +137,7 @@ let () =
 
 let () =
   (* TODO read reward functions from module; choose default and document possible values *)
-  let open Definitions in
+  let open Cpr_protocols in
   let m = Py_module.create "protocols" in
   Py_module.set
     m
@@ -145,12 +145,12 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"block" ~docstring:"reward function"
      in
-     Proto (nakamoto ~reward) |> python_of_protocol);
+     Proto (Engine.of_module nakamoto_ssz ~reward) |> python_of_protocol);
   Py_module.set
     m
     "bk"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     Proto (bk ~k ~reward) |> python_of_protocol)
+     Proto (Engine.of_module (bk_ssz ~k) ~reward) |> python_of_protocol)
 ;;
