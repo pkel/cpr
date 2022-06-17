@@ -1,6 +1,11 @@
 open Cpr_lib.Next
-open Nakamoto0
+module Protocol = Nakamoto0
 
+type nonrec data = Protocol.data
+
+open Protocol
+
+let key = "ssz"
 let info = "SSZ'16 attack space"
 
 module Observation = struct
@@ -193,7 +198,7 @@ module Agent (V : LocalView with type data = data) = struct
     State.update ~public s
   ;;
 
-  (* the attacker emulates a another node. This describes the defender node *)
+  (* this describes the attacker node *)
   let handle_private (s : state) event =
     let (module V) = private_view s in
     let open Honest (V) in
@@ -260,7 +265,7 @@ module Agent (V : LocalView with type data = data) = struct
   let apply (Observable state) action = interpret state action |> conclude
 end
 
-let agent (type a) policy ((module V) : (a, data) local_view) : (a, data) node =
+let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =
   Node
     (module struct
       include Agent (V)

@@ -141,9 +141,6 @@ module type Protocol = sig
 
   (** specification for honest participants *)
   val honest : ('env, data) local_view -> ('env, data) node
-
-  (** TODO: move out of the protocol module type. *)
-  val attacks : unit -> (('env, data) local_view -> ('env, data) node) Collection.t
 end
 
 type 'a protocol = (module Protocol with type data = 'a)
@@ -151,6 +148,7 @@ type 'a protocol = (module Protocol with type data = 'a)
 module type AttackSpace = sig
   type data
 
+  val key : string
   val info : string
 
   module Protocol : Protocol with type data = data
@@ -190,6 +188,11 @@ module type AttackSpace = sig
   end
 
   val policies : (Observation.t -> Action.t) Collection.t
+
+  val attacker
+    :  (Observation.t -> Action.t)
+    -> ('env, data) local_view
+    -> ('env, data) node
 end
 
 type 'a attack_space = (module AttackSpace with type data = 'a)

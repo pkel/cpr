@@ -48,12 +48,12 @@ let node_name (Csv_runner.Task t) =
     | Some i -> "n" ^ string_of_int i
 ;;
 
-let tasks_per_protocol
+let tasks_per_attack_space
     (type a)
-    (module Protocol : Protocol with type data = a)
+    (module A : AttackSpace with type data = a)
     n_activations
   =
-  let protocol : a protocol = (module Protocol) in
+  let protocol : a protocol = (module A.Protocol) in
   List.map
     (fun activation_delay ->
       let sim, network = honest_clique ~activation_delay ~n:7 protocol in
@@ -63,7 +63,14 @@ let tasks_per_protocol
   @ List.concat_map
       (fun alpha ->
         Collection.map_to_list
-          (fun attack ->
+          (fun policy ->
+            let attack =
+              Collection.
+                { key = A.key ^ "-" ^ policy.key
+                ; info = A.info ^ "; " ^ policy.info
+                ; it = A.attacker policy.it
+                }
+            in
             let sim, network = two_agents ~alpha protocol attack in
             Csv_runner.Task
               { activations = n_activations
@@ -72,16 +79,34 @@ let tasks_per_protocol
               ; sim
               ; network
               })
-          (Protocol.attacks ()))
+          A.policies)
       [ 0.25; 0.33; 0.5 ]
 ;;
 
 let tasks =
+  let open Cpr_protocols in
+  let module Bk_8 =
+    Bk.Make (struct
+      let k = 8
+    end)
+  in
+  let module Bk_4 =
+    Bk.Make (struct
+      let k = 4
+    end)
+  in
+  let module Bk_1 =
+    Bk.Make (struct
+      let k = 1
+    end)
+  in
   List.concat
-    [ tasks_per_protocol (module Cpr_protocols.Nakamoto) 30
-      (* ; bk ~k:8, 100 ; bk ~k:4, 50 ; bk ~k:1, 20 ; bk_lessleader ~k:8, 100 ;
-         bk_lessleader ~k:4, 50 ; bk_lessleader ~k:1, 20 ; tailstorm ~k:8, 100 ; tailstorm
-         ~k:4, 50 ; tailstorm ~k:1, 20 *)
+    [ tasks_per_attack_space (module Nakamoto.SSZattack) 30
+    ; tasks_per_attack_space (module Bk_8.SSZattack) 100
+    ; tasks_per_attack_space (module Bk_4.SSZattack) 50
+    ; tasks_per_attack_space (module Bk_1.SSZattack) 20
+      (* bk_lessleader ~k:8, 100 ; bk_lessleader ~k:4, 50 ; bk_lessleader ~k:1, 20 ;
+         tailstorm ~k:8, 100 ; tailstorm ~k:4, 50 ; tailstorm ~k:1, 20 *)
     ]
 ;;
 
@@ -130,7 +155,7 @@ let run (Csv_runner.Task t) =
             rewardfn.it
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
-          (Dag.iterate_ancestors env.global_view [ judge env ])
+          (Dag.iterate_ancestors env.global_view [ head env ])
       in
       let path =
         let open Fpath in

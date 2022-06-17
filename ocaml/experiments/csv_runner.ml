@@ -118,7 +118,7 @@ let run task =
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
     loop ~activations:t.activations sim;
-    let head = judge sim in
+    let head = head sim in
     (* incentive stats *)
     Collection.map_to_list
       (fun rewardfn ->

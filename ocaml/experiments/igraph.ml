@@ -8,17 +8,15 @@ let outdir = Fpath.(root / "data" / "networks" / "output")
 let _ = OS.Dir.create ~path:true outdir |> R.failwith_error_msg
 
 let protocols =
-  let open Simulator in
-  let open Cpr_protocols in
-  assert false (* (module Nakamoto) *)
-  :: List.concat_map
-       (fun k ->
-         [ Protocol (B_k.protocol ~k)
-         ; Protocol (B_k_lessleader.protocol ~k)
-         ; Protocol (Tailstorm.protocol ~k)
-         ])
-       [ 1; 2; 4; 8; 16; 32; 64 ]
+  (* let open Simulator in *)
+  (* let open Cpr_protocols in *)
+  assert false
 ;;
+
+(* (module Nakamoto) *)
+(* :: List.concat_map (fun k -> [ Protocol (B_k.protocol ~k) ; Protocol
+   (B_k_lessleader.protocol ~k) ; Protocol (Tailstorm.protocol ~k) ]) [ 1; 2; 4; 8; 16;
+   32; 64 ] *)
 
 let run ~activations ~srcfile ~protocol =
   let (Simulator.Protocol protocol) = protocol in

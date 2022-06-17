@@ -1,16 +1,6 @@
 open Cpr_lib.Next
 open Models
 
-let protocols =
-  (*
-  let open Cpr_lib in
-  let k = [ 1; 2; 4; 8; 16; 32; 64; 128 ] in
-  nakamoto :: List.concat_map (fun k -> [ bk ~k; bk_lessleader ~k; tailstorm ~k ]) k
-  *)
-  ()
-  [@@ocamlformat "wrap-comments=false"]
-;;
-
 let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
 
 let activation_delay (type a) ~block_interval ~protocol =
@@ -34,7 +24,18 @@ let tasks_per_protocol protocol n_activations =
 (* Run all combinations of protocol, network and block_interval. *)
 let tasks ~n_activations =
   let open Cpr_protocols in
-  List.concat [ tasks_per_protocol (module Nakamoto) n_activations ]
+  let bk =
+    List.concat_map
+      (fun k ->
+        let module P =
+          Bk.Make (struct
+            let k = k
+          end)
+        in
+        tasks_per_protocol (module P) n_activations)
+      [ 1; 2; 4; 8; 16; 32; 64; 128 ]
+  and nakamoto = tasks_per_protocol (module Nakamoto) n_activations in
+  List.concat [ nakamoto; bk ]
 ;;
 
 open Cmdliner

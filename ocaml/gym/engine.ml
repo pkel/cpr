@@ -58,14 +58,16 @@ type 'data agent =
       -> 'data agent
 
 (* state of a running (but paused) simulation *)
-type 'data instance =
-  { sim : 'data Simulator.state
-  ; agent : 'data agent
-  ; reward_function : 'data Simulator.env reward_function
-  ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex
-  ; mutable last_time : float
-  ; mutable steps : int
-  }
+type instance =
+  | Instance :
+      { sim : 'data Simulator.state
+      ; agent : 'data agent
+      ; reward_function : 'data Simulator.env reward_function
+      ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex
+      ; mutable last_time : float
+      ; mutable steps : int
+      }
+      -> instance
 
 let numeration ?(sep = ", ") ?(conj = "and") =
   let rec f acc = function
@@ -100,7 +102,7 @@ let of_module
     (module M : AttackSpace with type data = data)
     ~(reward : string)
     (p : Parameters.t)
-    : data instance ref env
+    : instance ref env
   =
   let network =
     Network.T.selfish_mining
@@ -169,18 +171,19 @@ let of_module
       Agent
         { preferred; init; puzzle_payload; observe; observe_hum; apply; prepare; state }
     in
-    { sim
-    ; agent
-    ; reward_function
-    ; reward_applied_upto = List.hd sim.roots
-    ; last_time = 0.
-    ; steps = 0
-    }
+    Instance
+      { sim
+      ; agent
+      ; reward_function
+      ; reward_applied_upto = List.hd sim.roots
+      ; last_time = 0.
+      ; steps = 0
+      }
   in
-  let observe t =
+  let observe (Instance t) =
     let (Agent a) = t.agent in
     a.observe a.state
-  and observe_hum t =
+  and observe_hum (Instance t) =
     let (Agent a) = t.agent in
     a.observe_hum a.state
   in
@@ -198,7 +201,7 @@ let of_module
   in
   let step ref_t ~action =
     (* env.step () *)
-    let t : data instance = !ref_t in
+    let (Instance t) = !ref_t in
     let (module Ref) = t.sim.referee in
     let () = t.steps <- t.steps + 1 in
     let (Agent a) = t.agent in
@@ -282,7 +285,7 @@ let of_module
     t.last_time <- t.sim.clock.now;
     (* Return *)
     ( (* observation *)
-      observe t
+      observe (Instance t)
     , (* reward *)
       cf.(0)
     , done_

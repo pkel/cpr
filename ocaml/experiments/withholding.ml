@@ -1,41 +1,47 @@
 open Cpr_lib.Next
 open Models
 
-let protocols =
-  (*
-  let k = [ 1; 2; 4; 8; 16; 32; 64 ] in
-  nakamoto :: List.concat_map (fun k -> [ bk ~k; bk_lessleader ~k; tailstorm ~k ]) k
-  *)
-  ()
-  [@@ocamlformat "wrap-comments=false"]
-;;
-
 let alphas = [ 0.1; 0.2; 0.25; 0.33; 0.4; 0.45; 0.5 ]
 
-let two_agents (type a) protocol n_activations =
-  let (module Protocol : Protocol with type data = a) = protocol in
+let two_agents (type a) (module A : AttackSpace with type data = a) n_activations =
+  let protocol : a protocol = (module A.Protocol) in
   List.concat_map
     (fun net ->
       Collection.map_to_list
-        (fun attack ->
+        (fun policy ->
+          let attack =
+            Collection.
+              { key = A.key ^ "-" ^ policy.key
+              ; info = A.info ^ "; " ^ policy.info
+              ; it = A.attacker policy.it
+              }
+          in
           let sim, network = net protocol attack in
           Csv_runner.Task
             { activations = n_activations; protocol; attack = Some attack; sim; network })
-        (Protocol.attacks ()))
+        A.policies)
     (List.map (fun alpha -> two_agents ~alpha) alphas)
 ;;
 
-let selfish_mining (type a) protocol n_activations =
+let selfish_mining (type a) (module A : AttackSpace with type data = a) n_activations =
+  let protocol : a protocol = (module A.Protocol) in
   let (module Protocol : Protocol with type data = a) = protocol in
   let gammas = [ 0.; 0.25; 0.5; 0.75; 0.9 ] in
   List.concat_map
     (fun net ->
       Collection.map_to_list
-        (fun attack ->
+        (fun policy ->
+          let attack =
+            Collection.
+              { key = A.key ^ "-" ^ policy.key
+              ; info = A.info ^ "; " ^ policy.info
+              ; it = A.attacker policy.it
+              }
+          in
           let sim, network = net protocol attack in
           Csv_runner.Task
             { activations = n_activations; protocol; attack = Some attack; sim; network })
-        (Protocol.attacks ()))
+        A.policies)
     (List.concat_map
        (fun alpha ->
          List.map (fun gamma -> selfish_mining ~defenders:10 ~alpha gamma) gammas)
@@ -45,11 +51,22 @@ let selfish_mining (type a) protocol n_activations =
 (* Run all combinations of protocol, attack, network and block_interval. *)
 let tasks ~n_activations =
   let open Cpr_protocols in
-  List.concat
-    (* TODO add the other protocols here *)
-    [ two_agents (module Nakamoto) n_activations
-    ; selfish_mining (module Nakamoto) n_activations
-    ]
+  let k = [ 1; 2; 4; 8; 16; 32; 64 ] in
+  let nakamoto =
+    two_agents (module Nakamoto.SSZattack) n_activations
+    @ selfish_mining (module Nakamoto.SSZattack) n_activations
+  and bk =
+    List.concat_map
+      (fun k ->
+        let module P =
+          Bk.Make (struct
+            let k = k
+          end)
+        in
+        two_agents (module P.SSZattack) n_activations)
+      k
+  in
+  List.concat [ nakamoto; bk ]
 ;;
 
 open Cmdliner

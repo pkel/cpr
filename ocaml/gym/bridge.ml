@@ -145,5 +145,12 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"block" ~docstring:"reward function"
      in
-     Proto (nakamoto ~reward) |> python_of_protocol)
+     Proto (nakamoto ~reward) |> python_of_protocol);
+  Py_module.set
+    m
+    "bk"
+    (let%map reward =
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
+     and k = keyword "k" int ~docstring:"puzzles per block" in
+     Proto (bk ~k ~reward) |> python_of_protocol)
 ;;

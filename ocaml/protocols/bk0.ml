@@ -5,7 +5,13 @@ module type Parameters = sig
   val k : int
 end
 
-module Data = struct
+module Make (P : Parameters) = struct
+  open P
+
+  let key = "bk"
+  let info = Printf.sprintf "Bₖ with k=%i" k
+  let puzzles_per_block = k
+
   type block_data = { height : int }
 
   type vote_data =
@@ -29,51 +35,18 @@ module Data = struct
 
   let dag_roots = [ Block { height = 0 } ]
 
-  let is_vote = function
-    | Vote _ -> true
-    | _ -> false
-  ;;
-
-  let is_block = function
-    | Block _ -> true
-    | _ -> false
-  ;;
-end
-
-module Make (P : Parameters) = struct
-  open P
-  include Data
-
-  let key = "bk"
-  let info = Printf.sprintf "Bₖ with k = %i" k
-  let puzzles_per_block = k
-
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
-    let dag_validity vertex =
-      let has_pow x = pow_hash x |> Option.is_some
-      and pow_hash x = pow_hash x |> Option.get in
-      match data vertex, Dag.parents view vertex with
-      | Vote v, [ p ] ->
-        let pd = data p in
-        has_pow vertex && is_block pd && v.height = height pd
-      | Block b, pblock :: vote0 :: votes ->
-        (match data pblock, data vote0 with
-        | Block p, Vote leader ->
-          let ordered_votes, _, nvotes =
-            List.fold_left
-              (fun (ok, h, i) n ->
-                let h' = pow_hash n in
-                data n |> is_vote && h' > h && ok, h', i + 1)
-              (true, pow_hash vote0, 1)
-              votes
-          in
-          p.height + 1 = b.height
-          && nvotes = k
-          && ordered_votes
-          && signed_by vertex = Some leader.id
-        | _ -> false)
+    let is_vote x =
+      match data x with
+      | Vote _ -> true
+      | _ -> false
+    ;;
+
+    let is_block x =
+      match data x with
+      | Block _ -> true
       | _ -> false
     ;;
 
@@ -86,8 +59,45 @@ module Make (P : Parameters) = struct
         | _ -> failwith "invalid dag")
     ;;
 
+    let height x = data x |> height
+
+    let block_height_exn x =
+      match data x with
+      | Block b -> b.height
+      | _ ->
+        let info _v = [] in
+        Dag.Exn.raise view info [ x ] "not a block"
+    ;;
+
+    let votes_only = Dag.filter is_vote view
+    let blocks_only = Dag.filter is_block view
+
+    let dag_validity vertex =
+      let has_pow x = pow_hash x |> Option.is_some
+      and pow_hash x = pow_hash x |> Option.get in
+      match data vertex, Dag.parents view vertex with
+      | Vote v, [ p ] -> has_pow vertex && is_block p && v.height = height p
+      | Block b, pblock :: vote0 :: votes ->
+        (match data pblock, data vote0 with
+        | Block p, Vote leader ->
+          let ordered_votes, _, nvotes =
+            List.fold_left
+              (fun (ok, h, i) n ->
+                let h' = pow_hash n in
+                is_vote n && h' > h && ok, h', i + 1)
+              (true, pow_hash vote0, 1)
+              votes
+          in
+          p.height + 1 = b.height
+          && nvotes = k
+          && ordered_votes
+          && signed_by vertex = Some leader.id
+        | _ -> false)
+      | _ -> false
+    ;;
+
     let winner l =
-      let height x = height (data x) in
+      let height x = height x in
       List.fold_left
         (fun acc x ->
           let x = last_block x in
@@ -104,7 +114,7 @@ module Make (P : Parameters) = struct
    ;;
 
     let constant_block c : env reward_function =
-     fun ~assign x -> if data x |> is_block then assign c x
+     fun ~assign x -> if is_block x then assign c x
    ;;
 
     let reward_functions =
@@ -135,19 +145,8 @@ module Make (P : Parameters) = struct
       | _ -> failwith "invalid roots"
     ;;
 
-    let votes_only = Dag.filter (fun x -> data x |> is_vote) view
-    let blocks_only = Dag.filter (fun x -> data x |> is_block) view
-
-    let block_height_exn x =
-      match data x with
-      | Block b -> b.height
-      | _ ->
-        let info _v = [] in
-        Dag.Exn.raise view info [ x ] "not a block"
-    ;;
-
     let leader_hash_exn x =
-      if not (is_block (data x)) then raise (Invalid_argument "not a block");
+      if not (is_block x) then raise (Invalid_argument "not a block");
       match Dag.parents view x with
       | _b :: v0 :: _ ->
         (match pow_hash v0 with

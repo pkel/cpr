@@ -4,7 +4,11 @@ let%test_unit "bk_progress" =
   let open Simulator in
   let propagation_delay = Distributions.exponential ~ev:1. in
   let test (k, activation_delay, height) =
-    let (module P) = Bk.make ~k in
+    let module P =
+      Bk.Make (struct
+        let k = k
+      end)
+    in
     let n_nodes = 32 in
     let network =
       Network.T.symmetric_clique ~activation_delay ~propagation_delay n_nodes
