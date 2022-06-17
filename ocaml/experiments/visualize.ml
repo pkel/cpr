@@ -50,10 +50,10 @@ let node_name (Csv_runner.Task t) =
 
 let tasks_per_attack_space
     (type a)
-    (module A : AttackSpace with type data = a)
+    (module A : AttackSpace with type Protocol.data = a)
     n_activations
   =
-  let protocol : a protocol = (module A.Protocol) in
+  let protocol = (module A.Protocol : Protocol with type data = a) in
   List.map
     (fun activation_delay ->
       let sim, network = honest_clique ~activation_delay ~n:7 protocol in

@@ -1,11 +1,8 @@
 open Cpr_lib.Next
 
-module Make (Parameters : Bk0.Parameters) = struct
+module Make (Parameters : Bk.Parameters) = struct
   open Parameters
-  module Protocol = Bk0.Make (Parameters)
-
-  type data = Protocol.data
-
+  module Protocol = Bk.Make (Parameters)
   open Protocol
 
   let key = "ssz"

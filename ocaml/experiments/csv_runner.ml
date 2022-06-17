@@ -4,7 +4,7 @@ type task =
   | Task :
       { activations : int
       ; network : Network.t
-      ; protocol : 'dag_data protocol
+      ; protocol : (module Protocol with type data = 'dag_data)
       ; attack :
           (('dag_data Simulator.env, 'dag_data) local_view
            -> ('dag_data Simulator.env, 'dag_data) node)

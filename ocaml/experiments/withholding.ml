@@ -3,8 +3,9 @@ open Models
 
 let alphas = [ 0.1; 0.2; 0.25; 0.33; 0.4; 0.45; 0.5 ]
 
-let two_agents (type a) (module A : AttackSpace with type data = a) n_activations =
-  let protocol : a protocol = (module A.Protocol) in
+let two_agents (type a) (module A : AttackSpace with type Protocol.data = a) n_activations
+  =
+  let protocol = (module A.Protocol : Protocol with type data = a) in
   List.concat_map
     (fun net ->
       Collection.map_to_list
@@ -23,9 +24,12 @@ let two_agents (type a) (module A : AttackSpace with type data = a) n_activation
     (List.map (fun alpha -> two_agents ~alpha) alphas)
 ;;
 
-let selfish_mining (type a) (module A : AttackSpace with type data = a) n_activations =
-  let protocol : a protocol = (module A.Protocol) in
-  let (module Protocol : Protocol with type data = a) = protocol in
+let selfish_mining
+    (type a)
+    (module A : AttackSpace with type Protocol.data = a)
+    n_activations
+  =
+  let protocol = (module A.Protocol : Protocol with type data = a) in
   let gammas = [ 0.; 0.25; 0.5; 0.75; 0.9 ] in
   List.concat_map
     (fun net ->

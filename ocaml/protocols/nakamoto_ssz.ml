@@ -1,8 +1,5 @@
 open Cpr_lib.Next
-module Protocol = Nakamoto0
-
-type nonrec data = Protocol.data
-
+module Protocol = Nakamoto
 open Protocol
 
 let key = "ssz"

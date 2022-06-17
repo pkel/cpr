@@ -143,15 +143,11 @@ module type Protocol = sig
   val honest : ('env, data) local_view -> ('env, data) node
 end
 
-type 'a protocol = (module Protocol with type data = 'a)
-
 module type AttackSpace = sig
-  type data
-
   val key : string
   val info : string
 
-  module Protocol : Protocol with type data = data
+  module Protocol : Protocol
 
   module Observation : sig
     type t
@@ -173,7 +169,7 @@ module type AttackSpace = sig
     val of_int : int -> t
   end
 
-  module Agent (V : LocalView with type data = data) : sig
+  module Agent (V : LocalView with type data = Protocol.data) : sig
     open V
 
     type state
@@ -191,8 +187,6 @@ module type AttackSpace = sig
 
   val attacker
     :  (Observation.t -> Action.t)
-    -> ('env, data) local_view
-    -> ('env, data) node
+    -> ('env, Protocol.data) local_view
+    -> ('env, Protocol.data) node
 end
-
-type 'a attack_space = (module AttackSpace with type data = 'a)

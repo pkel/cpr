@@ -99,7 +99,7 @@ let dummy_node
 
 let of_module
     (type data)
-    (module M : AttackSpace with type data = data)
+    (module M : AttackSpace with type Protocol.data = data)
     ~(reward : string)
     (p : Parameters.t)
     : instance ref env
