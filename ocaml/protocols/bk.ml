@@ -96,15 +96,16 @@ module Make (P : Parameters) = struct
       | _ -> false
     ;;
 
-    let winner l =
-      let height x = height x in
-      List.fold_left
-        (fun acc x ->
-          let x = last_block x in
-          if height x > height acc then x else acc)
-        (List.hd l)
-        l
+    let compare_blocks =
+      let open Compare in
+      let cmp =
+        by int block_height_exn
+        $ by int (fun x -> List.length (Dag.children votes_only x))
+      in
+      skip_eq Dag.vertex_eq cmp
     ;;
+
+    let winner l = first compare_blocks 1 l |> Option.get |> List.hd
 
     let constant_pow c : env reward_function =
      fun ~assign x ->

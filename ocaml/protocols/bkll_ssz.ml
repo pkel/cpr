@@ -1,6 +1,6 @@
 open Cpr_lib.Next
 
-module Make (Parameters : Bk.Parameters) = struct
+module Make (Parameters : Bkll.Parameters) = struct
   open Parameters
   module Protocol = Bk.Make (Parameters)
   open Protocol
@@ -16,7 +16,6 @@ module Make (Parameters : Bk.Parameters) = struct
       ; private_votes : int (** number of votes confirming the leading block *)
       ; diff_blocks : int (** private_blocks - public_blocks *)
       ; diff_votes : int (** private_votes - public_votes *)
-      ; lead : bool (** attacker is truthful leader on leading public block *)
       }
     [@@deriving fields]
 
@@ -29,7 +28,6 @@ module Make (Parameters : Bk.Parameters) = struct
       ; private_votes = 0
       ; diff_blocks = min_int
       ; diff_votes = min_int
-      ; lead = false
       }
     ;;
 
@@ -40,7 +38,6 @@ module Make (Parameters : Bk.Parameters) = struct
       ; private_votes = max_int
       ; diff_blocks = max_int
       ; diff_votes = max_int
-      ; lead = true
       }
     ;;
 
@@ -50,8 +47,7 @@ module Make (Parameters : Bk.Parameters) = struct
         Float.Array.set a i (Fieldslib.Field.get field t |> conv);
         i + 1
       in
-      let int = set float_of_int
-      and bool = set (fun x -> if x then 1. else 0.) in
+      let int = set float_of_int in
       let _ =
         Fields.fold
           ~init:0
@@ -61,20 +57,13 @@ module Make (Parameters : Bk.Parameters) = struct
           ~private_votes:int
           ~diff_blocks:int
           ~diff_votes:int
-          ~lead:bool
       in
       a
     ;;
 
     let of_floatarray =
       let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
-      let int = get int_of_float
-      and bool =
-        get (fun f ->
-            match int_of_float f with
-            | 0 -> false
-            | _ -> true)
-      in
+      let int = get int_of_float in
       fst
         (Fields.make_creator
            0
@@ -83,8 +72,7 @@ module Make (Parameters : Bk.Parameters) = struct
            ~private_blocks:int
            ~private_votes:int
            ~diff_blocks:int
-           ~diff_votes:int
-           ~lead:bool)
+           ~diff_votes:int)
     ;;
 
     let to_string t =
@@ -94,8 +82,7 @@ module Make (Parameters : Bk.Parameters) = struct
           (Fieldslib.Field.name field)
           (to_s (Fieldslib.Field.get field t))
       in
-      let int = conv string_of_int
-      and bool = conv string_of_bool in
+      let int = conv string_of_int in
       Fields.to_list
         ~public_blocks:int
         ~public_votes:int
@@ -103,7 +90,6 @@ module Make (Parameters : Bk.Parameters) = struct
         ~private_votes:int
         ~diff_blocks:int
         ~diff_votes:int
-        ~lead:bool
       |> String.concat "\n"
     ;;
 
@@ -116,7 +102,6 @@ module Make (Parameters : Bk.Parameters) = struct
           ; private_votes = Random.bits ()
           ; diff_blocks = Random.bits ()
           ; diff_votes = Random.bits ()
-          ; lead = Random.bool ()
           }
         in
         t = (to_floatarray t |> of_floatarray)
@@ -125,93 +110,14 @@ module Make (Parameters : Bk.Parameters) = struct
     ;;
   end
 
-  module Action = struct
-    type t =
-      | Adopt_Prolong
-      | Override_Prolong
-      | Match_Prolong
-      | Wait_Prolong
-      | Adopt_Proceed
-      | Override_Proceed
-      | Match_Proceed
-      | Wait_Proceed
-    [@@deriving variants]
-
-    let to_string = Variants.to_name
-    let to_int = Variants.to_rank
-
-    let table =
-      let add acc var = var.Variantslib.Variant.constructor :: acc in
-      Variants.fold
-        ~init:[]
-        ~adopt_prolong:add
-        ~override_prolong:add
-        ~match_prolong:add
-        ~wait_prolong:add
-        ~adopt_proceed:add
-        ~override_proceed:add
-        ~match_proceed:add
-        ~wait_proceed:add
-      |> List.rev
-      |> Array.of_list
-    ;;
-
-    let of_int i = table.(i)
-    let n = Array.length table
-  end
+  module Bk_ssz = Bk_ssz.Make (Parameters)
+  module Action = Bk_ssz.Action
 
   module Agent (V : LocalView with type data = data) = struct
     open Protocol.Referee (V)
     include V
-
-    module State : sig
-      type t = private
-        { public : env Dag.vertex (* defender's preferred block *)
-        ; private_ : env Dag.vertex (* attacker's preferred block *)
-        ; common : env Dag.vertex (* common chain *)
-        ; epoch : [ `Proceed | `Prolong ]
-              (* Proceed: the attacker considers the defender's votes that extend on his
-                 preferred block when building a new block.
-
-                 Prolong: the attacker prolongs the current epoch until he can form a
-                 block that does not reference any defender votes. *)
-        }
-
-      val init : epoch:[ `Proceed | `Prolong ] -> env Dag.vertex -> t
-
-      (* Set fields in state; updates common chain *)
-      val update
-        :  ?public:env Dag.vertex
-        -> ?private_:env Dag.vertex
-        -> ?epoch:[ `Proceed | `Prolong ]
-        -> t
-        -> t
-    end = struct
-      type t =
-        { public : env Dag.vertex
-        ; private_ : env Dag.vertex
-        ; common : env Dag.vertex
-        ; epoch : [ `Proceed | `Prolong ]
-        }
-
-      let init ~epoch x = { public = x; private_ = x; common = x; epoch }
-
-      (* call this whenever public or private_ changes *)
-      let set_common state =
-        let common = Dag.common_ancestor view state.public state.private_ in
-        assert (Option.is_some common) (* all our protocols maintain this invariant *);
-        { state with common = Option.get common }
-      ;;
-
-      let update ?public ?private_ ?epoch t =
-        set_common
-          { public = Option.value ~default:t.public public
-          ; private_ = Option.value ~default:t.private_ private_
-          ; epoch = Option.value ~default:t.epoch epoch
-          ; common = t.common
-          }
-      ;;
-    end
+    module Bk_ssz = Bk_ssz.Agent (V)
+    module State = Bk_ssz.State
 
     type state = State.t
     type observable_state = Observable of state
@@ -306,17 +212,7 @@ module Make (Parameters : Bk.Parameters) = struct
       and public_votes =
         Dag.children Public.view s.public |> List.filter is_vote |> List.length
       in
-      let lead =
-        match Dag.children view s.public |> List.filter is_vote with
-        | [] -> false
-        | votes ->
-          let leader =
-            first Compare.(by (tuple int int) (fun n -> pow_hash n |> Option.get)) 1 votes
-            |> Option.get
-            |> List.hd
-          in
-          appended_by_me leader
-      and ca = last_block s.common in
+      let ca = last_block s.common in
       let ca_height = block_height_exn ca
       and private_height = block_height_exn s.private_
       and public_height = block_height_exn s.public in
@@ -326,7 +222,6 @@ module Make (Parameters : Bk.Parameters) = struct
       ; private_votes
       ; public_votes
       ; diff_votes = private_votes - public_votes
-      ; lead
       }
     ;;
 
@@ -336,17 +231,15 @@ module Make (Parameters : Bk.Parameters) = struct
         | hd :: _ when is_block hd -> Some hd
         | _ -> None
       in
-      let (module Public) = public_view s in
       let (module Private) = private_view s in
-      let release kind =
+      let match_ offset =
         let height, nvotes =
-          let height = block_height_exn s.public
-          and nvotes =
-            List.length (Dag.children Public.view s.public |> List.filter is_vote)
+          let target =
+            (block_height_exn s.public * k)
+            + List.length (Dag.children votes_only s.public)
+            + offset
           in
-          match kind with
-          | `Match -> height, nvotes
-          | `Override -> if nvotes >= k then height + 1, 0 else height, nvotes + 1
+          target / k, target mod k
         in
         let block =
           (* find block to be released backwards from private head *)
@@ -356,15 +249,6 @@ module Make (Parameters : Bk.Parameters) = struct
           h s.private_
           (* NOTE: if private height is smaller public height, then private head is marked
              for release. *)
-        in
-        (* include proposal if attacker was able to produce one *)
-        let block, nvotes =
-          if nvotes >= k
-          then (
-            match Dag.children Private.view block |> List.filter is_block with
-            | proposal :: _ -> proposal, 0
-            | [] -> block, nvotes)
-          else block, nvotes
         in
         let votes = Dag.children Private.view block |> List.filter is_vote in
         match first Compare.(by float delivered_at) nvotes votes with
@@ -376,10 +260,10 @@ module Make (Parameters : Bk.Parameters) = struct
       match (action : Action.t) with
       | Adopt_Proceed -> [], State.update ~epoch:`Proceed ~private_:s.public s
       | Adopt_Prolong -> [], State.update ~epoch:`Prolong ~private_:s.public s
-      | Match_Proceed -> release `Match, State.update ~epoch:`Proceed s
-      | Match_Prolong -> release `Match, State.update ~epoch:`Prolong s
-      | Override_Proceed -> release `Override, State.update ~epoch:`Proceed s
-      | Override_Prolong -> release `Override, State.update ~epoch:`Prolong s
+      | Match_Proceed -> match_ 0, State.update ~epoch:`Proceed s
+      | Match_Prolong -> match_ 0, State.update ~epoch:`Prolong s
+      | Override_Proceed -> match_ 1, State.update ~epoch:`Proceed s
+      | Override_Prolong -> match_ 1, State.update ~epoch:`Prolong s
       | Wait_Proceed -> [], State.update ~epoch:`Proceed s
       | Wait_Prolong -> [], State.update ~epoch:`Prolong s
     ;;

@@ -653,7 +653,56 @@ end
 module SszLikeAttack = struct
   let info = "SSZ'16-like attack space"
 
-  module State = B_k_lessleader.SszLikeAttack.State
+  module State : sig
+    type 'env t = private
+      { public : 'env Dag.vertex (* defender's preferred block *)
+      ; private_ : 'env Dag.vertex (* attacker's preferred block *)
+      ; common : 'env Dag.vertex (* common chain *)
+      ; epoch : [ `Proceed | `Prolong ]
+            (* Proceed: the attacker considers the defender's votes that extend on his
+               preferred block when building a new block.
+
+               Prolong: the attacker prolongs the current epoch until he can form a block
+               that does not reference any defender votes. *)
+      }
+
+    val init : epoch:[ `Proceed | `Prolong ] -> 'env Dag.vertex -> 'env t
+
+    (* Set fields in state; updates common chain *)
+    val update
+      :  ('env, 'b) local_view
+      -> ?public:'env Dag.vertex
+      -> ?private_:'env Dag.vertex
+      -> ?epoch:[ `Proceed | `Prolong ]
+      -> 'env t
+      -> 'env t
+  end = struct
+    type 'env t =
+      { public : 'env Dag.vertex
+      ; private_ : 'env Dag.vertex
+      ; common : 'env Dag.vertex
+      ; epoch : [ `Proceed | `Prolong ]
+      }
+
+    let init ~epoch x = { public = x; private_ = x; common = x; epoch }
+
+    (* call this whenever public or private_ changes *)
+    let set_common (v : _ local_view) state =
+      let common = Dag.common_ancestor v.view state.public state.private_ in
+      assert (Option.is_some common) (* all our protocols maintain this invariant *);
+      { state with common = Option.get common }
+    ;;
+
+    let update v ?public ?private_ ?epoch t =
+      set_common
+        v
+        { public = Option.value ~default:t.public public
+        ; private_ = Option.value ~default:t.private_ private_
+        ; epoch = Option.value ~default:t.epoch epoch
+        ; common = t.common
+        }
+    ;;
+  end
 
   (* the attacker emulates a defending node. This is the local_view of the defender *)
 
@@ -809,7 +858,40 @@ module SszLikeAttack = struct
     ;;
   end
 
-  module Action = B_k_lessleader.SszLikeAttack.Action
+  module Action = struct
+    type t =
+      | Adopt_Prolong
+      | Override_Prolong
+      | Match_Prolong
+      | Wait_Prolong
+      | Adopt_Proceed
+      | Override_Proceed
+      | Match_Proceed
+      | Wait_Proceed
+    [@@deriving variants]
+
+    let to_string = Variants.to_name
+    let to_int = Variants.to_rank
+
+    let table =
+      let add acc var = var.Variantslib.Variant.constructor :: acc in
+      Variants.fold
+        ~init:[]
+        ~adopt_prolong:add
+        ~override_prolong:add
+        ~match_prolong:add
+        ~wait_prolong:add
+        ~adopt_proceed:add
+        ~override_proceed:add
+        ~match_proceed:add
+        ~wait_proceed:add
+      |> List.rev
+      |> Array.of_list
+    ;;
+
+    let of_int i = table.(i)
+    let n = Array.length table
+  end
 
   module Agent (A : sig
     val k : int
