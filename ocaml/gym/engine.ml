@@ -44,77 +44,30 @@ end = struct
   ;;
 end
 
-module type AttackSpace = sig
-  type env
-  type data
-  type pow
-  type agent_state
-  type honest_state
+type 'data agent =
+  | Agent :
+      { preferred : 'state -> 'data Simulator.env Dag.vertex
+      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) vertex_proposal
+      ; init : roots:'data Simulator.env Dag.vertex list -> 'state
+      ; prepare : 'state -> 'data Simulator.env event -> 'observable
+      ; observe : 'observable -> floatarray
+      ; observe_hum : 'observable -> string
+      ; apply : 'observable -> int -> ('data Simulator.env, 'state) handler_return
+      ; mutable state : 'observable
+      }
+      -> 'data agent
 
-  val protocol : (env, data, pow, honest_state) protocol
-  val info : string
-
-  module Observation : sig
-    type t
-
-    val length : int
-    val low : t
-    val high : t
-    val to_floatarray : t -> floatarray
-    val of_floatarray : floatarray -> t
-    val to_string : t -> string
-  end
-
-  module Action : sig
-    type t
-
-    val n : int
-    val to_string : t -> string
-    val to_int : t -> int
-    val of_int : int -> t
-  end
-
-  val noop_node : (env, data, pow, agent_state) node
-
-  type pre_action
-
-  val prepare
-    :  (env, data) local_view
-    -> (env, data, pow) actions
-    -> agent_state
-    -> (env, pow) event
-    -> pre_action
-
-  val observe : (env, data) local_view -> pre_action -> Observation.t
-
-  val apply
-    :  (env, data) local_view
-    -> (env, data, pow) actions
-    -> pre_action
-    -> Action.t
-    -> agent_state
-
-  val shutdown
-    :  (env, data) local_view
-    -> (env, data, pow) actions
-    -> agent_state
-    -> agent_state
-
-  val policies : (Observation.t -> Action.t) Collection.t
-end
-
-(* state of a running simulation *)
-type ('data, 'honest_state, 'agent_state, 'pre_action) instance =
-  { sim : 'data Simulator.state
-  ; attacker_view : ('data Simulator.data, 'data) local_view
-  ; attacker_actions : ('data Simulator.data, 'data, Simulator.pow) actions
-  ; attacker_node : ('data, 'agent_state) Simulator.node'
-  ; mutable current_event : ('data Simulator.data, Simulator.pow) event option
-  ; mutable current_state : 'pre_action option
-  ; mutable reward_applied_upto : 'data Simulator.data Dag.vertex option
-  ; mutable last_time : float
-  ; mutable steps : int
-  }
+(* state of a running (but paused) simulation *)
+type instance =
+  | Instance :
+      { sim : 'data Simulator.state
+      ; agent : 'data agent
+      ; reward_function : 'data Simulator.env reward_function
+      ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex
+      ; mutable last_time : float
+      ; mutable steps : int
+      }
+      -> instance
 
 let numeration ?(sep = ", ") ?(conj = "and") =
   let rec f acc = function
@@ -129,34 +82,24 @@ let numeration ?(sep = ", ") ?(conj = "and") =
   | x -> f "" x
 ;;
 
-let of_module
-    (type data honest_state agent_state pre_action)
-    (module M : AttackSpace
-      with type env = data Simulator.data
-       and type data = data
-       and type pow = Simulator.pow
-       and type honest_state = honest_state
-       and type agent_state = agent_state
-       and type pre_action = pre_action)
-    ~(reward : string)
-    (p : Parameters.t)
-    : (data, honest_state, agent_state, pre_action) instance ref env
+let dummy_node
+    (type env data)
+    (module P : Protocol with type data = data)
+    (view : (env, data) local_view)
+    : (env, data) node
   =
-  let reward_function =
-    match Collection.get reward M.protocol.reward_functions with
-    | Some x -> x.it
-    | None ->
-      let msg =
-        "unkown reward function '"
-        ^ reward
-        ^ "'. Try "
-        ^ (Collection.keys M.protocol.reward_functions
-          |> List.map (fun s -> "'" ^ s ^ "'")
-          |> numeration ~conj:"or")
-        ^ "."
-      in
-      failwith msg
-  in
+  let (Node (module Honest)) = P.honest view in
+  Node
+    (module struct
+      include Honest
+
+      let handler _state _event = failwith "dummy node handler must not be called"
+    end)
+;;
+
+let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
+    : instance ref env
+  =
   let network =
     Network.T.selfish_mining
       ~activation_delay:p.activation_delay
@@ -165,108 +108,153 @@ let of_module
       ~defenders:p.defenders
       ~propagation_delay:0.00001
   in
+  let rec skip_to_interaction sim puzzle_payload =
+    let open Simulator in
+    match dequeue sim with
+    | Some (ForNode (0, ev)) -> ev
+    | Some (FromNode (0, PuzzleProposal _)) ->
+      let payload = puzzle_payload () in
+      let vertex = extend_dag ~pow:true sim 0 payload in
+      let () = sim.check_dag vertex in
+      schedule sim.clock 0. (ForNode (0, PuzzleSolved vertex));
+      skip_to_interaction sim puzzle_payload
+    | Some ev ->
+      handle_event sim ev;
+      skip_to_interaction sim puzzle_payload
+    | None -> failwith "simulation should continue forever"
+  in
   let init () =
     let open Simulator in
-    let setup = all_honest network M.protocol in
-    let attacker_view, attacker_actions, attacker_node =
-      patch ~node:0 M.noop_node setup
+    let patch = function
+      | 0 -> Some (dummy_node (module M.Protocol))
+      | _ -> None
     in
-    { sim = Simulator.init setup
-    ; attacker_view
-    ; attacker_actions
-    ; attacker_node
-    ; current_event = None
-    ; current_state = None
-    ; reward_applied_upto = None
-    ; last_time = 0.
-    ; steps = 0
-    }
+    let sim = init ~patch (module M.Protocol) network in
+    let reward_function =
+      let (module Ref) = sim.referee in
+      match Collection.get reward Ref.reward_functions with
+      | Some x -> x.it
+      | None ->
+        let msg =
+          "unkown reward function '"
+          ^ reward
+          ^ "'. Try "
+          ^ (Collection.keys Ref.reward_functions
+            |> List.map (fun s -> "'" ^ s ^ "'")
+            |> numeration ~conj:"or")
+          ^ "."
+        in
+        failwith msg
+    in
+    let agent =
+      let (Node node) = sim.nodes.(0) in
+      let _ = node.view in
+      let (module LocalView : LocalView with type env = _ and type data = _) =
+        node.view
+      in
+      let open M.Agent (LocalView) in
+      let observe s = observe s |> M.Observation.to_floatarray
+      and observe_hum s = observe s |> M.Observation.to_string
+      and apply s i = apply s (M.Action.of_int i)
+      and state =
+        let init = init ~roots:sim.roots in
+        let puzzle_payload () = puzzle_payload init in
+        skip_to_interaction sim puzzle_payload |> prepare init
+      in
+      Agent
+        { preferred; init; puzzle_payload; observe; observe_hum; apply; prepare; state }
+    in
+    Instance
+      { sim
+      ; agent
+      ; reward_function
+      ; reward_applied_upto = List.hd sim.roots
+      ; last_time = 0.
+      ; steps = 0
+      }
   in
-  let rec skip_to_interaction t =
-    let open Simulator in
-    match dequeue t.sim with
-    | Some ev ->
-      handle_event ~activations:(-1) t.sim ev;
-      if ev.node = 0
-      then (
-        t.current_event <- Some ev.event;
-        t.current_state
-          <- Some
-               (M.prepare
-                  t.attacker_view
-                  t.attacker_actions
-                  t.attacker_node.state
-                  ev.event))
-      else skip_to_interaction t
-    | None -> failwith "simulation should continue forever"
-  and observe t = M.observe t.attacker_view (t.current_state |> Option.get) in
+  let observe (Instance t) =
+    let (Agent a) = t.agent in
+    a.observe a.state
+  and observe_hum (Instance t) =
+    let (Agent a) = t.agent in
+    a.observe_hum a.state
+  in
   let create () =
     let t = init () in
-    skip_to_interaction t;
     ref t
   and reset ref_t =
     let t = init () in
-    skip_to_interaction t;
     ref_t := t;
-    observe t |> M.Observation.to_floatarray
+    observe t
   and actions_hum =
     let open M.Action in
     List.init n (fun i -> Printf.sprintf "(%d) %s" i (of_int i |> to_string))
     |> String.concat " | "
   in
-  let step ref_t ~action:i =
+  let step ref_t ~action =
     (* env.step () *)
-    let t = !ref_t in
+    let (Instance t) = !ref_t in
+    let (module Ref) = t.sim.referee in
     let () = t.steps <- t.steps + 1 in
+    let (Agent a) = t.agent in
     (* Apply action i to the simulator state. *)
-    let action = M.Action.of_int i in
-    t.attacker_node.state
-      <- M.apply t.attacker_view t.attacker_actions (t.current_state |> Option.get) action;
-    t.current_state <- None;
-    t.current_event <- None;
+    let state =
+      let ret = a.apply a.state action in
+      let () =
+        let open Simulator in
+        List.iter (fun m -> schedule t.sim.clock 0. (FromNode (0, Share m))) ret.share
+      in
+      ret.state
+    in
     (* Fast forward simulation till next attacker action. *)
-    skip_to_interaction t;
+    let () =
+      let event = skip_to_interaction t.sim (fun () -> a.puzzle_payload state) in
+      a.state <- a.prepare state event
+    in
     (* End simulation? *)
-    let done_ =
+    let done_, apply_upto =
+      let prefs =
+        Array.mapi
+          Simulator.(
+            function
+            | 0 -> fun _ -> a.preferred state
+            | _ ->
+              (function
+              | Node n -> n.preferred n.state))
+          t.sim.nodes
+        |> Array.to_list
+      in
       if t.steps < p.max_steps && t.sim.clock.now < p.max_time
-      then false
-      else (
-        t.attacker_node.state
-          <- M.shutdown t.attacker_view t.attacker_actions t.attacker_node.state;
-        true)
+      then (
+        (* TODO. common_ancenstor on preferred heads is a leaky abstraction. Attacker
+           might change preference and subvert this mechanism. Consider calculating full
+           rewards on each step, then return the delta. If this turns out to be to
+           expensive, add a "safepoint" mechanism to attack space which informs the
+           environment over the finalized block.*)
+        let ca =
+          List.to_seq prefs |> Dag.common_ancestor' t.sim.global_view |> Option.get
+        in
+        false, ca)
+      else true, Ref.winner prefs
     in
     (* Calculate rewards for the new common blocks. *)
     (* 1. find common ancestor *)
-    let ca =
-      (* TODO move this into Simulator.common_ancestor *)
-      Array.to_seq t.sim.nodes
-      |> Seq.map
-           Simulator.(
-             function
-             | Node n -> n.preferred n.state)
-      |> Dag.common_ancestor' t.sim.global.view
-      |> Option.get
-    in
     (* 2. apply reward function up to last marked DAG vertex (exclusive) *)
-    let ( $=? ) n m = Option.map (fun m -> m $== n) m |> Option.value ~default:false in
     let cf (* cash flow *) = Array.make 2 0. in
     let reward_time_elapsed, reward_n_pows, simulator_clock_rewarded =
-      let last_ca_time =
-        Option.map Simulator.(fun x -> (Dag.data x).appended_at) t.reward_applied_upto
-        |> Option.value ~default:0.
-      in
-      if ca $=? t.reward_applied_upto
+      let last_ca_time = (Dag.data t.reward_applied_upto).appended_at in
+      if apply_upto $== t.reward_applied_upto
       then 0., 0, last_ca_time
       else (
         let pow_cnt = ref 0 in
         let rec iter seq =
           match seq () with
           | Seq.Nil -> ()
-          | Cons (n, _seq) when n $=? t.reward_applied_upto -> ()
+          | Cons (n, _seq) when n $== t.reward_applied_upto -> ()
           | Cons (n, seq) ->
             if Option.is_some (Dag.data n).pow_hash then incr pow_cnt else ();
-            reward_function
-              ~view:t.sim.global
+            t.reward_function
               ~assign:(fun x n ->
                 match (Dag.data n).appended_by with
                 | None -> ()
@@ -277,18 +265,20 @@ let of_module
               n;
             iter seq
         in
-        iter (Dag.iterate_ancestors t.sim.global.view [ ca ]);
-        (Dag.data ca).appended_at -. last_ca_time, !pow_cnt, (Dag.data ca).appended_at)
+        iter (Dag.iterate_ancestors t.sim.global_view [ apply_upto ]);
+        ( (Dag.data apply_upto).appended_at -. last_ca_time
+        , !pow_cnt
+        , (Dag.data apply_upto).appended_at ))
     in
     assert (cf.(0) = 0. || reward_time_elapsed > 0.);
     (* 3. mark common ancestor DAG vertex *)
-    t.reward_applied_upto <- Some ca;
+    t.reward_applied_upto <- apply_upto;
     (* Calculate simulated time. *)
     let step_time = t.sim.clock.now -. t.last_time in
     t.last_time <- t.sim.clock.now;
     (* Return *)
     ( (* observation *)
-      observe t |> M.Observation.to_floatarray
+      observe (Instance t)
     , (* reward *)
       cf.(0)
     , done_
@@ -306,10 +296,10 @@ let of_module
   and to_string t =
     Printf.sprintf
       "%s; %s; α=%.2f attacker\n%s\nActions: %s"
-      M.protocol.info
+      M.Protocol.info
       M.info
       p.alpha
-      (observe !t |> M.Observation.to_string)
+      (observe_hum !t)
       actions_hum
   and policies =
     Collection.map_to_list

@@ -1,22 +1,5 @@
 open Cpr_lib
 
-(** {1} protocols instantiated for a specific simulator *)
-
-include struct
-  open Simulator
-
-  type t = P : ('dag_data data, 'dag_data, pow, 'node_state) protocol -> t
-
-  open Cpr_protocols
-
-  let nakamoto = P Nakamoto.protocol
-  let bk ~k = P (B_k.protocol ~k)
-  let bk_lessleader ~k = P (B_k_lessleader.protocol ~k)
-  let tailstorm ~k = P (Tailstorm.protocol ~k)
-end
-
-(** {1} simulated environments *)
-
 let honest_clique ~activation_delay ~n protocol =
   let propagation_delay = Distributions.uniform ~lower:0.5 ~upper:1.5 in
   let net = Network.T.symmetric_clique ~activation_delay ~propagation_delay n in
@@ -28,7 +11,7 @@ let honest_clique ~activation_delay ~n protocol =
           net.nodes
     }
   in
-  let it () = Simulator.all_honest net protocol |> Simulator.init in
+  let it () = Simulator.init protocol net in
   ( Collection.
       { it
       ; key = Printf.sprintf "honest-clique-%i" n
@@ -46,12 +29,11 @@ let honest_clique ~activation_delay ~n protocol =
 let two_agents ~alpha protocol attack =
   let net = Network.T.two_agents ~alpha ~activation_delay:1. in
   let it () =
-    let sim = Simulator.all_honest net protocol in
-    let () =
-      let (Node n) = attack.Collection.it in
-      Simulator.patch ~node:0 n sim |> ignore
+    let patch = function
+      | 0 -> Some attack.Collection.it
+      | _ -> None
     in
-    Simulator.init sim
+    Simulator.init ~patch protocol net
   in
   ( Collection.
       { it
@@ -80,12 +62,11 @@ let selfish_mining ?(msg_delay = 1. /. 10000.) ~defenders ~alpha gamma protocol 
       ~alpha
   in
   let it () =
-    let sim = Simulator.all_honest net protocol in
-    let () =
-      let (Node n) = attack.Collection.it in
-      Simulator.patch ~node:0 n sim |> ignore
+    let patch = function
+      | 0 -> Some attack.Collection.it
+      | _ -> None
     in
-    Simulator.init sim
+    Simulator.init ~patch protocol net
   in
   ( Collection.
       { it
