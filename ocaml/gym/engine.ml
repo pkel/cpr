@@ -220,20 +220,20 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       a.state <- a.prepare state event
     in
     (* End simulation? *)
+    let prefs =
+      Array.mapi
+        Simulator.(
+          function
+          | 0 -> fun _ -> a.preferred state
+          | _ ->
+            (function
+            | Node n -> n.preferred n.state))
+        t.sim.nodes
+      |> Array.to_list
+    in
+    let head = Ref.winner prefs in
+    let height = Protocol.height (Dag.data head).value in
     let done_, apply_upto =
-      let prefs =
-        Array.mapi
-          Simulator.(
-            function
-            | 0 -> fun _ -> a.preferred state
-            | _ ->
-              (function
-              | Node n -> n.preferred n.state))
-          t.sim.nodes
-        |> Array.to_list
-      in
-      let head = Ref.winner prefs in
-      let height = Protocol.height (Dag.data head).value in
       if t.steps < p.max_steps && height < p.max_height && t.sim.clock.now < p.max_time
       then (
         (* TODO. common_ancestor on preferred heads is a leaky abstraction. Attacker might
@@ -299,6 +299,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       ; "step_time_elapsed", Py.Float.of_float step_time
       ; "simulator_clock_now", Py.Float.of_float t.sim.clock.now
       ; "simulator_clock_rewarded", Py.Float.of_float simulator_clock_rewarded
+      ; "simulator_block_height", Py.Int.of_int height
       ] )
   and low = M.Observation.(low |> to_floatarray)
   and high = M.Observation.(high |> to_floatarray)
