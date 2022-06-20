@@ -86,8 +86,9 @@ let tasks =
     ; tasks_per_attack_space (bk_ssz ~k:8) 100
     ; tasks_per_attack_space (bk_ssz ~k:4) 50
     ; tasks_per_attack_space (bk_ssz ~k:1) 20
-      (* bk_lessleader ~k:8, 100 ; bk_lessleader ~k:4, 50 ; bk_lessleader ~k:1, 20 ;
-         tailstorm ~k:8, 100 ; tailstorm ~k:4, 50 ; tailstorm ~k:1, 20 *)
+    ; tasks_per_attack_space (bkll_ssz ~k:8) 100
+    ; tasks_per_attack_space (bkll_ssz ~k:4) 50
+    ; tasks_per_attack_space (bkll_ssz ~k:1) 20
     ]
 ;;
 

@@ -7,7 +7,7 @@ let activation_delay ~block_interval ~puzzles_per_block =
   block_interval /. (puzzles_per_block |> float_of_int)
 ;;
 
-let tasks_per_protocol (Protocol protocol) n_activations =
+let tasks_per_protocol ~n_activations (Protocol protocol) =
   let (module P) = protocol in
   List.concat_map
     (fun net ->
@@ -24,16 +24,14 @@ let tasks_per_protocol (Protocol protocol) n_activations =
     [ honest_clique ~n:10 ]
 ;;
 
-(* Run all combinations of protocol, network and block_interval. *)
-let tasks ~n_activations =
+let protocols =
   let open Cpr_protocols in
-  let bk =
-    List.concat_map
-      (fun k -> tasks_per_protocol (bk ~k) n_activations)
-      [ 1; 2; 4; 8; 16; 32; 64; 128 ]
-  and nakamoto = tasks_per_protocol nakamoto n_activations in
-  List.concat [ nakamoto; bk ]
+  nakamoto
+  :: List.concat_map (fun k -> [ bk ~k; bkll ~k ]) [ 1; 2; 4; 8; 16; 32; 64; 128 ]
 ;;
+
+(* Run all combinations of protocol, network and block_interval. *)
+let tasks ~n_activations = List.concat_map (tasks_per_protocol ~n_activations) protocols
 
 open Cmdliner
 

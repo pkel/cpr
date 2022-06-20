@@ -63,10 +63,10 @@ def test_nakamoto(capsys):
         obs, _, _, _ = env.step(env.policy(obs, "eyal-sirer-2014"))
 
 
-def test_bk_ll(capsys):
+def test_bkll(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bk_ll(k=17),
+        proto=protocols.bkll(k=17),
         alpha=0.33,
         gamma=0.3,
         defenders=4,
