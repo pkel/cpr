@@ -227,11 +227,11 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       in
       if t.steps < p.max_steps && t.sim.clock.now < p.max_time
       then (
-        (* TODO. common_ancenstor on preferred heads is a leaky abstraction. Attacker
-           might change preference and subvert this mechanism. Consider calculating full
-           rewards on each step, then return the delta. If this turns out to be to
-           expensive, add a "safepoint" mechanism to attack space which informs the
-           environment over the finalized block.*)
+        (* TODO. common_ancestor on preferred heads is a leaky abstraction. Attacker might
+           change preference and subvert this mechanism. Consider calculating full rewards
+           on each step, then return the delta. If this turns out to be to expensive, add
+           a "safepoint" mechanism to attack space which informs the environment over the
+           finalized block.*)
         let ca =
           List.to_seq prefs |> Dag.common_ancestor' t.sim.global_view |> Option.get
         in

@@ -98,6 +98,7 @@ module Make (Parameters : Parameters) = struct
       | _ -> false
     ;;
 
+    (** better is bigger *)
     let compare_blocks =
       let open Compare in
       let cmp =
@@ -108,7 +109,10 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let winner l =
-      List.map last_block l |> Compare.first compare_blocks 1 |> Option.get |> List.hd
+      List.map last_block l
+      |> Compare.first (Compare.neg compare_blocks) 1
+      |> Option.get
+      |> List.hd
     ;;
 
     let constant_pow c : env reward_function =
