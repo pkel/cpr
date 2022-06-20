@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 (** Original proof-of-work consensus as described by Nakamoto. 2008. *)
 let nakamoto = Protocol (module Nakamoto)

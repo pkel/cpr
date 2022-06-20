@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 open Models
 
 let alphas = [ 0.1; 0.2; 0.25; 0.33; 0.4; 0.45; 0.5 ]

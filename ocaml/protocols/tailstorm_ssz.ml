@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 module Make (Parameters : Tailstorm.Parameters) = struct
   module Protocol = Tailstorm.Make (Parameters)

@@ -1,5 +1,5 @@
 open Intf
-open Cpr_lib.Next
+open Cpr_lib
 
 (* Gym parameters *)
 module Parameters : sig

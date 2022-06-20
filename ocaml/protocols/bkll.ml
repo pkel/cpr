@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 module type Parameters = Bk.Parameters
 
@@ -94,7 +94,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let winner l =
-      List.map last_block l |> first compare_blocks 1 |> Option.get |> List.hd
+      List.map last_block l |> Compare.first compare_blocks 1 |> Option.get |> List.hd
     ;;
 
     let constant_pow c : env reward_function = fun ~assign -> assign c
@@ -154,7 +154,7 @@ module Make (Parameters : Parameters) = struct
         let height = block_height_exn preferred + 1 in
         let parents =
           preferred
-          :: (first
+          :: (Compare.first
                 Compare.(
                   by (tuple (neg bool) float) (fun x -> appended_by_me x, delivered_at x))
                 (k - 1)

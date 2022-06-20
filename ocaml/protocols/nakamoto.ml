@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 let key = "nakamoto"
 let info = "Nakamoto consensus"

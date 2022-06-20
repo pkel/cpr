@@ -1,6 +1,7 @@
 open Bos_setup
 open Common
-open Cpr_lib
+
+(* open Cpr_lib *)
 
 let relativize p = Fpath.relativize ~root p |> Option.value ~default:p
 let inpdir = Fpath.(root / "data" / "networks" / "input")
@@ -8,18 +9,19 @@ let outdir = Fpath.(root / "data" / "networks" / "output")
 let _ = OS.Dir.create ~path:true outdir |> R.failwith_error_msg
 
 let protocols =
-  (* let open Simulator in *)
-  (* let open Cpr_protocols in *)
-  assert false
+  let open Cpr_protocols in
+  nakamoto
+  :: List.concat_map
+       (fun k -> [ bk ~k; bkll ~k; tailstorm ~k ])
+       [ 1; 2; 4; 8; 16; 32; 64 ]
 ;;
 
-(* (module Nakamoto) *)
-(* :: List.concat_map (fun k -> [ Protocol (B_k.protocol ~k) ; Protocol
-   (B_k_lessleader.protocol ~k) ; Protocol (Tailstorm.protocol ~k) ]) [ 1; 2; 4; 8; 16;
-   32; 64 ] *)
+[@@@ocamlformat "wrap-comments=false"]
+
+(*
 
 let run ~activations ~srcfile ~protocol =
-  let (Simulator.Protocol protocol) = protocol in
+  let (Protocol protocol) = protocol in
   let open ResultSyntax in
   let* g = GraphML.load_graph srcfile in
   let* net, to_graphml = Network.of_graphml g in
@@ -82,6 +84,8 @@ let run ~activations ~srcfile ~protocol =
     (Ok [])
     dstfiles
 ;;
+
+
 
 (* TODO: Ensure unique output file names with digest? *)
 
@@ -153,3 +157,5 @@ let info =
 ;;
 
 let () = Term.exit @@ Term.eval (main_t, info)
+
+*)

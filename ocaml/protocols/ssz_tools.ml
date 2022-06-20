@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 module Action8 = struct
   type t =

@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 module type Parameters = sig
   (** number of votes (= puzzle solutions) per block *)
@@ -108,7 +108,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let winner l =
-      List.map last_block l |> first compare_blocks 1 |> Option.get |> List.hd
+      List.map last_block l |> Compare.first compare_blocks 1 |> Option.get |> List.hd
     ;;
 
     let constant_pow c : env reward_function =
@@ -201,7 +201,7 @@ module Make (Parameters : Parameters) = struct
       if replace_hash <= my_hash || nmine + ntheirs < k
       then (* fast path *) None
       else if nmine >= k
-      then first Compare.(by (tuple int int) pow_hash_exn) k mine
+      then Compare.first Compare.(by (tuple int int) pow_hash_exn) k mine
       else (
         let theirs, ntheirs =
           List.fold_left
@@ -216,7 +216,7 @@ module Make (Parameters : Parameters) = struct
         then (* fast path *) None
         else (
           let theirs =
-            first Compare.(by float delivered_at) (k - nmine) theirs |> Option.get
+            Compare.first Compare.(by float delivered_at) (k - nmine) theirs |> Option.get
           in
           mine @ theirs
           |> List.sort Compare.(by (tuple int int) pow_hash_exn)

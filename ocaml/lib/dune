@@ -1,6 +1,6 @@
 (library
  (name cpr_lib)
- (public_name cpr.lib)
+ (public_name cpr)
  (libraries angstrom bos ezxmlm ppx_show.runtime)
  (inline_tests)
  (preprocess

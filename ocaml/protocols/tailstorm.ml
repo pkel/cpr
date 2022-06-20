@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 module type Parameters = sig
   (** number of votes (= puzzle solutions) per block *)
@@ -73,7 +73,7 @@ module Make (Parameters : Parameters) = struct
         let parent = data p in
         let unique_votes =
           Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
-        and sorted_votes = is_sorted ~unique:true compare_votes_in_block votes in
+        and sorted_votes = Compare.is_sorted ~unique:true compare_votes_in_block votes in
         is_block p
         && sorted_votes
         && List.for_all is_vote votes
@@ -94,7 +94,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let winner l =
-      List.map last_block l |> first compare_blocks 1 |> Option.get |> List.hd
+      List.map last_block l |> Compare.first compare_blocks 1 |> Option.get |> List.hd
     ;;
 
     let constant_block c : _ reward_function =

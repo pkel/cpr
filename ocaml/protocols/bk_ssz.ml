@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 module Make (Parameters : Bk.Parameters) = struct
   open Parameters
@@ -237,7 +237,10 @@ module Make (Parameters : Bk.Parameters) = struct
         | [] -> false
         | votes ->
           let leader =
-            first Compare.(by (tuple int int) (fun n -> pow_hash n |> Option.get)) 1 votes
+            Compare.first
+              Compare.(by (tuple int int) (fun n -> pow_hash n |> Option.get))
+              1
+              votes
             |> Option.get
             |> List.hd
           in
@@ -293,7 +296,7 @@ module Make (Parameters : Bk.Parameters) = struct
           else block, nvotes
         in
         let votes = Dag.children Private.view block |> List.filter is_vote in
-        match first Compare.(by float delivered_at) nvotes votes with
+        match Compare.first Compare.(by float delivered_at) nvotes votes with
         | Some subset -> block :: subset
         | None ->
           (* not enough votes, release all *)

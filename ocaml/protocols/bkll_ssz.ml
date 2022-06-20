@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 module Make (Parameters : Bkll.Parameters) = struct
   open Parameters
@@ -267,7 +267,7 @@ module Make (Parameters : Bkll.Parameters) = struct
           else block, nvotes
         in
         let votes = Dag.children Private.view block |> List.filter is_vote in
-        match first Compare.(by float delivered_at) nvotes votes with
+        match Compare.first Compare.(by float delivered_at) nvotes votes with
         | Some subset -> block :: subset
         | None ->
           (* not enough votes, release all *)

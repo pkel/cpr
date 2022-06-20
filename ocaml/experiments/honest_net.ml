@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 open Models
 
 let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]

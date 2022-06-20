@@ -1,4 +1,4 @@
-open Cpr_lib.Next
+open Cpr_lib
 
 let honest_clique ~activation_delay ~n protocol =
   let propagation_delay = Distributions.uniform ~lower:0.5 ~upper:1.5 in
