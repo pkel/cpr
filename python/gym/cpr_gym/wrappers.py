@@ -72,47 +72,63 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
     This way, we know the divisor in SparseRewardPerBlockWrapper in advance.
     """
 
-    def __init__(self, env, n_pow=128):
+    def __init__(self, env, max_height=None):
         super().__init__(env)
 
-        self.drpb_stop = n_pow
+        self.drpb_max_height = max_height
+        self.drpb_puzzles_per_block = env.puzzles_per_block()
+
+        if max_height is not None:
+            if "max_height" in self.env.core_kwargs.keys():
+                warnings.warn(
+                    "DenseRewardPerBlockWrapper overwrites argument 'max_height'\
+                    given to wrapped env"
+                )
+            self.env.core_kwargs["max_height"] = max_height
+        else:
+            if "max_height" not in self.env.core_kwargs.keys():
+                raise ValueError(
+                    "DenseRewardPerBlockWrapper requires argument 'max_height' argument"
+                )
 
         for k in ["max_steps", "max_time"]:
             if k in self.env.core_kwargs.keys():
                 self.env.core_kwargs.pop(k, None)
                 warnings.warn(
-                    f"DenseRewardPerBlockWrapper overwrites argument '{k}' in wrapped env"
+                    f"DenseRewardPerBlockWrapper overwrites argument '{k}' given to wrapped env"
                 )
 
-        self.env.core_kwargs["max_steps"] = n_pow * 10
+        self.env.core_kwargs["max_steps"] = self.env.core_kwargs["max_height"] * 100
 
     def reset(self):
-        self.drpb_cnt = 0
+        self.drpb_acc = 0
         return self.env.reset()
 
     def step(self, action):
         obs, _reward, done, info = self.env.step(action)
 
-        if info["reward_n_pows"] < 0:
-            warnings.warn("negative reward_n_pows")
-        if info["reward_attacker"] < 0:
-            warnings.warn("negative reward_attacker")
+        reward = (
+            info["reward_attacker"] / self.drpb_max_height / self.drpb_puzzles_per_block
+        )
+        self.drpb_acc += reward
 
-        reward = info["reward_attacker"] / self.drpb_stop
-        step = info["reward_n_pows"]
+        if done:
+            got = info["simulator_block_height"]
+            want = self.drpb_max_height
 
-        if step > self.drpb_stop - self.drpb_cnt:
-            # we are overshooting self.drpb_stop, resize reward accordingly
-            reward = reward * (self.drpb_stop - self.drpb_cnt) / step
-            step = self.drpb_stop - self.drpb_cnt
+            if got < want:
+                warnings.warn(f"observed too few blocks: {got}/{want}")
 
-        self.drpb_cnt += step
+            if got > want + 1:
+                warnings.warn(f"observed too many blocks: {got}/{want}")
 
-        if done and self.drpb_cnt < self.drpb_stop:
-            warnings.warn("observed less pows than expected")
-
-        if self.drpb_cnt >= self.drpb_stop:
-            done = True
+            # TODO I don't get why we observe got = want + 1 regularly.
+            if got != want:
+                # want = 2 | 4
+                # got = 3 | 6
+                delta = want - got  # = -1 | -2
+                fix = delta * self.drpb_acc / got  # = -1 * acc/3 | -2 * acc/6
+                reward += fix
 
         return obs, reward, done, info
 

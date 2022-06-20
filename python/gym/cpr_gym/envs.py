@@ -33,7 +33,7 @@ class Core(gym.Env):
         return engine.policies(self.ocaml_env)[name](obs)
 
     def puzzles_per_block(self):
-        return engine.puzzles_per_block(self.env)
+        return engine.puzzles_per_block(self.ocaml_env)
 
     def reset(self):
         # TODO / ocaml: we could expose engine.init that combines create and reset
