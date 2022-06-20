@@ -22,6 +22,7 @@ def test_config(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Bₖ with k=8; SSZ'16-like attack space; α=0.33 attacker"
+    assert env.puzzles_per_block() == 8
 
 
 def test_policies_honest():
@@ -53,6 +54,7 @@ def test_nakamoto(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.33 attacker"
+    assert env.puzzles_per_block() == 1
 
     obs = env.reset()
     for x in range(600):
@@ -74,6 +76,7 @@ def test_bkll(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Bₖ/ll with k=17; SSZ'16-like attack space; α=0.33 attacker"
+    assert env.puzzles_per_block() == 17
 
     obs = env.reset()
     for x in range(600):
@@ -95,6 +98,7 @@ def test_tailstorm(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Tailstorm with k=13; SSZ'16-like attack space; α=0.33 attacker"
+    assert env.puzzles_per_block() == 13
 
     obs = env.reset()
     for x in range(600):

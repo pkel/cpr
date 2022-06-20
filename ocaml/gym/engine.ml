@@ -326,5 +326,6 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
   ; high
   ; to_string
   ; policies
+  ; puzzles_per_block = M.Protocol.puzzles_per_block
   }
 ;;

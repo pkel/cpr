@@ -124,6 +124,13 @@ let () =
      |> Py.Dict.of_bindings_string);
   Py_module.set
     m
+    "puzzles_per_block"
+    (let%map (IEnv (t, _)) =
+       positional "ienv" ienv ~docstring:"OCaml gym environment instance"
+     in
+     Py.Int.of_int t.puzzles_per_block);
+  Py_module.set
+    m
     "to_string"
     (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance" in
      let (IEnv (t, i)) = ienv in
