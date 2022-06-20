@@ -2,7 +2,7 @@ open Cpr_lib.Next
 
 module Make (Parameters : Bkll.Parameters) = struct
   open Parameters
-  module Protocol = Bk.Make (Parameters)
+  module Protocol = Bkll.Make (Parameters)
   open Protocol
 
   let key = "ssz"
@@ -110,14 +110,12 @@ module Make (Parameters : Bkll.Parameters) = struct
     ;;
   end
 
-  module Bk_ssz = Bk_ssz.Make (Parameters)
-  module Action = Bk_ssz.Action
+  module Action = Ssz_tools.Action8
 
   module Agent (V : LocalView with type data = data) = struct
     open Protocol.Referee (V)
     include V
-    module Bk_ssz = Bk_ssz.Agent (V)
-    module State = Bk_ssz.State
+    module State = Ssz_tools.State8 (V)
 
     type state = State.t
     type observable_state = Observable of state
@@ -239,14 +237,16 @@ module Make (Parameters : Bkll.Parameters) = struct
         | _ -> None
       in
       let (module Private) = private_view s in
-      let match_ offset =
+      let (module Public) = public_view s in
+      let release kind =
         let height, nvotes =
-          let target =
-            (block_height_exn s.public * k)
-            + List.length (Dag.children votes_only s.public)
-            + offset
+          let height = block_height_exn s.public
+          and nvotes =
+            List.length (Dag.children Public.view s.public |> List.filter is_vote)
           in
-          target / k, target mod k
+          match kind with
+          | `Match -> height, nvotes
+          | `Override -> if nvotes >= k then height + 1, 0 else height, nvotes + 1
         in
         let block =
           (* find block to be released backwards from private head *)
@@ -256,6 +256,15 @@ module Make (Parameters : Bkll.Parameters) = struct
           h s.private_
           (* NOTE: if private height is smaller public height, then private head is marked
              for release. *)
+        in
+        (* include proposal if attacker was able to produce one *)
+        let block, nvotes =
+          if nvotes >= k
+          then (
+            match Dag.children Private.view block |> List.filter is_block with
+            | proposal :: _ -> proposal, 0
+            | [] -> block, nvotes)
+          else block, nvotes
         in
         let votes = Dag.children Private.view block |> List.filter is_vote in
         match first Compare.(by float delivered_at) nvotes votes with
@@ -267,10 +276,10 @@ module Make (Parameters : Bkll.Parameters) = struct
       match (action : Action.t) with
       | Adopt_Proceed -> [], State.update ~epoch:`Proceed ~private_:s.public s
       | Adopt_Prolong -> [], State.update ~epoch:`Prolong ~private_:s.public s
-      | Match_Proceed -> match_ 0, State.update ~epoch:`Proceed s
-      | Match_Prolong -> match_ 0, State.update ~epoch:`Prolong s
-      | Override_Proceed -> match_ 1, State.update ~epoch:`Proceed s
-      | Override_Prolong -> match_ 1, State.update ~epoch:`Prolong s
+      | Match_Proceed -> release `Match, State.update ~epoch:`Proceed s
+      | Match_Prolong -> release `Match, State.update ~epoch:`Prolong s
+      | Override_Proceed -> release `Override, State.update ~epoch:`Proceed s
+      | Override_Prolong -> release `Override, State.update ~epoch:`Prolong s
       | Wait_Proceed -> [], State.update ~epoch:`Proceed s
       | Wait_Prolong -> [], State.update ~epoch:`Prolong s
     ;;
