@@ -299,6 +299,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       ; "step_time_elapsed", Py.Float.of_float step_time
       ; "simulator_clock_now", Py.Float.of_float t.sim.clock.now
       ; "simulator_clock_rewarded", Py.Float.of_float simulator_clock_rewarded
+      ; "simulator_steps", Py.Int.of_int t.steps
       ; "simulator_block_height", Py.Int.of_int height
       ] )
   and low = M.Observation.(low |> to_floatarray)
