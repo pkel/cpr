@@ -41,19 +41,19 @@ module Make (Parameters : Parameters) = struct
       | _ -> false
     ;;
 
-    let last_block n =
-      match data n with
-      | Block _ -> n
+    let last_block x =
+      match data x with
+      | Block _ -> x
       | Vote _ ->
-        (match Dag.parents view n with
-        | [ n ] -> n
+        (match Dag.parents view x with
+        | [ x ] -> x
         | _ -> failwith "invalid dag")
     ;;
 
     let height x = data x |> height
 
-    let block_height_exn node =
-      match data node with
+    let block_height_exn x =
+      match data x with
       | Block b -> b.height
       | _ -> raise (Invalid_argument "not a block")
     ;;
@@ -93,7 +93,10 @@ module Make (Parameters : Parameters) = struct
       skip_eq Dag.vertex_eq cmp
     ;;
 
-    let winner l = first compare_blocks 1 l |> Option.get |> List.hd
+    let winner l =
+      List.map last_block l |> first compare_blocks 1 |> Option.get |> List.hd
+    ;;
+
     let constant_pow c : env reward_function = fun ~assign -> assign c
 
     let constant_block c : env reward_function =

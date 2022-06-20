@@ -56,7 +56,9 @@ module Make (P : Parameters) = struct
       | Vote _ ->
         (match Dag.parents view x with
         | [ x ] -> x
-        | _ -> failwith "invalid dag")
+        | _ ->
+          let info _v = [] in
+          Dag.Exn.raise view info [ x ] "last block: invalid dag")
     ;;
 
     let height x = data x |> height
@@ -66,7 +68,7 @@ module Make (P : Parameters) = struct
       | Block b -> b.height
       | _ ->
         let info _v = [] in
-        Dag.Exn.raise view info [ x ] "not a block"
+        Dag.Exn.raise view info [ x ] "block_height_exn: not a block"
     ;;
 
     let votes_only = Dag.filter is_vote view
@@ -105,7 +107,9 @@ module Make (P : Parameters) = struct
       skip_eq Dag.vertex_eq cmp
     ;;
 
-    let winner l = first compare_blocks 1 l |> Option.get |> List.hd
+    let winner l =
+      List.map last_block l |> first compare_blocks 1 |> Option.get |> List.hd
+    ;;
 
     let constant_pow c : env reward_function =
      fun ~assign x ->

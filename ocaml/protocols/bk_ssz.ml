@@ -175,6 +175,7 @@ module Make (Parameters : Bk.Parameters) = struct
 
                  Prolong: the attacker prolongs the current epoch until he can form a
                  block that does not reference any defender votes. *)
+        ; pending_private_to_public_messages : env Dag.vertex list
         }
 
       val init : epoch:[ `Proceed | `Prolong ] -> env Dag.vertex -> t
@@ -184,6 +185,7 @@ module Make (Parameters : Bk.Parameters) = struct
         :  ?public:env Dag.vertex
         -> ?private_:env Dag.vertex
         -> ?epoch:[ `Proceed | `Prolong ]
+        -> ?pending_private_to_public_messages:env Dag.vertex list
         -> t
         -> t
     end = struct
@@ -192,9 +194,17 @@ module Make (Parameters : Bk.Parameters) = struct
         ; private_ : env Dag.vertex
         ; common : env Dag.vertex
         ; epoch : [ `Proceed | `Prolong ]
+        ; pending_private_to_public_messages : env Dag.vertex list
         }
 
-      let init ~epoch x = { public = x; private_ = x; common = x; epoch }
+      let init ~epoch x =
+        { public = x
+        ; private_ = x
+        ; common = x
+        ; epoch
+        ; pending_private_to_public_messages = []
+        }
+      ;;
 
       (* call this whenever public or private_ changes *)
       let set_common state =
@@ -203,12 +213,16 @@ module Make (Parameters : Bk.Parameters) = struct
         { state with common = Option.get common }
       ;;
 
-      let update ?public ?private_ ?epoch t =
+      let update ?public ?private_ ?epoch ?pending_private_to_public_messages t =
         set_common
           { public = Option.value ~default:t.public public
           ; private_ = Option.value ~default:t.private_ private_
           ; epoch = Option.value ~default:t.epoch epoch
           ; common = t.common
+          ; pending_private_to_public_messages =
+              Option.value
+                ~default:t.pending_private_to_public_messages
+                pending_private_to_public_messages
           }
       ;;
     end
@@ -225,7 +239,7 @@ module Make (Parameters : Bk.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    let public_visibility _state x = released x
+    let public_visibility _ x = released x
 
     let public_view s : (env, data) local_view =
       (module struct
@@ -281,7 +295,14 @@ module Make (Parameters : Bk.Parameters) = struct
       puzzle_payload s.private_
     ;;
 
-    let prepare state event =
+    let prepare (state : state) event =
+      let state =
+        let pending = state.pending_private_to_public_messages in
+        List.fold_left
+          (fun state msg -> handle_public state (Deliver msg))
+          (State.update ~pending_private_to_public_messages:[] state)
+          pending
+      in
       match event with
       | PuzzleSolved _ ->
         (* work on private chain *)
@@ -384,9 +405,10 @@ module Make (Parameters : Bk.Parameters) = struct
       | Wait_Prolong -> [], State.update ~epoch:`Prolong s
     ;;
 
-    let conclude (share, state) =
-      let simulate_public state msg = handle_public state (Deliver msg) in
-      { share; state = List.fold_left simulate_public state share }
+    let conclude (pending_private_to_public_messages, state) =
+      { share = pending_private_to_public_messages
+      ; state = State.update ~pending_private_to_public_messages state
+      }
     ;;
 
     let apply (Observable state) action = interpret state action |> conclude

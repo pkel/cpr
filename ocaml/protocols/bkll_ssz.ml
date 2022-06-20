@@ -187,7 +187,14 @@ module Make (Parameters : Bkll.Parameters) = struct
       puzzle_payload s.private_
     ;;
 
-    let prepare state event =
+    let prepare (state : state) event =
+      let state =
+        let pending = state.pending_private_to_public_messages in
+        List.fold_left
+          (fun state msg -> handle_public state (Deliver msg))
+          (State.update ~pending_private_to_public_messages:[] state)
+          pending
+      in
       match event with
       | PuzzleSolved _ ->
         (* work on private chain *)
@@ -268,9 +275,10 @@ module Make (Parameters : Bkll.Parameters) = struct
       | Wait_Prolong -> [], State.update ~epoch:`Prolong s
     ;;
 
-    let conclude (share, state) =
-      let simulate_public state msg = handle_public state (Deliver msg) in
-      { share; state = List.fold_left simulate_public state share }
+    let conclude (pending_private_to_public_messages, state) =
+      { share = pending_private_to_public_messages
+      ; state = State.update ~pending_private_to_public_messages state
+      }
     ;;
 
     let apply (Observable state) action = interpret state action |> conclude

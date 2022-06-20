@@ -108,20 +108,29 @@ module Agent (V : LocalView with type data = data) = struct
       { public : env Dag.vertex (* defender's preferred block *)
       ; private_ : env Dag.vertex (* attacker's preferred block *)
       ; common : env Dag.vertex (* common chain *)
+      ; pending_private_to_public_messages : env Dag.vertex list
       }
 
     val init : env Dag.vertex -> t
 
     (* Set fields in state; updates common chain *)
-    val update : ?public:env Dag.vertex -> ?private_:env Dag.vertex -> t -> t
+    val update
+      :  ?public:env Dag.vertex
+      -> ?private_:env Dag.vertex
+      -> ?pending_private_to_public_messages:env Dag.vertex list
+      -> t
+      -> t
   end = struct
     type t =
       { public : env Dag.vertex
       ; private_ : env Dag.vertex
       ; common : env Dag.vertex
+      ; pending_private_to_public_messages : env Dag.vertex list
       }
 
-    let init x = { public = x; private_ = x; common = x }
+    let init x =
+      { public = x; private_ = x; common = x; pending_private_to_public_messages = [] }
+    ;;
 
     (* call this whenever public or private_ changes *)
     let set_common state =
@@ -130,11 +139,15 @@ module Agent (V : LocalView with type data = data) = struct
       { state with common = Option.get common }
     ;;
 
-    let update ?public ?private_ t =
+    let update ?public ?private_ ?pending_private_to_public_messages t =
       set_common
         { public = Option.value ~default:t.public public
         ; private_ = Option.value ~default:t.private_ private_
         ; common = t.common
+        ; pending_private_to_public_messages =
+            Option.value
+              ~default:t.pending_private_to_public_messages
+              pending_private_to_public_messages
         }
     ;;
   end
@@ -203,7 +216,14 @@ module Agent (V : LocalView with type data = data) = struct
     State.update ~private_ s
   ;;
 
-  let prepare state event =
+  let prepare (state : state) event =
+    let state =
+      let pending = state.pending_private_to_public_messages in
+      List.fold_left
+        (fun state msg -> handle_public state (Deliver msg))
+        (State.update ~pending_private_to_public_messages:[] state)
+        pending
+    in
     match event with
     | PuzzleSolved _ ->
       (* work on private chain *)
@@ -254,9 +274,10 @@ module Agent (V : LocalView with type data = data) = struct
     | Wait -> [], s
   ;;
 
-  let conclude (share, state) =
-    let simulate_public state msg = handle_public state (Deliver msg) in
-    { share; state = List.fold_left simulate_public state share }
+  let conclude (pending_private_to_public_messages, state) =
+    { share = pending_private_to_public_messages
+    ; state = State.update ~pending_private_to_public_messages state
+    }
   ;;
 
   let apply (Observable state) action = interpret state action |> conclude
