@@ -207,3 +207,46 @@ let%test_module "policy" =
     ;;
   end)
 ;;
+
+let%test_module "random" =
+  (module struct
+    let test (AttackSpace (module A)) =
+      let env =
+        let network =
+          let propagation_delay = Distributions.exponential ~ev:1. in
+          let n_nodes = 3 in
+          Network.T.symmetric_clique ~activation_delay:100. ~propagation_delay n_nodes
+        in
+        let policy _ = Random.int A.Action.n |> A.Action.of_int in
+        let random = A.attacker policy in
+        Simulator.init
+          ~patch:(function
+            | 0 -> Some random
+            | _ -> None)
+          (module A.Protocol)
+          network
+      in
+      let target_height = 1000 in
+      Simulator.loop ~activations:(target_height * A.Protocol.puzzles_per_block) env;
+      let head = Simulator.head env in
+      let observed_height = A.Protocol.height (Dag.data head).value in
+      let observed_orphan_rate =
+        float_of_int (target_height - observed_height) /. float_of_int target_height
+      in
+      if observed_orphan_rate > 0.5
+      then
+        failwith
+          (Printf.sprintf
+             "too many orphans: got %.2f, expected %.2f"
+             observed_orphan_rate
+             0.5)
+      else ()
+    ;;
+
+    let%test_unit "nakamoto/random" = test nakamoto_ssz
+    let%test_unit "bk8/ssz/random" = test (bk_ssz ~k:8)
+    let%test_unit "bkll8/ssz/random" = test (bkll_ssz ~k:8)
+    let%test_unit "tailstorm8/ssz/random" = test (tailstorm_ssz ~k:8)
+    let%test_unit "tailstorm8/draft/random" = test (tailstorm_draft ~k:8)
+  end)
+;;
