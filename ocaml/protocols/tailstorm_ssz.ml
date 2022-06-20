@@ -331,18 +331,10 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     let open Policies in
     empty
     |> add ~info:"emulate honest behaviour" "honest" honest
+    |> add ~info:"release private block a.s.a.p." "release-block" release_block
+    |> add ~info:"override public block a.s.a.p." "override-block" override_block
     |> add
-         ~info:"release private block a.s.a.p., inspired from PrivateAttack"
-         "release-block"
-         release_block
-    |> add
-         ~info:"override public block a.s.a.p., inspired from PrivateAttack"
-         "override-block"
-         override_block
-    |> add
-         ~info:
-           "override public head just before defender catches up, inspired from \
-            PrivateAttack"
+         ~info:"override public head just before defender catches up"
          "override-catchup"
          override_catchup
   ;;

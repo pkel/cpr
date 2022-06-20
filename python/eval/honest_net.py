@@ -64,7 +64,7 @@ print(
     )
 )
 print(
-    df[df.protocol == "george"].pivot(
+    df[df.protocol == "tailstorm"].pivot(
         index="block_interval",
         columns=["protocol", "k", "incentive_scheme"],
         values="reward_activations_gini_delta",
