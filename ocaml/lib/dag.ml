@@ -34,7 +34,8 @@ let data n = n.data
 type 'a view = ('a vertex -> bool) list
 
 let view _ : 'a view = []
-let filter a b = a :: b
+let filter a b = b @ [ a ] (* it's important to apply the filter in-order *)
+
 let visible view n = List.for_all (fun flt -> flt n) view
 let parents view n = List.filter (visible view) n.parents
 let children view n = List.filter (visible view) n.children

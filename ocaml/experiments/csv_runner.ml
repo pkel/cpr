@@ -4,9 +4,10 @@ type task =
   | Task :
       { activations : int
       ; network : Network.t
-      ; protocol : ('dag_data Simulator.data, 'dag_data, Simulator.pow, 'state) protocol
+      ; protocol : (module Protocol with type data = 'dag_data)
       ; attack :
-          ('dag_data Simulator.data, 'dag_data, Simulator.pow) opaque_node
+          (('dag_data Simulator.env, 'dag_data) local_view
+           -> ('dag_data Simulator.env, 'dag_data) node)
           Collection.entry
           option
       ; sim : (unit -> 'dag_data Simulator.state) Collection.entry
@@ -75,6 +76,7 @@ let save_rows_as_tsv filename l =
 ;;
 
 let prepare_row (Task { activations; network; protocol; attack; sim }) =
+  let (module Protocol) = protocol in
   let strategy, strategy_description =
     match attack with
     | Some x -> x.Collection.key, x.info
@@ -82,14 +84,15 @@ let prepare_row (Task { activations; network; protocol; attack; sim }) =
   in
   { network = sim.key
   ; network_description = sim.info
-  ; protocol = protocol.key
-  ; protocol_description = protocol.info
-  ; k = protocol.pow_per_block
+  ; protocol = Protocol.key
+  ; protocol_description = Protocol.info
+  ; k = Protocol.puzzles_per_block
   ; activation_delay = network.activation_delay
   ; number_activations = activations
   ; activations = [||]
   ; compute = [||]
-  ; block_interval = network.activation_delay *. (protocol.pow_per_block |> float_of_int)
+  ; block_interval =
+      network.activation_delay *. (Protocol.puzzles_per_block |> float_of_int)
   ; incentive_scheme = "none"
   ; incentive_scheme_description = ""
   ; strategy
@@ -106,36 +109,32 @@ let prepare_row (Task { activations; network; protocol; attack; sim }) =
 let run task =
   let row = prepare_row task in
   let (Task t) = task in
+  let (module Protocol) = t.protocol in
   let clock = Mtime_clock.counter () in
   try
     let open Simulator in
     let sim = t.sim.it () in
+    let (module Ref) = sim.referee in
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
     loop ~activations:t.activations sim;
-    let activations = Array.map (fun (Node x) -> x.n_activations) sim.nodes in
-    Array.to_seq sim.nodes
-    |> Seq.map (fun (Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor' sim.global.view
-    |> function
-    | None -> failwith "no common ancestor found"
-    | Some common_chain ->
-      (* incentive stats *)
-      Collection.map_to_list
-        (fun rewardfn ->
-          let reward = apply_reward_function rewardfn.it common_chain sim in
-          { row with
-            activations
-          ; compute
-          ; incentive_scheme = rewardfn.key
-          ; incentive_scheme_description = rewardfn.info
-          ; reward
-          ; ca_time = (Dag.data common_chain).appended_at
-          ; ca_height = t.protocol.height (Dag.data common_chain).value
-          ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
-          ; error = ""
-          })
-        t.protocol.reward_functions
+    let head = head sim in
+    (* incentive stats *)
+    Collection.map_to_list
+      (fun rewardfn ->
+        let reward = apply_reward_function rewardfn.it sim in
+        { row with
+          activations = sim.activations
+        ; compute
+        ; incentive_scheme = rewardfn.key
+        ; incentive_scheme_description = rewardfn.info
+        ; reward
+        ; ca_time = (Dag.data head).appended_at
+        ; ca_height = Protocol.height (Dag.data head).value
+        ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
+        ; error = ""
+        })
+      Ref.reward_functions
   with
   | e ->
     let bt = Printexc.get_backtrace () in
@@ -143,8 +142,8 @@ let run task =
       Printf.eprintf
         "\nRUN:\tnetwork:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
         t.sim.key
-        t.protocol.key
-        t.protocol.pow_per_block
+        Protocol.key
+        Protocol.puzzles_per_block
         (match t.attack with
         | None -> "n/a"
         | Some a -> a.key);

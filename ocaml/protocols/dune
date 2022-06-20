@@ -1,5 +1,6 @@
 (library
  (name cpr_protocols)
+ (public_name cpr.protocols)
  (libraries cpr_lib)
  (inline_tests)
  (preprocess
