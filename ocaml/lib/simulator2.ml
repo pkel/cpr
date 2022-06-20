@@ -200,7 +200,7 @@ let init
             data x
           ;;
 
-          let released n = (Dag.data n).released_at <= clock.now
+          let released x = (Dag.data x).released_at <= clock.now
           let extend_dag x = extend_dag ~pow:false ~n_nodes clock dag node_id x
         end
         in
