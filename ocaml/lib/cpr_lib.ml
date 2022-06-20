@@ -146,4 +146,5 @@ module Next = struct
   include Infix
 
   let first = first
+  let is_sorted = is_sorted
 end

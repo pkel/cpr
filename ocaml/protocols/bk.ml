@@ -5,8 +5,8 @@ module type Parameters = sig
   val k : int
 end
 
-module Make (P : Parameters) = struct
-  open P
+module Make (Parameters : Parameters) = struct
+  open Parameters
 
   let key = "bk"
   let info = Printf.sprintf "Bₖ with k=%i" k

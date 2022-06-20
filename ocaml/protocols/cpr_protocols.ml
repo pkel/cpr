@@ -50,6 +50,16 @@ let bkll_ssz ~k =
   AttackSpace (module M)
 ;;
 
+(** Tailstorm protocol with k - 1 subblocks per (strong) block *)
+let tailstorm ~k =
+  let module M =
+    Tailstorm.Make (struct
+      let k = k
+    end)
+  in
+  Protocol (module M)
+;;
+
 (** deprecated / old interface *)
 
 module Tailstorm = Tailstorm
@@ -107,6 +117,18 @@ let%test_module "protocol" =
 
     let%test_unit "bkll32/hard" =
       test ~activation_delay:1. ~orphan_rate_limit:0.1 (bkll ~k:32)
+    ;;
+
+    let%test_unit "tailstorm8/easy" =
+      test ~activation_delay:10. ~orphan_rate_limit:0.1 (tailstorm ~k:8)
+    ;;
+
+    let%test_unit "tailstorm8/hard" =
+      test ~activation_delay:1. ~orphan_rate_limit:0.3 (tailstorm ~k:8)
+    ;;
+
+    let%test_unit "tailstorm32/hard" =
+      test ~activation_delay:1. ~orphan_rate_limit:0.1 (tailstorm ~k:32)
     ;;
   end)
 ;;
