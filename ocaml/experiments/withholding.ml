@@ -54,8 +54,12 @@ let tasks ~n_activations =
   let nakamoto =
     two_agents nakamoto_ssz n_activations @ selfish_mining nakamoto_ssz n_activations
   and bk = List.concat_map (fun k -> two_agents (bk_ssz ~k) n_activations) k
-  and bkll = List.concat_map (fun k -> two_agents (bkll_ssz ~k) n_activations) k in
-  List.concat [ nakamoto; bk; bkll ]
+  and bkll = List.concat_map (fun k -> two_agents (bkll_ssz ~k) n_activations) k
+  and tailstorm = List.concat_map (fun k -> two_agents (tailstorm_ssz ~k) n_activations) k
+  and tailstorm' =
+    List.concat_map (fun k -> two_agents (tailstorm_draft ~k) n_activations) k
+  in
+  List.concat [ nakamoto; bk; bkll; tailstorm; tailstorm' ]
 ;;
 
 open Cmdliner

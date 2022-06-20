@@ -60,9 +60,25 @@ let tailstorm ~k =
   Protocol (module M)
 ;;
 
-(** deprecated / old interface *)
+(** {!nakamoto_ssz} adapted for {!tailstorm}. *)
+let tailstorm_ssz ~k =
+  let module M =
+    Tailstorm_ssz.Make (struct
+      let k = k
+    end)
+  in
+  AttackSpace (module M)
+;;
 
-module Tailstorm = Tailstorm
+(** Deprecated draft attack space against {!tailstorm}. *)
+let tailstorm_draft ~k =
+  let module M =
+    Tailstorm_draft.Make (struct
+      let k = k
+    end)
+  in
+  AttackSpace (module M)
+;;
 
 let%test_module "protocol" =
   (module struct
@@ -180,6 +196,14 @@ let%test_module "policy" =
 
     let%test_unit "bkll8/ssz/honest" =
       test ~policy:"honest" ~orphan_rate_limit:0.01 (bkll_ssz ~k:8)
+    ;;
+
+    let%test_unit "tailstorm8/ssz/honest" =
+      test ~policy:"honest" ~orphan_rate_limit:0.01 (tailstorm_ssz ~k:8)
+    ;;
+
+    let%test_unit "tailstorm8/draft/honest" =
+      test ~policy:"honest" ~orphan_rate_limit:0.01 (tailstorm_draft ~k:8)
     ;;
   end)
 ;;

@@ -159,5 +159,12 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     Proto (Engine.of_module (bkll_ssz ~k) ~reward) |> python_of_protocol)
+     Proto (Engine.of_module (bkll_ssz ~k) ~reward) |> python_of_protocol);
+  Py_module.set
+    m
+    "tailstorm"
+    (let%map reward =
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
+     and k = keyword "k" int ~docstring:"puzzles per block" in
+     Proto (Engine.of_module (tailstorm_ssz ~k) ~reward) |> python_of_protocol)
 ;;
