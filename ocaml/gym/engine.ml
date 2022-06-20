@@ -9,6 +9,7 @@ module Parameters : sig
     ; defenders : int (** number of defenders; 1 <= x *)
     ; activation_delay : float (** difficulty; 0 < x *)
     ; max_steps : int (** termination criterion, number of attacker steps; 1 <= x *)
+    ; max_height : int (** termination criterion, block height; 0 < x *)
     ; max_time : float (** termination criterion, simulated time; 0 < x *)
     }
 
@@ -19,6 +20,7 @@ module Parameters : sig
     -> defenders:int
     -> activation_delay:float
     -> max_steps:int
+    -> max_height:int
     -> max_time:float
     -> t
 end = struct
@@ -28,19 +30,21 @@ end = struct
     ; defenders : int
     ; activation_delay : float
     ; max_steps : int
+    ; max_height : int
     ; max_time : float
     }
 
-  let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_time =
+  let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_height ~max_time =
     let () =
       if alpha < 0. || alpha > 1. then failwith "alpha < 0 || alpha > 1";
       if gamma < 0. || gamma > 1. then failwith "gamma < 0 || gamma > 1";
       if defenders < 1 then failwith "defenders < 0";
       if activation_delay <= 0. then failwith "activation_delay <= 0";
       if max_steps <= 0 then failwith "max_steps <= 0";
+      if max_height <= 0 then failwith "max_height <= 0";
       if max_time <= 0. then failwith "max_time <= 0"
     in
-    { alpha; gamma; defenders; activation_delay; max_steps; max_time }
+    { alpha; gamma; defenders; activation_delay; max_steps; max_height; max_time }
   ;;
 end
 
@@ -63,6 +67,7 @@ type instance =
       { sim : 'data Simulator.state
       ; agent : 'data agent
       ; reward_function : 'data Simulator.env reward_function
+      ; protocol : (module Protocol with type data = 'data)
       ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex
       ; mutable last_time : float
       ; mutable steps : int
@@ -168,6 +173,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       { sim
       ; agent
       ; reward_function
+      ; protocol = (module M.Protocol)
       ; reward_applied_upto = List.hd sim.roots
       ; last_time = 0.
       ; steps = 0
@@ -198,6 +204,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     let (module Ref) = t.sim.referee in
     let () = t.steps <- t.steps + 1 in
     let (Agent a) = t.agent in
+    let (module Protocol) = t.protocol in
     (* Apply action i to the simulator state. *)
     let state =
       let ret = a.apply a.state action in
@@ -225,7 +232,9 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
           t.sim.nodes
         |> Array.to_list
       in
-      if t.steps < p.max_steps && t.sim.clock.now < p.max_time
+      let head = Ref.winner prefs in
+      let height = Protocol.height (Dag.data head).value in
+      if t.steps < p.max_steps && height < p.max_height && t.sim.clock.now < p.max_time
       then (
         (* TODO. common_ancestor on preferred heads is a leaky abstraction. Attacker might
            change preference and subvert this mechanism. Consider calculating full rewards
@@ -236,7 +245,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
           List.to_seq prefs |> Dag.common_ancestor' t.sim.global_view |> Option.get
         in
         false, ca)
-      else true, Ref.winner prefs
+      else true, head
     in
     (* Calculate rewards for the new common blocks. *)
     (* 1. find common ancestor *)

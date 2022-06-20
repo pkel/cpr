@@ -52,6 +52,12 @@ let () =
          int
          ~docstring:"maximum number of attacker steps before terminating the simulation"
          ~default:1000
+     and max_height =
+       keyword
+         "max_height"
+         int
+         ~docstring:"maximum block height before terminating the simulation"
+         ~default:Int.max_int
      and max_time =
        keyword
          "max_time"
@@ -61,7 +67,14 @@ let () =
      in
      let (Proto p) = proto in
      let config =
-       Engine.Parameters.t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_time
+       Engine.Parameters.t
+         ~alpha
+         ~gamma
+         ~defenders
+         ~activation_delay
+         ~max_steps
+         ~max_height
+         ~max_time
      in
      let t = p config in
      IEnv (t, t.create ()) |> python_of_ienv);
