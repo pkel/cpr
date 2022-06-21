@@ -142,6 +142,7 @@ def env_fn(eval=False, n_recordings=42):
     reward = dict(
         sparse_relative=cpr_gym.wrappers.SparseRelativeRewardWrapper,
         sparse_per_block=cpr_gym.wrappers.SparseRewardPerBlockWrapper,
+        sparse_daa=cpr_gym.wrappers.SparseDaaRewardWrapper,
         dense_per_block=lambda env: cpr_gym.wrappers.DenseRewardPerBlockWrapper(
             env, episode_len=config["main"]["episode_len"]
         ),
