@@ -72,9 +72,18 @@ module Exn : sig
   type exn +=
     | Malformed_DAG of
         { msg : string
-        ; dag : string lazy_t
+        ; dot : string lazy_t
         }
 
   val set_to_file : string -> unit
-  val raise : 'a view -> ('a -> (string * string) list) -> 'a vertex list -> string -> 'b
+
+  (** Convert Graphviz dot to ASCII using graph-easy if available. *)
+  val dot_to_ascii : string -> string
+
+  val raise
+    :  'a view
+    -> ('a vertex -> (string * string) list)
+    -> 'a vertex list
+    -> string
+    -> 'b
 end

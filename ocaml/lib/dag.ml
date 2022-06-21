@@ -409,11 +409,28 @@ module Exn = struct
   type exn +=
     | Malformed_DAG of
         { msg : string
-        ; dag : string lazy_t
+        ; dot : string lazy_t
         }
 
   let to_file = ref (Bos.OS.Env.var "CPR_MALFORMED_DAG_TO_FILE")
   let set_to_file f = to_file := Some f
+
+  let dot_to_ascii dot =
+    let open Bos in
+    let open Rresult in
+    let cmd = Cmd.(v "graph-easy") in
+    OS.Cmd.exists cmd
+    >>= (function
+          | true ->
+            OS.Cmd.(in_string dot |> run_io cmd |> out_string)
+            |> Result.map fst
+            |> Result.map (fun ascii -> dot ^ ascii)
+          | false ->
+            Result.ok
+              (dot
+              ^ "HINT: Install graph-easy to automatically convert this graph to ASCII."))
+    |> Result.get_ok
+  ;;
 
   let () =
     Printexc.register_printer (fun exn ->
@@ -422,7 +439,7 @@ module Exn = struct
           let oc = open_out f in
           let msg =
             try
-              Printf.fprintf oc "%s" (Lazy.force t.dag);
+              Printf.fprintf oc "%s" (Lazy.force t.dot);
               Printf.sprintf "Malformed_DAG: %s (DAG written to %s)" t.msg f
             with
             | _ -> Printf.sprintf "Malformed_DAG: %s (writing DAG to %s failed)" t.msg f
@@ -430,7 +447,7 @@ module Exn = struct
           close_out oc;
           Some msg
         | Malformed_DAG t, None ->
-          let () = Printf.eprintf "%s" (Lazy.force t.dag) in
+          let () = Printf.eprintf "%s\n" (Lazy.force t.dot |> dot_to_ascii) in
           Some (Printf.sprintf "Malformed_DAG: %s" t.msg)
         | _ -> None)
   ;;
@@ -438,8 +455,7 @@ module Exn = struct
   let raise v info nodes msg (type a) : a =
     let node_attr x =
       let label =
-        data x
-        |> info
+        info x
         |> List.map (function
                | "", s | s, "" -> s
                | k, v -> k ^ ": " ^ v)
@@ -449,7 +465,7 @@ module Exn = struct
     in
     let pp fmt = dot fmt ~legend:[] v ~node_attr in
     let nodes = List.concat_map (parents v) nodes in
-    let dag = lazy (Format.asprintf "%a" pp nodes) in
-    raise (Malformed_DAG { msg; dag })
+    let dot = lazy (Format.asprintf "%a" pp nodes) in
+    raise (Malformed_DAG { msg; dot })
   ;;
 end

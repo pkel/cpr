@@ -173,13 +173,14 @@ let init
     if not (Ref.dag_validity vertex)
     then (
       let info x =
+        let x = Dag.data x in
         [ Protocol.describe x.value, ""
         ; "node", Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
         ; "time", Printf.sprintf "%.2f" x.appended_at
         ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
         ]
       in
-      Dag.Exn.raise Ref.view info [ vertex ] "invalid append")
+      Dag.Exn.raise Ref.view info (vertex :: Dag.parents Ref.view vertex) "invalid append")
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
