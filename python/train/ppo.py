@@ -143,7 +143,7 @@ def env_fn(eval=False, n_recordings=42):
         sparse_relative=cpr_gym.wrappers.SparseRelativeRewardWrapper,
         sparse_per_block=cpr_gym.wrappers.SparseRewardPerBlockWrapper,
         dense_per_block=lambda env: cpr_gym.wrappers.DenseRewardPerBlockWrapper(
-            env, max_height=config["main"]["episode_len"]
+            env, episode_len=config["main"]["episode_len"]
         ),
     )
 

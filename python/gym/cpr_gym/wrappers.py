@@ -72,33 +72,21 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
     This way, we know the divisor in SparseRewardPerBlockWrapper in advance.
     """
 
-    def __init__(self, env, max_height=None):
+    def __init__(self, env, episode_len=None):
         super().__init__(env)
 
-        self.drpb_max_height = max_height
         self.drpb_puzzles_per_block = env.puzzles_per_block()
+        self.drpb_max_height = numpy.ceil(episode_len / env.puzzles_per_block())
 
-        if max_height is not None:
-            if "max_height" in self.env.core_kwargs.keys():
-                warnings.warn(
-                    "DenseRewardPerBlockWrapper overwrites argument 'max_height'\
-                    given to wrapped env"
-                )
-            self.env.core_kwargs["max_height"] = max_height
-        else:
-            if "max_height" not in self.env.core_kwargs.keys():
-                raise ValueError(
-                    "DenseRewardPerBlockWrapper requires argument 'max_height' argument"
-                )
-
-        for k in ["max_steps", "max_time"]:
+        for k in ["max_steps", "max_time", "max_height"]:
             if k in self.env.core_kwargs.keys():
                 self.env.core_kwargs.pop(k, None)
                 warnings.warn(
                     f"DenseRewardPerBlockWrapper overwrites argument '{k}' given to wrapped env"
                 )
 
-        self.env.core_kwargs["max_steps"] = self.env.core_kwargs["max_height"] * 100
+        self.env.core_kwargs["max_steps"] = self.drpb_max_height * 100
+        self.env.core_kwargs["max_height"] = self.drpb_max_height
 
     def reset(self):
         self.drpb_acc = 0
