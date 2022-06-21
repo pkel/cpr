@@ -42,4 +42,3 @@ import engine, protocols  # noqa
 #  Register gym environments
 
 gym.envs.register(id="core-v0", entry_point="cpr_gym.envs:Core")
-gym.envs.register(id="auto-v0", entry_point="cpr_gym.envs:Auto")

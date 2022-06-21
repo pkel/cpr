@@ -63,9 +63,3 @@ def test_alphaScheduleWrapper():
         assert i["alpha"] == obs[-1]
         alphas[i["alpha"]] = True
     assert len(alphas.keys()) > 30
-
-
-def test_auto():
-    env = gym.make("cpr_gym:auto-v0", max_steps=2016)
-    check_env(env)
-    run_episode(env, "honest")
