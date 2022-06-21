@@ -32,7 +32,7 @@ module Make (Parameters : Parameters) = struct
     include V
 
     let dag_fail (type a) vertices msg : a =
-      let meta x = [ "describe", describe (data x) ] in
+      let meta x = [ describe (data x), "" ] in
       Dag.Exn.raise view meta vertices msg
     ;;
 
@@ -45,12 +45,12 @@ module Make (Parameters : Parameters) = struct
       then x
       else (
         match Dag.parents view x with
-        (* votes have only one parent by dag_validity *)
         | [ x ] -> last_block x
         | parents ->
           dag_fail (x :: parents) "last_block: votes have one parent by dag_validity")
     ;;
 
+    (* smaller is better *)
     let compare_votes_in_block =
       let get x =
         let d = data x
@@ -303,17 +303,27 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let puzzle_payload preferred =
-      let head = last_block preferred in
-      match quorum head with
+      let block = last_block preferred in
+      match quorum block with
       | Some q ->
-        { parents = head :: q
+        { parents = block :: q
         ; sign = false
-        ; data = { block = height head + 1; vote = 0 }
+        ; data = { block = height block + 1; vote = 0 }
         }
       | None ->
-        { parents = [ preferred ]
+        let votes =
+          Dag.iterate_descendants votes_only [ block ]
+          |> List.of_seq
+          |> List.sort compare_votes_in_block
+        in
+        let parent =
+          match votes with
+          | hd :: _ -> hd
+          | _ -> block
+        in
+        { parents = [ parent ]
         ; sign = false
-        ; data = { block = height head; vote = (data preferred).vote + 1 }
+        ; data = { block = height block; vote = (data parent).vote + 1 }
         }
     ;;
 
