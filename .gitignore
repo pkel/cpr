@@ -8,9 +8,5 @@ _venv/
 .ipynb_checkpoints
 *.pyc
 
-logs/
-rl/muzero-general/results/
-rl/muzero-general/wandb/
-saved_models
-*.wandb
+saved_models/
 wandb/
