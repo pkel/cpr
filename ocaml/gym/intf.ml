@@ -11,6 +11,7 @@ type 'instance env =
   ; low : floatarray
   ; high : floatarray
   ; policies : (string * (floatarray -> int)) list
+  ; puzzles_per_block : int
   }
 
 module Sim = struct
