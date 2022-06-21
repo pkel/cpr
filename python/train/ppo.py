@@ -196,22 +196,27 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
         r = super()._on_step()
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             buffers = self.eval_env.get_attr("erw_history")
-            columns = buffers[0][0].keys()
             df = pandas.DataFrame(itertools.chain(*buffers))
+            df = df.groupby("alpha").mean()
+            df2 = df.reset_index()
             table = wandb.Table(
-                data=df,
-                columns=columns,
+                data=df2,
+                columns=list(df2),
             )
-            d = {
-                f"{self.prefix}/per_alpha_reward": wandb.plot.line(
-                    table, "alpha", "episode_reward"
-                ),
-                f"{self.prefix}/per_alpha_runtime": wandb.plot.line(
-                    table, "alpha", "simulator_clock_rewarded"
-                ),
+            plots = {
+                f"{self.prefix}/plot_{key}_over_alpha": wandb.plot.line(
+                    table, "alpha", key
+                )
+                for key in list(df)
             }
+            per_alpha = {
+                f"{self.prefix}/per_alpha_{key}/{alpha}": df.loc[alpha, key]
+                for key in list(df)
+                for alpha in df.index
+            }
+            timestep = {"timestep": self.num_timesteps}
             # log
-            wandb.log(d)
+            wandb.log(plots | per_alpha | timestep, commit=True)
             return True
         return r
 
