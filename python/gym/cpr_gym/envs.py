@@ -26,6 +26,9 @@ class Core(gym.Env):
     def policy(self, obs, name="honest"):
         return engine.policies(self.env)[name](obs)
 
+    def puzzles_per_block(self):
+        return engine.puzzles_per_block(self.env)
+
     def reset(self):
         obs = engine.reset(self.env)
         obs = np.array(obs)  # for pickling; why doesn't pyml support pickling?

@@ -180,8 +180,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
 
     let puzzle_payload (s : state) =
       let (module Private) = private_view s in
-      let open Honest (Private) in
-      puzzle_payload s.private_
+      let module N = Honest (Private) in
+      N.puzzle_payload (last_block s.private_)
     ;;
 
     let prepare (state : state) event =
@@ -193,7 +193,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           pending
       in
       match event with
-      | PuzzleSolved _ ->
+      | PuzzleSolved x ->
+        assert (private_visibility state x);
         (* work on private chain *)
         handle_private state event
       | Deliver x ->
