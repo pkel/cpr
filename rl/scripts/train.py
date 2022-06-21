@@ -17,7 +17,6 @@ from stable_baselines3.common.vec_env.base_vec_env import (
 )
 from tqdm import tqdm
 import torch
-from rl.wrappers.exploration_reward_wrapper import ExplorationRewardWrapper
 from rl.wrappers.excess_reward_wrapper import (
     RelativeRewardWrapper,
     SparseDaaRewardWrapper,
@@ -26,10 +25,8 @@ from rl.wrappers.excess_reward_wrapper import (
     AbsoluteRewardWrapper,
 )
 from rl.wrappers import ReleaseOnDoneWrapper
-from rl.wrappers.honest_policy_wrapper import HonestPolicyWrapper
 
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
-from rl.wrappers.illegal_move_wrapper import IllegalMoveWrapper
 
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results

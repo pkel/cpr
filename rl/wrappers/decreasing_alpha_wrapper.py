@@ -65,6 +65,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
         return obs
 
     def observation(self, obs):
+        obs = np.append(obs, self.alpha)
         if self.run_daa:
             obs = np.append(obs, int(self.in_prep_phase))
         return obs
