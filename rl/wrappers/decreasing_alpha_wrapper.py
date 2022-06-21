@@ -14,6 +14,11 @@ class AlphaScheduleWrapper(gym.Wrapper):
         self.alpha = None
         self.config = config
         self.in_prep_phase = False
+        low = self.observation_space.low
+        high = self.observation_space.high
+        low = np.append(low, [0])
+        high = np.append(high, [1])
+        self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
         # DAA
         self.run_daa = config["USE_DAA"] and config["DAA_METHOD"] != "sparse"
         if self.run_daa:
@@ -23,9 +28,11 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.observed = self.target
             self.in_prep_phase = True
 
-            self.observation_space = gym.spaces.Box(
-                -np.inf, np.inf, (5,), dtype=np.float64
-            )
+            low = self.observation_space.low
+            high = self.observation_space.high
+            low = np.append(low, [0])
+            high = np.append(high, [1])
+            self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
 
     def update_difficulties(self, reset_difficulties=False):
         if reset_difficulties:
