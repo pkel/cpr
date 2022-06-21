@@ -82,6 +82,8 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 
 # RL
 
-rl-train: _venv
-	. _venv/bin/activate && python rl/scripts/train.py
+train-online: bridge _venv
+	. _venv/bin/activate && python python/train/ppo.py
 
+train-offline: export WANDB_MODE=offline
+train-offline: _venv train-online

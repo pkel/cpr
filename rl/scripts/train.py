@@ -112,6 +112,42 @@ config = dict(
 )
 
 
+class LogDaaBufferCallback(BaseCallback):
+    def __init__(self, prefix="daa_buffer"):
+        super().__init__()
+        self.prefix = prefix
+
+    def _on_step(self):
+        data = pd.concat(self.training_env.get_attr("buf"))
+        data["reward_per_alpha"] = data.reward
+        data["reward"] = data.reward * data.alpha
+        table = wandb.Table(
+            data=data,
+            columns=[
+                "alpha",
+                "activation_delay",
+                "observed_block_interval",
+                "reward_per_alpha",
+                "reward",
+            ],
+        )
+        rb = {
+            f"{self.prefix}/reward": wandb.plot.line(table, "alpha", "reward"),
+            f"{self.prefix}/reward_per_alpha": wandb.plot.line(
+                table, "alpha", "reward_per_alpha"
+            ),
+            f"{self.prefix}/activation_delay": wandb.plot.line(
+                table, "alpha", "activation_delay"
+            ),
+            f"{self.prefix}/observed_block_interval": wandb.plot.line(
+                table, "alpha", "observed_block_interval"
+            ),
+        }
+        # log
+        wandb.log(rb)
+        return True
+
+
 class VecWandbLogger(VecEnvWrapper):
     def __init__(
         self,
@@ -265,6 +301,10 @@ if __name__ == "__main__":
             exploration_initial_eps=config["STARTING_EPS"],
             exploration_final_eps=config["ENDING_EPS"],
         )
+
+    logger = stable_baselines3.common.utils.configure_logger(verbose=1)
+    logger.output_formats.append(WandbKVWriter())
+    model.set_logger(logger)
 
     model.learn(
         total_timesteps=config["TOTAL_TIMESTEPS"],
