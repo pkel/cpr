@@ -13,10 +13,19 @@ def run_episode(env, policy):
     return obs, rew, done, info
 
 
+def fuzz_episode(env):
+    obs = env.reset()
+    done = False
+    while not done:
+        obs, rew, done, info = env.step(env.action_space.sample())
+    return obs, rew, done, info
+
+
 def test_coreEnv():
     env = gym.make("cpr_gym:core-v0", max_steps=2016)
     check_env(env)
     run_episode(env, "honest")
+    fuzz_episode(env)
 
 
 def test_sparseRelativeRewardWrapper():
@@ -25,6 +34,7 @@ def test_sparseRelativeRewardWrapper():
     check_env(env)
     for i in range(42):
         run_episode(env, "honest")
+        fuzz_episode(env)
 
 
 def test_sparseRewardPerBlockWrapper():
@@ -33,6 +43,16 @@ def test_sparseRewardPerBlockWrapper():
     check_env(env)
     for i in range(42):
         run_episode(env, "honest")
+        fuzz_episode(env)
+
+
+def test_denseRewardPerBlockWrapper():
+    env = gym.make("cpr_gym:core-v0")
+    env = wrappers.DenseRewardPerBlockWrapper(env, episode_len=32)
+    check_env(env)
+    for i in range(42):
+        run_episode(env, "honest")
+        fuzz_episode(env)
 
 
 def test_alphaScheduleWrapper():
@@ -40,7 +60,7 @@ def test_alphaScheduleWrapper():
     env = wrappers.AlphaScheduleWrapper(env, alpha_schedule=[0.33])
     check_env(env)
     for i in range(2):
-        obs, _, _, i = run_episode(env, "honest")
+        obs, _, _, i = fuzz_episode(env)
         assert i["alpha"] == 0.33
         assert obs[-1] == 0.33
 
@@ -63,3 +83,17 @@ def test_alphaScheduleWrapper():
         assert i["alpha"] == obs[-1]
         alphas[i["alpha"]] = True
     assert len(alphas.keys()) > 30
+
+
+def test_EpisodeRecorderWrapper():
+    env = gym.make("cpr_gym:core-v0")
+    env = wrappers.EpisodeRecorderWrapper(
+        env, n=10, info_keys=["simulator_clock_rewarded"]
+    )
+    check_env(env)
+    for i in range(42):
+        run_episode(env, "honest")
+    assert len(env.erw_history) == 10
+    for entry in env.erw_history:
+        assert "episode_reward" in entry.keys()
+        assert "simulator_clock_rewarded" in entry.keys()
