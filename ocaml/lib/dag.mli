@@ -76,5 +76,11 @@ module Exn : sig
         }
 
   val set_to_file : string -> unit
-  val raise : 'a view -> ('a -> (string * string) list) -> 'a vertex list -> string -> 'b
+
+  val raise
+    :  'a view
+    -> ('a vertex -> (string * string) list)
+    -> 'a vertex list
+    -> string
+    -> 'b
 end

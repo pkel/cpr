@@ -173,6 +173,7 @@ let init
     if not (Ref.dag_validity vertex)
     then (
       let info x =
+        let x = Dag.data x in
         [ Protocol.describe x.value, ""
         ; "node", Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
         ; "time", Printf.sprintf "%.2f" x.appended_at

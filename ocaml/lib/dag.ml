@@ -438,8 +438,7 @@ module Exn = struct
   let raise v info nodes msg (type a) : a =
     let node_attr x =
       let label =
-        data x
-        |> info
+        info x
         |> List.map (function
                | "", s | s, "" -> s
                | k, v -> k ^ ": " ^ v)

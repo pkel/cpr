@@ -31,6 +31,11 @@ module Make (Parameters : Parameters) = struct
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
+    let dag_fail (type a) vertices msg : a =
+      let meta x = [ "describe", describe (data x) ] in
+      Dag.Exn.raise view meta vertices msg
+    ;;
+
     let is_vote x = is_vote (data x)
     let is_block x = is_block (data x)
     let height x = height (data x)
@@ -40,8 +45,10 @@ module Make (Parameters : Parameters) = struct
       then x
       else (
         match Dag.parents view x with
+        (* votes have only one parent by dag_validity *)
         | [ x ] -> last_block x
-        | _ -> failwith "invalid dag" (* votes have only one parent by dag_validity *))
+        | parents ->
+          dag_fail (x :: parents) "last_block: votes have one parent by dag_validity")
     ;;
 
     let compare_votes_in_block =
@@ -170,7 +177,7 @@ module Make (Parameters : Parameters) = struct
     let init ~roots =
       match roots with
       | [ genesis ] -> genesis
-      | _ -> failwith "invalid roots"
+      | roots -> dag_fail roots "init: expected single root"
     ;;
 
     module IntSet = Set.Make (struct
