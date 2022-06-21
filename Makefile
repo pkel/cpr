@@ -18,12 +18,10 @@ check-format: _venv
 	cd ocaml && opam exec dune build @fmt
 	cd python && ../_venv/bin/black --check .
 	cd python && ../_venv/bin/flake8
-	cd rl && ../_venv/bin/black --check .
 
 format: _venv
 	cd ocaml && opam exec dune -- build @fmt --auto-promote || true
 	cd python && ../_venv/bin/black . || true
-	cd rl && ../_venv/bin/black . || true
 
 pre-commit: check-format test
 
@@ -36,12 +34,11 @@ dependencies:
 	opam exec dune build ocaml/{cpr,cpr-dev}.opam
 	opam install ./ocaml --deps-only --working-dir
 
-_venv: python/requirements.txt rl/requirements.txt
+_venv: python/requirements.txt
 	rm -rf _venv
 	${python} -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
 	cd python && ../_venv/bin/pip install -r requirements.txt
-	cd rl && ../_venv/bin/pip install -r requirements.txt
 
 # bridge OCaml and Python
 
@@ -82,6 +79,8 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 
 # RL
 
-rl-train: _venv
-	. _venv/bin/activate && python rl/scripts/train.py
+train-online: bridge _venv
+	. _venv/bin/activate && python python/train/ppo.py
 
+train-offline: export WANDB_MODE=offline
+train-offline: _venv train-online
