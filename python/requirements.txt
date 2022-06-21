@@ -1,11 +1,15 @@
-pandas
-numpy
 black[jupyter]
 flake8
 pytest
+pytest-forked
+
+pandas
+numpy
 jupyter
 matplotlib
 seaborn
+
 -e ./gym
-pytest-forked
+
 stable-baselines3
+wandb
