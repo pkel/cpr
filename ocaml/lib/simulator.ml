@@ -180,7 +180,7 @@ let init
         ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
         ]
       in
-      Dag.Exn.raise Ref.view info [ vertex ] "invalid append")
+      Dag.Exn.raise Ref.view info (vertex :: Dag.parents Ref.view vertex) "invalid append")
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
