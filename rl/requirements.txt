@@ -1,0 +1,4 @@
+# in addition to ../python/requirements.txt
+stable-baselines3
+tqdm
+wandb
