@@ -19,9 +19,9 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
         return obs
 
     def step(self, action):
-        obs, _reward, done, info = self.env.step(action)
+        obs, reward, done, info = self.env.step(action)
+        self.srrw_atk += reward
         self.srrw_def += info["reward_defender"]
-        self.srrw_atk += info["reward_attacker"]
         if done:
             sum = self.srrw_def + self.srrw_atk
             if sum != 0:
@@ -52,8 +52,8 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
         return obs
 
     def step(self, action):
-        obs, _reward, done, info = self.env.step(action)
-        self.srpbw_acc += info["reward_attacker"]
+        obs, reward, done, info = self.env.step(action)
+        self.srpbw_acc += reward
         self.srpbw_pow += info["reward_n_pows"]
         if done:
             if self.srpbw_pow != 0:
@@ -77,6 +77,7 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
 
         self.drpb_puzzles_per_block = env.puzzles_per_block()
         self.drpb_max_height = numpy.ceil(episode_len / env.puzzles_per_block())
+        self.drpb_factor = 1 / self.drpb_max_height / self.drpb_puzzles_per_block
 
         for k in ["max_steps", "max_time", "max_height"]:
             if k in self.env.core_kwargs.keys():
@@ -93,11 +94,9 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
         return self.env.reset()
 
     def step(self, action):
-        obs, _reward, done, info = self.env.step(action)
+        obs, reward, done, info = self.env.step(action)
 
-        reward = (
-            info["reward_attacker"] / self.drpb_max_height / self.drpb_puzzles_per_block
-        )
+        reward *= self.drpb_factor
         self.drpb_acc += reward
 
         if done:
@@ -195,4 +194,27 @@ class EpisodeRecorderWrapper(gym.Wrapper):
             entry = {k: info[k] for k in self.erw_info_keys}
             entry["episode_reward"] = self.erw_episode_reward
             self.erw_history.append(entry)
+        return obs, reward, done, info
+
+
+class ClearInfoWrapper(gym.Wrapper):
+    """
+    Deletes all info keys but the ones in `keep_keys`.
+
+    Apply before vectorization to avoid IPC overhead.
+    """
+
+    def __init__(self, env, keep_keys=[]):
+        super().__init__(env)
+        self.ciw_keys = keep_keys
+
+    def reset(self):
+        return self.env.reset()
+
+    def step(self, action):
+        obs, reward, done, was_info = self.env.step(action)
+        info = dict()
+        for key in self.ciw_keys:
+            if key in was_info.key():
+                info[key] = was_info[key]
         return obs, reward, done, info

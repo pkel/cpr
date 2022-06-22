@@ -159,6 +159,8 @@ def env_fn(eval=False, n_recordings=42):
             info_keys=["alpha", "simulator_clock_rewarded"],
         )
 
+    env = cpr_gym.wrappers.ClearInfoWrapper(env)
+
     return env
 
 
