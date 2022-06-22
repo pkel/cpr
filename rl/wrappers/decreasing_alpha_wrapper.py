@@ -71,6 +71,9 @@ class AlphaScheduleWrapper(gym.Wrapper):
 
         return obs
 
+    def policy(self, obs, name="honest"):
+        return self.env.policy(obs[:-1], name)
+
     def observation(self, obs):
         obs = np.append(obs, self.alpha)
         if self.run_daa:

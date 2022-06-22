@@ -31,7 +31,7 @@ class SparseDaaRewardWrapper(gym.Wrapper):
             self.difficulties[self.env.alpha] = observed
             reward = self.sum_attacker * observed
             if self.relative:
-                reward -= self.env.config["STEPS_PER_ROLLOUT"] * self.env.alpha
+                reward -= self.n_pow * self.env.alpha
 
             if self.env.alpha not in self.rolling_reward:
                 # take last 5000 rewards
