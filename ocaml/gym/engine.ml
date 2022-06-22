@@ -279,7 +279,13 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
         , !pow_cnt
         , (Dag.data apply_upto).appended_at ))
     in
-    assert (cf.(0) = 0. || reward_time_elapsed > 0.);
+    (* For some protocols, the common ancestor can go back in time. It's the case with Bk.
+       I do not understand why and it might hint at a bug. We might want to get rid of
+       this common ancestor calculation. Instead, we could calculate full rewards from
+       [head] backwards on each step and pass the delta to the simulator. The following
+       check ensures that not too much havoc is caused by the [simulator_clock_rewarded]
+       going backwards. *)
+    assert (reward_time_elapsed >= 0. || Array.for_all (( = ) 0.) cf);
     (* 3. mark common ancestor DAG vertex *)
     t.reward_applied_upto <- apply_upto;
     (* Calculate simulated time. *)
