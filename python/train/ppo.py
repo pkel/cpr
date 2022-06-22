@@ -54,9 +54,10 @@ cast("ppo", "n_layers", int)
 cast("ppo", "layer_size", int)
 cast("ppo", "starting_lr", float)
 cast("ppo", "ending_lr", float)
+cast("eval", "alpha_step", float)
 cast("eval", "episodes_per_alpha_per_env", int)
-cast("eval", "n_alphas", int)
 cast("eval", "recorder_multiple", int)
+cast("eval", "report_alpha", int)
 
 
 ###
@@ -82,6 +83,7 @@ if __name__ == "__main__":
     print("## Configuration ##")
     pprint.pprint(config)
 
+
 ###
 # env
 ###
@@ -94,6 +96,7 @@ def alpha_schedule(eval=False):
 
         if eval:
             info["n_alphas"] = len(alphas)
+            info["range"] = False
             alpha_schedule = alphas
 
         def alpha_schedule():
@@ -101,12 +104,13 @@ def alpha_schedule(eval=False):
 
     elif "alpha_min" in config["main"].keys():
         if eval:
-            alpha_schedule = numpy.linspace(
+            alpha_schedule = numpy.arange(
                 config["main"]["alpha_min"],
-                config["main"]["alpha_max"],
-                config["eval"]["n_alphas"],
+                numpy.nextafter(config["main"]["alpha_max"], 1),
+                config["eval"]["alpha_step"],
             )
-            info["n_alphas"] = config["eval"]["n_alphas"]
+            info["n_alphas"] = numpy.size(alpha_schedule)
+            info["range"] = True
         else:
 
             def alpha_schedule():
@@ -117,6 +121,7 @@ def alpha_schedule(eval=False):
     else:
         if eval:
             info["n_alphas"] = 1
+            info["range"] = False
 
         if "alpha" in config["main"].keys():
             alpha_schedule = [config["main"]["alpha"]]
@@ -190,29 +195,33 @@ def venv_fn(**kwargs):
 
 
 class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
-    def __init__(self, eval_env, prefix="eval", **kwargs):
+    def __init__(self, eval_env, prefix="eval_per_alpha", **kwargs):
         super().__init__(eval_env, **kwargs)
         self.prefix = prefix
 
     def _on_step(self):
         r = super()._on_step()
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            # create data frame from buffers in vectorized envs
             buffers = self.eval_env.get_attr("erw_history")
             df = pandas.DataFrame(itertools.chain(*buffers))
+            # acc per alpha
             df = df.groupby("alpha").mean()
+            # subset alpha
+            if alpha_schedule(eval=True)[1]["range"]:
+                df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
+            # do the actual logging
             df2 = df.reset_index()
             table = wandb.Table(
                 data=df2,
                 columns=list(df2),
             )
             plots = {
-                f"{self.prefix}/plot_{key}_over_alpha": wandb.plot.line(
-                    table, "alpha", key
-                )
+                f"{self.prefix}/{key}/plot": wandb.plot.line(table, "alpha", key)
                 for key in list(df)
             }
             per_alpha = {
-                f"{self.prefix}/per_alpha_{key}/{alpha}": df.loc[alpha, key]
+                f"{self.prefix}/{key}/{alpha:.2g}": df.loc[alpha, key]
                 for key in list(df)
                 for alpha in df.index
             }
