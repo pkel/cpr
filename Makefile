@@ -43,7 +43,7 @@ _venv: python/requirements.txt
 # bridge OCaml and Python
 
 bridge python/gym/cpr_gym/bridge.so:
-	opam exec dune build ocaml/gym/bridge.so
+	opam exec dune -- build --release ocaml/gym/bridge.so
 	rm -f python/gym/cpr_gym/bridge.so
 	cp _build/default/ocaml/gym/bridge.so python/gym/cpr_gym/bridge.so
 
