@@ -195,9 +195,8 @@ def venv_fn(**kwargs):
 
 
 class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
-    def __init__(self, eval_env, prefix="eval_per_alpha", **kwargs):
+    def __init__(self, eval_env, **kwargs):
         super().__init__(eval_env, **kwargs)
-        self.prefix = prefix
 
     def _on_step(self):
         r = super()._on_step()
@@ -217,11 +216,11 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
                 columns=list(df2),
             )
             plots = {
-                f"{self.prefix}/{key}/plot": wandb.plot.line(table, "alpha", key)
+                f"plot_over_alpha/{key}": wandb.plot.line(table, "alpha", key)
                 for key in list(df)
             }
             per_alpha = {
-                f"{self.prefix}/{key}/{alpha:.2g}": df.loc[alpha, key]
+                f"eval_per_alpha/{key}/{alpha:.2g}": df.loc[alpha, key]
                 for key in list(df)
                 for alpha in df.index
             }
