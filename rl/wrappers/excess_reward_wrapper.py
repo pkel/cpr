@@ -33,7 +33,7 @@ class SparseDaaRewardWrapper(gym.Wrapper):
                 reward -= (
                     self.env.config["STEPS_PER_ROLLOUT"]
                     * self.env.alpha
-                    * self.env.config["K"]
+                    / self.env.config["K"]
                 )
 
             if self.env.alpha not in self.rolling_reward:
