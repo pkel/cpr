@@ -80,6 +80,9 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 # RL
 
 train-online: bridge _venv
+	if [ ! -e python/train/config.ini ] ; then\
+		cp python/train/defaults.ini python/train/config.ini ; fi
+	${EDITOR} python/train/config.ini
 	. _venv/bin/activate && python python/train/ppo.py
 
 train-offline: export WANDB_MODE=offline
