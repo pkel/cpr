@@ -4,6 +4,7 @@ pytest
 pytest-forked
 
 pandas
+pandarallel
 numpy
 jupyter
 matplotlib
