@@ -60,4 +60,4 @@ def test_max_time():
     while not done:
         obs, _, done, info = env.step(env.policy(obs, "honest"))
 
-    assert info["episode_time"] >= target - 10
+    assert info["episode_chain_time"] >= target - 10
