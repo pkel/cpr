@@ -3,10 +3,10 @@ import cpr_gym
 import cpr_gym.wrappers
 import gym
 import itertools
+import json
 import numpy
 import os
 import pandas
-import pprint
 import psutil
 import random
 import stable_baselines3
@@ -59,34 +59,16 @@ cast("eval", "episodes_per_alpha_per_env", int)
 cast("eval", "recorder_multiple", int)
 cast("eval", "report_alpha", int)
 
-
 ###
-# W&B init
+# Analyse config
 ###
 
 if "tags" in config["wandb"].keys():
-    wandb_tags = [str(t).strip() for t in str(config["wandb"]["tags"]).split(",")]
+    config["wandb"]["tags"] = [
+        str(t).strip() for t in str(config["wandb"]["tags"]).split(",")
+    ] + ["ppo"]
 else:
-    wandb_tags = []
-
-config.pop("wandb", None)
-config["engine_version"] = cpr_gym.engine.cpr_lib_version
-
-if __name__ == "__main__":
-    wandb.init(
-        project="dqn",
-        entity="tailstorm",
-        tags=["ppo"] + wandb_tags,
-        config=dict(config=config),
-    )
-
-    print("## Configuration ##")
-    pprint.pprint(config)
-
-
-###
-# env
-###
+    config["wandb"]["tags"] = ["ppo"]
 
 
 def alpha_schedule(eval=False):
@@ -129,6 +111,53 @@ def alpha_schedule(eval=False):
             alpha_schedule = [0.33]
 
     return alpha_schedule, info
+
+
+info = dict()
+info["engine_version"] = cpr_gym.engine.cpr_lib_version
+info["episode_n_steps"] = config["main"]["episode_len"]
+info["rollout_n_steps"] = (
+    config["ppo"]["batch_size"]
+    * config["ppo"]["n_steps_multiple"]
+    * config["main"]["n_envs"]
+)
+info["rollout_n_episodes"] = info["rollout_n_steps"] / config["main"]["episode_len"]
+info["rollout_n_batches"] = info["rollout_n_steps"] / config["ppo"]["batch_size"]
+info["batch_n_steps"] = config["ppo"]["batch_size"]
+info["batch_n_episodes"] = config["ppo"]["batch_size"] / config["main"]["episode_len"]
+info["eval_n_alphas"] = alpha_schedule(eval=True)[1]["n_alphas"]
+info["eval_n_episodes"] = (
+    config["eval"]["episodes_per_alpha_per_env"]
+    * info["eval_n_alphas"]
+    * config["main"]["n_envs"]
+)
+info["eval_n_steps"] = info["eval_n_episodes"] * config["main"]["episode_len"]
+info["eval_overhead"] = info["eval_n_steps"] / info["rollout_n_steps"]
+
+if __name__ == "__main__":
+    print("## Configuration ##")
+    print(json.dumps(dict(config=config, info=info), indent=2))
+    input("Press Enter to continue.")
+
+
+###
+# W&B init
+###
+
+if __name__ == "__main__":
+    wandb_tags = config["wandb"]["tags"]
+    config.pop("wandb", None)
+    print("## WandB init ##")
+    wandb.init(
+        project="dqn",
+        entity="tailstorm",
+        tags=wandb_tags,
+        config=dict(config=config, info=info),
+    )
+
+###
+# env
+###
 
 
 def env_fn(eval=False, n_recordings=42):
@@ -275,10 +304,9 @@ if __name__ == "__main__":
     utils.setWandbLogger(model)
 
     # we evaluate on a fixed alpha schedule
-    _, alpha_info = alpha_schedule(eval=True)
     eval_env = venv_fn(
         eval=True,
-        n_recordings=alpha_info["n_alphas"]
+        n_recordings=info["eval_n_alphas"]
         * config["eval"]["episodes_per_alpha_per_env"]
         * config["eval"]["recorder_multiple"],
     )
@@ -296,8 +324,8 @@ if __name__ == "__main__":
                 eval_env,
                 best_model_save_path=log_dir,
                 log_path=log_dir,
-                eval_freq=vec_steps_per_rollout,
-                n_eval_episodes=alpha_info["n_alphas"]
+                eval_freq=vec_steps_per_rollout + 1,
+                n_eval_episodes=info["eval_n_alphas"]
                 * config["main"]["n_envs"]
                 * config["eval"]["episodes_per_alpha_per_env"],
                 deterministic=True,
