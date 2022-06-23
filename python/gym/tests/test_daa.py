@@ -26,11 +26,9 @@ def test_simple_daa():
     env, p = env_with_activation_delay(target)
     obs = env.reset()
     done = False
-    n_pow = 0
     while not done:
         obs, _, done, info = env.step(p(obs))
-        n_pow += info["reward_n_pows"]
-    observed = info["simulator_clock_rewarded"] / n_pow  # block interval
+    observed = info["episode_pow_interval"]
 
     # the selfish mining policy causes orphans, hence block interval should be out of tolerance
     assert not target - eps < observed < target + eps
@@ -39,11 +37,9 @@ def test_simple_daa():
     env, p = env_with_activation_delay(target * target / observed)
     obs = env.reset()
     done = False
-    n_pow = 0
     while not done:
         obs, _, done, info = env.step(p(obs))
-        n_pow += info["reward_n_pows"]
-    observed = info["simulator_clock_rewarded"] / n_pow  # block interval
+    observed = info["episode_pow_interval"]
 
     # observed block interval should be within tolerance now
     assert target - eps < observed < target + eps
@@ -64,5 +60,4 @@ def test_max_time():
     while not done:
         obs, _, done, info = env.step(env.policy(obs, "honest"))
 
-    assert info["simulator_clock_now"] >= target
-    assert info["simulator_clock_rewarded"] >= target - 10
+    assert info["episode_time"] >= target - 10

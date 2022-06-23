@@ -190,7 +190,7 @@ def env_fn(eval=False, n_recordings=42):
         env = cpr_gym.wrappers.EpisodeRecorderWrapper(
             env,
             n=n_recordings,
-            info_keys=["alpha", "simulator_clock_rewarded"],
+            info_keys=["alpha", "episode_pow_interval"],
         )
 
     env = cpr_gym.wrappers.ClearInfoWrapper(env)

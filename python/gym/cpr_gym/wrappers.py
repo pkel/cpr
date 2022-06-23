@@ -12,20 +12,14 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
     One reward per episode.
     """
 
-    def reset(self):
-        obs = self.env.reset()
-        self.srrw_atk = 0
-        self.srrw_def = 0
-        return obs
-
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
-        self.srrw_atk += reward
-        self.srrw_def += info["reward_defender"]
+        obs, _reward, done, info = self.env.step(action)
         if done:
-            sum = self.srrw_def + self.srrw_atk
+            attacker = info["episode_reward_attacker"]
+            defender = info["episode_reward_defender"]
+            sum = attacker + defender
             if sum != 0:
-                reward = self.srrw_atk / sum
+                reward = attacker / sum
             else:
                 reward = 0
         else:
@@ -45,19 +39,13 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
     Tailstorm's 'discount' scheme, this wrapper is better suited.
     """
 
-    def reset(self):
-        obs = self.env.reset()
-        self.srpbw_acc = 0
-        self.srpbw_pow = 0
-        return obs
-
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
-        self.srpbw_acc += reward
-        self.srpbw_pow += info["reward_n_pows"]
+        obs, _reward, done, info = self.env.step(action)
         if done:
-            if self.srpbw_pow != 0:
-                reward = self.srpbw_acc / self.srpbw_pow
+            n_pow = info["episode_n_pow"]
+            attacker = info["episode_reward_attacker"]
+            if n_pow != 0:
+                reward = attacker / n_pow
             else:
                 reward = 0
         else:
@@ -100,7 +88,7 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
         self.drpb_acc += reward
 
         if done:
-            got = info["simulator_block_height"]
+            got = info["episode_height"]
             want = self.drpb_max_height
 
             if got < want:

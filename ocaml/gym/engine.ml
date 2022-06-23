@@ -69,8 +69,12 @@ type instance =
       ; reward_function : 'data Simulator.env reward_function
       ; protocol : (module Protocol with type data = 'data)
       ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex
+      ; mutable reward_applied_upto_time : float
+      ; mutable episode_steps : int
+      ; mutable episode_reward_attacker : float
+      ; mutable episode_reward_defender : float
+      ; mutable episode_n_pow : int
       ; mutable last_time : float
-      ; mutable steps : int
       }
       -> instance
 
@@ -175,8 +179,12 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       ; reward_function
       ; protocol = (module M.Protocol)
       ; reward_applied_upto = List.hd sim.roots
+      ; reward_applied_upto_time = 0.
+      ; episode_steps = 0
+      ; episode_n_pow = 0
+      ; episode_reward_attacker = 0.
+      ; episode_reward_defender = 0.
       ; last_time = 0.
-      ; steps = 0
       }
   in
   let observe (Instance t) =
@@ -202,7 +210,6 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     (* env.step () *)
     let (Instance t) = !ref_t in
     let (module Ref) = t.sim.referee in
-    let () = t.steps <- t.steps + 1 in
     let (Agent a) = t.agent in
     let (module Protocol) = t.protocol in
     (* Apply action i to the simulator state. *)
@@ -214,6 +221,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       in
       ret.state
     in
+    let () = t.episode_steps <- t.episode_steps + 1 in
     (* Fast forward simulation till next attacker action. *)
     let () =
       let event = skip_to_interaction t.sim (fun () -> a.puzzle_payload state) in
@@ -234,7 +242,9 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     let head = Ref.winner prefs in
     let height = Protocol.height (Dag.data head).value in
     let done_, apply_upto =
-      if t.steps < p.max_steps && height < p.max_height && t.sim.clock.now < p.max_time
+      if t.episode_steps < p.max_steps
+         && height < p.max_height
+         && t.sim.clock.now < p.max_time
       then (
         (* TODO. common_ancestor on preferred heads is a leaky abstraction. Attacker might
            change preference and subvert this mechanism. Consider calculating full rewards
@@ -251,11 +261,12 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     (* 1. find common ancestor *)
     (* 2. apply reward function up to last marked DAG vertex (exclusive) *)
     let cf (* cash flow *) = Array.make 2 0. in
-    let reward_time_elapsed, reward_n_pows, simulator_clock_rewarded =
-      let last_ca_time = (Dag.data t.reward_applied_upto).appended_at in
+    let reward_n_pow, reward_time_elapsed =
       if apply_upto $== t.reward_applied_upto
-      then 0., 0, last_ca_time
+      then 0, 0.
       else (
+        let apply_upto_time = (Dag.data apply_upto).appended_at in
+        let last_time = t.reward_applied_upto_time in
         let pow_cnt = ref 0 in
         let rec iter seq =
           match seq () with
@@ -275,9 +286,9 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
             iter seq
         in
         iter (Dag.iterate_ancestors t.sim.global_view [ apply_upto ]);
-        ( (Dag.data apply_upto).appended_at -. last_ca_time
-        , !pow_cnt
-        , (Dag.data apply_upto).appended_at ))
+        t.reward_applied_upto <- apply_upto;
+        t.reward_applied_upto_time <- apply_upto_time;
+        !pow_cnt, apply_upto_time -. last_time)
     in
     (* For some protocols, the common ancestor can go back in time. It's the case with Bk.
        I do not understand why and it might hint at a bug. We might want to get rid of
@@ -285,29 +296,45 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
        [head] backwards on each step and pass the delta to the simulator. The following
        check ensures that not too much havoc is caused by the [simulator_clock_rewarded]
        going backwards. *)
-    assert (reward_time_elapsed >= 0. || Array.for_all (( = ) 0.) cf);
-    (* 3. mark common ancestor DAG vertex *)
-    t.reward_applied_upto <- apply_upto;
-    (* Calculate simulated time. *)
-    let step_time = t.sim.clock.now -. t.last_time in
+    assert (reward_time_elapsed >= 0. || cf.(1) = 0.);
+    (* step timer *)
+    let step_time_elapsed = t.sim.clock.now -. t.last_time in
     t.last_time <- t.sim.clock.now;
+    (* Calculate return/info metrics *)
+    let reward_attacker = cf.(0)
+    and reward_defender = cf.(1) in
+    t.episode_reward_attacker <- t.episode_reward_attacker +. reward_attacker;
+    t.episode_reward_defender <- t.episode_reward_defender +. reward_defender;
+    t.episode_n_pow <- t.episode_n_pow + reward_n_pow;
     (* Return *)
+    let float = Py.Float.of_float
+    and int = Py.Int.of_int in
     ( (* observation *)
       observe (Instance t)
     , (* reward *)
-      cf.(0)
+      reward_attacker
     , done_
     , (* info dict *)
-      [ "reward_attacker", Py.Float.of_float cf.(0)
-      ; "reward_defender", Py.Float.of_float cf.(1)
-      ; "reward_time_elapsed", Py.Float.of_float reward_time_elapsed
-      ; "reward_n_pows", Py.Int.of_int reward_n_pows
-      ; "step_time_elapsed", Py.Float.of_float step_time
-      ; "simulator_clock_now", Py.Float.of_float t.sim.clock.now
-      ; "simulator_clock_rewarded", Py.Float.of_float simulator_clock_rewarded
-      ; "simulator_steps", Py.Int.of_int t.steps
-      ; "simulator_block_height", Py.Int.of_int height
-      ] )
+      [ "reward_attacker", float reward_attacker
+      ; "reward_defender", float reward_defender
+      ; "reward_time_elapsed", float reward_time_elapsed
+      ; "reward_applied_upto_time", float t.reward_applied_upto_time
+      ; "reward_n_pow", int reward_n_pow
+      ; "step_time_elapsed", float step_time_elapsed
+      ; "episode_reward_attacker", float t.episode_reward_attacker
+      ; "episode_reward_defender", float t.episode_reward_defender
+      ; "episode_n_pow", int t.episode_n_pow
+      ; "episode_steps", int t.episode_steps
+      ; "episode_time", float (Dag.data head).appended_at
+      ; "episode_height", int height
+      ]
+      @
+      if done_
+      then
+        [ ( "episode_pow_interval"
+          , float ((Dag.data head).appended_at /. float_of_int t.episode_n_pow) )
+        ]
+      else [] )
   and low = M.Observation.(low |> to_floatarray)
   and high = M.Observation.(high |> to_floatarray)
   and to_string t =

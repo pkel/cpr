@@ -87,13 +87,11 @@ def test_alphaScheduleWrapper():
 
 def test_EpisodeRecorderWrapper():
     env = gym.make("cpr_gym:core-v0")
-    env = wrappers.EpisodeRecorderWrapper(
-        env, n=10, info_keys=["simulator_clock_rewarded"]
-    )
+    env = wrappers.EpisodeRecorderWrapper(env, n=10, info_keys=["episode_time"])
     check_env(env)
     for i in range(42):
         run_episode(env, "honest")
     assert len(env.erw_history) == 10
     for entry in env.erw_history:
         assert "episode_reward" in entry.keys()
-        assert "simulator_clock_rewarded" in entry.keys()
+        assert "episode_time" in entry.keys()
