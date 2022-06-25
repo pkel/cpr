@@ -235,10 +235,7 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
             df = pandas.DataFrame(itertools.chain(*buffers))
             # acc per alpha
             df = df.groupby("alpha").mean()
-            # subset alpha
-            if alpha_schedule(eval=True)[1]["range"]:
-                df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
-            # do the actual logging
+            # plot metric over alpha
             df2 = df.reset_index()
             table = wandb.Table(
                 data=df2,
@@ -248,6 +245,9 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
                 f"plot_over_alpha/{key}": wandb.plot.line(table, "alpha", key)
                 for key in list(df)
             }
+            # timeline for subset of alpha
+            if alpha_schedule(eval=True)[1]["range"]:
+                df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
             per_alpha = {
                 f"eval_per_alpha/{key}/{alpha:.2g}": df.loc[alpha, key]
                 for key in list(df)
