@@ -3,10 +3,10 @@ import cpr_gym
 import cpr_gym.wrappers
 import gym
 import itertools
+import json
 import numpy
 import os
 import pandas
-import pprint
 import psutil
 import random
 import stable_baselines3
@@ -54,37 +54,21 @@ cast("ppo", "n_layers", int)
 cast("ppo", "layer_size", int)
 cast("ppo", "starting_lr", float)
 cast("ppo", "ending_lr", float)
+cast("eval", "alpha_step", float)
 cast("eval", "episodes_per_alpha_per_env", int)
-cast("eval", "n_alphas", int)
 cast("eval", "recorder_multiple", int)
-
+cast("eval", "report_alpha", int)
 
 ###
-# W&B init
+# Analyse config
 ###
 
 if "tags" in config["wandb"].keys():
-    wandb_tags = [str(t).strip() for t in str(config["wandb"]["tags"]).split(",")]
+    config["wandb"]["tags"] = [
+        str(t).strip() for t in str(config["wandb"]["tags"]).split(",")
+    ] + ["ppo"]
 else:
-    wandb_tags = []
-
-config.pop("wandb", None)
-config["engine_version"] = cpr_gym.engine.cpr_lib_version
-
-if __name__ == "__main__":
-    wandb.init(
-        project="dqn",
-        entity="tailstorm",
-        tags=["ppo"] + wandb_tags,
-        config=dict(config=config),
-    )
-
-    print("## Configuration ##")
-    pprint.pprint(config)
-
-###
-# env
-###
+    config["wandb"]["tags"] = ["ppo"]
 
 
 def alpha_schedule(eval=False):
@@ -94,6 +78,7 @@ def alpha_schedule(eval=False):
 
         if eval:
             info["n_alphas"] = len(alphas)
+            info["range"] = False
             alpha_schedule = alphas
 
         def alpha_schedule():
@@ -101,12 +86,13 @@ def alpha_schedule(eval=False):
 
     elif "alpha_min" in config["main"].keys():
         if eval:
-            alpha_schedule = numpy.linspace(
+            alpha_schedule = numpy.arange(
                 config["main"]["alpha_min"],
-                config["main"]["alpha_max"],
-                config["eval"]["n_alphas"],
+                numpy.nextafter(config["main"]["alpha_max"], 1),
+                config["eval"]["alpha_step"],
             )
-            info["n_alphas"] = config["eval"]["n_alphas"]
+            info["n_alphas"] = numpy.size(alpha_schedule)
+            info["range"] = True
         else:
 
             def alpha_schedule():
@@ -117,6 +103,7 @@ def alpha_schedule(eval=False):
     else:
         if eval:
             info["n_alphas"] = 1
+            info["range"] = False
 
         if "alpha" in config["main"].keys():
             alpha_schedule = [config["main"]["alpha"]]
@@ -124,6 +111,53 @@ def alpha_schedule(eval=False):
             alpha_schedule = [0.33]
 
     return alpha_schedule, info
+
+
+info = dict()
+info["engine_version"] = cpr_gym.engine.cpr_lib_version
+info["episode_n_steps"] = config["main"]["episode_len"]
+info["rollout_n_steps"] = (
+    config["ppo"]["batch_size"]
+    * config["ppo"]["n_steps_multiple"]
+    * config["main"]["n_envs"]
+)
+info["rollout_n_episodes"] = info["rollout_n_steps"] / config["main"]["episode_len"]
+info["rollout_n_batches"] = info["rollout_n_steps"] / config["ppo"]["batch_size"]
+info["batch_n_steps"] = config["ppo"]["batch_size"]
+info["batch_n_episodes"] = config["ppo"]["batch_size"] / config["main"]["episode_len"]
+info["eval_n_alphas"] = alpha_schedule(eval=True)[1]["n_alphas"]
+info["eval_n_episodes"] = (
+    config["eval"]["episodes_per_alpha_per_env"]
+    * info["eval_n_alphas"]
+    * config["main"]["n_envs"]
+)
+info["eval_n_steps"] = info["eval_n_episodes"] * config["main"]["episode_len"]
+info["eval_overhead"] = info["eval_n_steps"] / info["rollout_n_steps"]
+
+if __name__ == "__main__":
+    print("## Configuration ##")
+    print(json.dumps(dict(config=config, info=info), indent=2))
+    input("Press Enter to continue.")
+
+
+###
+# W&B init
+###
+
+if __name__ == "__main__":
+    wandb_tags = config["wandb"]["tags"]
+    config.pop("wandb", None)
+    print("## WandB init ##")
+    wandb.init(
+        project="dqn",
+        entity="tailstorm",
+        tags=wandb_tags,
+        config=dict(config=config, info=info),
+    )
+
+###
+# env
+###
 
 
 def env_fn(eval=False, n_recordings=42):
@@ -157,8 +191,10 @@ def env_fn(eval=False, n_recordings=42):
         env = cpr_gym.wrappers.EpisodeRecorderWrapper(
             env,
             n=n_recordings,
-            info_keys=["alpha", "simulator_clock_rewarded"],
+            info_keys=["alpha", "episode_pow_interval"],
         )
+
+    env = cpr_gym.wrappers.ClearInfoWrapper(env)
 
     return env
 
@@ -189,29 +225,32 @@ def venv_fn(**kwargs):
 
 
 class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
-    def __init__(self, eval_env, prefix="eval", **kwargs):
+    def __init__(self, eval_env, **kwargs):
         super().__init__(eval_env, **kwargs)
-        self.prefix = prefix
 
     def _on_step(self):
         r = super()._on_step()
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            # create data frame from buffers in vectorized envs
             buffers = self.eval_env.get_attr("erw_history")
             df = pandas.DataFrame(itertools.chain(*buffers))
+            # acc per alpha
             df = df.groupby("alpha").mean()
+            # plot metric over alpha
             df2 = df.reset_index()
             table = wandb.Table(
                 data=df2,
                 columns=list(df2),
             )
             plots = {
-                f"{self.prefix}/plot_{key}_over_alpha": wandb.plot.line(
-                    table, "alpha", key
-                )
+                f"plot_over_alpha/{key}": wandb.plot.line(table, "alpha", key)
                 for key in list(df)
             }
+            # timeline for subset of alpha
+            if alpha_schedule(eval=True)[1]["range"]:
+                df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
             per_alpha = {
-                f"{self.prefix}/per_alpha_{key}/{alpha}": df.loc[alpha, key]
+                f"eval_per_alpha/{key}/{alpha:.2g}": df.loc[alpha, key]
                 for key in list(df)
                 for alpha in df.index
             }
@@ -266,10 +305,9 @@ if __name__ == "__main__":
     utils.setWandbLogger(model)
 
     # we evaluate on a fixed alpha schedule
-    _, alpha_info = alpha_schedule(eval=True)
     eval_env = venv_fn(
         eval=True,
-        n_recordings=alpha_info["n_alphas"]
+        n_recordings=info["eval_n_alphas"]
         * config["eval"]["episodes_per_alpha_per_env"]
         * config["eval"]["recorder_multiple"],
     )
@@ -287,8 +325,8 @@ if __name__ == "__main__":
                 eval_env,
                 best_model_save_path=log_dir,
                 log_path=log_dir,
-                eval_freq=vec_steps_per_rollout,
-                n_eval_episodes=alpha_info["n_alphas"]
+                eval_freq=vec_steps_per_rollout + 1,
+                n_eval_episodes=info["eval_n_alphas"]
                 * config["main"]["n_envs"]
                 * config["eval"]["episodes_per_alpha_per_env"],
                 deterministic=True,

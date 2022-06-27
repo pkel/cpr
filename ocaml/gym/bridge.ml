@@ -163,7 +163,7 @@ let () =
     m
     "nakamoto"
     (let%map reward =
-       keyword "reward" string ~default:"block" ~docstring:"reward function"
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
      Proto (Engine.of_module nakamoto_ssz ~reward) |> python_of_protocol);
   Py_module.set

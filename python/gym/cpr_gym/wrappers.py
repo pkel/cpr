@@ -50,20 +50,14 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
     One reward per episode.
     """
 
-    def reset(self):
-        obs = self.env.reset()
-        self.srrw_atk = 0
-        self.srrw_def = 0
-        return obs
-
     def step(self, action):
         obs, _reward, done, info = self.env.step(action)
-        self.srrw_def += info["reward_defender"]
-        self.srrw_atk += info["reward_attacker"]
         if done:
-            sum = self.srrw_def + self.srrw_atk
+            attacker = info["episode_reward_attacker"]
+            defender = info["episode_reward_defender"]
+            sum = attacker + defender
             if sum != 0:
-                reward = self.srrw_atk / sum
+                reward = attacker / sum
             else:
                 reward = 0
         else:
@@ -83,19 +77,13 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
     Tailstorm's 'discount' scheme, this wrapper is better suited.
     """
 
-    def reset(self):
-        obs = self.env.reset()
-        self.srpbw_acc = 0
-        self.srpbw_pow = 0
-        return obs
-
     def step(self, action):
         obs, _reward, done, info = self.env.step(action)
-        self.srpbw_acc += info["reward_attacker"]
-        self.srpbw_pow += info["reward_n_pows"]
         if done:
-            if self.srpbw_pow != 0:
-                reward = self.srpbw_acc / self.srpbw_pow
+            n_pow = info["episode_n_pow"]
+            attacker = info["episode_reward_attacker"]
+            if n_pow != 0:
+                reward = attacker / n_pow
             else:
                 reward = 0
         else:
@@ -115,6 +103,7 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
 
         self.drpb_puzzles_per_block = env.puzzles_per_block()
         self.drpb_max_height = numpy.ceil(episode_len / env.puzzles_per_block())
+        self.drpb_factor = 1 / self.drpb_max_height / self.drpb_puzzles_per_block
 
         for k in ["max_steps", "max_time", "max_height"]:
             if k in self.env.core_kwargs.keys():
@@ -131,15 +120,13 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
         return self.env.reset()
 
     def step(self, action):
-        obs, _reward, done, info = self.env.step(action)
+        obs, reward, done, info = self.env.step(action)
 
-        reward = (
-            info["reward_attacker"] / self.drpb_max_height / self.drpb_puzzles_per_block
-        )
+        reward *= self.drpb_factor
         self.drpb_acc += reward
 
         if done:
-            got = info["simulator_block_height"]
+            got = info["episode_height"]
             want = self.drpb_max_height
 
             if got < want:
@@ -233,4 +220,27 @@ class EpisodeRecorderWrapper(gym.Wrapper):
             entry = {k: info[k] for k in self.erw_info_keys}
             entry["episode_reward"] = self.erw_episode_reward
             self.erw_history.append(entry)
+        return obs, reward, done, info
+
+
+class ClearInfoWrapper(gym.Wrapper):
+    """
+    Deletes all info keys but the ones in `keep_keys`.
+
+    Apply before vectorization to avoid IPC overhead.
+    """
+
+    def __init__(self, env, keep_keys=[]):
+        super().__init__(env)
+        self.ciw_keys = keep_keys
+
+    def reset(self):
+        return self.env.reset()
+
+    def step(self, action):
+        obs, reward, done, was_info = self.env.step(action)
+        info = dict()
+        for key in self.ciw_keys:
+            if key in was_info.key():
+                info[key] = was_info[key]
         return obs, reward, done, info
