@@ -25,6 +25,7 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         self.sum_attacker += info["reward_attacker"]
         if done:
             if self.n_pow > 0:
+                # observed will be > 1 when miner is selfish
                 observed = info["simulator_clock_now"] / self.n_pow
             else:
                 observed = 0
