@@ -38,7 +38,7 @@ from wandb.integration.sb3 import WandbCallback
 
 
 def lr_schedule(remaining):
-    return config["STARTING_LR"] * remaining + config["ENDING_LR"] * (1 - remaining)
+    return config.STARTING_LR * remaining + config.ENDING_LR * (1 - remaining)
 
 
 def clip_schedule(remaining):
@@ -78,7 +78,7 @@ class VecWandbLogger(VecEnvWrapper):
         # regular logging
         if self.epoch_vec_steps >= self.every:
             # performance
-            n_envs = config["N_ENVS"]
+            n_envs = config.N_ENVS
             now = time.time()
             seconds = now - self.last_epoch
             performance = {
