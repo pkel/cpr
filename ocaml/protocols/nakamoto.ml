@@ -31,7 +31,7 @@ module Referee (V : GlobalView with type data = data) = struct
 
   let reward_functions =
     let open Collection in
-    empty |> add ~info:"1 per confirmed block" "block" (constant 1.)
+    empty |> add ~info:"1 per confirmed block" "constant" (constant 1.)
   ;;
 end
 

@@ -68,9 +68,12 @@ type instance =
       ; agent : 'data agent
       ; reward_function : 'data Simulator.env reward_function
       ; protocol : (module Protocol with type data = 'data)
-      ; mutable reward_applied_upto : 'data Simulator.env Dag.vertex
-      ; mutable last_time : float
-      ; mutable steps : int
+      ; mutable episode_steps : int
+      ; mutable last_chain_time : float
+      ; mutable last_sim_time : float
+      ; mutable last_reward_attacker : float
+      ; mutable last_reward_defender : float
+      ; mutable last_n_pow : int
       }
       -> instance
 
@@ -174,9 +177,12 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       ; agent
       ; reward_function
       ; protocol = (module M.Protocol)
-      ; reward_applied_upto = List.hd sim.roots
-      ; last_time = 0.
-      ; steps = 0
+      ; episode_steps = 0
+      ; last_chain_time = 0.
+      ; last_sim_time = 0.
+      ; last_reward_attacker = 0.
+      ; last_reward_defender = 0.
+      ; last_n_pow = 0
       }
   in
   let observe (Instance t) =
@@ -202,7 +208,6 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     (* env.step () *)
     let (Instance t) = !ref_t in
     let (module Ref) = t.sim.referee in
-    let () = t.steps <- t.steps + 1 in
     let (Agent a) = t.agent in
     let (module Protocol) = t.protocol in
     (* Apply action i to the simulator state. *)
@@ -214,6 +219,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       in
       ret.state
     in
+    let () = t.episode_steps <- t.episode_steps + 1 in
     (* Fast forward simulation till next attacker action. *)
     let () =
       let event = skip_to_interaction t.sim (fun () -> a.puzzle_payload state) in
@@ -233,75 +239,68 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     in
     let head = Ref.winner prefs in
     let height = Protocol.height (Dag.data head).value in
-    let done_, apply_upto =
-      if t.steps < p.max_steps && height < p.max_height && t.sim.clock.now < p.max_time
-      then (
-        (* TODO. common_ancestor on preferred heads is a leaky abstraction. Attacker might
-           change preference and subvert this mechanism. Consider calculating full rewards
-           on each step, then return the delta. If this turns out to be to expensive, add
-           a "safepoint" mechanism to attack space which informs the environment over the
-           finalized block.*)
-        let ca =
-          List.to_seq prefs |> Dag.common_ancestor' t.sim.global_view |> Option.get
-        in
-        false, ca)
-      else true, head
+    let done_ =
+      not
+        (t.episode_steps < p.max_steps
+        && height < p.max_height
+        && t.sim.clock.now < p.max_time)
     in
-    (* Calculate rewards for the new common blocks. *)
-    (* 1. find common ancestor *)
-    (* 2. apply reward function up to last marked DAG vertex (exclusive) *)
-    let cf (* cash flow *) = Array.make 2 0. in
-    let reward_time_elapsed, reward_n_pows, simulator_clock_rewarded =
-      let last_ca_time = (Dag.data t.reward_applied_upto).appended_at in
-      if apply_upto $== t.reward_applied_upto
-      then 0., 0, last_ca_time
-      else (
-        let pow_cnt = ref 0 in
-        let rec iter seq =
-          match seq () with
-          | Seq.Nil -> ()
-          | Cons (n, _seq) when n $== t.reward_applied_upto -> ()
-          | Cons (n, seq) ->
-            if Option.is_some (Dag.data n).pow_hash then incr pow_cnt else ();
-            t.reward_function
-              ~assign:(fun x n ->
-                match (Dag.data n).appended_by with
-                | None -> ()
-                | Some i ->
-                  (* accumulate all defender rewards in cf.(1) *)
-                  let i = min i 1 in
-                  cf.(i) <- cf.(i) +. x)
-              n;
-            iter seq
-        in
-        iter (Dag.iterate_ancestors t.sim.global_view [ apply_upto ]);
-        ( (Dag.data apply_upto).appended_at -. last_ca_time
-        , !pow_cnt
-        , (Dag.data apply_upto).appended_at ))
+    (* TODO. We calculate rewards for the whole chain on each step, then return the delta.
+       If this turns out to be to expensive, we can record safepoints and use them for
+       caching. *)
+    let reward_attacker = ref 0.
+    and reward_defender = ref 0.
+    and n_pow = ref 0 in
+    let () =
+      let f vertex =
+        let open Simulator in
+        if Option.is_some (Dag.data vertex).pow_hash then incr n_pow else ();
+        t.reward_function
+          ~assign:(fun reward vertex ->
+            match (Dag.data vertex).appended_by with
+            | None -> ()
+            | Some 0 -> reward_attacker := !reward_attacker +. reward
+            | Some _ -> reward_defender := !reward_defender +. reward)
+          vertex
+      in
+      Dag.iterate_ancestors t.sim.global_view [ head ] |> Seq.iter f
     in
-    assert (cf.(0) = 0. || reward_time_elapsed > 0.);
-    (* 3. mark common ancestor DAG vertex *)
-    t.reward_applied_upto <- apply_upto;
-    (* Calculate simulated time. *)
-    let step_time = t.sim.clock.now -. t.last_time in
-    t.last_time <- t.sim.clock.now;
-    (* Return *)
-    ( (* observation *)
-      observe (Instance t)
-    , (* reward *)
-      cf.(0)
-    , done_
-    , (* info dict *)
-      [ "reward_attacker", Py.Float.of_float cf.(0)
-      ; "reward_defender", Py.Float.of_float cf.(1)
-      ; "reward_time_elapsed", Py.Float.of_float reward_time_elapsed
-      ; "reward_n_pows", Py.Int.of_int reward_n_pows
-      ; "step_time_elapsed", Py.Float.of_float step_time
-      ; "simulator_clock_now", Py.Float.of_float t.sim.clock.now
-      ; "simulator_clock_rewarded", Py.Float.of_float simulator_clock_rewarded
-      ; "simulator_steps", Py.Int.of_int t.steps
-      ; "simulator_block_height", Py.Int.of_int height
-      ] )
+    let chain_time = (Dag.data head).appended_at
+    and sim_time = t.sim.clock.now in
+    (* Calculate return/info metrics *)
+    let reward = !reward_attacker -. t.last_reward_attacker
+    and info =
+      let float = Py.Float.of_float
+      and int = Py.Int.of_int in
+      [ "step_reward_attacker", float (!reward_attacker -. t.last_reward_attacker)
+      ; "step_reward_defender", float (!reward_defender -. t.last_reward_defender)
+      ; "step_n_pow", int (!n_pow - t.last_n_pow)
+      ; "step_chain_time", float (chain_time -. t.last_chain_time)
+      ; "step_sim_time", float (sim_time -. t.last_sim_time)
+      ; "episode_reward_attacker", float !reward_attacker
+      ; "episode_reward_defender", float !reward_defender
+      ; "episode_n_pow", int !n_pow
+      ; "episode_chain_time", float chain_time
+      ; "episode_sim_time", float sim_time
+      ; "episode_n_steps", int t.episode_steps
+      ; "episode_height", int height
+      ]
+      @
+      if done_
+      then
+        [ "episode_pow_interval", float (chain_time /. float_of_int !n_pow)
+        ; "episode_block_interval", float (chain_time /. float_of_int height)
+        ]
+      else []
+    in
+    (* update state *)
+    t.last_chain_time <- chain_time;
+    t.last_sim_time <- sim_time;
+    t.last_reward_attacker <- !reward_attacker;
+    t.last_reward_defender <- !reward_defender;
+    t.last_n_pow <- !n_pow;
+    (* return *)
+    observe (Instance t), reward, done_, info
   and low = M.Observation.(low |> to_floatarray)
   and high = M.Observation.(high |> to_floatarray)
   and to_string t =

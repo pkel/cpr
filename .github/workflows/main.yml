@@ -40,6 +40,7 @@ jobs:
           opam exec -- dune build @fmt
           opam exec -- dune build
           opam exec -- dune runtest
+          opam exec -- dune build --release
 
       - name: Upload the gym shared object
         uses: actions/upload-artifact@v2
