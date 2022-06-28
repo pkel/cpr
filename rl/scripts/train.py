@@ -139,7 +139,7 @@ if __name__ == "__main__":
     def vec_env_fn():
         env = env_fn(0, 1, config)
         env = AlphaScheduleWrapper(env, env_fn, config)
-        env = ReleaseOnDoneWrapper(env)
+        # env = ReleaseOnDoneWrapper(env)
         if config.USE_DAA:
             if config.DAA_METHOD == "sparse":
                 env = SparseDaaRewardWrapper(env)

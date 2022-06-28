@@ -28,7 +28,7 @@ Evaluate on Patrik's wrapper
 
 config = Config(
     STEPS_PER_ROLLOUT=200,
-    ALPHA_SCHEDULE=[0.35],
+    ALPHA_SCHEDULE=[0.25],
     K=8,
     REWARD_SCHEME="constant",
     USE_DAA=False,
@@ -36,11 +36,11 @@ config = Config(
 env = env_fn(0, 1, config)
 env = AlphaScheduleWrapper(env, env_fn, config)
 # env = ReleaseOnDoneWrapper(env)
-env = wrappers.DenseRewardPerBlockWrapper(env, config.STEPS_PER_ROLLOUT)
-# env = SparseDaaRewardWrapper(env)
+# env = wrappers.DenseRewardPerBlockWrapper(env, config.STEPS_PER_ROLLOUT)
+env = SparseDaaRewardWrapper(env)
 p = PPO.load(f"rl/saved_models/model.zip")
 rs = []
-while True:
+for _ in range(100):
     obs = env.reset()
     reward_attacker = 0
     done = False
@@ -49,7 +49,7 @@ while True:
     while not done:
         action, _state = p.predict(np.array(obs), deterministic=True)
         actions.append(action)
-        # obs, r, done, info = env.step(env.policy(obs, "override-catchup"))
+        # obs, r, done, info = env.step(env.policy(obs, "honest"))
         obs, r, done, info = env.step(action)
         ep_r += r
         reward_attacker += info["step_reward_attacker"]
@@ -57,3 +57,4 @@ while True:
     print(ep_r)
     rs.append(ep_r)
     print("---")
+print(np.mean(rs))

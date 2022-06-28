@@ -25,16 +25,16 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         # if self.env.config.PROTOCOL == "tailstorm":
         #     self.n_pow += info["reward_attacker"] + info["reward_defender"]
         # else:
-        self.n_pow += info["reward_n_pows"]
-        self.sum_attacker += info["reward_attacker"]
-        self.sum_defender += info["reward_defender"]
+        # self.n_pow += info["reward_n_pows"]
+        # self.sum_attacker += info["reward_attacker"]
+        # self.sum_defender += info["reward_defender"]
         if done:
-            if self.n_pow > 0:
-                observed_time_per_pow = self.env.config.STEPS_PER_ROLLOUT / self.n_pow
-            else:
-                observed_time_per_pow = 0
+            observed_time_per_pow = (
+                self.env.config.STEPS_PER_ROLLOUT / info["episode_n_pow"]
+            )
+
             self.difficulties[self.env.alpha] = observed_time_per_pow
-            reward = self.sum_attacker * observed_time_per_pow
+            reward = info["episode_reward_attacker"] * observed_time_per_pow
             if self.relative:
                 reward -= (
                     self.env.config.STEPS_PER_ROLLOUT
