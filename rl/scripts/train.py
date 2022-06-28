@@ -25,7 +25,7 @@ from rl.wrappers.excess_reward_wrapper import (
     AbsoluteRewardWrapper,
 )
 from rl.wrappers import ReleaseOnDoneWrapper
-
+from rl.utils import config, env_fn
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 
 from stable_baselines3.common.callbacks import BaseCallback
@@ -43,70 +43,6 @@ def lr_schedule(remaining):
 
 def clip_schedule(remaining):
     return 0.1
-
-
-def env_fn(alpha, target, config):
-    if config["PROTOCOL"] == "nakamoto":
-        proto = protocols.nakamoto()
-    elif config["PROTOCOL"] == "bk_ll":
-        proto = protocols.bk_ll(k=config["K"])
-    elif config["PROTOCOL"] == "bk_ll":
-        pass
-    elif config["PROTOCOL"] == "tailstorm":
-        proto = protocols.tailstorm(k=config["K"], reward="discount")
-
-    if config["USE_DAA"]:
-        max_steps = config["STEPS_PER_ROLLOUT"] * 1000
-        max_time = config["STEPS_PER_ROLLOUT"]
-    else:
-        max_steps = config["STEPS_PER_ROLLOUT"]
-        max_time = config["STEPS_PER_ROLLOUT"] * 1000
-    return gym.make(
-        "cpr_gym:core-v0",
-        proto=proto,
-        alpha=alpha,
-        max_steps=max_steps,
-        max_time=max_time,
-        gamma=config["GAMMA"],
-        defenders=config["DEFENDERS"],
-        activation_delay=target,
-    )
-
-
-config = dict(
-    PROTOCOL="tailstorm",
-    K=10,
-    ALGO="PPO",
-    TOTAL_TIMESTEPS=10e8,
-    STEPS_PER_ROLLOUT=200,
-    STARTING_LR=10e-5,
-    ENDING_LR=10e-6,
-    BATCH_SIZE=2048,
-    ALPHA_SCHEDULE_CUTOFF=0,
-    LAYER_SIZE=100,
-    N_LAYERS=2,
-    N_STEPS_MULTIPLE=10,
-    HONEST_STEPS_FRACTION=0.1,
-    STARTING_EPS=0.99,
-    ENDING_EPS=0.01,
-    ALPHA_SCHEDULE=[
-        0.15,
-        0.25,
-        1 / 3.0,
-        0.35,
-        0.375,
-        0.4,
-        0.425,
-        0.45,
-        0.475,
-    ],
-    USE_DAA=True,
-    DAA_METHOD="sparse",
-    GAMMA=0,
-    DEFENDERS=1,
-    ACTIVATION_DELAY=1,
-    N_ENVS=16,
-)
 
 
 class VecWandbLogger(VecEnvWrapper):
@@ -204,8 +140,8 @@ if __name__ == "__main__":
         env = env_fn(0, 1, config)
         env = AlphaScheduleWrapper(env, env_fn, config)
         env = ReleaseOnDoneWrapper(env)
-        if config["USE_DAA"]:
-            if config["DAA_METHOD"] == "sparse":
+        if config.USE_DAA:
+            if config.DAA_METHOD == "sparse":
                 env = SparseDaaRewardWrapper(env)
             else:
                 env = AbsoluteRewardWrapper(env)
@@ -213,21 +149,21 @@ if __name__ == "__main__":
             env = WastedBlocksRewardWrapper(env)
         return env
 
-    if config["N_ENVS"] > 1:
-        env = SubprocVecEnv([vec_env_fn] * config["N_ENVS"])
+    if config.N_ENVS > 1:
+        env = SubprocVecEnv([vec_env_fn] * config.N_ENVS)
     else:
         env = DummyVecEnv([vec_env_fn])
     env = VecMonitor(env)
     env = VecWandbLogger(env)
     print(env.action_space)
     print(env.observation_space)
-    if config["ALGO"] == "PPO":
+    if config.ALGO == "PPO":
         policy_kwargs = dict(
             activation_fn=torch.nn.ReLU,
             net_arch=[
                 dict(
-                    pi=[config["LAYER_SIZE"]] * config["N_LAYERS"],
-                    vf=[config["LAYER_SIZE"]] * config["N_LAYERS"],
+                    pi=[config.LAYER_SIZE] * config.N_LAYERS,
+                    vf=[config.LAYER_SIZE] * config.N_LAYERS,
                 )
             ],
         )
@@ -235,8 +171,8 @@ if __name__ == "__main__":
             "MlpPolicy",
             env,
             verbose=1,
-            batch_size=config["BATCH_SIZE"],
-            n_steps=config["BATCH_SIZE"] * config["N_STEPS_MULTIPLE"],
+            batch_size=config.BATCH_SIZE,
+            n_steps=config.BATCH_SIZE * config.N_STEPS_MULTIPLE,
             clip_range=0.1,
             # ent_coef=0.01,
             learning_rate=lr_schedule,
@@ -244,27 +180,27 @@ if __name__ == "__main__":
             policy_kwargs=policy_kwargs,
             gamma=0.999,
         )
-    elif config["ALGO"] == "DQN":
+    elif config.ALGO == "DQN":
         policy_kwargs = dict(
             activation_fn=torch.nn.ReLU,
-            net_arch=[config["LAYER_SIZE"]] * config["N_LAYERS"],
+            net_arch=[config.LAYER_SIZE] * config.N_LAYERS,
         )
         model = DQN(
             "MlpPolicy",
             env,
             verbose=1,
-            batch_size=config["BATCH_SIZE"],
+            batch_size=config.BATCH_SIZE,
             # clip_range=0.1,
             # ent_coef=0.01,
             learning_rate=lr_schedule,
             # clip_range=clip_schedule,
             policy_kwargs=policy_kwargs,
-            exploration_initial_eps=config["STARTING_EPS"],
-            exploration_final_eps=config["ENDING_EPS"],
+            exploration_initial_eps=config.STARTING_EPS,
+            exploration_final_eps=config.ENDING_EPS,
         )
 
     model.learn(
-        total_timesteps=config["TOTAL_TIMESTEPS"],
+        total_timesteps=config.TOTAL_TIMESTEPS,
         callback=WandbCallback(
             gradient_save_freq=10000,
             model_save_path=log_dir,
@@ -272,4 +208,4 @@ if __name__ == "__main__":
             verbose=0,
         ),
     )
-    model.save(os.path.join(log_dir, f"{config['ALGO']}_{config['PROTOCOL']}"))
+    model.save(os.path.join(log_dir, f"{config.ALGO}_{config.PROTOCOL}"))

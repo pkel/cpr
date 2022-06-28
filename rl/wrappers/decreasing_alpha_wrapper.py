@@ -3,12 +3,13 @@ import gym
 import numpy as np
 from gym.spaces import Tuple, MultiDiscrete
 from typing import List
+from rl.utils import Config
 
 
 class AlphaScheduleWrapper(gym.Wrapper):
-    def __init__(self, env, env_fn, config):
+    def __init__(self, env, env_fn, config: Config):
         super().__init__(env)
-        self.alpha_schedule = config["ALPHA_SCHEDULE"]
+        self.alpha_schedule = config.ALPHA_SCHEDULE
         self.env_fn = env_fn
         self.current_step = 0
         self.alpha = None
@@ -20,10 +21,10 @@ class AlphaScheduleWrapper(gym.Wrapper):
         high = np.append(high, [1])
         self.observation_space = gym.spaces.Box(low, high, dtype=np.float64)
         # DAA
-        self.run_daa = config["USE_DAA"] and config["DAA_METHOD"] != "sparse"
+        self.run_daa = config.USE_DAA and config.DAA_METHOD != "sparse"
         if self.run_daa:
-            self.target = config["ACTIVATION_DELAY"]
-            self.difficulties = dict((a, self.target) for a in config["ALPHA_SCHEDULE"])
+            self.target = config.ACTIVATION_DELAY
+            self.difficulties = dict((a, self.target) for a in config.ALPHA_SCHEDULE)
             self.n_pow = 0
             self.observed = self.target
             self.in_prep_phase = True
@@ -63,7 +64,7 @@ class AlphaScheduleWrapper(gym.Wrapper):
             self.env = self.env_fn(alpha=alpha, target=1, config=self.config)
         else:
             self.env = self.env_fn(
-                alpha=alpha, target=self.config["ACTIVATION_DELAY"], config=self.config
+                alpha=alpha, target=self.config.ACTIVATION_DELAY, config=self.config
             )
         self.alpha = alpha
 

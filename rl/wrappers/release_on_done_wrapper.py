@@ -11,8 +11,12 @@ class ReleaseOnDoneWrapper(gym.Wrapper):
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         if done:
-            public_blocks = obs[0]
-            private_blocks = obs[1]
+            if self.env.config.PROTOCOL == "tailstorm":
+                public_blocks = obs[0] * self.env.config.K + obs[1]
+                private_blocks = obs[2] * self.env.config.K + obs[3]
+            else:
+                public_blocks = obs[0]
+                private_blocks = obs[1]
             info["reward_n_pows"] += max(public_blocks, private_blocks)
             if public_blocks > private_blocks:
                 info["reward_defender"] += public_blocks

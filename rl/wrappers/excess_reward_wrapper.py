@@ -11,26 +11,36 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         self.relative = relative
         self.n_pow = 0
         self.sum_attacker = 0
-        self.difficulties = dict((a, 1) for a in self.env.config["ALPHA_SCHEDULE"])
+        self.sum_defender = 0
+        self.difficulties = dict((a, 1) for a in self.env.config.ALPHA_SCHEDULE)
 
     def reset(self):
         self.n_pow = 0
         self.sum_attacker = 0
+        self.sum_defender = 0
         return self.env.reset()
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+        # if self.env.config.PROTOCOL == "tailstorm":
+        #     self.n_pow += info["reward_attacker"] + info["reward_defender"]
+        # else:
         self.n_pow += info["reward_n_pows"]
         self.sum_attacker += info["reward_attacker"]
+        self.sum_defender += info["reward_defender"]
         if done:
             if self.n_pow > 0:
-                observed = info["simulator_clock_now"] / self.n_pow
+                observed_time_per_pow = self.env.config.STEPS_PER_ROLLOUT / self.n_pow
             else:
-                observed = 0
-            self.difficulties[self.env.alpha] = observed
-            reward = self.sum_attacker * observed
+                observed_time_per_pow = 0
+            self.difficulties[self.env.alpha] = observed_time_per_pow
+            reward = self.sum_attacker * observed_time_per_pow
             if self.relative:
-                reward -= self.n_pow * self.env.alpha
+                reward -= (
+                    self.env.config.STEPS_PER_ROLLOUT
+                    * self.env.alpha
+                    # * self.env.config.K
+                )
 
             if self.env.alpha not in self.rolling_reward:
                 # take last 5000 rewards
