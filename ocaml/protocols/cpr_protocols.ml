@@ -8,6 +8,9 @@ let nakamoto = Protocol (module Nakamoto)
     {{:https://arxiv.org/abs/1507.06183}Paper.} *)
 let nakamoto_ssz = AttackSpace (module Nakamoto_ssz)
 
+(** Simplified version of GHOST as used in the Ethereum Platform *)
+let ethereum = Protocol (module Ethereum)
+
 (** Bₖ as proposed by Keller and Böhme. Parallel Proof-of-Work with Concrete Bounds. 2022.
     {{:https://arxiv.org/abs/2204.00034}Paper.} *)
 let bk ~k =
@@ -91,12 +94,13 @@ let%test_module "protocol" =
         in
         Simulator.init (module P) network
       in
-      let target_height = 1000 in
-      Simulator.loop ~activations:(target_height * P.puzzles_per_block) env;
+      let target_progress = 1000 in
+      Simulator.loop ~activations:(target_progress * P.puzzles_per_block) env;
       let head = Simulator.head env in
-      let observed_height = P.height (Dag.data head).value in
+      let observed_progress = P.progress (Dag.data head).value in
       let observed_orphan_rate =
-        float_of_int (target_height - observed_height) /. float_of_int target_height
+        (float_of_int target_progress -. observed_progress)
+        /. float_of_int target_progress
       in
       if observed_orphan_rate > orphan_rate_limit
       then
@@ -114,6 +118,16 @@ let%test_module "protocol" =
 
     let%test_unit "nakamoto/hard" =
       test ~activation_delay:1. ~orphan_rate_limit:0.5 nakamoto
+    ;;
+
+    let%test_unit "ethereum/easy" =
+      (* even nakamoto achives this! *)
+      test ~activation_delay:16. ~orphan_rate_limit:0.1 ethereum
+    ;;
+
+    let%test_unit "ethereum/hard" =
+      (* ethereum should collect all orphans most uncles *)
+      test ~activation_delay:1. ~orphan_rate_limit:0.2 ethereum
     ;;
 
     let%test_unit "bk8/easy" = test ~activation_delay:10. ~orphan_rate_limit:0.1 (bk ~k:8)

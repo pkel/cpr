@@ -28,6 +28,8 @@ module Make (Parameters : Parameters) = struct
     | Block x -> x.height
   ;;
 
+  let progress x = (height x * k) + 1 |> float_of_int
+
   let describe = function
     | Vote x -> "vote by " ^ string_of_int x.id
     | Block { height } -> "block " ^ string_of_int height

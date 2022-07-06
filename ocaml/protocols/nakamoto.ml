@@ -7,6 +7,7 @@ let puzzles_per_block = 1
 type data = { height : int }
 
 let height data = data.height
+let progress data = float_of_int data.height
 let describe { height } = Printf.sprintf "block %i" height
 let dag_roots = [ { height = 0 } ]
 

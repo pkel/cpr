@@ -18,6 +18,7 @@ module Make (Parameters : Parameters) = struct
     }
 
   let height h = h.block
+  let progress x = (x.block * k) + x.vote |> float_of_int
   let is_vote h = h.vote > 0
   let is_block h = h.vote = 0
 
