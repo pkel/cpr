@@ -103,10 +103,25 @@ module Make (Parameters : Parameters) = struct
       |> List.hd
     ;;
 
-    let constant_pow c : env reward_function = fun ~assign -> assign c
+    let history =
+      Seq.unfold (fun this ->
+          Dag.parents view this
+          |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
+    ;;
+
+    let constant_pow c : env reward_function =
+     fun ~assign x ->
+      if not (is_block x)
+      then failwith "reward function should only be called for linear history of blocks";
+      assign c x;
+      Dag.parents view x |> List.iteri (fun i p -> if i > 0 then assign c p)
+   ;;
 
     let constant_block c : env reward_function =
-     fun ~assign x -> if is_block x then assign c x
+     fun ~assign x ->
+      if not (is_block x)
+      then failwith "reward function should only be called for linear history of blocks";
+      assign c x
    ;;
 
     let reward_functions =

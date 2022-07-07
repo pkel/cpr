@@ -28,6 +28,12 @@ module Referee (V : GlobalView with type data = data) = struct
     List.fold_left (fun acc x -> if height x > height acc then x else acc) (List.hd l) l
   ;;
 
+  let history =
+    Seq.unfold (fun this ->
+        Dag.parents view this
+        |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
+  ;;
+
   let constant c : env reward_function = fun ~assign n -> assign c n
 
   let reward_functions =

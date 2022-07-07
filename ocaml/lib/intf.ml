@@ -29,8 +29,8 @@ end
 
 type ('a, 'b) global_view = (module GlobalView with type env = 'a and type data = 'b)
 
-(** Calculate and assign rewards to a vertex and (potentially) its neighbours. Use this
-    together with {!Dag.iterate_ancestors}. *)
+(** Calculate and assign rewards for the vertex and (potentially) its neighbours.
+    Typically this is called on the history of the winning chain. *)
 type 'a reward_function = assign:(float -> 'a Dag.vertex -> unit) -> 'a Dag.vertex -> unit
 
 module type Referee = sig
@@ -44,6 +44,11 @@ module type Referee = sig
       nodes. This functions determines the best vertex. The reward function will be
       applied from the best vertex backwards to the roots. *)
   val winner : env Dag.vertex list -> env Dag.vertex
+
+  (** Extract linear history of the given (tip of) chain. For Bitcoin, this returns the
+      blockchain in reverse order. For Ethereum it returns the sequence of blocks w/o
+      uncles in reverse order. *)
+  val history : env Dag.vertex -> env Dag.vertex Seq.t
 
   val reward_functions : env reward_function Collection.t
 end

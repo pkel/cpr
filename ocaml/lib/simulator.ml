@@ -367,6 +367,6 @@ let head (type a) (state : a state) =
   |> Ref.winner
 ;;
 
-let apply_reward_function (fn : _ Intf.reward_function) state =
-  apply_reward_function' fn (Dag.iterate_ancestors state.global_view [ head state ]) state
+let apply_reward_function ~history (fn : _ Intf.reward_function) state =
+  apply_reward_function' fn (history (head state)) state
 ;;

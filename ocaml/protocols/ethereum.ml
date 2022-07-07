@@ -61,7 +61,11 @@ module Referee (V : GlobalView with type data = data) = struct
     | _ -> false
   ;;
 
-  let uncles b = Dag.parents view b |> List.tl
+  let uncles b =
+    match Dag.parents view b with
+    | [] -> []
+    | _hd :: tl -> tl
+  ;;
 
   let winner l =
     let progress x = (data x).progress in
@@ -71,20 +75,21 @@ module Referee (V : GlobalView with type data = data) = struct
       l
   ;;
 
-  let ethereum base_reward : env reward_function =
-    (* the reward function should be called per block not per uncle. This is not possible
-       with the current API, is it? *)
-    let is_block_not_uncle _b = false (* failwith "hole" *) in
-    fun ~assign v ->
-      if is_block_not_uncle v
-      then (
-        let uncles = uncles v in
-        List.iter (assign (0.9375 *. base_reward)) uncles;
-        let n_uncles = List.length uncles |> float_of_int in
-        let r = 1. +. (n_uncles *. 0.03125 *. base_reward) in
-        assign r v)
-      else ()
+  let history =
+    (* uncles are not part of the linear history *)
+    Seq.unfold (fun this ->
+        Dag.parents view this
+        |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
   ;;
+
+  let ethereum base_reward : env reward_function =
+   fun ~assign v ->
+    let uncles = uncles v in
+    List.iter (assign (0.9375 *. base_reward)) uncles;
+    let n_uncles = List.length uncles |> float_of_int in
+    let r = 1. +. (n_uncles *. 0.03125 *. base_reward) in
+    assign r v
+ ;;
 
   let reward_functions =
     let open Collection in

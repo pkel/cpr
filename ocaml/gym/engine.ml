@@ -263,7 +263,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
             | Some _ -> reward_defender := !reward_defender +. reward)
           vertex
       in
-      Dag.iterate_ancestors t.sim.global_view [ head ] |> Seq.iter f
+      Ref.history head |> Seq.iter f
     in
     let chain_time = (Dag.data head).appended_at
     and sim_time = t.sim.clock.now in

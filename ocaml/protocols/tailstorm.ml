@@ -109,6 +109,14 @@ module Make (Parameters : Parameters) = struct
       |> List.hd
     ;;
 
+    let history =
+      (* TODO: we could adapt the implementation to not include the last block as first
+         parent but to infer it with last_block where needed *)
+      Seq.unfold (fun this ->
+          List.nth_opt (Dag.parents view this) (if is_block this && k > 1 then 1 else 0)
+          |> Option.map (fun next -> this, next))
+    ;;
+
     let constant_block c : _ reward_function =
      fun ~assign x -> if is_block x then assign c x
    ;;

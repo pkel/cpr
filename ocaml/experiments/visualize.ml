@@ -158,7 +158,7 @@ let run (Csv_runner.Task t) =
             rewardfn.it
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
-          (Dag.iterate_ancestors env.global_view [ head env ])
+          (Ref.history (head env))
       in
       let path =
         let open Fpath in
