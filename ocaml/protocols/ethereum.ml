@@ -88,7 +88,8 @@ module Referee (V : GlobalView with type data = data) = struct
 
   let reward_functions =
     let open Collection in
-    empty |> add ~info:"Ethereum reward scheme" "constant" (ethereum 1.)
+    empty
+    |> add ~info:"base reward 1; uncles yield 3.215% / 93.75%" "ethereum" (ethereum 1.)
   ;;
 end
 
