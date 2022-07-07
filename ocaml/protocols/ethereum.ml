@@ -21,34 +21,42 @@ module Referee (V : GlobalView with type data = data) = struct
     match pow_hash b, Dag.parents view b with
     | Some _, p :: uncles ->
       let pd = data p
-      and bd = data b in
+      and bd = data b
+      and ancestors, previous_uncles =
+        let rec f generation (a, pu) b =
+          if generation > 6
+          then a, pu
+          else (
+            match Dag.parents view b with
+            | [] -> b :: a, pu (* we hit the root *)
+            | x :: tl -> f (generation + 1) (b :: a, tl @ pu) x)
+        in
+        f 0 ([], []) p
+      in
       let check_height () = bd.height = pd.height + 1
       and check_progress () = bd.progress = pd.progress + 1 + List.length uncles
       and check_recent u =
         let ud = data u in
-        ud.height - 1 >= bd.height - 7
+        let k = bd.height - ud.height in
+        1 <= k && k <= 6
       and check_unique_in_parents u =
         let n = List.filter (( $== ) u) (p :: uncles) |> List.length in
         n = 1
+      and check_direct_child_of_ancestor u =
+        match Dag.parents view u with
+        | [] -> false
+        | hd :: _ -> List.exists (( $== ) hd) ancestors
       and check_unique_in_chain u =
-        let rec f generation b =
-          match Dag.parents view b with
-          | [] -> true (* we hit the root *)
-          | b :: _ ->
-            let generation = generation + 1 in
-            if generation > 6 (* anything beyond this contradicts [check_recent] *)
-            then true
-            else if List.for_all (( $!= ) u) (Dag.parents view b)
-            then f generation b
-            else false
-        in
-        f 0 b
+        List.for_all (( $!= ) u) ancestors && List.for_all (( $!= ) u) previous_uncles
       in
       check_height ()
       && check_progress ()
       && List.for_all
            (fun u ->
-             check_recent u && check_unique_in_parents u && check_unique_in_chain u)
+             check_recent u
+             && check_unique_in_parents u
+             && check_direct_child_of_ancestor u
+             && check_unique_in_chain u)
            uncles
     | _ -> false
   ;;
