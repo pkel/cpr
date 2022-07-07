@@ -1,6 +1,6 @@
 open Cpr_lib
 
-let key = "Ethereum"
+let key = "ethereum"
 let info = "Ethereum's adaption of GHOST"
 let puzzles_per_block = 1
 
@@ -74,7 +74,7 @@ module Referee (V : GlobalView with type data = data) = struct
   let ethereum base_reward : env reward_function =
     (* the reward function should be called per block not per uncle. This is not possible
        with the current API, is it? *)
-    let is_block_not_uncle _b = failwith "hole" in
+    let is_block_not_uncle _b = false (* failwith "hole" *) in
     fun ~assign v ->
       if is_block_not_uncle v
       then (

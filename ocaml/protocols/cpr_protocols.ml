@@ -121,13 +121,23 @@ let%test_module "protocol" =
     ;;
 
     let%test_unit "ethereum/easy" =
-      (* even nakamoto achives this! *)
+      (* even nakamoto achieves this! *)
       test ~activation_delay:16. ~orphan_rate_limit:0.1 ethereum
     ;;
 
     let%test_unit "ethereum/hard" =
-      (* ethereum should collect all orphans most uncles *)
+      (* ethereum should collect most blocks that would be orphans as uncles *)
       test ~activation_delay:1. ~orphan_rate_limit:0.2 ethereum
+    ;;
+
+    let%test_unit "ethereum/real" =
+      (* ethereum should collect most blocks that would be orphans as uncles *)
+      test ~activation_delay:6. ~orphan_rate_limit:0.01 ethereum
+    ;;
+
+    let%test_unit "ethereum/extreme" =
+      (* fuzzing the uncle inclusion rule *)
+      test ~activation_delay:0.3 ~orphan_rate_limit:0.9 ethereum
     ;;
 
     let%test_unit "bk8/easy" = test ~activation_delay:10. ~orphan_rate_limit:0.1 (bk ~k:8)
