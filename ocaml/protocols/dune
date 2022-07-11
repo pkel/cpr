@@ -1,7 +1,7 @@
 (library
  (name cpr_protocols)
  (public_name cpr.protocols)
- (libraries cpr_lib)
+ (libraries angstrom cpr_lib)
  (inline_tests)
  (preprocess
   (pps ppx_expect ppx_fields_conv ppx_variants_conv)))

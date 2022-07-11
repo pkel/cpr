@@ -312,3 +312,103 @@ let%test_module "random" =
     ;;
   end)
 ;;
+
+module Serializable : sig
+  type t =
+    | Nakamoto
+    | Ethereum
+    | Bk of { k : int }
+    | Bkll of { k : int }
+    | Tailstorm of { k : int }
+
+  val to_protocol : t -> protocol
+  val to_string : t -> string
+  val of_string : string -> (t, [> Rresult.R.msg ]) result
+end = struct
+  type t =
+    | Nakamoto
+    | Ethereum
+    | Bk of { k : int }
+    | Bkll of { k : int }
+    | Tailstorm of { k : int }
+
+  let to_protocol = function
+    | Nakamoto -> nakamoto
+    | Ethereum -> ethereum
+    | Bk { k } -> bk ~k
+    | Bkll { k } -> bkll ~k
+    | Tailstorm { k } -> tailstorm ~k
+  ;;
+
+  let to_string = function
+    | Nakamoto -> "nakamoto"
+    | Ethereum -> "ethereum"
+    | Bk { k } -> "bk " ^ string_of_int k
+    | Bkll { k } -> "bkll " ^ string_of_int k
+    | Tailstorm { k } -> "tailstorm " ^ string_of_int k
+  ;;
+
+  open Angstrom
+
+  let whitespace = function
+    | ' ' -> true
+    | _ -> false
+  ;;
+
+  let space = skip_many1 (skip whitespace)
+  let trim = skip_many (skip whitespace)
+
+  let int_literal =
+    let* str = take_till whitespace in
+    match int_of_string_opt str with
+    | Some x -> return x
+    | None -> fail "could not parse int"
+  ;;
+
+  let nakamoto = string "nakamoto" |> lift (fun _ -> Nakamoto)
+  let ethereum = string "ethereum" |> lift (fun _ -> Ethereum)
+  let arg_k name f = string name *> space *> lift f int_literal
+  let bk = arg_k "bk" (fun k -> Bk { k })
+  let bkll = arg_k "bkll" (fun k -> Bkll { k })
+  let tailstorm = arg_k "tailstorm" (fun k -> Tailstorm { k })
+
+  let protocol =
+    trim
+    *> (nakamoto <|> ethereum <|> bk <|> bkll <|> tailstorm <|> fail "unknown protocol")
+    <* trim
+  ;;
+
+  let of_string s =
+    parse_string ~consume:Consume.All protocol s |> Rresult.R.reword_error Rresult.R.msg
+  ;;
+
+  let%expect_test "serializable/of_string/to_string" =
+    List.iter
+      (fun s ->
+        let s' =
+          match of_string s with
+          | Ok p -> to_string p
+          | Error (`Msg m) -> "ERROR" ^ m
+        in
+        print_endline s')
+      [ "nakamoto"
+      ; "ethereum"
+      ; "bk 2"
+      ; "bkll 5"
+      ; "  tailstorm  42  "
+      ; " X"
+      ; "bk"
+      ; "nakamoto 2"
+      ];
+    [%expect
+      {|
+      nakamoto
+      ethereum
+      bk 2
+      bkll 5
+      tailstorm 42
+      ERROR: unknown protocol
+      ERROR: unknown protocol
+      ERROR: end_of_input |}]
+  ;;
+end
