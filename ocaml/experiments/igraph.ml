@@ -1,7 +1,6 @@
 open Bos_setup
 open Common
-
-(* open Cpr_lib *)
+open Cpr_lib
 
 let relativize p = Fpath.relativize ~root p |> Option.value ~default:p
 let inpdir = Fpath.(root / "data" / "networks" / "input")
@@ -20,24 +19,21 @@ let protocols =
        [ 1; 2; 4; 8; 16; 32; 64 ]
 ;;
 
-[@@@ocamlformat "wrap-comments=false"]
-
-(*
-
 let run ~activations ~srcfile ~protocol =
   let (Protocol protocol) = protocol in
+  let (module P) = protocol in
   let open ResultSyntax in
   let* g = GraphML.load_graph srcfile in
   let* net, to_graphml = Network.of_graphml g in
   let clock = Mtime_clock.counter () in
-  let env = Simulator.(all_honest net protocol |> init) in
+  let env = Simulator.(init protocol net) in
+  let (module Ref) = env.referee in
   let () = Simulator.loop ~activations env in
   let machine_duration = Mtime_clock.count clock |> Mtime.Span.to_s in
   let head =
-    Array.to_seq env.nodes
-    |> Seq.map (fun (Simulator.Node x) -> x.preferred x.state)
-    |> Dag.common_ancestor' env.global.view
-    |> Option.get
+    Array.to_list env.nodes
+    |> List.map (fun (Simulator.Node x) -> x.preferred x.state)
+    |> Ref.winner
   in
   let dstfiles =
     Collection.map_to_list
@@ -46,39 +42,34 @@ let run ~activations ~srcfile ~protocol =
         let dstfile =
           Fpath.(
             outdir
-            / strf
-                "%a-%s-%i-%s%s"
-                pp
-                name
-                protocol.key
-                protocol.pow_per_block
-                rewardfn.key
-                ext)
+            / strf "%a-%s-%i-%s%s" pp name P.key P.puzzles_per_block rewardfn.key ext)
         in
-        let rewards = Simulator.apply_reward_function rewardfn.it head env in
+        let rewards =
+          Simulator.apply_reward_function ~history:Ref.history rewardfn.it env
+        in
         let open GraphML.Data.Write in
         let graph_data =
           [ "activations", int activations
           ; "source_graph", relativize srcfile |> Fpath.to_string |> string
           ; "version", string version
-          ; "protocol", string protocol.key
-          ; "protocol_info", string protocol.info
-          ; "pow_per_block", int protocol.pow_per_block
+          ; "protocol", string P.key
+          ; "protocol_info", string P.info
+          ; "puzzles_per_block", int P.puzzles_per_block
           ; "reward_function", string rewardfn.key
           ; "reward_function_info", string rewardfn.info
-          ; "ca_time", float (Dag.data head).appended_at
-          ; "ca_height", int (protocol.height (Dag.data head).value)
+          ; "head_time", float (Dag.data head).appended_at
+          ; "head_height", int (P.height (Dag.data head).value)
+          ; "head_progress", float (P.progress (Dag.data head).value)
           ; "machine_duration", float machine_duration
           ]
         in
         let node_data i =
-          let (Node n) = env.nodes.(i) in
-          [ "reward", float rewards.(i); "activations", int n.n_activations ]
+          [ "reward", float rewards.(i); "activations", int env.activations.(i) ]
         in
         let g = to_graphml ~node_data ~graph_data () in
         let+ () = GraphML.write_graph g dstfile in
         dstfile)
-      protocol.reward_functions
+      Ref.reward_functions
   in
   List.fold_left
     (fun acc el ->
@@ -88,8 +79,6 @@ let run ~activations ~srcfile ~protocol =
     (Ok [])
     dstfiles
 ;;
-
-
 
 (* TODO: Ensure unique output file names with digest? *)
 
@@ -157,9 +146,7 @@ let main_t = Term.(const run_all $ activations $ cores |> term_result)
 
 let info =
   let doc = "simulate protocols on iGraph networks" in
-  Term.info ~doc ~version "igraph"
+  Cmd.info ~doc ~version "igraph"
 ;;
 
-let () = Term.exit @@ Term.eval (main_t, info)
-
-*)
+let () = Cmd.v info main_t |> Cmd.eval |> Stdlib.exit

@@ -62,6 +62,10 @@ expand: _venv
 	_venv/bin/python python/eval/honest_net.py
 	_venv/bin/python python/eval/withholding.py
 
+igraph:
+	nix-shell -p R -p rPackages.igraph --command "Rscript R/create-networks.R"
+	dune exec ocaml/experiments/igraph.exe
+
 # visualizations from short simulations
 
 visualize:
