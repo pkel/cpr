@@ -210,6 +210,8 @@ let graph_of_xml =
           match get_attr "attr.type" attrs with
           | "string" -> `String
           | "double" -> `Double
+          | "float" -> `Float
+          | "long" -> `Long
           | "boolean" -> `Boolean
           | _ -> failwith "unexpected value of \"attr.type\" attribute on key"
           | exception Not_found -> failwith "missing \"attr.type\" attribute on key"
@@ -248,7 +250,7 @@ let graph_of_xml =
       (match bool_of_string_opt s with
       | Some b -> Data.Bool b
       | None -> failwith "invalid boolean")
-    | `Double ->
+    | `Double | `Float | `Long ->
       (match float_of_string_opt s with
       | Some f -> Float f
       | None -> failwith "invalid double")
@@ -281,8 +283,12 @@ let graph_of_xml =
         try int_of_string s with
         | Failure _ -> failwith "invalid id"
       in
-      (* igraph exports integer ids extended with leading n *)
-      let id = String.sub s 1 (String.length s - 1) |> parse_int in
+      let id =
+        (* igraph exports integer ids extended with leading n *)
+        if String.length s > 0 && s.[0] = 'n'
+        then String.sub s 1 (String.length s - 1) |> parse_int
+        else parse_int s
+      in
       if id < 0 then failwith "negative node id";
       id
     | exception Not_found -> failwith ("missing " ^ key)
