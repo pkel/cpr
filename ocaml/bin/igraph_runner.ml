@@ -39,7 +39,6 @@ let run g =
   let open GraphML.Data.Write in
   let graph_data =
     [ "version", string version
-    ; "protocol", string P.key
     ; "protocol_info", string P.info
     ; "puzzles_per_block", int P.puzzles_per_block
     ; "reward_function", string rewardfn.key
