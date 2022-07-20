@@ -11,6 +11,9 @@ let nakamoto_ssz = AttackSpace (module Nakamoto_ssz)
 (** Simplified version of GHOST as used in the Ethereum Platform *)
 let ethereum = Protocol (module Ethereum)
 
+(** {!nakamoto_ssz} adapted for Ethereum. *)
+let ethereum_ssz = AttackSpace (module Ethereum_ssz)
+
 (** Bₖ as proposed by Keller and Böhme. Parallel Proof-of-Work with Concrete Bounds. 2022.
     {{:https://arxiv.org/abs/2204.00034}Paper.} *)
 let bk ~k =
