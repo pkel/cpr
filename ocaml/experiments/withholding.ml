@@ -50,16 +50,18 @@ let selfish_mining (AttackSpace (module A)) n_activations =
 (* Run all combinations of protocol, attack, network and block_interval. *)
 let tasks ~n_activations =
   let open Cpr_protocols in
-  let k = [ 1; 2; 4; 8; 16; 32; 64 ] in
+  let k = [ 1; 2; 4; 8; 16; 32 ] in
   let nakamoto =
     two_agents nakamoto_ssz n_activations @ selfish_mining nakamoto_ssz n_activations
+  and ethereum =
+    two_agents ethereum_ssz n_activations @ selfish_mining ethereum_ssz n_activations
   and bk = List.concat_map (fun k -> two_agents (bk_ssz ~k) n_activations) k
   and bkll = List.concat_map (fun k -> two_agents (bkll_ssz ~k) n_activations) k
   and tailstorm = List.concat_map (fun k -> two_agents (tailstorm_ssz ~k) n_activations) k
   and tailstorm' =
     List.concat_map (fun k -> two_agents (tailstorm_draft ~k) n_activations) k
   in
-  List.concat [ nakamoto; bk; bkll; tailstorm; tailstorm' ]
+  List.concat [ nakamoto; ethereum; bk; bkll; tailstorm; tailstorm' ]
 ;;
 
 open Cmdliner

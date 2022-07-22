@@ -97,7 +97,7 @@ let tasks =
   let open Cpr_protocols in
   List.concat
     [ tasks_per_attack_space nakamoto_ssz 30
-    ; tasks_per_protocol ethereum 30
+    ; tasks_per_attack_space ethereum_ssz 30
     ; tasks_per_attack_space (bk_ssz ~k:8) 100
     ; tasks_per_attack_space (bk_ssz ~k:4) 50
     ; tasks_per_attack_space (bk_ssz ~k:1) 20

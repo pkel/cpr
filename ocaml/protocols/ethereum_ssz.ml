@@ -477,7 +477,7 @@ module Policies = struct
     (* Ad-hoc strategy. This is probably not optimal. *)
     let open Observation in
     let open Action in
-    let mining = { own = true; foreign = true } in
+    let mining = { own = true; foreign = false } in
     let adopt =
       match adopt with
       | `Release -> Adopt_release
