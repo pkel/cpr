@@ -65,6 +65,23 @@ def test_nakamoto(capsys):
         obs, _, _, _ = env.step(env.policy(obs, "eyal-sirer-2014"))
 
 
+def test_ethereum(capsys):
+    env = gym.make(
+        "cpr_gym:core-v0",
+        proto=protocols.ethereum(),
+        alpha=0.13,
+        gamma=0.9,
+        defenders=10,
+    )
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert (
+        captured
+        == "Ethereum's adaptation of GHOST; SSZ'16-like attack space; α=0.13 attacker"
+    )
+    assert env.puzzles_per_block() == 1
+
+
 def test_bkll(capsys):
     env = gym.make(
         "cpr_gym:core-v0",

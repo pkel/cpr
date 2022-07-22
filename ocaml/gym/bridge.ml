@@ -174,6 +174,13 @@ let () =
      fun () -> Proto (Engine.of_module nakamoto_ssz ~reward) |> python_of_protocol);
   Py_module.set
     m
+    "ethereum"
+    (let%map reward =
+       keyword "reward" string ~default:"ethereum" ~docstring:"reward function"
+     in
+     fun () -> Proto (Engine.of_module ethereum_ssz ~reward) |> python_of_protocol);
+  Py_module.set
+    m
     "bk"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"

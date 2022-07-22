@@ -1,7 +1,7 @@
 open Cpr_lib
 
 let key = "ethereum"
-let info = "Ethereum's adaption of GHOST"
+let info = "Ethereum's adaptation of GHOST"
 let puzzles_per_block = 1
 
 type data =
