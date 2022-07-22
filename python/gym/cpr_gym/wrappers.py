@@ -56,7 +56,7 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
 class DenseRewardPerBlockWrapper(gym.Wrapper):
     """
     Mimics SparseRewardPerBlockWrapper but with dense rewards.
-    The trick is to end the episode at a given target block height.
+    The trick is to end the episode at a given target progress.
     This way, we know the divisor in SparseRewardPerBlockWrapper in advance.
     """
 
@@ -64,18 +64,18 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
         super().__init__(env)
 
         self.drpb_puzzles_per_block = env.puzzles_per_block()
-        self.drpb_max_height = numpy.ceil(episode_len / env.puzzles_per_block())
-        self.drpb_factor = 1 / self.drpb_max_height / self.drpb_puzzles_per_block
+        self.drpb_max_progress = episode_len
+        self.drpb_factor = 1 / self.drpb_max_progress / self.drpb_puzzles_per_block
 
-        for k in ["max_steps", "max_time", "max_height"]:
+        for k in ["max_steps", "max_time", "max_height", "max_progress"]:
             if k in self.env.core_kwargs.keys():
                 self.env.core_kwargs.pop(k, None)
                 warnings.warn(
                     f"DenseRewardPerBlockWrapper overwrites argument '{k}' given to wrapped env"
                 )
 
-        self.env.core_kwargs["max_steps"] = self.drpb_max_height * 100
-        self.env.core_kwargs["max_height"] = self.drpb_max_height
+        self.env.core_kwargs["max_steps"] = self.drpb_max_progress * 100
+        self.env.core_kwargs["max_progress"] = self.drpb_max_progress
 
     def reset(self):
         self.drpb_acc = 0
@@ -88,16 +88,22 @@ class DenseRewardPerBlockWrapper(gym.Wrapper):
         self.drpb_acc += reward
 
         if done:
-            got = info["episode_height"]
-            want = self.drpb_max_height
+            got = info["episode_progress"]
+            want = self.drpb_max_progress
 
             if got < want:
-                warnings.warn(f"observed too few blocks: {got}/{want}")
+                warnings.warn(f"observed too little progress: {got}/{want}")
 
-            if got > want + 1:
-                warnings.warn(f"observed too many blocks: {got}/{want}")
+            if got > want * 1.1:
+                warnings.warn(f"observed too much progress: {got}/{want}")
 
-            # TODO I don't get why we observe got = want + 1 regularly.
+            # TODO I don't get why we observe got = want + 1 for nakamoto regularly.
+            # For Ethereum, it's relatively clear, that we observe got > want:
+            # the last block might include a couple of orphans and thereby
+            # increment got by more than one. But this reasoning does not apply
+            # for Nakamoto.
+
+            # fix progress mismatch on last step
             if got != want:
                 # want = 2 | 4
                 # got = 3 | 6
