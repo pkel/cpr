@@ -418,7 +418,7 @@ module Agent (V : LocalView with type data = data) = struct
   let interpret (s : state) (action, mining) =
     let parent vtx =
       match Dag.parents view vtx with
-      | [ x ] -> Some x
+      | hd :: _tl -> Some hd
       | _ -> None
     in
     let match_ offset =
@@ -431,7 +431,8 @@ module Agent (V : LocalView with type data = data) = struct
         if (data b).progress <= progress then b else parent b |> Option.get |> f
       in
       [ f s.private_ ]
-      (* NOTE: if private height is smaller target height, then private head is released. *)
+      (* NOTE: if private progress is smaller target height, then private head is
+         released. *)
     in
     let release, state =
       match (action : Action.action) with
