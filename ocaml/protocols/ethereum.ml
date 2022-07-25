@@ -8,6 +8,19 @@ type height_or_work =
 module type Parameters = sig
   val preference : height_or_work
   val progress : height_or_work
+  val max_uncles : int
+end
+
+module Whitepaper = struct
+  let preference = Height
+  let progress = Height
+  let max_uncles = Int.max_int
+end
+
+module Byzantium = struct
+  let preference = Height
+  let progress = Work
+  let max_uncles = 2
 end
 
 module Make (Parameters : Parameters) = struct
@@ -17,9 +30,10 @@ module Make (Parameters : Parameters) = struct
 
   let info =
     Printf.sprintf
-      "Ethereum's adaptation of GHOST with %s-preference and %s-progress"
+      "Ethereum's adaptation of GHOST with %s-preference, %s-progress, and uncle cap %i"
       (Variants_of_height_or_work.to_name preference |> String.lowercase_ascii)
       (Variants_of_height_or_work.to_name progress |> String.lowercase_ascii)
+      max_uncles
   ;;
 
   let puzzles_per_block = 1
@@ -67,6 +81,7 @@ module Make (Parameters : Parameters) = struct
         in
         let check_height () = bd.height = pd.height + 1
         and check_work () = bd.work = pd.work + 1 + List.length uncles
+        and check_max_uncles () = List.length uncles <= max_uncles
         and check_recent u =
           let ud = data u in
           let k = bd.height - ud.height in
@@ -83,6 +98,7 @@ module Make (Parameters : Parameters) = struct
         in
         check_height ()
         && check_work ()
+        && check_max_uncles ()
         && List.for_all
              (fun u ->
                check_recent u
@@ -146,7 +162,15 @@ module Make (Parameters : Parameters) = struct
       | _ -> failwith "invalid roots"
     ;;
 
-    let puzzle_payload state =
+    let uncle_preference =
+      let open Compare in
+      (* better is lower | better is first after sorting *)
+      (* own over foreign *)
+      (* old blocks over new *)
+      by (tuple bool int) (fun x -> not (appended_by_me x), preference (data x))
+    ;;
+
+    let puzzle_payload' ~uncle_filter state =
       let preferred = state in
       let uncles =
         let non_uncle_ancestors, in_chain =
@@ -175,6 +199,8 @@ module Make (Parameters : Parameters) = struct
             uncles @ acc)
           []
           non_uncle_ancestors
+        |> List.filter uncle_filter
+        |> Compare.at_most_first uncle_preference max_uncles
       in
       let n_uncles = List.length uncles in
       let data =
@@ -183,6 +209,8 @@ module Make (Parameters : Parameters) = struct
       in
       { sign = false; parents = preferred :: uncles; data }
     ;;
+
+    let puzzle_payload = puzzle_payload' ~uncle_filter:(fun _ -> true)
 
     let handler state = function
       | PuzzleSolved vertex -> { state = vertex; share = [ vertex ] }
@@ -199,13 +227,3 @@ module Make (Parameters : Parameters) = struct
     Node (module Honest (V))
   ;;
 end
-
-module Whitepaper = Make (struct
-  let preference = Height
-  let progress = Height
-end)
-
-module Byzantium = Make (struct
-  let preference = Height
-  let progress = Work
-end)

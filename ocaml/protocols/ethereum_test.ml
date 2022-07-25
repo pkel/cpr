@@ -19,7 +19,7 @@ module TestView (P : Protocol) = struct
   let signed_by x = (Dag.data x).signed_by
 end
 
-module Ethereum = Ethereum.Byzantium
+module Ethereum = Ethereum.Make (Ethereum.Byzantium)
 module V = TestView (Ethereum)
 module Ref = Ethereum.Referee (V)
 
@@ -104,10 +104,12 @@ let%test_unit "ethereum-dag-validity" = mine_should_work a1 [ b5 ]
 let%test_unit "ethereum-dag-validity" = mine_should_work a1 [ b6 ]
 let%test_unit "ethereum-dag-validity" = mine_should_fail a1 [ b7 ]
 let%test_unit "ethereum-dag-validity" = mine_should_fail a1 [ b8 ]
-(* ... also multiple times *)
-let%test_unit "ethereum-dag-validity" = mine_should_work a1 [ b2; b3; b4 ]
-(* ... but not a single block multiple times *)
+(* ... also two times *)
+let%test_unit "ethereum-dag-validity" = mine_should_work a1 [ b2; b3 ]
+(* ... but not a single block twice *)
 let%test_unit "ethereum-dag-validity" = mine_should_fail a1 [ b2; b2 ]
+(* ... or more than two uncles *)
+let%test_unit "ethereum-dag-validity" = mine_should_fail a1 [ b2; b3; b4 ]
 (* indirect children of ancestor should never work *)
 let%test_unit "ethereum-dag-validity" = mine_should_fail a1 [ c0 ]
 let%test_unit "ethereum-dag-validity" = mine_should_fail a1 [ c1 ]

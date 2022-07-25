@@ -76,7 +76,7 @@ def test_ethereum(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
-        "Ethereum's adaptation of GHOST with height-preference and work-progress; "
+        "Ethereum's adaptation of GHOST with height-preference, work-progress, and uncle cap 2; "
         "SSZ'16-like attack space; α=0.13 attacker"
     )
     assert env.puzzles_per_block() == 1

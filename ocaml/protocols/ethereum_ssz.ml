@@ -345,20 +345,11 @@ module Make (Parameters : Ethereum.Parameters) = struct
     module Private = Honest (V)
 
     let puzzle_payload (s : state) =
-      (* reuse honest logic for locating orphans, then filter them according to agent
-         choice *)
-      let honest = Private.puzzle_payload s.private_ in
-      let parents =
-        List.filteri
-          (fun i x ->
-            i == 0
-            || (s.mining.own && appended_by_me x)
-            || (s.mining.foreign && not (appended_by_me x)))
-          honest.parents
-      in
-      let n_uncles = List.length parents - 1
-      and p = List.hd parents |> data in
-      { honest with parents; data = { honest.data with work = p.work + n_uncles + 1 } }
+      Private.puzzle_payload'
+        ~uncle_filter:(fun x ->
+          (s.mining.own && appended_by_me x)
+          || (s.mining.foreign && not (appended_by_me x)))
+        s.private_
     ;;
 
     let handle_private (s : state) event =
@@ -509,17 +500,3 @@ module Make (Parameters : Ethereum.Parameters) = struct
          (selfish ~adopt:`Discard)
   ;;
 end
-
-module Whitepaper = Make (struct
-  open Ethereum
-
-  let preference = Height
-  let progress = Height
-end)
-
-module Byzantium = Make (struct
-  open Ethereum
-
-  let preference = Height
-  let progress = Work
-end)
