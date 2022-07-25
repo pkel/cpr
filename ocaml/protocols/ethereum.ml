@@ -127,7 +127,8 @@ module Make (Parameters : Parameters) = struct
           |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
     ;;
 
-    let ethereum base_reward : env reward_function =
+    (* described in whitepaper *)
+    let constant base_reward : env reward_function =
      fun ~assign v ->
       let uncles = uncles v in
       List.iter (assign (0.9375 *. base_reward)) uncles;
@@ -136,10 +137,33 @@ module Make (Parameters : Parameters) = struct
       assign r v
    ;;
 
+    (* actually used; source: https://www.doi.org/10.1109/ICDCS.2019.00131 *)
+    let discount base_reward : env reward_function =
+     fun ~assign v ->
+      let uncles = uncles v in
+      let vheight = height (data v) in
+      List.iter
+        (fun u ->
+          (* discount based on age *)
+          let delta = vheight - height (data u) |> float_of_int in
+          assign ((8. -. delta) /. 8. *. base_reward) u)
+        uncles;
+      let n_uncles = List.length uncles |> float_of_int in
+      let r = 1. +. (n_uncles *. 0.03125 *. base_reward) in
+      assign r v
+   ;;
+
     let reward_functions =
       let open Collection in
       empty
-      |> add ~info:"base reward 1; uncles yield 3.215% / 93.75%" "ethereum" (ethereum 1.)
+      |> add
+           ~info:"base reward 1; uncles yield 3.215% and (8 - d) / 8"
+           "discount"
+           (discount 1.)
+      |> add
+           ~info:"base reward 1; uncles yield 3.215% and 93.75%"
+           "constant"
+           (constant 1.)
     ;;
   end
 
