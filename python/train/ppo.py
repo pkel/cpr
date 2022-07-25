@@ -38,6 +38,7 @@ def cast(s, k, f):
 
 cast("main", "n_envs", int)
 cast("main", "total_timesteps", float)
+cast("main", "alpha", float)
 cast("main", "alpha_min", float)
 cast("main", "alpha_max", float)
 cast("main", "episode_len", int)
