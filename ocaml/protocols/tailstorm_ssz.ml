@@ -15,6 +15,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       ; private_depth : int (** number of votes confirming the leading block *)
       ; diff_blocks : int (** private_blocks - public_blocks *)
       ; diff_depth : int (** private_votes - public_votes *)
+      ; include_foreign_votes : bool
       }
     [@@deriving fields]
 
@@ -27,6 +28,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       ; private_depth = 0
       ; diff_blocks = min_int
       ; diff_depth = min_int
+      ; include_foreign_votes = false
       }
     ;;
 
@@ -37,6 +39,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       ; private_depth = max_int
       ; diff_blocks = max_int
       ; diff_depth = max_int
+      ; include_foreign_votes = true
       }
     ;;
 
@@ -46,7 +49,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         Float.Array.set a i (Fieldslib.Field.get field t |> conv);
         i + 1
       in
-      let int = set float_of_int in
+      let int = set float_of_int
+      and bool = set (fun x -> if x then 1. else 0.) in
       let _ =
         Fields.fold
           ~init:0
@@ -56,13 +60,20 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           ~private_depth:int
           ~diff_blocks:int
           ~diff_depth:int
+          ~include_foreign_votes:bool
       in
       a
     ;;
 
     let of_floatarray =
       let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
-      let int = get int_of_float in
+      let int = get int_of_float
+      and bool =
+        get (fun f ->
+            match int_of_float f with
+            | 0 -> false
+            | _ -> true)
+      in
       fst
         (Fields.make_creator
            0
@@ -71,7 +82,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
            ~private_blocks:int
            ~private_depth:int
            ~diff_blocks:int
-           ~diff_depth:int)
+           ~diff_depth:int
+           ~include_foreign_votes:bool)
     ;;
 
     let to_string t =
@@ -81,7 +93,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           (Fieldslib.Field.name field)
           (to_s (Fieldslib.Field.get field t))
       in
-      let int = conv string_of_int in
+      let int = conv string_of_int
+      and bool = conv string_of_bool in
       Fields.to_list
         ~public_blocks:int
         ~public_depth:int
@@ -89,6 +102,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         ~private_depth:int
         ~diff_blocks:int
         ~diff_depth:int
+        ~include_foreign_votes:bool
       |> String.concat "\n"
     ;;
 
@@ -101,6 +115,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           ; private_depth = Random.bits ()
           ; diff_blocks = Random.bits ()
           ; diff_depth = Random.bits ()
+          ; include_foreign_votes = Random.bool ()
           }
         in
         t = (to_floatarray t |> of_floatarray)
@@ -221,6 +236,10 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       ; private_depth
       ; public_depth
       ; diff_depth = private_depth - public_depth
+      ; include_foreign_votes =
+          (match s.epoch with
+          | `Proceed -> true
+          | `Prolong -> false)
       }
     ;;
 

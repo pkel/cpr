@@ -17,6 +17,7 @@ module Make (Parameters : Bk.Parameters) = struct
       ; diff_blocks : int (** private_blocks - public_blocks *)
       ; diff_votes : int (** private_votes - public_votes *)
       ; lead : bool (** attacker is truthful leader on leading public block *)
+      ; include_foreign_votes : bool
       }
     [@@deriving fields]
 
@@ -30,6 +31,7 @@ module Make (Parameters : Bk.Parameters) = struct
       ; diff_blocks = min_int
       ; diff_votes = min_int
       ; lead = false
+      ; include_foreign_votes = false
       }
     ;;
 
@@ -41,6 +43,7 @@ module Make (Parameters : Bk.Parameters) = struct
       ; diff_blocks = max_int
       ; diff_votes = max_int
       ; lead = true
+      ; include_foreign_votes = true
       }
     ;;
 
@@ -62,6 +65,7 @@ module Make (Parameters : Bk.Parameters) = struct
           ~diff_blocks:int
           ~diff_votes:int
           ~lead:bool
+          ~include_foreign_votes:bool
       in
       a
     ;;
@@ -84,7 +88,8 @@ module Make (Parameters : Bk.Parameters) = struct
            ~private_votes:int
            ~diff_blocks:int
            ~diff_votes:int
-           ~lead:bool)
+           ~lead:bool
+           ~include_foreign_votes:bool)
     ;;
 
     let to_string t =
@@ -104,6 +109,7 @@ module Make (Parameters : Bk.Parameters) = struct
         ~diff_blocks:int
         ~diff_votes:int
         ~lead:bool
+        ~include_foreign_votes:bool
       |> String.concat "\n"
     ;;
 
@@ -117,6 +123,7 @@ module Make (Parameters : Bk.Parameters) = struct
           ; diff_blocks = Random.bits ()
           ; diff_votes = Random.bits ()
           ; lead = Random.bool ()
+          ; include_foreign_votes = Random.bool ()
           }
         in
         t = (to_floatarray t |> of_floatarray)
@@ -256,6 +263,10 @@ module Make (Parameters : Bk.Parameters) = struct
       ; public_votes
       ; diff_votes = private_votes - public_votes
       ; lead
+      ; include_foreign_votes =
+          (match s.epoch with
+          | `Proceed -> true
+          | `Prolong -> false)
       }
     ;;
 
