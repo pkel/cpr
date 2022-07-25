@@ -24,6 +24,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_height : int (** private_height - public_height *)
       ; diff_work : int (** private_work - public_work *)
       ; diff_orphans : int (** private_orphans - public_orphans *)
+      ; include_own_orphans : bool
+      ; include_foreign_orphans : bool
       }
     [@@deriving fields]
 
@@ -39,6 +41,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_height = min_int
       ; diff_work = min_int
       ; diff_orphans = min_int
+      ; include_own_orphans = false
+      ; include_foreign_orphans = false
       }
     ;;
 
@@ -52,6 +56,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_height = max_int
       ; diff_work = max_int
       ; diff_orphans = max_int
+      ; include_own_orphans = true
+      ; include_foreign_orphans = true
       }
     ;;
 
@@ -61,7 +67,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
         Float.Array.set a i (Fieldslib.Field.get field t |> conv);
         i + 1
       in
-      let int = set float_of_int in
+      let int = set float_of_int
+      and bool = set (fun x -> if x then 1. else 0.) in
       let _ =
         Fields.fold
           ~init:0
@@ -74,13 +81,21 @@ module Make (Parameters : Ethereum.Parameters) = struct
           ~diff_height:int
           ~diff_work:int
           ~diff_orphans:int
+          ~include_own_orphans:bool
+          ~include_foreign_orphans:bool
       in
       a
     ;;
 
     let of_floatarray =
       let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
-      let int = get int_of_float in
+      let int = get int_of_float
+      and bool =
+        get (fun f ->
+            match int_of_float f with
+            | 0 -> false
+            | _ -> true)
+      in
       fst
         (Fields.make_creator
            0
@@ -92,7 +107,9 @@ module Make (Parameters : Ethereum.Parameters) = struct
            ~private_orphans:int
            ~diff_height:int
            ~diff_work:int
-           ~diff_orphans:int)
+           ~diff_orphans:int
+           ~include_own_orphans:bool
+           ~include_foreign_orphans:bool)
     ;;
 
     let to_string t =
@@ -102,7 +119,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
           (Fieldslib.Field.name field)
           (to_s (Fieldslib.Field.get field t))
       in
-      let int = conv string_of_int in
+      let int = conv string_of_int
+      and bool = conv string_of_bool in
       Fields.to_list
         ~public_height:int
         ~public_work:int
@@ -113,6 +131,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
         ~diff_height:int
         ~diff_work:int
         ~diff_orphans:int
+        ~include_own_orphans:bool
+        ~include_foreign_orphans:bool
       |> String.concat "\n"
     ;;
 
@@ -128,6 +148,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
           ; diff_height = Random.bits ()
           ; diff_work = Random.bits ()
           ; diff_orphans = Random.bits ()
+          ; include_own_orphans = Random.bool ()
+          ; include_foreign_orphans = Random.bool ()
           }
         in
         t = (to_floatarray t |> of_floatarray)
@@ -403,6 +425,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_height = private_height - public_height
       ; diff_work = private_work - public_work
       ; diff_orphans = private_orphans - public_orphans
+      ; include_own_orphans = s.mining.own
+      ; include_foreign_orphans = s.mining.foreign
       }
     ;;
 
