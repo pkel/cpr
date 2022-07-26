@@ -8,10 +8,11 @@ homepage: "https://github.com/pkel/cpr"
 bug-reports: "https://github.com/pkel/cpr/issues"
 depends: [
   "dune" {>= "2.8"}
-  "ocamlformat" {= "0.15.0"}
-  "merlin" {>= "4.2"}
-  "odig" {>= "0.0.6"}
-  "odoc" {>= "1.5.2"}
+  "ocamlformat" {= "0.22.4"}
+  "merlin" {>= "4.5"}
+  "odig" {>= "0.0.8"}
+  "odoc" {>= "2.1.0"}
+  "utop" {>= "2.9.1"}
 ]
 build: [
   ["dune" "subst"] {dev}

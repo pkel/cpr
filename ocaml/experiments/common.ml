@@ -24,13 +24,13 @@ let parany_demux_list_ref queue () =
 let activations =
   let open Cmdliner in
   let doc = "Number of proof-of-work activations simulated per output row." in
-  let env = Arg.env_var "CPR_ACTIVATIONS" ~doc in
+  let env = Cmd.Env.info ~doc "CPR_ACTIVATIONS" in
   Arg.(value & opt int 10000 & info [ "n"; "activations" ] ~env ~docv:"ACTIVATIONS" ~doc)
 ;;
 
 let cores =
   let open Cmdliner in
   let doc = "Number of simulation tasks run in parallel" in
-  let env = Arg.env_var "CPR_CORES" ~doc in
+  let env = Cmd.Env.info ~doc "CPR_CORES" in
   Arg.(value & opt int (Cpu.numcores ()) & info [ "p"; "cores" ] ~env ~docv:"CORES" ~doc)
 ;;

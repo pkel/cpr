@@ -39,7 +39,7 @@ open Cmdliner
 
 let info =
   let doc = "simulate honest networks running proof-of-work protocols" in
-  Term.info ~version ~doc "honest_net"
+  Cmd.info ~version ~doc "honest_net"
 ;;
 
-let () = Term.exit @@ Term.eval (Csv_runner.main_t tasks, info)
+let () = Csv_runner.main_t tasks |> Cmd.v info |> Cmd.eval |> Stdlib.exit

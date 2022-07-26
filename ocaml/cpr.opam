@@ -9,21 +9,21 @@ bug-reports: "https://github.com/pkel/cpr/issues"
 depends: [
   "dune" {>= "2.8"}
   "angstrom" {>= "0.15.0"}
-  "bos" {>= "0.2.0"}
-  "cmdliner" {>= "1.0"}
+  "bos" {>= "0.2.1"}
+  "cmdliner" {>= "1.1.1"}
   "ezxmlm" {>= "1.1.0"}
-  "ocaml" {>= "4.11"}
+  "ocaml" {>= "4.12"}
   "owl-base" {>= "1.0"}
-  "parany" {>= "12.0"}
-  "ppx_expect" {>= "v0.14"}
-  "ppx_fields_conv" {>= "v0.14"}
-  "ppx_let" {>= "v0.14"}
-  "ppx_sexp_conv" {>= "v0.14"}
+  "parany" {>= "12.2"}
+  "ppx_expect" {>= "v0.15"}
+  "ppx_fields_conv" {>= "v0.15"}
+  "ppx_let" {>= "v0.15"}
+  "ppx_sexp_conv" {>= "v0.15"}
   "ppx_show" {>= "0.2.1"}
-  "ppx_variants_conv" {>= "v0.14"}
-  "progress" {>= "0.2"}
-  "pyml" {>= "20210924"}
-  "pythonlib" {>= "v0.14"}
+  "ppx_variants_conv" {>= "v0.15"}
+  "progress" {>= "0.2.1"}
+  "pyml" {>= "20220325"}
+  "pythonlib" {>= "v0.15"}
   "odoc" {with-doc}
 ]
 build: [
