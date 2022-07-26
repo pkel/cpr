@@ -66,7 +66,7 @@ open Cmdliner
 
 let info =
   let doc = "simulate withholding strategies against proof-of-work protocols" in
-  Term.info ~version ~doc "withholding"
+  Cmd.info ~version ~doc "withholding"
 ;;
 
-let () = Term.exit @@ Term.eval (Csv_runner.main_t tasks, info)
+let () = Csv_runner.main_t tasks |> Cmd.v info |> Cmd.eval |> Stdlib.exit

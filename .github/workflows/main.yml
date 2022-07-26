@@ -13,7 +13,7 @@ jobs:
           - ubuntu-18.04
           - macos-11
         ocaml-compiler:
-          - 4.11.1
+          - 4.12.1
 
     runs-on: ${{ matrix.os }}
 
@@ -26,7 +26,7 @@ jobs:
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
         with:
-          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+          ocaml-compiler: ocaml-variants.${{ matrix.ocaml-compiler }}+options,ocaml-option-flambda
           opam-local-packages: ocaml/*.opam
           dune-cache: true
 
@@ -69,7 +69,7 @@ jobs:
       - name: Download gym shared object
         uses: actions/download-artifact@v2
         with:
-          name: ubuntu-18.04-ocaml-4.11.1
+          name: ubuntu-18.04-ocaml-4.12.1
           path: python/gym/cpr_gym
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -102,13 +102,13 @@ jobs:
       - name: Download gym shared object (linux)
         uses: actions/download-artifact@v2
         with:
-          name: ubuntu-18.04-ocaml-4.11.1
+          name: ubuntu-18.04-ocaml-4.12.1
           path: linux
 
       - name: Download gym shared object (macos)
         uses: actions/download-artifact@v2
         with:
-          name: macos-11-ocaml-4.11.1
+          name: macos-11-ocaml-4.12.1
           path: macos
 
       - name: Deploy to GitHub Pages

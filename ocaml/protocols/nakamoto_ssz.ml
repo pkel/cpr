@@ -265,7 +265,8 @@ module Agent (V : LocalView with type data = data) = struct
       (* look for to be released block backwards from private head *)
       let rec f b = if height (data b) <= h then b else parent b |> Option.get |> f in
       [ f s.private_ ]
-      (* NOTE: if private height is smaller target height, then private head is released. *)
+      (* NOTE: if private height is smaller target height, then private head is
+         released. *)
     in
     match (action : Action.t) with
     | Adopt -> [], State.update ~private_:s.public s
@@ -344,7 +345,8 @@ module Policies = struct
       else Wait)
   ;;
 
-  (* Sapirshtein, Sompolinsky, Zohar. Optimal Selfish Mining Strategies in Bitcoin. 2016. *)
+  (* Sapirshtein, Sompolinsky, Zohar. Optimal Selfish Mining Strategies in Bitcoin.
+     2016. *)
   let ssz_2016_sm1 o =
     (* The authors rephrase the policy of ES'14 and call it SM1. Their version is much
        shorter.
