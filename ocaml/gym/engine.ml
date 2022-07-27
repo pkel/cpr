@@ -98,7 +98,7 @@ type instance =
       }
       -> instance
 
-let numeration ?(sep = ", ") ?(conj = "and") =
+let numeration ?(sep = ", ") ?(conj = " and ") =
   let rec f acc = function
     | [] -> assert false
     | [ hd ] -> acc ^ sep ^ conj ^ hd
@@ -170,7 +170,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
           ^ "'. Try "
           ^ (Collection.keys Ref.reward_functions
             |> List.map (fun s -> "'" ^ s ^ "'")
-            |> numeration ~conj:"or")
+            |> numeration ~conj:" or ")
           ^ "."
         in
         failwith msg

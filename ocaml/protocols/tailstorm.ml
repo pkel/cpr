@@ -1,15 +1,53 @@
 open Cpr_lib
 
+type reward_scheme =
+  | Discount
+  | Constant
+  | Punish
+  | Hybrid
+  | Block
+
+let reward_schemes = [ Discount; Constant; Punish; Hybrid; Block ]
+
+let reward_key = function
+  | Constant -> "constant"
+  | Discount -> "discount"
+  | Punish -> "punish"
+  | Hybrid -> "hybrid"
+  | Block -> "block"
+;;
+
+let reward_info = function
+  | Constant -> "1 per confirmed puzzle solution"
+  | Discount ->
+    "max k per confirmed block, d/k per confirmed pow solution (d ∊ 1..k = height since \
+     last block)"
+  | Punish -> "max k per confirmed block, 1 per pow solution on longest chain of votes"
+  | Hybrid ->
+    "max k per confirmed block, d/k per pow solution on longest chain of votes (d ∊ 1..k \
+     = height since last block)"
+  | Block -> "1 per confirmed (strong) block"
+;;
+
 module type Parameters = sig
   (** number of votes (= puzzle solutions) per block *)
   val k : int
+
+  val rewards : reward_scheme
 end
 
 module Make (Parameters : Parameters) = struct
   open Parameters
 
   let key = "tailstorm"
-  let info = "Tailstorm with k=" ^ string_of_int k
+
+  let info =
+    Printf.sprintf
+      "Tailstorm with k=%i and '%s' rewards"
+      Parameters.k
+      (reward_key Parameters.rewards)
+  ;;
+
   let puzzles_per_block = k
 
   type data =
@@ -121,7 +159,7 @@ module Make (Parameters : Parameters) = struct
      fun ~assign x -> if is_block x then assign c x
    ;;
 
-    let reward ~max_reward_per_block ~discount ~punish : env reward_function =
+    let reward' ~max_reward_per_block ~discount ~punish : env reward_function =
       let k = float_of_int k in
       let c = max_reward_per_block /. k in
       fun ~assign x ->
@@ -139,33 +177,22 @@ module Make (Parameters : Parameters) = struct
             else Dag.iterate_ancestors votes_only [ x ] |> Seq.iter (assign r))
     ;;
 
+    let reward =
+      let reward = reward' ~max_reward_per_block:(float_of_int k) in
+      match Parameters.rewards with
+      | Constant -> reward ~discount:false ~punish:false
+      | Discount -> reward ~discount:true ~punish:false
+      | Punish -> reward ~discount:false ~punish:true
+      | Hybrid -> reward ~discount:true ~punish:true
+      | Block -> constant_block 1.
+    ;;
+
     (* TODO: add tests for reward functions *)
 
     let reward_functions =
-      let reward = reward ~max_reward_per_block:(float_of_int k) in
       let open Collection in
-      empty
-      |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
-      |> add
-           ~info:
-             "max k per confirmed block, d/k per pow solution on longest chain of votes \
-              (d ∊ 1..k = height since last block)"
-           "hybrid"
-           (reward ~discount:true ~punish:true)
-      |> add
-           ~info:"max k per confirmed block, 1 per pow solution on longest chain of votes"
-           "punish"
-           (reward ~discount:false ~punish:true)
-      |> add
-           ~info:
-             "max k per confirmed block, d/k per confirmed pow solution (d ∊ 1..k = \
-              height since last block)"
-           "discount"
-           (reward ~discount:true ~punish:false)
-      |> add
-           ~info:"1 per confirmed pow solution"
-           "constant"
-           (reward ~discount:false ~punish:false)
+      let x = Parameters.rewards in
+      empty |> add ~info:(reward_info x) (reward_key x) reward
     ;;
   end
 

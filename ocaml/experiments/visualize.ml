@@ -104,13 +104,18 @@ let tasks =
     ; tasks_per_attack_space (bkll_ssz ~k:8) 100
     ; tasks_per_attack_space (bkll_ssz ~k:4) 50
     ; tasks_per_attack_space (bkll_ssz ~k:1) 20
-    ; tasks_per_attack_space (tailstorm_ssz ~k:8) 100
-    ; tasks_per_attack_space (tailstorm_ssz ~k:4) 50
-    ; tasks_per_attack_space (tailstorm_ssz ~k:1) 20
-    ; tasks_per_attack_space (tailstorm_draft ~k:8) 100
-    ; tasks_per_attack_space (tailstorm_draft ~k:4) 50
-    ; tasks_per_attack_space (tailstorm_draft ~k:1) 20
     ]
+  @ List.concat_map
+      (fun rewards ->
+        List.concat
+          [ tasks_per_attack_space (tailstorm_ssz ~rewards ~k:8) 100
+          ; tasks_per_attack_space (tailstorm_ssz ~rewards ~k:4) 50
+          ; tasks_per_attack_space (tailstorm_ssz ~rewards ~k:1) 20
+          ; tasks_per_attack_space (tailstorm_draft ~rewards ~k:8) 100
+          ; tasks_per_attack_space (tailstorm_draft ~rewards ~k:4) 50
+          ; tasks_per_attack_space (tailstorm_draft ~rewards ~k:1) 20
+          ])
+      Tailstorm.reward_schemes
 ;;
 
 let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
