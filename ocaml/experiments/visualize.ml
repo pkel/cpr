@@ -48,6 +48,20 @@ let node_name (Csv_runner.Task t) =
     | Some i -> "n" ^ string_of_int i
 ;;
 
+let tasks_per_protocol (Protocol (module P)) n_activations =
+  List.map
+    (fun activation_delay ->
+      let sim, network = honest_clique ~activation_delay ~n:7 (module P) in
+      Csv_runner.Task
+        { activations = n_activations
+        ; protocol = (module P)
+        ; attack = None
+        ; sim
+        ; network
+        })
+    [ 1.; 2.; 4. ]
+;;
+
 let tasks_per_attack_space (AttackSpace (module A)) n_activations =
   let protocol = (module A.Protocol : Protocol with type data = _) in
   List.map
@@ -55,7 +69,7 @@ let tasks_per_attack_space (AttackSpace (module A)) n_activations =
       let sim, network = honest_clique ~activation_delay ~n:7 protocol in
       Csv_runner.Task
         { activations = n_activations; protocol; attack = None; sim; network })
-    [ 2.; 4. ]
+    [ 1.; 2.; 4. ]
   @ List.concat_map
       (fun alpha ->
         Collection.map_to_list
@@ -83,6 +97,7 @@ let tasks =
   let open Cpr_protocols in
   List.concat
     [ tasks_per_attack_space nakamoto_ssz 30
+    ; tasks_per_attack_space ethereum_ssz 30
     ; tasks_per_attack_space (bk_ssz ~k:8) 100
     ; tasks_per_attack_space (bk_ssz ~k:4) 50
     ; tasks_per_attack_space (bk_ssz ~k:1) 20
@@ -143,7 +158,7 @@ let run (Csv_runner.Task t) =
             rewardfn.it
               ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
               n)
-          (Dag.iterate_ancestors env.global_view [ head env ])
+          (Ref.history (head env))
       in
       let path =
         let open Fpath in

@@ -58,6 +58,12 @@ let () =
          int
          ~docstring:"maximum block height before terminating the simulation"
          ~default:Int.max_int
+     and max_progress =
+       keyword
+         "max_progress"
+         float
+         ~docstring:"maximum blockchain progress before terminating the simulation"
+         ~default:Float.infinity
      and max_time =
        keyword
          "max_time"
@@ -74,6 +80,7 @@ let () =
          ~activation_delay
          ~max_steps
          ~max_height
+         ~max_progress
          ~max_time
      in
      let t = p config in
@@ -172,6 +179,13 @@ let () =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      in
      fun () -> Proto (Engine.of_module nakamoto_ssz ~reward) |> python_of_protocol);
+  Py_module.set
+    m
+    "ethereum"
+    (let%map reward =
+       keyword "reward" string ~default:"discount" ~docstring:"reward function"
+     in
+     fun () -> Proto (Engine.of_module ethereum_ssz ~reward) |> python_of_protocol);
   Py_module.set
     m
     "bk"

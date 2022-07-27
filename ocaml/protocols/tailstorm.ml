@@ -18,6 +18,7 @@ module Make (Parameters : Parameters) = struct
     }
 
   let height h = h.block
+  let progress x = (x.block * k) + x.vote |> float_of_int
   let is_vote h = h.vote > 0
   let is_block h = h.vote = 0
 
@@ -106,6 +107,14 @@ module Make (Parameters : Parameters) = struct
       |> Compare.first (Compare.neg compare_blocks) 1
       |> Option.get
       |> List.hd
+    ;;
+
+    let history =
+      (* TODO: we could adapt the implementation to not include the last block as first
+         parent but to infer it with last_block where needed *)
+      Seq.unfold (fun this ->
+          List.nth_opt (Dag.parents view this) (if is_block this && k > 1 then 1 else 0)
+          |> Option.map (fun next -> this, next))
     ;;
 
     let constant_block c : _ reward_function =

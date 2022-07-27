@@ -10,6 +10,7 @@ module Parameters : sig
     ; activation_delay : float (** difficulty; 0 < x *)
     ; max_steps : int (** termination criterion, number of attacker steps; 1 <= x *)
     ; max_height : int (** termination criterion, block height; 0 < x *)
+    ; max_progress : float (** termination criterion, block float; 0 < x *)
     ; max_time : float (** termination criterion, simulated time; 0 < x *)
     }
 
@@ -21,6 +22,7 @@ module Parameters : sig
     -> activation_delay:float
     -> max_steps:int
     -> max_height:int
+    -> max_progress:float
     -> max_time:float
     -> t
 end = struct
@@ -31,10 +33,20 @@ end = struct
     ; activation_delay : float
     ; max_steps : int
     ; max_height : int
+    ; max_progress : float
     ; max_time : float
     }
 
-  let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_height ~max_time =
+  let t
+      ~alpha
+      ~gamma
+      ~defenders
+      ~activation_delay
+      ~max_steps
+      ~max_height
+      ~max_progress
+      ~max_time
+    =
     let () =
       if alpha < 0. || alpha > 1. then failwith "alpha < 0 || alpha > 1";
       if gamma < 0. || gamma > 1. then failwith "gamma < 0 || gamma > 1";
@@ -42,9 +54,18 @@ end = struct
       if activation_delay <= 0. then failwith "activation_delay <= 0";
       if max_steps <= 0 then failwith "max_steps <= 0";
       if max_height <= 0 then failwith "max_height <= 0";
+      if max_progress <= 0. then failwith "max_progress <= 0";
       if max_time <= 0. then failwith "max_time <= 0"
     in
-    { alpha; gamma; defenders; activation_delay; max_steps; max_height; max_time }
+    { alpha
+    ; gamma
+    ; defenders
+    ; activation_delay
+    ; max_steps
+    ; max_height
+    ; max_progress
+    ; max_time
+    }
   ;;
 end
 
@@ -238,11 +259,13 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       |> Array.to_list
     in
     let head = Ref.winner prefs in
-    let height = Protocol.height (Dag.data head).value in
+    let height = Protocol.height (Dag.data head).value
+    and progress = Protocol.progress (Dag.data head).value in
     let done_ =
       not
         (t.episode_steps < p.max_steps
         && height < p.max_height
+        && progress < p.max_progress
         && t.sim.clock.now < p.max_time)
     in
     (* TODO. We calculate rewards for the whole chain on each step, then return the delta.
@@ -263,7 +286,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
             | Some _ -> reward_defender := !reward_defender +. reward)
           vertex
       in
-      Dag.iterate_ancestors t.sim.global_view [ head ] |> Seq.iter f
+      Ref.history head |> Seq.iter f
     in
     let chain_time = (Dag.data head).appended_at
     and sim_time = t.sim.clock.now in
@@ -284,6 +307,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       ; "episode_sim_time", float sim_time
       ; "episode_n_steps", int t.episode_steps
       ; "episode_height", int height
+      ; "episode_progress", float progress
       ]
       @
       if done_

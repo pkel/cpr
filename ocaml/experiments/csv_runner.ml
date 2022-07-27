@@ -122,7 +122,7 @@ let run task =
     (* incentive stats *)
     Collection.map_to_list
       (fun rewardfn ->
-        let reward = apply_reward_function rewardfn.it sim in
+        let reward = apply_reward_function ~history:Ref.history rewardfn.it sim in
         { row with
           activations = sim.activations
         ; compute

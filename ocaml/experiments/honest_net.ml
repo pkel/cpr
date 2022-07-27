@@ -27,9 +27,8 @@ let tasks_per_protocol ~n_activations (Protocol protocol) =
 let protocols =
   let open Cpr_protocols in
   nakamoto
-  :: List.concat_map
-       (fun k -> [ bk ~k; bkll ~k; tailstorm ~k ])
-       [ 1; 2; 4; 8; 16; 32; 64; 128 ]
+  :: ethereum
+  :: List.concat_map (fun k -> [ bk ~k; bkll ~k; tailstorm ~k ]) [ 1; 2; 4; 8; 16; 32 ]
 ;;
 
 (* Run all combinations of protocol, network and block_interval. *)

@@ -50,3 +50,16 @@ let first ?(skip_to = fun _ -> true) compare n l =
       done;
       Some !l))
 ;;
+
+let at_most_first compare n l =
+  let a = Array.of_list l in
+  let () = Array.sort compare a in
+  if Array.length a < n
+  then Array.to_list a
+  else (
+    let l = ref [] in
+    for j = 0 to n - 1 do
+      l := a.(n - 1 - j) :: !l
+    done;
+    !l)
+;;

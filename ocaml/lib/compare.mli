@@ -19,3 +19,4 @@ val skip_eq : ('a -> 'a -> bool) -> 'a cmp -> 'a cmp
 
 val is_sorted : ?unique:bool -> 'a cmp -> 'a list -> bool
 val first : ?skip_to:('a -> bool) -> 'a cmp -> int -> 'a list -> 'a list option
+val at_most_first : 'a cmp -> int -> 'a list -> 'a list

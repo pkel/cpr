@@ -166,7 +166,7 @@ def env_fn(eval=False, n_recordings=42):
     protocol_args = config["protocol_args"]
     env_args = config["env_args"]
 
-    if config["main"]["reward"] != "dense_per_block":
+    if config["main"]["reward"] != "dense_per_progress":
         if "max_steps" not in env_args.keys():
             env_args["max_steps"] = config["main"]["episode_len"]
 
@@ -176,8 +176,8 @@ def env_fn(eval=False, n_recordings=42):
 
     reward = dict(
         sparse_relative=cpr_gym.wrappers.SparseRelativeRewardWrapper,
-        sparse_per_block=cpr_gym.wrappers.SparseRewardPerBlockWrapper,
-        dense_per_block=lambda env: cpr_gym.wrappers.DenseRewardPerBlockWrapper(
+        sparse_per_progress=cpr_gym.wrappers.SparseRewardPerProgressWrapper,
+        dense_per_progress=lambda env: cpr_gym.wrappers.DenseRewardPerProgressWrapper(
             env, episode_len=config["main"]["episode_len"]
         ),
     )
