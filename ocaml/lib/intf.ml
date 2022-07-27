@@ -139,7 +139,9 @@ module type Protocol = sig
   val height : data -> int
 
   (** blockchain progress. Measures work spent on the blockchain. Equals height for
-      Nakamoto. Includes uncles for Ethereum. DAA tries to keep progress/time constant. *)
+      Nakamoto. Includes uncles for Ethereum. Counts votes in B_k.
+
+      DAA tries to keep progress/time constant. *)
   val progress : data -> float
 
   (** specify the roots of the DAG. *)

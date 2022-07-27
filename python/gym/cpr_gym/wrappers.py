@@ -9,7 +9,6 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
     """
     Overwrites objective function.
     Calculates relative rewards at the end of the episode.
-    One reward per episode.
     """
 
     def step(self, action):
@@ -27,25 +26,24 @@ class SparseRelativeRewardWrapper(gym.Wrapper):
         return obs, reward, done, info
 
 
-class SparseRewardPerBlockWrapper(gym.Wrapper):
+class SparseRewardPerProgressWrapper(gym.Wrapper):
     """
     Overwrites objective function.
-    Calculates reward per confirmed proof-of-work puzzle solution at the end of episode.
-    One reward per episode.
+    Calculates reward per chain progress at the end of episode.
 
-    This is similar to the SparseRelativeRewardWrapper. The two wrappers are
-    equivalent for protocols or reward functions that assign a constant reward
-    per confirmed puzzle solution. For different reward functions, e.g.
-    Tailstorm's 'discount' scheme, this wrapper is better suited.
+    Equivalent to SparseRelativeRewardWrapper for Nakamoto but not for
+    protocols with dynamic rewards or progress.
+    SparseRewardPerProgressWrapper is better suited for protocols like Ethereum
+    or Tailstorm with 'discount' reward scheme.
     """
 
     def step(self, action):
         obs, _reward, done, info = self.env.step(action)
         if done:
-            n_pow = info["episode_n_pow"]
+            progress = info["episode_progress"]
             attacker = info["episode_reward_attacker"]
-            if n_pow != 0:
-                reward = attacker / n_pow
+            if progress != 0:
+                reward = attacker / progress
             else:
                 reward = 0
         else:
@@ -53,25 +51,26 @@ class SparseRewardPerBlockWrapper(gym.Wrapper):
         return obs, reward, done, info
 
 
-class DenseRewardPerBlockWrapper(gym.Wrapper):
+class DenseRewardPerProgressWrapper(gym.Wrapper):
     """
-    Mimics SparseRewardPerBlockWrapper but with dense rewards.
+    Mimics SparseRewardPerProgressWrapper but with dense rewards.
     The trick is to end the episode at a given target progress.
-    This way, we know the divisor in SparseRewardPerBlockWrapper in advance.
+    This way, we know the divisor from SparseRewardPerProgressWrapper in advance.
+
+    Normalized to episode reward 1.
     """
 
     def __init__(self, env, episode_len=None):
         super().__init__(env)
 
-        self.drpb_puzzles_per_block = env.puzzles_per_block()
         self.drpb_max_progress = episode_len
-        self.drpb_factor = 1 / self.drpb_max_progress / self.drpb_puzzles_per_block
+        self.drpb_factor = 1 / self.drpb_max_progress
 
         for k in ["max_steps", "max_time", "max_height", "max_progress"]:
             if k in self.env.core_kwargs.keys():
                 self.env.core_kwargs.pop(k, None)
                 warnings.warn(
-                    f"DenseRewardPerBlockWrapper overwrites argument '{k}' given to wrapped env"
+                    f"DenseRewardPerProgressWrapper overwrites argument '{k}' given to wrapped env"
                 )
 
         self.env.core_kwargs["max_steps"] = self.drpb_max_progress * 100

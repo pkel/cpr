@@ -37,18 +37,18 @@ def test_sparseRelativeRewardWrapper():
         fuzz_episode(env)
 
 
-def test_sparseRewardPerBlockWrapper():
+def test_sparseRewardPerProgressWrapper():
     env = gym.make("cpr_gym:core-v0", max_steps=32)
-    env = wrappers.SparseRewardPerBlockWrapper(env)
+    env = wrappers.SparseRewardPerProgressWrapper(env)
     check_env(env)
     for i in range(42):
         run_episode(env, "honest")
         fuzz_episode(env)
 
 
-def test_denseRewardPerBlockWrapper():
+def test_denseRewardPerProgressWrapper():
     env = gym.make("cpr_gym:core-v0")
-    env = wrappers.DenseRewardPerBlockWrapper(env, episode_len=32)
+    env = wrappers.DenseRewardPerProgressWrapper(env, episode_len=32)
     check_env(env)
     for i in range(42):
         run_episode(env, "honest")
