@@ -57,7 +57,9 @@ let tasks ~n_activations =
     two_agents ethereum_ssz n_activations @ selfish_mining ethereum_ssz n_activations
   and bk = List.concat_map (fun k -> two_agents (bk_ssz ~k) n_activations) k
   and bkll = List.concat_map (fun k -> two_agents (bkll_ssz ~k) n_activations) k
-  and tailstorm = List.concat_map (fun k -> two_agents (tailstorm_ssz ~k) n_activations) k
+  and tailstorm =
+    List.concat_map (fun k -> two_agents (tailstorm_ssz ~k) n_activations) k
+    @ List.concat_map (fun k -> selfish_mining (tailstorm_ssz ~k) n_activations) k
   and tailstorm' =
     List.concat_map (fun k -> two_agents (tailstorm_draft ~k) n_activations) k
   in
