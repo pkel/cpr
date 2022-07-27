@@ -26,6 +26,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_orphans : int (** private_orphans - public_orphans *)
       ; include_own_orphans : bool
       ; include_foreign_orphans : bool
+      ; step_is_attacker_pow : bool
       }
     [@@deriving fields]
 
@@ -43,6 +44,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_orphans = min_int
       ; include_own_orphans = false
       ; include_foreign_orphans = false
+      ; step_is_attacker_pow = false
       }
     ;;
 
@@ -58,6 +60,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_orphans = max_int
       ; include_own_orphans = true
       ; include_foreign_orphans = true
+      ; step_is_attacker_pow = true
       }
     ;;
 
@@ -83,6 +86,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
           ~diff_orphans:int
           ~include_own_orphans:bool
           ~include_foreign_orphans:bool
+          ~step_is_attacker_pow:bool
       in
       a
     ;;
@@ -109,6 +113,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
            ~diff_work:int
            ~diff_orphans:int
            ~include_own_orphans:bool
+           ~step_is_attacker_pow:bool
            ~include_foreign_orphans:bool)
     ;;
 
@@ -133,6 +138,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
         ~diff_orphans:int
         ~include_own_orphans:bool
         ~include_foreign_orphans:bool
+        ~step_is_attacker_pow:bool
       |> String.concat "\n"
     ;;
 
@@ -150,6 +156,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
           ; diff_orphans = Random.bits ()
           ; include_own_orphans = Random.bool ()
           ; include_foreign_orphans = Random.bool ()
+          ; step_is_attacker_pow = Random.bool ()
           }
         in
         t = (to_floatarray t |> of_floatarray)
@@ -166,6 +173,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
        defender adopts it as uncle.
 
        2. attacker can include foreign orphans or ignore them
+
+       3. release some block on the private chain
 
        . *)
     type action =
@@ -195,6 +204,10 @@ module Make (Parameters : Ethereum.Parameters) = struct
               information.
 
               Equivalent to Match in SSZ'16 model. *)
+      | Release1
+          (** Publish one block from the private chain, continue mining on the private chain.
+
+              No equivalent in SSZ'16. *)
       | Wait
           (** Continue withholding. Always possible. Equivalent to Wait in SSZ'16 model. *)
     [@@deriving variants]
@@ -210,6 +223,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
         ~adopt_release:add
         ~override:add
         ~match_:add
+        ~release1:add
         ~wait:add
       |> List.rev
     ;;
@@ -332,7 +346,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
     end
 
     type state = State.t
-    type observable_state = Observable of state
+    type observable_state = Observable of ([ `PoW | `Deliver ] * state)
 
     let preferred (s : state) = s.private_
 
@@ -391,19 +405,21 @@ module Make (Parameters : Ethereum.Parameters) = struct
         match event with
         | PuzzleSolved _ ->
           (* work on private chain *)
-          handle_private state event
+          `PoW, handle_private state event
         | Deliver x ->
           let state =
             (* simulate defender *)
             handle_public state event
           in
           (* deliver visible (not ignored) messages *)
-          if Public_view.visibility x then handle_private state event else state
+          if Public_view.visibility x
+          then `Deliver, handle_private state event
+          else `Deliver, state
       in
       Observable state
     ;;
 
-    let observe (Observable s) =
+    let observe (Observable (ev, s)) =
       let open Observation in
       let private_proposal = Private.puzzle_payload s.private_
       and public_proposal = Public.puzzle_payload s.public in
@@ -427,6 +443,10 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; diff_orphans = private_orphans - public_orphans
       ; include_own_orphans = s.mining.own
       ; include_foreign_orphans = s.mining.foreign
+      ; step_is_attacker_pow =
+          (match ev with
+          | `PoW -> true
+          | `Deliver -> false)
       }
     ;;
 
@@ -436,25 +456,22 @@ module Make (Parameters : Ethereum.Parameters) = struct
         | hd :: _tl -> Some hd
         | _ -> None
       in
-      let match_ offset =
-        let target =
-          (* preference of to be released block, can be height or work *)
-          preference (data s.public) + offset
-        in
+      let release_upto target =
         (* look for to be released block backwards from private head *)
         let rec f b =
           if preference (data b) <= target then b else parent b |> Option.get |> f
         in
         [ f s.private_ ]
-        (* NOTE: if private preference is smaller target height, then private head is
+        (* NOTE: if private preference is smaller target preference, then private head is
            released. *)
       in
       let release, state =
         match (action : Action.action) with
         | Adopt_release -> [ s.private_ ], State.update ~private_:s.public s
         | Adopt_discard -> [], State.update ~private_:s.public s
-        | Match -> match_ 0, s
-        | Override -> match_ 1, s
+        | Match -> release_upto (preference (data s.public)), s
+        | Override -> release_upto (preference (data s.public) + 1), s
+        | Release1 -> release_upto (preference (data s.common) + 1), s
         | Wait -> [], s
       in
       release, State.update ~mining state
@@ -466,7 +483,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
       }
     ;;
 
-    let apply (Observable state) action = interpret state action |> conclude
+    let apply (Observable (_, state)) action = interpret state action |> conclude
   end
 
   let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =
@@ -498,14 +515,65 @@ module Make (Parameters : Ethereum.Parameters) = struct
         match adopt with
         | `Release -> Adopt_release
         | `Discard -> Adopt_discard
+      and private_pref, public_pref =
+        match Parameters.preference with
+        | Height -> o.private_height, o.public_height
+        | Work -> o.private_work, o.public_work
       in
-      if o.private_work < o.public_work
+      if private_pref < public_pref
       then adopt, mining
-      else if o.private_work = 0 && o.public_work = 0
+      else if private_pref = 0 && public_pref = 0
       then Wait, mining
-      else if o.public_work = 0
+      else if public_pref = 0
       then Wait, mining
       else Override, mining
+    ;;
+
+    (** Feng and Niu. Selfish mining in Ethereum. ICDCS '19. *)
+    let fn19 o =
+      let open Observation in
+      let open Action in
+      let selfish_pool_mines_new_block () =
+        if o.private_height = 2 && o.public_height = 1 then Override else Wait
+      and honest_miner_adds_new_block () =
+        if o.private_height < o.public_height
+        then Adopt_discard
+        else if o.private_height = o.public_height
+        then Match
+        else if o.private_height = o.public_height + 1
+        then Override
+        else Release1
+      in
+      let a =
+        if o.step_is_attacker_pow
+        then selfish_pool_mines_new_block ()
+        else honest_miner_adds_new_block ()
+      in
+      (* I think the strategy could be improved by ignoring honest uncles and by using
+         Adopt_release. *)
+      a, { own = true; foreign = true }
+    ;;
+
+    let fn19pkel o =
+      let open Observation in
+      let open Action in
+      let selfish_pool_mines_new_block () =
+        if o.private_height = 2 && o.public_height = 1 then Override else Wait
+      and honest_miner_adds_new_block () =
+        if o.private_height < o.public_height
+        then Adopt_release
+        else if o.private_height = o.public_height
+        then Match
+        else if o.private_height = o.public_height + 1
+        then Override
+        else Release1
+      in
+      let a =
+        if o.step_is_attacker_pow
+        then selfish_pool_mines_new_block ()
+        else honest_miner_adds_new_block ()
+      in
+      a, { own = true; foreign = false }
     ;;
   end
 
@@ -522,5 +590,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
          ~info:"ad-hoc selfish policy w/ discard on adopt"
          "selfish_discard"
          (selfish ~adopt:`Discard)
+    |> add ~info:"Feng and Niu. Selfish mining in Ethereum. ICDCS '19." "fn19" fn19
+    |> add ~info:"Improved? version of Feng and Niu @ ICDCS '19." "fn19pkel" fn19pkel
   ;;
 end
