@@ -338,6 +338,43 @@ module Make (Parameters : Parameters) = struct
       loop ()
     ;;
 
+    (* new Algorithm for reward-optimizing choice
+
+       Input: last block b
+
+       1. Find all confirming sub blocks of b. Put them into array a.
+
+       2. Check |a| > k. Abort if not.
+
+       3. Prepare mutable list l. Iterate |a| choose k. For each choice, check
+       connectivity. Calculate rewards for connected choice; add to l.
+
+       4. Sort l by reward, pick optimal choice q.
+
+       5. Reduce q such that only sub block tree leaves remain.
+
+       6. Sort q by branch depth, descending.
+
+       7. Return q.
+
+       Sorting sub blocks on step (1.) by dag-imposed partial order can simplify
+       connectivity check in (3.); e.g., we can iterate the choice in dag-imposed order
+       and check if all predecessors have been visited before or equal b.
+
+       We can find the leaves with the same technique. Iterate choice in dag-imposed
+       order, for each block mark all its predecessors as redundant. After the iteration,
+       leaves are still unmarked.
+
+       It's also easy to select the branch with the highest depth: just pick the last
+       entry of q.
+
+       Maybe we can exploit that [iter_n_choose_k] returns the choice in (reverse) sorted
+       manner. If we start relying on this, we'd have to add a test for that.
+
+       Calculating rewards will be interesting. We cannot use the reward function of the
+       referee, because the block is not yet appended. But maybe we can reuse parts to
+       avoid error-prone redundancy. *)
+
     let puzzle_payload preferred =
       let block = last_block preferred in
       match quorum block with
