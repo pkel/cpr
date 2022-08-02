@@ -146,18 +146,14 @@ module Make (Parameters : Parameters) = struct
     let compare_blocks =
       let open Compare in
       let cmp =
-        by (tuple int int) (fun x ->
-            let x = data x in
-            x.block, x.vote)
+        by int height $ by int (fun x -> List.length (Dag.children votes_only x))
       in
       skip_eq Dag.vertex_eq cmp
     ;;
 
     let winner l =
-      List.map last_block l
-      |> Compare.first (Compare.neg compare_blocks) 1
-      |> Option.get
-      |> List.hd
+      assert (List.for_all is_block l);
+      Compare.first (Compare.neg compare_blocks) 1 l |> Option.get |> List.hd
     ;;
 
     let history =
@@ -221,19 +217,13 @@ module Make (Parameters : Parameters) = struct
 
     type state = env Dag.vertex
 
-    let preferred state = last_block state
+    let preferred state = state
 
     let init ~roots =
       match roots with
       | [ genesis ] -> genesis
       | roots -> dag_fail roots "init: expected single root"
     ;;
-
-    module IntSet = Set.Make (struct
-      type t = int
-
-      let compare = compare
-    end)
 
     (** Algorithm for selecting sub blocks quickly.
 
@@ -244,7 +234,8 @@ module Make (Parameters : Parameters) = struct
         block. Thus this implementation does not align with George's
         description of Tailstorm.
     *)
-    let altruistic_quorum for_block =
+    let altruistic_quorum ~vote_filter b =
+      let module IntSet = Set.Make (Int) in
       let rec f ids n q l =
         if n = k - 1
         then Some (List.rev q)
@@ -267,8 +258,8 @@ module Make (Parameters : Parameters) = struct
             then (* quorum would grow to big *) f ids n q tl
             else f (IntSet.union fresh ids) n' (hd :: q) tl)
       in
-      Dag.iterate_descendants votes_only [ for_block ]
-      |> Seq.filter (Dag.vertex_neq for_block)
+      Dag.iterate_descendants votes_only (Dag.children votes_only b)
+      |> Seq.filter vote_filter
       |> List.of_seq
       |> List.sort
            Compare.(
@@ -302,7 +293,7 @@ module Make (Parameters : Parameters) = struct
         We sort the branches by the amount of reward they would add. We add the
         most valuable branch an reiterate until enough sub blocks are added.
     *)
-    let heuristic_quorum for_block =
+    let heuristic_quorum ~vote_filter b =
       let ht = Hashtbl.create (2 * k)
       and acc = ref []
       and n = ref (k - 1) in
@@ -329,8 +320,8 @@ module Make (Parameters : Parameters) = struct
         assert (!n >= 0);
         if !n > 0
         then (
-          Dag.iterate_descendants votes_only [ for_block ]
-          |> Seq.filter (Dag.vertex_neq for_block)
+          Dag.iterate_descendants votes_only (Dag.children votes_only b)
+          |> Seq.filter vote_filter
           |> Seq.filter (fun x -> not (included x))
           |> (* calculate own and overall reward for branch *)
           Seq.map (fun x -> x, reward x, reward ~all:true x)
@@ -389,13 +380,15 @@ module Make (Parameters : Parameters) = struct
        Calculating rewards will be interesting. We cannot use the reward function of the
        referee, because the block is not yet appended. But maybe we can reuse parts to
        avoid error-prone redundancy. *)
-    let optimal_quorum b =
+    let optimal_quorum ~vote_filter b =
       assert (is_block b);
       if k = 1
       then Some []
       else (
         let a =
-          Dag.children votes_only b |> Dag.iterate_descendants votes_only |> Array.of_seq
+          Dag.children votes_only b
+          |> Dag.iterate_descendants (Dag.filter vote_filter votes_only)
+          |> Array.of_seq
         in
         let n = Array.length a in
         if n < k - 1
@@ -449,9 +442,9 @@ module Make (Parameters : Parameters) = struct
                   let rewarded_votes =
                     match rewards with
                     | Block -> Seq.empty
-                    | Constant | Discount -> Dag.iterate_descendants votes_only leaves
+                    | Constant | Discount -> Dag.iterate_ancestors votes_only leaves
                     | Punish | Hybrid ->
-                      Dag.iterate_descendants votes_only [ List.hd leaves ]
+                      Dag.iterate_ancestors votes_only [ List.hd leaves ]
                   and per_vote =
                     match rewards with
                     | Block | Constant | Punish -> 1.
@@ -498,40 +491,44 @@ module Make (Parameters : Parameters) = struct
       | Optimal -> optimal_quorum
     ;;
 
-    let puzzle_payload preferred =
-      let block = last_block preferred in
-      match quorum block with
+    let puzzle_payload' ~vote_filter b =
+      assert (is_block b);
+      match quorum ~vote_filter b with
       | Some q ->
-        { parents = block :: q
-        ; sign = false
-        ; data = { block = height block + 1; vote = 0 }
-        }
+        { parents = b :: q; sign = false; data = { block = height b + 1; vote = 0 } }
       | None ->
         let votes =
-          Dag.iterate_descendants votes_only [ block ]
+          Dag.iterate_descendants (Dag.filter vote_filter votes_only) [ b ]
           |> List.of_seq
           |> List.sort compare_votes_in_block
         in
         let parent =
           match votes with
           | hd :: _ -> hd
-          | _ -> block
+          | _ -> b
         in
         { parents = [ parent ]
         ; sign = false
-        ; data = { block = height block; vote = (data parent).vote + 1 }
+        ; data = { block = height b; vote = (data parent).vote + 1 }
         }
     ;;
 
-    let handler preferred = function
-      | PuzzleSolved v -> { state = v; share = [ v ] }
-      | Deliver consider ->
+    let puzzle_payload = puzzle_payload' ~vote_filter:(fun _ -> true)
+
+    let handler b = function
+      | PuzzleSolved v -> { state = last_block v; share = [ v ] }
+      | Deliver c ->
         (* Prefer longest chain of votes after longest chain of blocks *)
-        let p = data preferred
-        and c = data consider in
-        if c.block > p.block || (c.block = p.block && c.vote > p.vote)
-        then { state = consider; share = [] }
-        else { state = preferred; share = [] }
+        let c = last_block c in
+        let count x =
+          Dag.iterate_descendants votes_only [ x ] |> Seq.fold_left (fun n _ -> n + 1) 0
+        in
+        let pref =
+          if height c > height b || (height c = height b && count c > count b)
+          then c
+          else b
+        in
+        { state = pref; share = [] }
     ;;
   end
 
