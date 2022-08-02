@@ -55,9 +55,10 @@ module Make (Parameters : Parameters) = struct
 
   let info =
     Printf.sprintf
-      "Tailstorm with k=%i and '%s' rewards"
+      "Tailstorm with k=%i, '%s' rewards, and '%s' sub block selection"
       Parameters.k
       (reward_key Parameters.rewards)
+      (subblock_selection_key Parameters.subblock_selection)
   ;;
 
   let puzzles_per_block = k
