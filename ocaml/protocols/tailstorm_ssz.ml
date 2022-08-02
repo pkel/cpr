@@ -278,24 +278,31 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     let interpret { state = s; common } action =
       let release kind =
         let vertices =
-          (* TODO: iterate_desc private |> iterate_ancestors *)
           Dag.iterate_descendants view [ common ]
           |> Seq.filter (fun x -> not (released x))
         in
-        let rec h x' = function
-          | Seq.Nil -> x' (* override not possible; release best *)
+        let module Map = Map.Make (Int) in
+        let rec h release_now = function
+          | Seq.Nil -> release_now (* override not possible; release all *)
           | Seq.Cons (x, vertices) ->
-            (* TODO: accumulate to be released vertices *)
-            (* TODO: handle visibility of to be released vertices *)
-            if s.public $!= (Private.handler s.public (Deliver x)).state
+            let release_now' = Map.add (Dag.id x) x release_now in
+            let module N =
+              Honest (struct
+                include V
+
+                let visibility x = released x || Map.mem (Dag.id x) release_now'
+                let view = Dag.filter visibility view
+              end)
+            in
+            if s.public $!= (N.handler s.public (Deliver x)).state
             then (
-              (* x is the first vertex better than s.public; we assume x' was a match *)
+              (* release_now' is just enough to override; release_now was not enough; *)
               match kind with
-              | `Override -> x
-              | `Match -> x')
-            else h x (vertices ())
+              | `Override -> release_now'
+              | `Match -> release_now)
+            else h release_now' (vertices ())
         in
-        [ h common (vertices ()) ]
+        h Map.empty (vertices ()) |> Map.bindings |> List.map snd
       in
       match (action : Action.t) with
       | Adopt_Proceed -> [], { s with epoch = `Proceed; private_ = s.public }
