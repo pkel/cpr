@@ -28,7 +28,17 @@ let protocols =
   let open Cpr_protocols in
   nakamoto
   :: ethereum
-  :: List.concat_map (fun k -> [ bk ~k; bkll ~k; tailstorm ~k ]) [ 1; 2; 4; 8; 16; 32 ]
+  :: List.concat_map
+       (fun k ->
+         [ bk ~k; bkll ~k ]
+         @ List.map
+             (fun rewards ->
+               let subblock_selection =
+                 if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
+               in
+               tailstorm ~subblock_selection ~rewards ~k)
+             Tailstorm.reward_schemes)
+       [ 1; 2; 4; 8; 16; 32 ]
 ;;
 
 (* Run all combinations of protocol, network and block_interval. *)
