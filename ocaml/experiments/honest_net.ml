@@ -32,7 +32,11 @@ let protocols =
        (fun k ->
          [ bk ~k; bkll ~k ]
          @ List.map
-             (fun rewards -> tailstorm ~subblock_selection:Optimal ~rewards ~k)
+             (fun rewards ->
+               let subblock_selection =
+                 if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
+               in
+               tailstorm ~subblock_selection ~rewards ~k)
              Tailstorm.reward_schemes)
        [ 1; 2; 4; 8; 16; 32 ]
 ;;

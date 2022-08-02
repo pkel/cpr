@@ -25,7 +25,8 @@ let two_agents (AttackSpace (module A)) n_activations =
 
 let selfish_mining (AttackSpace (module A)) n_activations =
   let protocol = (module A.Protocol : Protocol with type data = _) in
-  let gammas = [ 0.; 0.25; 0.5; 0.75; 0.9 ] in
+  (* let gammas = [ 0.; 0.25; 0.5; 0.75; 0.9 ] in *)
+  let gammas = [ 0.; 0.5 ] in
   List.concat_map
     (fun net ->
       Collection.map_to_list
@@ -43,7 +44,11 @@ let selfish_mining (AttackSpace (module A)) n_activations =
         A.policies)
     (List.concat_map
        (fun alpha ->
-         List.map (fun gamma -> selfish_mining ~defenders:10 ~alpha gamma) gammas)
+         List.map
+           (fun gamma ->
+             let defenders = 1. /. (1. -. gamma) |> Float.ceil |> Float.to_int in
+             selfish_mining ~defenders ~alpha gamma)
+           gammas)
        alphas)
 ;;
 
@@ -62,27 +67,30 @@ let tasks ~n_activations =
       (fun rewards ->
         List.concat_map
           (fun k ->
-            two_agents
-              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k)
-              n_activations)
+            let subblock_selection =
+              if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
+            in
+            two_agents (tailstorm_ssz ~subblock_selection ~rewards ~k) n_activations)
           k
         @ List.concat_map
             (fun k ->
-              selfish_mining
-                (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k)
-                n_activations)
+              let subblock_selection =
+                if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
+              in
+              selfish_mining (tailstorm_ssz ~subblock_selection ~rewards ~k) n_activations)
             k)
-      Tailstorm.reward_schemes
+      Tailstorm.[ Constant; Discount ]
   and tailstorm' =
     List.concat_map
       (fun rewards ->
         List.concat_map
           (fun k ->
-            two_agents
-              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k)
-              n_activations)
+            let subblock_selection =
+              if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
+            in
+            two_agents (tailstorm_draft ~subblock_selection ~rewards ~k) n_activations)
           k)
-      Tailstorm.reward_schemes
+      Tailstorm.[ Constant; Discount ]
   in
   List.concat [ nakamoto; ethereum; bk; bkll; tailstorm; tailstorm' ]
 ;;
