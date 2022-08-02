@@ -22,7 +22,7 @@ let%test "n_choose_k" = n_choose_k 4 2 = 6
 let iter_n_choose_k n k f =
   let rec iter v s j =
     if j = k
-    then f v
+    then f (List.rev v) (* return choice in increasing order *)
     else
       for i = s to n - 1 do
         iter (i :: v) (i + 1) (j + 1)
@@ -37,13 +37,19 @@ let%test "iter_n_choose_k" =
   !i = n_choose_k 7 5
 ;;
 
+let%test_unit "iter_n_choose_k-sorted" =
+  iter_n_choose_k 5 3 (fun c ->
+      let rec f = function
+        | [] | [ _ ] -> ()
+        | e0 :: e1 :: tl -> if e1 < e0 then failwith "not sorted" else f (e1 :: tl)
+      in
+      f c)
+;;
+
 let%expect_test "iter_n_choose_k" =
   let f l =
     print_char '[';
-    List.sort Int.compare l
-    |> List.map string_of_int
-    |> String.concat "; "
-    |> print_string;
+    List.map string_of_int l |> String.concat "; " |> print_string;
     print_endline "]"
   in
   iter_n_choose_k 4 2 f;

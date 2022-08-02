@@ -31,7 +31,9 @@ let protocols =
   :: List.concat_map
        (fun k ->
          [ bk ~k; bkll ~k ]
-         @ List.map (fun rewards -> tailstorm ~rewards ~k) Tailstorm.reward_schemes)
+         @ List.map
+             (fun rewards -> tailstorm ~subblock_selection:Optimal ~rewards ~k)
+             Tailstorm.reward_schemes)
        [ 1; 2; 4; 8; 16; 32 ]
 ;;
 

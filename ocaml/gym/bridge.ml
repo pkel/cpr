@@ -223,6 +223,9 @@ let () =
          failwith msg
      in
      fun () ->
-       Proto (Engine.of_module (tailstorm_ssz ~rewards:reward_ ~k) ~reward)
+       Proto
+         (Engine.of_module
+            (tailstorm_ssz ~subblock_selection:Optimal ~rewards:reward_ ~k)
+            ~reward)
        |> python_of_protocol)
 ;;

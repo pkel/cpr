@@ -65,33 +65,36 @@ let bkll_ssz ~k =
 ;;
 
 (** Tailstorm protocol with k - 1 subblocks per (strong) block *)
-let tailstorm ~k ~rewards =
+let tailstorm ~subblock_selection ~k ~rewards =
   let module M =
     Tailstorm.Make (struct
       let k = k
       let rewards = rewards
+      let subblock_selection = subblock_selection
     end)
   in
   Protocol (module M)
 ;;
 
 (** {!nakamoto_ssz} adapted for {!tailstorm}. *)
-let tailstorm_ssz ~k ~rewards =
+let tailstorm_ssz ~subblock_selection ~k ~rewards =
   let module M =
     Tailstorm_ssz.Make (struct
       let k = k
       let rewards = rewards
+      let subblock_selection = subblock_selection
     end)
   in
   AttackSpace (module M)
 ;;
 
 (** Deprecated draft attack space against {!tailstorm}. *)
-let tailstorm_draft ~k ~rewards =
+let tailstorm_draft ~subblock_selection ~k ~rewards =
   let module M =
     Tailstorm_draft.Make (struct
       let k = k
       let rewards = rewards
+      let subblock_selection = subblock_selection
     end)
   in
   AttackSpace (module M)
@@ -174,15 +177,24 @@ let%test_module "protocol" =
     ;;
 
     let%test_unit "tailstorm8constant/easy" =
-      test ~activation_delay:10. ~orphan_rate_limit:0.1 (tailstorm ~k:8 ~rewards:Constant)
+      test
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
     let%test_unit "tailstorm8discount/hard" =
-      test ~activation_delay:1. ~orphan_rate_limit:0.3 (tailstorm ~k:8 ~rewards:Discount)
+      test
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
     ;;
 
     let%test_unit "tailstorm32block/hard" =
-      test ~activation_delay:1. ~orphan_rate_limit:0.1 (tailstorm ~k:32 ~rewards:Block)
+      test
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
     ;;
   end)
 ;;
@@ -237,14 +249,17 @@ let%test_module "policy" =
     ;;
 
     let%test_unit "tailstorm8constant/ssz/honest" =
-      test ~policy:"honest" ~orphan_rate_limit:0.01 (tailstorm_ssz ~k:8 ~rewards:Constant)
+      test
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
     let%test_unit "tailstorm8constant/draft/honest" =
       test
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_draft ~k:8 ~rewards:Constant)
+        (tailstorm_draft ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
   end)
 ;;
@@ -289,11 +304,11 @@ let%test_module "random" =
     let%test_unit "bkll8/ssz/random" = test (bkll_ssz ~k:8)
 
     let%test_unit "tailstorm8constant/ssz/random" =
-      test (tailstorm_ssz ~k:8 ~rewards:Constant)
+      test (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
     let%test_unit "tailstorm8discount/draft/random" =
-      test (tailstorm_draft ~k:8 ~rewards:Discount)
+      test (tailstorm_draft ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
     ;;
   end)
 ;;

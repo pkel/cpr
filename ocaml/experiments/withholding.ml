@@ -60,16 +60,27 @@ let tasks ~n_activations =
   and tailstorm =
     List.concat_map
       (fun rewards ->
-        List.concat_map (fun k -> two_agents (tailstorm_ssz ~rewards ~k) n_activations) k
+        List.concat_map
+          (fun k ->
+            two_agents
+              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k)
+              n_activations)
+          k
         @ List.concat_map
-            (fun k -> selfish_mining (tailstorm_ssz ~rewards ~k) n_activations)
+            (fun k ->
+              selfish_mining
+                (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k)
+                n_activations)
             k)
       Tailstorm.reward_schemes
   and tailstorm' =
     List.concat_map
       (fun rewards ->
         List.concat_map
-          (fun k -> two_agents (tailstorm_draft ~rewards ~k) n_activations)
+          (fun k ->
+            two_agents
+              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k)
+              n_activations)
           k)
       Tailstorm.reward_schemes
   in

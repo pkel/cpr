@@ -29,11 +29,23 @@ let reward_info = function
   | Block -> "1 per confirmed (strong) block"
 ;;
 
+type subblock_selection =
+  | Altruistic
+  | Heuristic
+  | Optimal
+
+let subblock_selection_key = function
+  | Altruistic -> "altruistic"
+  | Heuristic -> "heuristic"
+  | Optimal -> "optimal"
+;;
+
 module type Parameters = sig
   (** number of votes (= puzzle solutions) per block *)
   val k : int
 
   val rewards : reward_scheme
+  val subblock_selection : subblock_selection
 end
 
 module Make (Parameters : Parameters) = struct
@@ -222,13 +234,16 @@ module Make (Parameters : Parameters) = struct
       let compare = compare
     end)
 
-    let quorum_old for_block =
-      (* look through sub blocks (votes) and assemble quorum if possible. This version
-         picks the longest branches first. If a branches does not fit into the quorum, it
-         is cut down until it fits.
+    (** Algorithm for selecting sub blocks quickly.
 
-         The chosen sub blocks are not always optimal for the miner of the block. Thus
-         this implementation does not align with George's description of Tailstorm.*)
+        This version picks the longest branches first. If a branches does not
+        fit into the quorum, it is cut down until it fits.
+
+        The chosen sub blocks do not maximize rewards for the miner of the
+        block. Thus this implementation does not align with George's
+        description of Tailstorm.
+    *)
+    let altruistic_quorum for_block =
       let rec f ids n q l =
         if n = k - 1
         then Some (List.rev q)
@@ -272,22 +287,21 @@ module Make (Parameters : Parameters) = struct
                     d.vote, hash)))
     ;;
 
-    let quorum for_block =
-      (* look through the sub blocks (votes) and assemble a quorum if possible. This
-         version tries to select the sub blocks that maximize a miner's own rewards.
+    (** Algorithm for selecting sub block heuristically but quickly.
 
-         We first find all branches of depth k-1 or less. We then sort the branches by own
-         reward, assuming that the branch will be confirmed in the future. We then add the
-         most valuable branch to the quorum.
+        This version tries to select the sub blocks that maximize a miner's
+        own rewards. We assume constant reward scheme.
 
-         If some (= k') sub blocks are missing after the first iteration, we search for
-         all remaining branches that would add 'k or less sub blocks. We sort the branches
-         by the amount of reward they would add. We add the most valuable branch an
-         reiterate until enough sub blocks are added.
+        We first find all branches of depth k-1 or less. We then sort the
+        branches by own reward, assuming that the branch will be confirmed in
+        the future. We then add the most valuable branch to the quorum.
 
-         TODO. For now, we assume constant reward per proof-of-work. Handling the other
-         reward schemes correctly requires a restructuring of the code: reward function
-         must become an argument of the protocol. *)
+        If some (= k') sub blocks are missing after the first iteration, we
+        search for all remaining branches that would add k' or less sub blocks.
+        We sort the branches by the amount of reward they would add. We add the
+        most valuable branch an reiterate until enough sub blocks are added.
+    *)
+    let heuristic_quorum for_block =
       let ht = Hashtbl.create (2 * k)
       and acc = ref []
       and n = ref (k - 1) in
@@ -338,7 +352,7 @@ module Make (Parameters : Parameters) = struct
       loop ()
     ;;
 
-    (* new Algorithm for reward-optimizing choice
+    (** Algorithm for reward-optimizing sub block choice
 
        Input: last block b
 
@@ -374,6 +388,114 @@ module Make (Parameters : Parameters) = struct
        Calculating rewards will be interesting. We cannot use the reward function of the
        referee, because the block is not yet appended. But maybe we can reuse parts to
        avoid error-prone redundancy. *)
+    let optimal_quorum b =
+      assert (is_block b);
+      if k = 1
+      then Some []
+      else (
+        let a =
+          Dag.children votes_only b |> Dag.iterate_descendants votes_only |> Array.of_seq
+        in
+        let n = Array.length a in
+        if n < k - 1
+        then None
+        else (
+          let a' =
+            let module Map = Map.Make (Int) in
+            let _, m =
+              Array.fold_left
+                (fun (i, m) x -> i + 1, Map.add (Dag.id x) i m)
+                (0, Map.empty)
+                a
+            in
+            fun x -> Map.find (Dag.id x) m
+          in
+          let leaves =
+            let reach_buf = Array.make n false in
+            let leave_buf = Array.make n true in
+            let reset () =
+              for i = 0 to n - 1 do
+                reach_buf.(i) <- false;
+                leave_buf.(i) <- true
+              done
+            in
+            let rec f = function
+              | hd :: tl ->
+                (* check connectivity, mark non-leaves *)
+                if List.for_all
+                     (fun p ->
+                       leave_buf.(a' p) <- false;
+                       reach_buf.(a' p))
+                     (Dag.parents votes_only a.(hd))
+                then (
+                  let () = reach_buf.(hd) <- true in
+                  f tl)
+                else `Not_connected
+              | [] ->
+                (* check quorum size (debugging) *)
+                (* assert (Array.fold_left (fun c b -> if b then c + 1 else c) 0 reach_buf = k - 1); *)
+                let leaves =
+                  let l = ref [] in
+                  let () =
+                    for i = 1 to n do
+                      let i' = n - i in
+                      if reach_buf.(i') && leave_buf.(i') then l := a.(i') :: !l
+                    done
+                  in
+                  List.sort compare_votes_in_block !l
+                in
+                let reward =
+                  let rewarded_votes =
+                    match rewards with
+                    | Block -> Seq.empty
+                    | Constant | Discount -> Dag.iterate_descendants votes_only leaves
+                    | Punish | Hybrid ->
+                      Dag.iterate_descendants votes_only [ List.hd leaves ]
+                  and per_vote =
+                    match rewards with
+                    | Block | Constant | Punish -> 1.
+                    | Discount | Hybrid ->
+                      let depth = (List.hd leaves |> data).vote in
+                      float_of_int (depth + 1) /. float_of_int k
+                  in
+                  Seq.fold_left
+                    (fun acc x -> if appended_by_me x then acc +. per_vote else acc)
+                    1.
+                    rewarded_votes
+                in
+                `Ok (reward, leaves)
+            in
+            fun c ->
+              reset ();
+              f c
+          in
+          let q =
+            let l = ref [] in
+            let () =
+              Combinatorics.iter_n_choose_k (Array.length a) (k - 1) (fun c ->
+                  (* assert (List.length c = k - 1); *)
+                  match leaves c with
+                  | `Ok x -> l := x :: !l
+                  | `Not_connected -> ())
+            in
+            match !l with
+            | hd :: tl ->
+              List.fold_left (* find maximum reward *)
+                (fun (ar, ac) (br, bc) -> if br > ar then br, bc else ar, ac)
+                hd
+                tl
+              |> snd
+            | _ -> failwith "reward_optim_quorum: no choice"
+          in
+          Some q))
+    ;;
+
+    let quorum =
+      match subblock_selection with
+      | Altruistic -> altruistic_quorum
+      | Heuristic -> heuristic_quorum
+      | Optimal -> optimal_quorum
+    ;;
 
     let puzzle_payload preferred =
       let block = last_block preferred in

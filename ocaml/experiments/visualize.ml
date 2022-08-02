@@ -108,12 +108,24 @@ let tasks =
   @ List.concat_map
       (fun rewards ->
         List.concat
-          [ tasks_per_attack_space (tailstorm_ssz ~rewards ~k:8) 100
-          ; tasks_per_attack_space (tailstorm_ssz ~rewards ~k:4) 50
-          ; tasks_per_attack_space (tailstorm_ssz ~rewards ~k:1) 20
-          ; tasks_per_attack_space (tailstorm_draft ~rewards ~k:8) 100
-          ; tasks_per_attack_space (tailstorm_draft ~rewards ~k:4) 50
-          ; tasks_per_attack_space (tailstorm_draft ~rewards ~k:1) 20
+          [ tasks_per_attack_space
+              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k:8)
+              100
+          ; tasks_per_attack_space
+              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k:4)
+              50
+          ; tasks_per_attack_space
+              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k:1)
+              20
+          ; tasks_per_attack_space
+              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k:8)
+              100
+          ; tasks_per_attack_space
+              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k:4)
+              50
+          ; tasks_per_attack_space
+              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k:1)
+              20
           ])
       Tailstorm.reward_schemes
 ;;
