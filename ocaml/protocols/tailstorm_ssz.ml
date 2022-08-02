@@ -150,16 +150,34 @@ module Make (Parameters : Tailstorm.Parameters) = struct
   module Agent (V : LocalView with type data = data) = struct
     open Protocol.Referee (V)
     include V
-    module State = Ssz_tools.State8 (V)
 
-    type state = State.t
-    type observable_state = Observable of state
+    type state =
+      { public : env Dag.vertex (* defender's preferred block *)
+      ; private_ : env Dag.vertex (* attacker's preferred block *)
+      ; epoch : [ `Proceed | `Prolong ]
+            (* Proceed: the attacker considers the defender's votes that extend on his
+               preferred block when building a new block.
+
+               Prolong: the attacker prolongs the current epoch until he can form a block
+               that does not reference any defender votes. *)
+      ; pending_private_to_public_messages : env Dag.vertex list
+      }
+
+    type observable_state =
+      { state : state
+      ; common : env Dag.vertex
+      }
 
     let preferred (s : state) = s.private_
 
     let init ~roots =
       let module N = Honest (V) in
-      N.init ~roots |> State.init ~epoch:`Prolong
+      let genesis = N.init ~roots in
+      { public = genesis
+      ; private_ = genesis
+      ; epoch = `Prolong
+      ; pending_private_to_public_messages = []
+      }
     ;;
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
@@ -182,14 +200,14 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     (* the attacker emulates a defending node. This describes the defender node *)
     let handle_public (s : state) event =
       let public = (Public.handler s.public event).state in
-      State.update ~public s
+      { s with public }
     ;;
 
     module Private = Honest (V)
 
     let handle_private (s : state) event =
       let private_ = (Private.handler s.private_ event).state in
-      State.update ~private_ s
+      { s with private_ }
     ;;
 
     let puzzle_payload (s : state) =
@@ -206,7 +224,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         let pending = state.pending_private_to_public_messages in
         List.fold_left
           (fun state msg -> handle_public state (Deliver msg))
-          (State.update ~pending_private_to_public_messages:[] state)
+          { state with pending_private_to_public_messages = [] }
           pending
       in
       match event with
@@ -218,13 +236,18 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           (* simulate defender *)
           handle_public state event
         in
-        (* TODO: do we have to deliver any messages to the private node? *)
+        (* TODO: do we have to deliver any messages to the private node? Probably not, see
+           https://github.com/pkel/cpr/issues/11 *)
         state
     ;;
 
-    let prepare s e = Observable (prepare s e)
+    let prepare s e =
+      { state = prepare s e
+      ; common = Dag.common_ancestor view s.public s.private_ |> Option.get
+      }
+    ;;
 
-    let observe (Observable s) =
+    let observe { state = s; common } =
       let open Observation in
       let private_depth, private_votes =
         Dag.iterate_descendants votes_only [ s.private_ ]
@@ -233,7 +256,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         Dag.iterate_descendants votes_only [ s.public ]
         |> Seq.fold_left (fun (d, n) x -> max d (data x).vote, n + 1) (0, 0)
       in
-      let ca_height = height s.common
+      let ca_height = height common
       and private_height = height s.private_
       and public_height = height s.public in
       { private_blocks = private_height - ca_height
@@ -252,15 +275,18 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       }
     ;;
 
-    let interpret (s : state) action =
+    let interpret { state = s; common } action =
       let release kind =
         let vertices =
-          Dag.iterate_descendants view [ s.common ]
+          (* TODO: iterate_desc private |> iterate_ancestors *)
+          Dag.iterate_descendants view [ common ]
           |> Seq.filter (fun x -> not (released x))
         in
         let rec h x' = function
           | Seq.Nil -> x' (* override not possible; release best *)
           | Seq.Cons (x, vertices) ->
+            (* TODO: accumulate to be released vertices *)
+            (* TODO: handle visibility of to be released vertices *)
             if s.public $!= (Private.handler s.public (Deliver x)).state
             then (
               (* x is the first vertex better than s.public; we assume x' was a match *)
@@ -269,26 +295,26 @@ module Make (Parameters : Tailstorm.Parameters) = struct
               | `Match -> x')
             else h x (vertices ())
         in
-        [ h s.common (vertices ()) ]
+        [ h common (vertices ()) ]
       in
       match (action : Action.t) with
-      | Adopt_Proceed -> [], State.update ~epoch:`Proceed ~private_:s.public s
-      | Adopt_Prolong -> [], State.update ~epoch:`Prolong ~private_:s.public s
-      | Match_Proceed -> release `Match, State.update ~epoch:`Proceed s
-      | Match_Prolong -> release `Match, State.update ~epoch:`Prolong s
-      | Override_Proceed -> release `Override, State.update ~epoch:`Proceed s
-      | Override_Prolong -> release `Override, State.update ~epoch:`Prolong s
-      | Wait_Proceed -> [], State.update ~epoch:`Proceed s
-      | Wait_Prolong -> [], State.update ~epoch:`Prolong s
+      | Adopt_Proceed -> [], { s with epoch = `Proceed; private_ = s.public }
+      | Adopt_Prolong -> [], { s with epoch = `Prolong; private_ = s.public }
+      | Match_Proceed -> release `Match, { s with epoch = `Proceed }
+      | Match_Prolong -> release `Match, { s with epoch = `Prolong }
+      | Override_Proceed -> release `Override, { s with epoch = `Proceed }
+      | Override_Prolong -> release `Override, { s with epoch = `Prolong }
+      | Wait_Proceed -> [], { s with epoch = `Proceed }
+      | Wait_Prolong -> [], { s with epoch = `Prolong }
     ;;
 
     let conclude (pending_private_to_public_messages, state) =
       { share = pending_private_to_public_messages
-      ; state = State.update ~pending_private_to_public_messages state
+      ; state = { state with pending_private_to_public_messages }
       }
     ;;
 
-    let apply (Observable state) action = interpret state action |> conclude
+    let apply state action = interpret state action |> conclude
   end
 
   let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =
@@ -343,7 +369,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       then Wait_Proceed
       else if o.private_depth = 0 && o.private_blocks = o.public_blocks + 1
       then Override_Proceed
-      else if o.public_blocks = o.private_blocks && o.private_depth = o.public_depth + 1
+      else if o.public_blocks = o.private_blocks && o.private_votes = o.public_votes + 1
       then Override_Proceed
       else if o.private_blocks - o.public_blocks > 10
               (* fork can become really deep for strong attackers. Cut-off shortens time

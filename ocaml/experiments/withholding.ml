@@ -26,7 +26,7 @@ let two_agents (AttackSpace (module A)) n_activations =
 let selfish_mining (AttackSpace (module A)) n_activations =
   let protocol = (module A.Protocol : Protocol with type data = _) in
   (* let gammas = [ 0.; 0.25; 0.5; 0.75; 0.9 ] in *)
-  let gammas = [ 0.; 0.5 ] in
+  let gammas = [ 0.; 0.5; 0.75; 0.9 ] in
   List.concat_map
     (fun net ->
       Collection.map_to_list
