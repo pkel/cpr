@@ -319,7 +319,8 @@ module Serializable : sig
     | Ethereum
     | Bk of { k : int }
     | Bkll of { k : int }
-    | Tailstorm of { k : int }
+    | TailstormConstant of { k : int }
+    | TailstormDiscount of { k : int }
 
   val to_protocol : t -> protocol
   val to_string : t -> string
@@ -330,14 +331,18 @@ end = struct
     | Ethereum
     | Bk of { k : int }
     | Bkll of { k : int }
-    | Tailstorm of { k : int }
+    | TailstormConstant of { k : int }
+    | TailstormDiscount of { k : int }
 
   let to_protocol = function
     | Nakamoto -> nakamoto
     | Ethereum -> ethereum
     | Bk { k } -> bk ~k
     | Bkll { k } -> bkll ~k
-    | Tailstorm { k } -> tailstorm ~k
+    | TailstormConstant { k } ->
+      tailstorm ~subblock_selection:Optimal ~rewards:Constant ~k
+    | TailstormDiscount { k } ->
+      tailstorm ~subblock_selection:Optimal ~rewards:Discount ~k
   ;;
 
   let to_string = function
@@ -345,7 +350,8 @@ end = struct
     | Ethereum -> "ethereum"
     | Bk { k } -> "bk " ^ string_of_int k
     | Bkll { k } -> "bkll " ^ string_of_int k
-    | Tailstorm { k } -> "tailstorm " ^ string_of_int k
+    | TailstormConstant { k } -> "tailstorm " ^ string_of_int k ^ " constant"
+    | TailstormDiscount { k } -> "tailstorm " ^ string_of_int k ^ " discount"
   ;;
 
   open Angstrom
@@ -370,11 +376,24 @@ end = struct
   let arg_k name f = string name *> space *> lift f int_literal
   let bk = arg_k "bk" (fun k -> Bk { k })
   let bkll = arg_k "bkll" (fun k -> Bkll { k })
-  let tailstorm = arg_k "tailstorm" (fun k -> Tailstorm { k })
+
+  let tailstorm_constant =
+    arg_k "tailstorm" (fun k -> TailstormConstant { k }) <* space <* string "constant"
+  ;;
+
+  let tailstorm_discount =
+    arg_k "tailstorm" (fun k -> TailstormDiscount { k }) <* space <* string "discount"
+  ;;
 
   let protocol =
     trim
-    *> (nakamoto <|> ethereum <|> bk <|> bkll <|> tailstorm <|> fail "unknown protocol")
+    *> (nakamoto
+       <|> ethereum
+       <|> bk
+       <|> bkll
+       <|> tailstorm_constant
+       <|> tailstorm_discount
+       <|> fail "unknown protocol")
     <* trim
   ;;
 
@@ -395,9 +414,12 @@ end = struct
       ; "ethereum"
       ; "bk 2"
       ; "bkll 5"
-      ; "  tailstorm  42  "
+      ; "  tailstorm  42 constant "
+      ; "  tailstorm  42 discount "
       ; " X"
       ; "bk"
+      ; "  tailstorm  42"
+      ; "  tailstorm  42 blub"
       ; "nakamoto 2"
       ];
     [%expect
@@ -406,7 +428,10 @@ end = struct
       ethereum
       bk 2
       bkll 5
-      tailstorm 42
+      tailstorm 42 constant
+      tailstorm 42 discount
+      ERROR: unknown protocol
+      ERROR: unknown protocol
       ERROR: unknown protocol
       ERROR: unknown protocol
       ERROR: end_of_input |}]
