@@ -664,7 +664,10 @@ include struct
     let protocol = trim *> protocol <* trim
 
     let of_key s =
-      parse_string ~consume:Consume.All protocol s |> Rresult.R.reword_error Rresult.R.msg
+      parse_string ~consume:Consume.All protocol s
+      |> Rresult.R.reword_error (fun err ->
+             Printf.sprintf "invalid protocol key '%s'%s" s err)
+      |> Rresult.R.reword_error Rresult.R.msg
     ;;
 
     let%expect_test "of_key/to_key" =
@@ -673,7 +676,7 @@ include struct
           let s' =
             match of_key s with
             | Ok (Protocol (module P)) -> P.key
-            | Error (`Msg m) -> "ERROR in key '" ^ s ^ "'" ^ m
+            | Error (`Msg m) -> "Error: " ^ m
           in
           print_endline s')
         [ "nakamoto"
@@ -692,9 +695,9 @@ include struct
       bk-2-constant
       bkll-5-block
       tailstorm-42-discount-heuristic
-      ERROR in key ' X': unknown protocol
-      ERROR in key 'bk': missing integer option
-      ERROR in key 'nakamoto 2': end_of_input |}]
+      Error: invalid protocol key ' X': unknown protocol
+      Error: invalid protocol key 'bk': missing integer option
+      Error: invalid protocol key 'nakamoto 2': end_of_input |}]
     ;;
   end
 
