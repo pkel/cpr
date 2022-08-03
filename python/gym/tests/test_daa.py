@@ -6,7 +6,7 @@ from cpr_gym import protocols
 
 def test_simple_daa():
     target = 600  # block interval
-    eps = 20
+    eps = 25
 
     def env_with_activation_delay(x):
         env = gym.make(
