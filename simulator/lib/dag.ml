@@ -355,11 +355,17 @@ let graphml view data vertices : GraphML.graph =
   let nodes, edges =
     Seq.fold_left
       (fun (nodes, edges) vertex ->
-        let nodes = { GraphML.id = vertex.serial; data = data vertex.data } :: nodes
+        let node_id i = "v" ^ string_of_int i in
+        let nodes =
+          { GraphML.id = node_id vertex.serial; data = data vertex.data } :: nodes
         and edges =
           List.fold_left
             (fun edges child ->
-              { GraphML.src = child.serial; dst = vertex.serial; data = [] } :: edges)
+              { GraphML.src = node_id child.serial
+              ; dst = node_id vertex.serial
+              ; data = []
+              }
+              :: edges)
             edges
             (children view vertex)
         in
@@ -388,19 +394,22 @@ let%expect_test "graphml" =
     {|
     { kind = Directed; data = [];
       nodes =
-      [{ id = 0; data = [("label", String ("r"))] };
-       { id = 1; data = [("label", String ("ra"))] };
-       { id = 2; data = [("label", String ("rb"))] };
-       { id = 3; data = [("label", String ("raa"))] };
-       { id = 4; data = [("label", String ("rba"))] };
-       { id = 5; data = [("label", String ("rbb"))] };
-       { id = 6; data = [("label", String ("rbaa"))] };
-       { id = 7; data = [("label", String ("rbaaa"))] }];
+      [{ id = "v0"; data = [("label", String ("r"))] };
+       { id = "v1"; data = [("label", String ("ra"))] };
+       { id = "v2"; data = [("label", String ("rb"))] };
+       { id = "v3"; data = [("label", String ("raa"))] };
+       { id = "v4"; data = [("label", String ("rba"))] };
+       { id = "v5"; data = [("label", String ("rbb"))] };
+       { id = "v6"; data = [("label", String ("rbaa"))] };
+       { id = "v7"; data = [("label", String ("rbaaa"))] }];
       edges =
-      [{ src = 2; dst = 0; data = [] }; { src = 1; dst = 0; data = [] };
-       { src = 3; dst = 1; data = [] }; { src = 5; dst = 2; data = [] };
-       { src = 4; dst = 2; data = [] }; { src = 6; dst = 4; data = [] };
-       { src = 7; dst = 6; data = [] }]
+      [{ src = "v2"; dst = "v0"; data = [] };
+       { src = "v1"; dst = "v0"; data = [] };
+       { src = "v3"; dst = "v1"; data = [] };
+       { src = "v5"; dst = "v2"; data = [] };
+       { src = "v4"; dst = "v2"; data = [] };
+       { src = "v6"; dst = "v4"; data = [] };
+       { src = "v7"; dst = "v6"; data = [] }]
       } |}]
 ;;
 
