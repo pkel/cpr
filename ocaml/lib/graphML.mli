@@ -33,13 +33,13 @@ type kind =
   | Undirected
 
 type edge =
-  { src : int
-  ; dst : int
+  { src : string
+  ; dst : string
   ; data : Data.t
   }
 
 type node =
-  { id : int
+  { id : string
   ; data : Data.t
   }
 

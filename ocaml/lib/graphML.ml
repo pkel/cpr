@@ -71,14 +71,14 @@ type kind =
 [@@deriving show { with_path = false }]
 
 type edge =
-  { src : int
-  ; dst : int
+  { src : string
+  ; dst : string
   ; data : Data.t
   }
 [@@deriving show { with_path = false }]
 
 type node =
-  { id : int
+  { id : string
   ; data : Data.t
   }
 [@@deriving show { with_path = false }]
@@ -93,8 +93,7 @@ type graph =
 
 let graph_to_xml =
   let open Xmlm in
-  let node_id i = Printf.sprintf "n%i" i
-  and el ?(a = []) tag l : _ frag =
+  let el ?(a = []) tag l : _ frag =
     `El ((("", tag), List.map (fun (k, v) -> ("", k), v) a), l)
   in
   let data ht eon (key, d) =
@@ -125,7 +124,7 @@ let graph_to_xml =
         (fun edges e ->
           el
             "edge"
-            ~a:[ "source", node_id e.src; "target", node_id e.dst ]
+            ~a:[ "source", e.src; "target", e.dst ]
             (List.fold_left (fun acc d -> data keys `Edge d :: acc) [] e.data)
           :: edges)
         []
@@ -135,7 +134,7 @@ let graph_to_xml =
         (fun nodes n ->
           el
             "node"
-            ~a:[ "id", node_id n.id ]
+            ~a:[ "id", n.id ]
             (List.fold_left (fun acc d -> data keys `Node d :: acc) [] n.data)
           :: nodes)
         []
@@ -276,35 +275,19 @@ let graph_of_xml =
       []
       (members_with_attr "data" frags)
     |> List.rev
-  and get_id key attrs =
-    match get_attr key attrs with
-    | s ->
-      let parse_int s =
-        try int_of_string s with
-        | Failure _ -> failwith "invalid id"
-      in
-      let id =
-        (* igraph exports integer ids extended with leading n *)
-        if String.length s > 0 && s.[0] = 'n'
-        then String.sub s 1 (String.length s - 1) |> parse_int
-        else parse_int s
-      in
-      if id < 0 then failwith "negative node id";
-      id
-    | exception Not_found -> failwith ("missing " ^ key)
   in
   let nodes keys graph =
     List.fold_left
       (fun nodes (attrs, childs) ->
-        { id = get_id "id" attrs; data = data keys `Node childs } :: nodes)
+        { id = get_attr "id" attrs; data = data keys `Node childs } :: nodes)
       []
       (members_with_attr "node" graph)
     |> List.rev
   and edges keys graph =
     List.fold_left
       (fun nodes (attrs, childs) ->
-        { src = get_id "source" attrs
-        ; dst = get_id "target" attrs
+        { src = get_attr "source" attrs
+        ; dst = get_attr "target" attrs
         ; data = data keys `Edge childs
         }
         :: nodes)
