@@ -1,5 +1,5 @@
 (executables
- (names igraph_runner)
- (libraries bos.setup cmdliner cpr_lib cpr_protocols mtime mtime.clock.os)
- (preprocess
-  (pps ppx_fields_conv)))
+ (names graphml_runner)
+ (public_names graphml_runner)
+ (package cpr)
+ (libraries cpr_lib cpr_protocols mtime.clock.os))
