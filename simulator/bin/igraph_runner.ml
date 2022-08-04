@@ -9,6 +9,11 @@ let run g =
     | Some v -> GraphML.Data.Read.string v >>= Cpr_protocols.of_key
     | None -> Ok Cpr_protocols.nakamoto
   and* activations = GraphML.Data.Read.(get int "activations") g.data in
+  let () =
+    match List.assoc_opt "seed" g.data with
+    | Some x -> Random.init (Hashtbl.hash x)
+    | None -> Random.self_init ()
+  in
   let (Protocol protocol) = protocol in
   let (module P) = protocol in
   let clock = Mtime_clock.counter () in
