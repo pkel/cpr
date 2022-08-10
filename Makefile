@@ -81,6 +81,11 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 %.png: %.dot
 	dot -Tpng < $^ > $@
 
+# Python
+
+notebook: _venv
+	_venv/bin/jupyter notebook
+
 # RL
 
 train-online: bridge _venv
