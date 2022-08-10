@@ -340,9 +340,15 @@ end = struct
     | Bk { k } -> bk ~k
     | Bkll { k } -> bkll ~k
     | TailstormConstant { k } ->
-      tailstorm ~subblock_selection:Optimal ~rewards:Constant ~k
+      let subblock_selection =
+        if k > 16 then Tailstorm.Heuristic else Tailstorm.Optimal
+      in
+      tailstorm ~subblock_selection ~rewards:Constant ~k
     | TailstormDiscount { k } ->
-      tailstorm ~subblock_selection:Optimal ~rewards:Discount ~k
+      let subblock_selection =
+        if k > 16 then Tailstorm.Heuristic else Tailstorm.Optimal
+      in
+      tailstorm ~subblock_selection ~rewards:Discount ~k
   ;;
 
   let to_string = function
