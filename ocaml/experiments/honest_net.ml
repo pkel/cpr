@@ -27,9 +27,18 @@ let tasks_per_protocol ~n_activations (Protocol protocol) =
 let protocols =
   let open Cpr_protocols in
   nakamoto
+  :: ethereum
   :: List.concat_map
-       (fun k -> [ bk ~k; bkll ~k; tailstorm ~k ])
-       [ 1; 2; 4; 8; 16; 32; 64; 128 ]
+       (fun k ->
+         [ bk ~k; bkll ~k ]
+         @ List.map
+             (fun rewards ->
+               let subblock_selection =
+                 if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
+               in
+               tailstorm ~subblock_selection ~rewards ~k)
+             Tailstorm.reward_schemes)
+       [ 1; 2; 4; 8; 16; 32 ]
 ;;
 
 (* Run all combinations of protocol, network and block_interval. *)
@@ -39,7 +48,7 @@ open Cmdliner
 
 let info =
   let doc = "simulate honest networks running proof-of-work protocols" in
-  Term.info ~version ~doc "honest_net"
+  Cmd.info ~version ~doc "honest_net"
 ;;
 
-let () = Term.exit @@ Term.eval (Csv_runner.main_t tasks, info)
+let () = Csv_runner.main_t tasks |> Cmd.v info |> Cmd.eval |> Stdlib.exit

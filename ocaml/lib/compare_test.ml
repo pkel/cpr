@@ -37,3 +37,5 @@ let%test "first" =
 ;;
 
 let%test "first" = first Compare.int ~skip_to:(fun x -> x > 10) 2 [ 19; 2; 5; 3 ] = None
+let%test "at_most_first" = at_most_first Compare.int 2 [ 1; 7; 3; 5; 0; 2 ] = [ 0; 1 ]
+let%test "at_most_first" = at_most_first Compare.int 3 [ 7; 1 ] = [ 1; 7 ]

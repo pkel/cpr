@@ -1,15 +1,66 @@
 open Cpr_lib
 
+type reward_scheme =
+  | Discount
+  | Constant
+  | Punish
+  | Hybrid
+  | Block
+
+let reward_schemes = [ Discount; Constant; Punish; Hybrid; Block ]
+
+let reward_key = function
+  | Constant -> "constant"
+  | Discount -> "discount"
+  | Punish -> "punish"
+  | Hybrid -> "hybrid"
+  | Block -> "block"
+;;
+
+let reward_info = function
+  | Constant -> "1 per confirmed puzzle solution"
+  | Discount ->
+    "max k per confirmed block, d/k per confirmed pow solution (d ∊ 1..k = height since \
+     last block)"
+  | Punish -> "max k per confirmed block, 1 per pow solution on longest chain of votes"
+  | Hybrid ->
+    "max k per confirmed block, d/k per pow solution on longest chain of votes (d ∊ 1..k \
+     = height since last block)"
+  | Block -> "1 per confirmed (strong) block"
+;;
+
+type subblock_selection =
+  | Altruistic
+  | Heuristic
+  | Optimal
+
+let subblock_selection_key = function
+  | Altruistic -> "altruistic"
+  | Heuristic -> "heuristic"
+  | Optimal -> "optimal"
+;;
+
 module type Parameters = sig
   (** number of votes (= puzzle solutions) per block *)
   val k : int
+
+  val rewards : reward_scheme
+  val subblock_selection : subblock_selection
 end
 
 module Make (Parameters : Parameters) = struct
   open Parameters
 
   let key = "tailstorm"
-  let info = "Tailstorm with k=" ^ string_of_int k
+
+  let info =
+    Printf.sprintf
+      "Tailstorm with k=%i, '%s' rewards, and '%s' sub block selection"
+      Parameters.k
+      (reward_key Parameters.rewards)
+      (subblock_selection_key Parameters.subblock_selection)
+  ;;
+
   let puzzles_per_block = k
 
   type data =
@@ -18,6 +69,7 @@ module Make (Parameters : Parameters) = struct
     }
 
   let height h = h.block
+  let progress x = (x.block * k) + x.vote |> float_of_int
   let is_vote h = h.vote > 0
   let is_block h = h.vote = 0
 
@@ -94,25 +146,29 @@ module Make (Parameters : Parameters) = struct
     let compare_blocks =
       let open Compare in
       let cmp =
-        by (tuple int int) (fun x ->
-            let x = data x in
-            x.block, x.vote)
+        by int height $ by int (fun x -> List.length (Dag.children votes_only x))
       in
       skip_eq Dag.vertex_eq cmp
     ;;
 
     let winner l =
-      List.map last_block l
-      |> Compare.first (Compare.neg compare_blocks) 1
-      |> Option.get
-      |> List.hd
+      assert (List.for_all is_block l);
+      Compare.first (Compare.neg compare_blocks) 1 l |> Option.get |> List.hd
+    ;;
+
+    let history =
+      (* TODO: we could adapt the implementation to not include the last block as first
+         parent but to infer it with last_block where needed *)
+      Seq.unfold (fun this ->
+          List.nth_opt (Dag.parents view this) (if is_block this && k > 1 then 1 else 0)
+          |> Option.map (fun next -> this, next))
     ;;
 
     let constant_block c : _ reward_function =
      fun ~assign x -> if is_block x then assign c x
    ;;
 
-    let reward ~max_reward_per_block ~discount ~punish : env reward_function =
+    let reward' ~max_reward_per_block ~discount ~punish : env reward_function =
       let k = float_of_int k in
       let c = max_reward_per_block /. k in
       fun ~assign x ->
@@ -130,33 +186,22 @@ module Make (Parameters : Parameters) = struct
             else Dag.iterate_ancestors votes_only [ x ] |> Seq.iter (assign r))
     ;;
 
+    let reward =
+      let reward = reward' ~max_reward_per_block:(float_of_int k) in
+      match Parameters.rewards with
+      | Constant -> reward ~discount:false ~punish:false
+      | Discount -> reward ~discount:true ~punish:false
+      | Punish -> reward ~discount:false ~punish:true
+      | Hybrid -> reward ~discount:true ~punish:true
+      | Block -> constant_block 1.
+    ;;
+
     (* TODO: add tests for reward functions *)
 
     let reward_functions =
-      let reward = reward ~max_reward_per_block:(float_of_int k) in
       let open Collection in
-      empty
-      |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
-      |> add
-           ~info:
-             "max k per confirmed block, d/k per pow solution on longest chain of votes \
-              (d ∊ 1..k = height since last block)"
-           "hybrid"
-           (reward ~discount:true ~punish:true)
-      |> add
-           ~info:"max k per confirmed block, 1 per pow solution on longest chain of votes"
-           "punish"
-           (reward ~discount:false ~punish:true)
-      |> add
-           ~info:
-             "max k per confirmed block, d/k per confirmed pow solution (d ∊ 1..k = \
-              height since last block)"
-           "discount"
-           (reward ~discount:true ~punish:false)
-      |> add
-           ~info:"1 per confirmed pow solution"
-           "constant"
-           (reward ~discount:false ~punish:false)
+      let x = Parameters.rewards in
+      empty |> add ~info:(reward_info x) (reward_key x) reward
     ;;
   end
 
@@ -172,7 +217,7 @@ module Make (Parameters : Parameters) = struct
 
     type state = env Dag.vertex
 
-    let preferred state = last_block state
+    let preferred state = state
 
     let init ~roots =
       match roots with
@@ -180,19 +225,17 @@ module Make (Parameters : Parameters) = struct
       | roots -> dag_fail roots "init: expected single root"
     ;;
 
-    module IntSet = Set.Make (struct
-      type t = int
+    (** Algorithm for selecting sub blocks quickly.
 
-      let compare = compare
-    end)
+        This version picks the longest branches first. If a branches does not
+        fit into the quorum, it is cut down until it fits.
 
-    let quorum_old for_block =
-      (* look through sub blocks (votes) and assemble quorum if possible. This version
-         picks the longest branches first. If a branches does not fit into the quorum, it
-         is cut down until it fits.
-
-         The chosen sub blocks are not always optimal for the miner of the block. Thus
-         this implementation does not align with George's description of Tailstorm.*)
+        The chosen sub blocks do not maximize rewards for the miner of the
+        block. Thus this implementation does not align with George's
+        description of Tailstorm.
+    *)
+    let altruistic_quorum ~vote_filter b =
+      let module IntSet = Set.Make (Int) in
       let rec f ids n q l =
         if n = k - 1
         then Some (List.rev q)
@@ -215,8 +258,8 @@ module Make (Parameters : Parameters) = struct
             then (* quorum would grow to big *) f ids n q tl
             else f (IntSet.union fresh ids) n' (hd :: q) tl)
       in
-      Dag.iterate_descendants votes_only [ for_block ]
-      |> Seq.filter (Dag.vertex_neq for_block)
+      Dag.iterate_descendants votes_only (Dag.children votes_only b)
+      |> Seq.filter vote_filter
       |> List.of_seq
       |> List.sort
            Compare.(
@@ -236,22 +279,21 @@ module Make (Parameters : Parameters) = struct
                     d.vote, hash)))
     ;;
 
-    let quorum for_block =
-      (* look through the sub blocks (votes) and assemble a quorum if possible. This
-         version tries to select the sub blocks that maximize a miner's own rewards.
+    (** Algorithm for selecting sub block heuristically but quickly.
 
-         We first find all branches of depth k-1 or less. We then sort the branches by own
-         reward, assuming that the branch will be confirmed in the future. We then add the
-         most valuable branch to the quorum.
+        This version tries to select the sub blocks that maximize a miner's
+        own rewards. We assume constant reward scheme.
 
-         If some (= k') sub blocks are missing after the first iteration, we search for
-         all remaining branches that would add 'k or less sub blocks. We sort the branches
-         by the amount of reward they would add. We add the most valuable branch an
-         reiterate until enough sub blocks are added.
+        We first find all branches of depth k-1 or less. We then sort the
+        branches by own reward, assuming that the branch will be confirmed in
+        the future. We then add the most valuable branch to the quorum.
 
-         TODO. For now, we assume constant reward per proof-of-work. Handling the other
-         reward schemes correctly requires a restructuring of the code: reward function
-         must become an argument of the protocol. *)
+        If some (= k') sub blocks are missing after the first iteration, we
+        search for all remaining branches that would add k' or less sub blocks.
+        We sort the branches by the amount of reward they would add. We add the
+        most valuable branch an reiterate until enough sub blocks are added.
+    *)
+    let heuristic_quorum ~vote_filter b =
       let ht = Hashtbl.create (2 * k)
       and acc = ref []
       and n = ref (k - 1) in
@@ -278,8 +320,8 @@ module Make (Parameters : Parameters) = struct
         assert (!n >= 0);
         if !n > 0
         then (
-          Dag.iterate_descendants votes_only [ for_block ]
-          |> Seq.filter (Dag.vertex_neq for_block)
+          Dag.iterate_descendants votes_only (Dag.children votes_only b)
+          |> Seq.filter vote_filter
           |> Seq.filter (fun x -> not (included x))
           |> (* calculate own and overall reward for branch *)
           Seq.map (fun x -> x, reward x, reward ~all:true x)
@@ -302,40 +344,191 @@ module Make (Parameters : Parameters) = struct
       loop ()
     ;;
 
-    let puzzle_payload preferred =
-      let block = last_block preferred in
-      match quorum block with
+    (** Algorithm for reward-optimizing sub block choice
+
+       Input: last block b
+
+       1. Find all confirming sub blocks of b. Put them into array a.
+
+       2. Check |a| > k. Abort if not.
+
+       3. Prepare mutable list l. Iterate |a| choose k. For each choice, check
+       connectivity. Calculate rewards for connected choice; add to l.
+
+       4. Sort l by reward, pick optimal choice q.
+
+       5. Reduce q such that only sub block tree leaves remain.
+
+       6. Sort q by branch depth, descending.
+
+       7. Return q.
+
+       Sorting sub blocks on step (1.) by dag-imposed partial order can simplify
+       connectivity check in (3.); e.g., we can iterate the choice in dag-imposed order
+       and check if all predecessors have been visited before or equal b.
+
+       We can find the leaves with the same technique. Iterate choice in dag-imposed
+       order, for each block mark all its predecessors as redundant. After the iteration,
+       leaves are still unmarked.
+
+       It's also easy to select the branch with the highest depth: just pick the last
+       entry of q.
+
+       Maybe we can exploit that [iter_n_choose_k] returns the choice in (reverse) sorted
+       manner. If we start relying on this, we'd have to add a test for that.
+
+       Calculating rewards will be interesting. We cannot use the reward function of the
+       referee, because the block is not yet appended. But maybe we can reuse parts to
+       avoid error-prone redundancy. *)
+    let optimal_quorum ~vote_filter b =
+      assert (is_block b);
+      if k = 1
+      then Some []
+      else (
+        let a =
+          Dag.children votes_only b
+          |> Dag.iterate_descendants (Dag.filter vote_filter votes_only)
+          |> Array.of_seq
+        in
+        let n = Array.length a in
+        if n < k - 1
+        then None
+        else (
+          let a' =
+            let module Map = Map.Make (Int) in
+            let _, m =
+              Array.fold_left
+                (fun (i, m) x -> i + 1, Map.add (Dag.id x) i m)
+                (0, Map.empty)
+                a
+            in
+            fun x -> Map.find (Dag.id x) m
+          in
+          let leaves =
+            let reach_buf = Array.make n false in
+            let leave_buf = Array.make n true in
+            let reset () =
+              for i = 0 to n - 1 do
+                reach_buf.(i) <- false;
+                leave_buf.(i) <- true
+              done
+            in
+            let rec f = function
+              | hd :: tl ->
+                (* check connectivity, mark non-leaves *)
+                if List.for_all
+                     (fun p ->
+                       leave_buf.(a' p) <- false;
+                       reach_buf.(a' p))
+                     (Dag.parents votes_only a.(hd))
+                then (
+                  let () = reach_buf.(hd) <- true in
+                  f tl)
+                else `Not_connected
+              | [] ->
+                (* check quorum size (debugging) *)
+                (* assert (Array.fold_left (fun c b -> if b then c + 1 else c) 0 reach_buf = k - 1); *)
+                let leaves =
+                  let l = ref [] in
+                  let () =
+                    for i = 1 to n do
+                      let i' = n - i in
+                      if reach_buf.(i') && leave_buf.(i') then l := a.(i') :: !l
+                    done
+                  in
+                  List.sort compare_votes_in_block !l
+                in
+                let reward =
+                  let rewarded_votes =
+                    match rewards with
+                    | Block -> Seq.empty
+                    | Constant | Discount -> Dag.iterate_ancestors votes_only leaves
+                    | Punish | Hybrid ->
+                      Dag.iterate_ancestors votes_only [ List.hd leaves ]
+                  and per_vote =
+                    match rewards with
+                    | Block | Constant | Punish -> 1.
+                    | Discount | Hybrid ->
+                      let depth = (List.hd leaves |> data).vote in
+                      float_of_int (depth + 1) /. float_of_int k
+                  in
+                  Seq.fold_left
+                    (fun acc x -> if appended_by_me x then acc +. per_vote else acc)
+                    1.
+                    rewarded_votes
+                in
+                `Ok (reward, leaves)
+            in
+            fun c ->
+              reset ();
+              f c
+          in
+          let q =
+            let l = ref [] in
+            let () =
+              Combinatorics.iter_n_choose_k (Array.length a) (k - 1) (fun c ->
+                  (* assert (List.length c = k - 1); *)
+                  match leaves c with
+                  | `Ok x -> l := x :: !l
+                  | `Not_connected -> ())
+            in
+            match !l with
+            | hd :: tl ->
+              List.fold_left (* find maximum reward *)
+                (fun (ar, ac) (br, bc) -> if br > ar then br, bc else ar, ac)
+                hd
+                tl
+              |> snd
+            | _ -> failwith "reward_optim_quorum: no choice"
+          in
+          Some q))
+    ;;
+
+    let quorum =
+      match subblock_selection with
+      | Altruistic -> altruistic_quorum
+      | Heuristic -> heuristic_quorum
+      | Optimal -> optimal_quorum
+    ;;
+
+    let puzzle_payload' ~vote_filter b =
+      assert (is_block b);
+      match quorum ~vote_filter b with
       | Some q ->
-        { parents = block :: q
-        ; sign = false
-        ; data = { block = height block + 1; vote = 0 }
-        }
+        { parents = b :: q; sign = false; data = { block = height b + 1; vote = 0 } }
       | None ->
         let votes =
-          Dag.iterate_descendants votes_only [ block ]
+          Dag.iterate_descendants (Dag.filter vote_filter votes_only) [ b ]
           |> List.of_seq
           |> List.sort compare_votes_in_block
         in
         let parent =
           match votes with
           | hd :: _ -> hd
-          | _ -> block
+          | _ -> b
         in
         { parents = [ parent ]
         ; sign = false
-        ; data = { block = height block; vote = (data parent).vote + 1 }
+        ; data = { block = height b; vote = (data parent).vote + 1 }
         }
     ;;
 
-    let handler preferred = function
-      | PuzzleSolved v -> { state = v; share = [ v ] }
-      | Deliver consider ->
+    let puzzle_payload = puzzle_payload' ~vote_filter:(fun _ -> true)
+
+    let handler b = function
+      | PuzzleSolved v -> { state = last_block v; share = [ v ] }
+      | Deliver c ->
         (* Prefer longest chain of votes after longest chain of blocks *)
-        let p = data preferred
-        and c = data consider in
-        if c.block > p.block || (c.block = p.block && c.vote > p.vote)
-        then { state = consider; share = [] }
-        else { state = preferred; share = [] }
+        let c = last_block c in
+        let count x =
+          Dag.iterate_descendants votes_only [ x ] |> Seq.fold_left (fun n _ -> n + 1) 0
+        in
+        let pref =
+          if height c > height b || (height c = height b && count c > count b)
+          then c
+          else b
+        in
+        { state = pref; share = [] }
     ;;
   end
 

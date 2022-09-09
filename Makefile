@@ -27,7 +27,7 @@ pre-commit: check-format test
 
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
-	opam switch create . "4.11.2+flambda"
+	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda
 	opam install ./ocaml --deps-only --working-dir
 
 dependencies:

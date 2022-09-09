@@ -7,6 +7,7 @@ let puzzles_per_block = 1
 type data = { height : int }
 
 let height data = data.height
+let progress data = float_of_int data.height
 let describe { height } = Printf.sprintf "block %i" height
 let dag_roots = [ { height = 0 } ]
 
@@ -25,6 +26,12 @@ module Referee (V : GlobalView with type data = data) = struct
   let winner l =
     let height x = (data x).height in
     List.fold_left (fun acc x -> if height x > height acc then x else acc) (List.hd l) l
+  ;;
+
+  let history =
+    Seq.unfold (fun this ->
+        Dag.parents view this
+        |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
   ;;
 
   let constant c : env reward_function = fun ~assign n -> assign c n
