@@ -12,7 +12,10 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         self.relative = relative
         self.n_pow = 0
         self.sum_attacker = 0
-        self.difficulties = dict((a, 1) for a in self.env.config["ALPHA_SCHEDULE"])
+        try:
+            self.difficulties = dict((a, 1) for a in self.env.config["ALPHA_SCHEDULE"])
+        except:
+            self.difficulties = None
 
     def reset(self):
         self.n_pow = 0
@@ -29,7 +32,8 @@ class SparseDaaRewardWrapper(gym.Wrapper):
                 observed = info["simulator_clock_now"] / self.n_pow
             else:
                 observed = 0
-            self.difficulties[self.env.alpha] = observed
+            if self.difficulties:
+                self.difficulties[self.env.alpha] = observed
             reward = self.sum_attacker * observed
             if self.relative:
                 reward -= self.n_pow * self.env.alpha

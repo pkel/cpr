@@ -27,11 +27,11 @@ Evaluate on Patrik's wrapper
 """
 protos = ["tailstorm"]
 reward_schemes = ["constant", "discount"]
-gammas = [0.9]
+gammas = [0, 0.5, 0.9]
 defenders = [50]
 alphas = np.arange(0.1, 0.5, 0.01)
 df = []
-setups = itertools.product(protos, reward_schemes, alphas, gammas, defenders)
+setups = list(itertools.product(protos, reward_schemes, alphas, gammas, defenders))
 for setup in tqdm(setups, desc="Evaluating setups"):
     protocol = setup[0]
     reward_scheme = setup[1]
@@ -81,4 +81,4 @@ for setup in tqdm(setups, desc="Evaluating setups"):
             )
 df = pd.DataFrame(df)
 print(df)
-pd.to_pickle(df, "breakevens_gamma_0.9.pkl")
+pd.to_pickle(df, "tailstorm_breakevens_all_gammas.pkl")

@@ -32,8 +32,8 @@ alphas = np.arange(0.1, 0.5, 0.01)
 # alphas = [0.26]
 gammas = [0, 0.5, 0.9]
 defenders = 50
-# model_names = ["2ys8h4ek", "2x496teq"]
 model_names = ["nakamoto"]
+# model_names = ["2x496teq"]
 df = []
 loaded_models = dict()
 setups = list(itertools.product(reward_schemes, alphas, model_names, protos, gammas))
@@ -87,4 +87,4 @@ for setup in tqdm(setups):
             )
         )
 df = pd.DataFrame(df)
-pd.to_pickle(df, f"rl/saved_models/nakamoto_model_evals_all_gammas.pkl")
+pd.to_pickle(df, f"rl/saved_models/model_evals_all_gammas_nakamoto.pkl")
