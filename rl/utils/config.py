@@ -4,10 +4,10 @@ from typing import List, Literal
 
 class Config(BaseSettings):
     PROTOCOL: Literal["tailstorm", "nakamoto", "bk", "bk_ll"] = "tailstorm"
-    REWARD_SCHEME: Literal["discount", "constant"] = "discount"
+    REWARD_SCHEME: Literal["discount", "constant"] = "constant"
     K: int = 8
     ALGO: Literal["PPO", "DQN"] = "PPO"
-    TOTAL_TIMESTEPS: int = 1e8
+    TOTAL_TIMESTEPS: int = 10e9
     STEPS_PER_ROLLOUT: int = 200
     STARTING_LR: float = 10e-3
     ENDING_LR: float = 10e-5
