@@ -146,7 +146,7 @@ module Make (Parameters : Parameters) = struct
         let unique_votes () =
           Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
         and same_summary () =
-          (* TODO. I think this check is missing from in the other protocols *)
+          (* TODO. I think this check is missing in the other protocols *)
           List.for_all (fun x -> last_summary x $== parent) votes
         and sorted_votes () =
           Compare.is_sorted ~unique:true compare_votes_in_block votes
@@ -157,7 +157,7 @@ module Make (Parameters : Parameters) = struct
         && same_summary ()
         && sorted_votes ()
         && List.for_all is_vote votes
-        && unique_votes () = k - 1
+        && unique_votes () = k
         && child.height = height parent + 1
       | _ -> false
     ;;
