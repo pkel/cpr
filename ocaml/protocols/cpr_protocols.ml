@@ -2,6 +2,7 @@ module Nakamoto = Nakamoto
 module Ethereum = Ethereum
 module Bk = Bk
 module Bkll = Bkll
+module Tailstorm = Tailstorm
 module Tailstormll = Tailstormll
 open Cpr_lib
 
@@ -62,6 +63,18 @@ let bkll_ssz ~k =
     end)
   in
   AttackSpace (module M)
+;;
+
+(** Tailstorm protocol with k subblocks per (strong) block, subblocks require proof-of-work, strong blocks don't. *)
+let tailstorm ~subblock_selection ~k ~rewards =
+  let module M =
+    Tailstorm.Make (struct
+      let k = k
+      let rewards = rewards
+      let subblock_selection = subblock_selection
+    end)
+  in
+  Protocol (module M)
 ;;
 
 (** Modified Tailstorm protocol with k - 1 subblocks per (strong) block, all
@@ -176,6 +189,27 @@ let%test_module "protocol" =
 
     let%test_unit "bkll32/hard" =
       test ~activation_delay:1. ~orphan_rate_limit:0.1 (bkll ~k:32)
+    ;;
+
+    let%test_unit "tailstorm8constant/easy" =
+      test
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
+
+    let%test_unit "tailstorm8discount/hard" =
+      test
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+    ;;
+
+    let%test_unit "tailstorm32block/hard" =
+      test
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
     ;;
 
     let%test_unit "tailstormll8constant/easy" =
