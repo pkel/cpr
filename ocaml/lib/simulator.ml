@@ -118,6 +118,39 @@ let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
     }
 ;;
 
+(** deterministic appends; required for tailstorm.
+    TODO: with this change, it's not clear anymore who appended what. It might interact badly with reward calculation. Maybe we should pay reward via signatures. *)
+let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
+  let default () = extend_dag ~pow ~n_nodes clock dag node_id x in
+  if pow || x.sign (* assuming non-deterministic signatures here *)
+  then default ()
+  else (
+    match x.parents with
+    | [] -> default ()
+    | hd :: _tl ->
+      let view = Dag.view dag in
+      let siblings = Dag.children view hd in
+      let eq y =
+        let dy = Dag.data y in
+        dy.value = x.data
+        && dy.signed_by = None
+        && List.for_all2 (fun a b -> Dag.id a = Dag.id b) (Dag.parents view y) x.parents
+      in
+      (match List.find_opt eq siblings with
+      | Some x ->
+        let dx = Dag.data x in
+        Float.Array.set
+          dx.delivered_at
+          node_id
+          (min clock.now (Float.Array.get dx.delivered_at node_id));
+        Float.Array.set
+          dx.received_at
+          node_id
+          (min clock.now (Float.Array.get dx.received_at node_id));
+        x
+      | _ -> default ()))
+;;
+
 let init
     (type a)
     (module Protocol : Intf.Protocol with type data = a)

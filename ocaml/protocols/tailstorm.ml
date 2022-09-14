@@ -532,7 +532,7 @@ module Make (Parameters : Parameters) = struct
                extend_dag
                  { parents = b :: q
                  ; data = Summary { height = height b + 1 }
-                 ; sign = true
+                 ; sign = false
                  }
              in
              { state = block; share = [ block ] })
