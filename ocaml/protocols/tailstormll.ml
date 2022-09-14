@@ -51,11 +51,11 @@ end
 module Make (Parameters : Parameters) = struct
   open Parameters
 
-  let key = "tailstorm"
+  let key = "tailstormll"
 
   let info =
     Printf.sprintf
-      "Tailstorm with k=%i, '%s' rewards, and '%s' sub block selection"
+      "Tailstorm/ll with k=%i, '%s' rewards, and '%s' sub block selection"
       Parameters.k
       (reward_key Parameters.rewards)
       (subblock_selection_key Parameters.subblock_selection)

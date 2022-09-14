@@ -2,7 +2,7 @@ module Nakamoto = Nakamoto
 module Ethereum = Ethereum
 module Bk = Bk
 module Bkll = Bkll
-module Tailstorm = Tailstorm
+module Tailstormll = Tailstormll
 open Cpr_lib
 
 (** Original proof-of-work consensus as described by Nakamoto. 2008. *)
@@ -64,10 +64,12 @@ let bkll_ssz ~k =
   AttackSpace (module M)
 ;;
 
-(** Tailstorm protocol with k - 1 subblocks per (strong) block *)
-let tailstorm ~subblock_selection ~k ~rewards =
+(** Modified Tailstorm protocol with k - 1 subblocks per (strong) block, all
+ * blocks (including strong ones) require a proof-of-work. I append ll because
+ * this protocol is to {!tailstorm}, what {!bkll} is to {!bk}. *)
+let tailstormll ~subblock_selection ~k ~rewards =
   let module M =
-    Tailstorm.Make (struct
+    Tailstormll.Make (struct
       let k = k
       let rewards = rewards
       let subblock_selection = subblock_selection
@@ -76,10 +78,10 @@ let tailstorm ~subblock_selection ~k ~rewards =
   Protocol (module M)
 ;;
 
-(** {!nakamoto_ssz} adapted for {!tailstorm}. *)
-let tailstorm_ssz ~subblock_selection ~k ~rewards =
+(** {!nakamoto_ssz} adapted for {!tailstormll}. *)
+let tailstormll_ssz ~subblock_selection ~k ~rewards =
   let module M =
-    Tailstorm_ssz.Make (struct
+    Tailstormll_ssz.Make (struct
       let k = k
       let rewards = rewards
       let subblock_selection = subblock_selection
@@ -88,10 +90,10 @@ let tailstorm_ssz ~subblock_selection ~k ~rewards =
   AttackSpace (module M)
 ;;
 
-(** Deprecated draft attack space against {!tailstorm}. *)
-let tailstorm_draft ~subblock_selection ~k ~rewards =
+(** Deprecated draft attack space against {!tailstormll}. *)
+let tailstormll_draft ~subblock_selection ~k ~rewards =
   let module M =
-    Tailstorm_draft.Make (struct
+    Tailstormll_draft.Make (struct
       let k = k
       let rewards = rewards
       let subblock_selection = subblock_selection
@@ -176,25 +178,25 @@ let%test_module "protocol" =
       test ~activation_delay:1. ~orphan_rate_limit:0.1 (bkll ~k:32)
     ;;
 
-    let%test_unit "tailstorm8constant/easy" =
+    let%test_unit "tailstormll8constant/easy" =
       test
         ~activation_delay:10.
         ~orphan_rate_limit:0.1
-        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstormll ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
-    let%test_unit "tailstorm8discount/hard" =
+    let%test_unit "tailstormll8discount/hard" =
       test
         ~activation_delay:1.
         ~orphan_rate_limit:0.3
-        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+        (tailstormll ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
     ;;
 
-    let%test_unit "tailstorm32block/hard" =
+    let%test_unit "tailstormll32block/hard" =
       test
         ~activation_delay:1.
         ~orphan_rate_limit:0.1
-        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
+        (tailstormll ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
     ;;
   end)
 ;;
@@ -248,18 +250,18 @@ let%test_module "policy" =
       test ~policy:"honest" ~orphan_rate_limit:0.01 (bkll_ssz ~k:8)
     ;;
 
-    let%test_unit "tailstorm8constant/ssz/honest" =
+    let%test_unit "tailstormll8constant/ssz/honest" =
       test
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
-    let%test_unit "tailstorm8constant/draft/honest" =
+    let%test_unit "tailstormll8constant/draft/honest" =
       test
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_draft ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstormll_draft ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
   end)
 ;;
@@ -303,12 +305,12 @@ let%test_module "random" =
     let%test_unit "bk8/ssz/random" = test (bk_ssz ~k:8)
     let%test_unit "bkll8/ssz/random" = test (bkll_ssz ~k:8)
 
-    let%test_unit "tailstorm8constant/ssz/random" =
-      test (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    let%test_unit "tailstormll8constant/ssz/random" =
+      test (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
-    let%test_unit "tailstorm8discount/draft/random" =
-      test (tailstorm_draft ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+    let%test_unit "tailstormll8discount/draft/random" =
+      test (tailstormll_draft ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
     ;;
   end)
 ;;

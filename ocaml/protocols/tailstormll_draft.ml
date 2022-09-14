@@ -1,7 +1,7 @@
 open Cpr_lib
 
-module Make (Parameters : Tailstorm.Parameters) = struct
-  module Protocol = Tailstorm.Make (Parameters)
+module Make (Parameters : Tailstormll.Parameters) = struct
+  module Protocol = Tailstormll.Make (Parameters)
   open Protocol
 
   let key = "draft"
