@@ -201,7 +201,12 @@ let init
           ;;
 
           let released x = (Dag.data x).released_at <= clock.now
-          let extend_dag x = extend_dag ~pow:false ~n_nodes clock dag node_id x
+
+          let extend_dag x =
+            let v = extend_dag ~pow:false ~n_nodes clock dag node_id x in
+            check_dag v;
+            v
+          ;;
         end
         in
         let (Node (module Node)) = impl node_id (module LocalView) in
