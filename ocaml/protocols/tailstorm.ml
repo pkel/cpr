@@ -142,23 +142,23 @@ module Make (Parameters : Parameters) = struct
         && pow_hash vertex |> Option.is_some
         && child.height = height parent
         && child.depth = depth parent + 1
-      | Summary child, parent :: votes ->
+      | Summary child, (vote0 :: votetl as votes) ->
         let unique_votes () =
           Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
         and same_summary () =
           (* TODO. I think this check is missing in the other protocols *)
-          List.for_all (fun x -> last_summary x $== parent) votes
+          let parent = last_summary vote0 in
+          List.for_all (fun x -> last_summary x $== parent) votetl
         and sorted_votes () =
           Compare.is_sorted ~unique:true compare_votes_in_block votes
         in
         child.height > 0
         && pow_hash vertex = None
-        && is_summary parent
         && same_summary ()
         && sorted_votes ()
         && List.for_all is_vote votes
         && unique_votes () = k
-        && child.height = height parent + 1
+        && child.height = height vote0 + 1
       | _ -> false
     ;;
 
@@ -177,11 +177,10 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let history =
-      (* TODO: we could adapt the implementation to not include the last summary as first
-         parent but to infer it with last_summary where needed *)
       Seq.unfold (fun this ->
-          List.nth_opt (Dag.parents view this) (if is_summary this && k > 1 then 1 else 0)
-          |> Option.map (fun next -> this, next))
+          match Dag.parents view this with
+          | [] -> None (* genesis / end of seq *)
+          | next :: _ -> Some (this, next))
     ;;
 
     let constant_block c : _ reward_function =
@@ -198,11 +197,9 @@ module Make (Parameters : Parameters) = struct
           | [] -> (* Either genesis or k=1 *) assign c x
           | hd :: _ ->
             let depth = depth hd in
-            let r = if discount then (float_of_int depth +. 1.) /. k *. c else c in
+            let r = if discount then float_of_int depth /. k *. c else c in
             if punish
-            then (
-              assign r x;
-              Dag.iterate_ancestors votes_only [ hd ] |> Seq.iter (assign r))
+            then Dag.iterate_ancestors votes_only [ hd ] |> Seq.iter (assign r)
             else Dag.iterate_ancestors votes_only [ x ] |> Seq.iter (assign r))
     ;;
 
@@ -528,14 +525,8 @@ module Make (Parameters : Parameters) = struct
     let next_summary' ~vote_filter b =
       quorum ~vote_filter b
       |> Option.map (fun q ->
-             let block =
-               extend_dag
-                 { parents = b :: q
-                 ; data = Summary { height = height b + 1 }
-                 ; sign = false
-                 }
-             in
-             { state = block; share = [ block ] })
+             extend_dag
+               { parents = q; data = Summary { height = height b + 1 }; sign = false })
     ;;
 
     let next_summary = next_summary' ~vote_filter:(fun _ -> true)
@@ -549,9 +540,10 @@ module Make (Parameters : Parameters) = struct
 
     let handler preferred = function
       | PuzzleSolved v ->
+        let share = [ v ] in
         (match next_summary preferred with
-        | Some ret -> ret
-        | None -> { share = [ v ]; state = preferred })
+        | Some state -> { share; state }
+        | None -> { share; state = preferred })
       | Deliver x ->
         (* We only prefer summaries. For received votes, reconsider parent summary. *)
         let s = last_summary x in
@@ -563,7 +555,7 @@ module Make (Parameters : Parameters) = struct
         in
         (* propose if possible *)
         (match next_summary s with
-        | Some ret -> { ret with state = consider [ s; ret.state ] }
+        | Some sum -> { share = []; state = consider [ s; sum ] }
         | None -> { share = []; state = consider [ s ] })
     ;;
   end
