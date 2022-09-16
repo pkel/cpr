@@ -87,6 +87,17 @@ let () =
      fun () -> IEnv (t, t.create ()) |> python_of_ienv);
   Py_module.set
     m
+    "copy"
+    (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance" in
+     fun () ->
+       let (IEnv (t, i)) = ienv in
+       let deepcopy (type a) (x : a) : a =
+         let s : string = Marshal.to_string x Marshal.[ Closures ] in
+         Marshal.from_string s 0
+       in
+       IEnv (t, deepcopy i) |> python_of_ienv);
+  Py_module.set
+    m
     "reset"
     (let%map ienv = positional "ienv" ienv ~docstring:"OCaml gym environment instance" in
      let (IEnv (t, i)) = ienv in

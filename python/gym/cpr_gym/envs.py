@@ -23,6 +23,12 @@ class Core(gym.Env):
 
         self.version = engine.cpr_lib_version
 
+    def __deepcopy__(self, memo):
+        r = Core(**self.core_kwargs)
+        # OCaml side env is stateful, this is quite expensive
+        r.ocaml_env = engine.copy(self.ocaml_env)
+        return r
+
     def policies(self):
         return engine.policies(self.ocaml_env).keys()
 
