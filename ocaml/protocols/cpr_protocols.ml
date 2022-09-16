@@ -77,6 +77,18 @@ let tailstorm ~subblock_selection ~k ~rewards =
   Protocol (module M)
 ;;
 
+(** {!nakamoto_ssz} adapted for {!tailstorm}. *)
+let tailstorm_ssz ~subblock_selection ~k ~rewards =
+  let module M =
+    Tailstorm_ssz.Make (struct
+      let k = k
+      let rewards = rewards
+      let subblock_selection = subblock_selection
+    end)
+  in
+  AttackSpace (module M)
+;;
+
 (** Modified Tailstorm protocol with k - 1 subblocks per (strong) block, all
  * blocks (including strong ones) require a proof-of-work. I append ll because
  * this protocol is to {!tailstorm}, what {!bkll} is to {!bk}. *)
@@ -284,6 +296,13 @@ let%test_module "policy" =
       test ~policy:"honest" ~orphan_rate_limit:0.01 (bkll_ssz ~k:8)
     ;;
 
+    let%test_unit "tailstorm8constant/ssz/honest" =
+      test
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
+
     let%test_unit "tailstormll8constant/ssz/honest" =
       test
         ~policy:"honest"
@@ -338,6 +357,10 @@ let%test_module "random" =
     let%test_unit "nakamoto/random" = test nakamoto_ssz
     let%test_unit "bk8/ssz/random" = test (bk_ssz ~k:8)
     let%test_unit "bkll8/ssz/random" = test (bkll_ssz ~k:8)
+
+    let%test_unit "tailstorm8constant/ssz/random" =
+      test (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
 
     let%test_unit "tailstormll8constant/ssz/random" =
       test (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
