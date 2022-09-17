@@ -137,8 +137,7 @@ module Make (Parameters : Parameters) = struct
     let dag_validity vertex =
       match data vertex, Dag.parents view vertex with
       | Vote child, [ parent ] ->
-        child.height >= 0
-        && child.depth > 0
+        child.depth > 0
         && pow_hash vertex |> Option.is_some
         && child.height = height parent
         && child.depth = depth parent + 1

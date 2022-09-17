@@ -275,12 +275,38 @@ let%test_module "policy" =
         float_of_int (target_height - observed_height) /. float_of_int target_height
       in
       if observed_orphan_rate > orphan_rate_limit
-      then
-        failwith
+      then (
+        let meta x =
+          let d : _ Simulator.env = Dag.data x in
+          let who =
+            match d.appended_by with
+            | None -> "n/a"
+            | Some i -> string_of_int i
+          in
+          [ ( Printf.sprintf
+                "%s | %s | t:%.1f%s"
+                (A.Protocol.describe d.value)
+                who
+                d.appended_at
+                (if d.released_at <> d.appended_at
+                then Printf.sprintf "-%.1f" d.released_at
+                else "")
+            , "" )
+          ]
+        in
+        let all =
+          let open Dag in
+          iterate_descendants env.global_view (roots env.dag) |> List.of_seq
+        in
+        Dag.Exn.raise
+          env.global_view
+          meta
+          all
+          (* failwith *)
           (Printf.sprintf
              "too many orphans: got %.2f, expected %.2f"
              observed_orphan_rate
-             orphan_rate_limit)
+             orphan_rate_limit))
       else ()
     ;;
 
@@ -300,7 +326,7 @@ let%test_module "policy" =
       test
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
     ;;
 
     let%test_unit "tailstormll8constant/ssz/honest" =

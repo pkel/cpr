@@ -91,6 +91,27 @@ let tasks_per_attack_space (AttackSpace (module A)) n_activations =
               })
           A.policies)
       [ 0.25; 0.33; 0.5 ]
+  @ List.concat_map
+      (fun alpha ->
+        Collection.map_to_list
+          (fun policy ->
+            let attack =
+              Collection.
+                { key = A.key ^ "-" ^ policy.key
+                ; info = A.info ^ "; " ^ policy.info
+                ; it = A.attacker policy.it
+                }
+            in
+            let sim, network = selfish_mining ~defenders:10 ~alpha 0.9 protocol attack in
+            Csv_runner.Task
+              { activations = n_activations
+              ; protocol
+              ; attack = Some attack
+              ; sim
+              ; network
+              })
+          A.policies)
+      [ 0.25; 0.33; 0.5 ]
 ;;
 
 let tasks =

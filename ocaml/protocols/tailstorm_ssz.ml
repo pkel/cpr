@@ -205,11 +205,6 @@ module Make (Parameters : Tailstorm.Parameters) = struct
 
     module Private = Honest (V)
 
-    let handle_private (s : state) event =
-      let private_ = (Private.handler s.private_ event).state in
-      { s with private_ }
-    ;;
-
     let vote_filter state x =
       match state.epoch with
       | `Proceed -> true
@@ -222,6 +217,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     ;;
 
     let prepare (state : state) event =
+      let vote_filter = vote_filter state in
       let state =
         let pending = state.pending_private_to_public_messages in
         List.fold_left
@@ -229,7 +225,6 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           { state with pending_private_to_public_messages = [] }
           pending
       and attempt_summary state =
-        let vote_filter = vote_filter state in
         match Private.next_summary' ~vote_filter state.private_ with
         | Some private_ -> { state with private_ }
         | None -> state
@@ -238,7 +233,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       | PuzzleSolved _ ->
         (* work on private chain *)
         attempt_summary state
-      | Deliver _ ->
+      | Deliver _x ->
         let state =
           (* simulate defender *)
           handle_public state event
