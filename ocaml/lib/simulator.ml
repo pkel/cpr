@@ -151,7 +151,7 @@ let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
 let debug_info ?describe x =
   let x = Dag.data x in
   let array a =
-    Float.Array.fold_left (fun s x -> s ^ "|" ^ Printf.sprintf "%.2f" x) "[|" a ^ "]"
+    Float.Array.fold_left (fun s x -> s ^ "|" ^ Printf.sprintf "%.2f" x) "[" a ^ "|]"
   in
   let protocol_info =
     match describe with

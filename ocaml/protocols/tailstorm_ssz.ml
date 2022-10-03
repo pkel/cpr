@@ -187,7 +187,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
 
       let rec visibility x =
         delivered x
-        || (appended_by_me x && released x)
+        || released x
         || (is_summary x && List.for_all visibility (Dag.parents view x))
       ;;
 
@@ -295,20 +295,13 @@ module Make (Parameters : Tailstorm.Parameters) = struct
                 include V
 
                 let visibility x =
-                  delivered x
-                  || released x
-                  || is_summary x
-                  || Map.mem (Dag.id x) release_now'
+                  Public_view.visibility x || Map.mem (Dag.id x) release_now'
                 ;;
 
                 let view = Dag.filter visibility view
               end)
             in
-            if s.public
-               $!= (N.handler
-                      s.public
-                      (Deliver x) (* this is stateful. Deliver might add summary! *))
-                     .state
+            if s.public $!= N.update_head ~consider:x ~preferred:s.public
             then (
               (* release_now' is just enough to override; release_now was not enough; *)
               match kind with
@@ -317,7 +310,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
             else h release_now' seq
         in
         Dag.iterate_descendants view [ common ]
-        |> Seq.filter (fun x -> appended_by_me x && not (released x))
+        |> Seq.filter (fun x -> not (Public_view.visibility x))
         |> h Map.empty
         |> Map.bindings
         |> List.map snd

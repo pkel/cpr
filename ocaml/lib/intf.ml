@@ -78,6 +78,7 @@ module type LocalView = sig
   (** was the vertex appended locally (true) or by another node (false) *)
   val appended_by_me : env Dag.vertex -> bool
 
+  (** TODO. This imperative interface bit me. Remodel like the proof-of-work activations. Append via handler_return. *)
   val extend_dag : (env, data) vertex_proposal -> env Dag.vertex
 end
 
