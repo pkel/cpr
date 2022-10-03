@@ -145,7 +145,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       let payload = puzzle_payload () in
       let vertex = extend_dag ~pow:true sim 0 payload in
       let () = sim.check_dag vertex in
-      schedule sim.clock 0. (ForNode (0, PuzzleSolved vertex));
+      schedule sim.clock `Now (ForNode (0, PuzzleSolved vertex));
       skip_to_interaction sim puzzle_payload
     | Some ev ->
       handle_event sim ev;
@@ -236,7 +236,9 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       let ret = a.apply a.state action in
       let () =
         let open Simulator in
-        List.iter (fun m -> schedule t.sim.clock 0. (FromNode (0, Share m))) ret.share
+        List.iter
+          (fun m -> schedule t.sim.clock `Immediate (FromNode (0, Share m)))
+          ret.share
       in
       ret.state
     in

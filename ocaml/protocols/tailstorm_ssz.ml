@@ -226,18 +226,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         (* deliver to defender the messages sent by attacker during last step *)
         List.fold_left
           (fun state msg ->
-            if not (Public_view.visibility msg)
-            then
-              (* TODO. WIP. find out why this happens. The pending messages have been
-                 shared, so I think they should also be released. Apparently they are not.
-                 Maybe there is a problem with zero message delays? *)
-              failwith
-                (Printf.sprintf
-                   "visibility bug: delivered=%b appended=%b released=%b summary=%b"
-                   (delivered msg)
-                   (appended_by_me msg)
-                   (released msg)
-                   (is_summary msg));
+            assert (Public_view.visibility msg);
             handle_public state (Deliver msg))
           { state with pending_private_to_public_messages = [] }
           state.pending_private_to_public_messages

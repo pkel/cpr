@@ -51,7 +51,7 @@ let string_of_event view =
 
 type 'prot_data clock =
   { mutable now : float
-  ; mutable queue : (float, 'prot_data event) OrderedQueue.t
+  ; mutable queue : (int * float, 'prot_data event) OrderedQueue.t
   ; mutable c_activations : int
   }
 
@@ -84,12 +84,18 @@ type 'prot_data state =
   }
 
 let schedule clock delay event =
-  clock.queue <- OrderedQueue.queue (clock.now +. delay) event clock.queue
+  let prio, delay =
+    match delay with
+    | `Immediate -> 0, 0.
+    | `Now -> 1, 0.
+    | `Delay x -> 1, x
+  in
+  clock.queue <- OrderedQueue.queue (prio, clock.now +. delay) event clock.queue
 ;;
 
 let schedule_proof_of_work state =
-  let delay = Distributions.sample state.activation_delay_distr in
-  schedule state.clock delay StochasticClock
+  let x = Distributions.sample state.activation_delay_distr in
+  schedule state.clock (`Delay x) StochasticClock
 ;;
 
 let string_of_pow_hash (nonce, _serial) =
@@ -208,7 +214,9 @@ let init
           })
       Protocol.dag_roots
   in
-  let clock = { queue = OrderedQueue.init Float.compare; now = 0.; c_activations = 0 } in
+  let clock =
+    { queue = OrderedQueue.init Compare.(tuple int float); now = 0.; c_activations = 0 }
+  in
   let patch = Option.value patch ~default:(fun _ -> None) in
   let impl node_id =
     match patch node_id with
@@ -296,7 +304,10 @@ let handle_event state ev =
   | ForNode (id, ev) ->
     let (Node node) = state.nodes.(id) in
     let ret : _ Intf.handler_return = node.handler node.state ev in
-    List.iter (fun m -> schedule 0. (FromNode (id, Share m))) ret.share;
+    (* It's important to schedule this immediately. From now on, the agent might rely on
+       the vertices being marked as released. This marking happens in the FromNode
+       handler. *)
+    List.iter (fun m -> schedule `Immediate (FromNode (id, Share m))) ret.share;
     node.state <- ret.state
   | StochasticClock ->
     if not state.done_
@@ -304,14 +315,14 @@ let handle_event state ev =
       let node_id = Distributions.sample state.assign_pow_distr in
       let (Node node) = state.nodes.(node_id) in
       let payload = node.puzzle_payload node.state in
-      schedule 0. (FromNode (node_id, PuzzleProposal payload));
+      schedule `Now (FromNode (node_id, PuzzleProposal payload));
       state.clock.c_activations <- state.clock.c_activations + 1;
       state.activations.(node_id) <- state.activations.(node_id) + 1;
       schedule_proof_of_work state)
   | FromNode (node_id, PuzzleProposal payload) ->
     let vertex = extend_dag ~pow:true state node_id payload in
     let () = state.check_dag vertex in
-    schedule 0. (ForNode (node_id, PuzzleSolved vertex))
+    schedule `Now (ForNode (node_id, PuzzleSolved vertex))
   | FromNode (src, Share msg) ->
     (* implements recursive sharing *)
     let rec share msg =
@@ -324,7 +335,7 @@ let handle_event state ev =
         (* appended by src but not yet released *)
         assert (appended_at <= state.clock.now);
         Float.Array.set d.released_at src state.clock.now;
-        schedule 0. (Network (Tx (src, msg)));
+        schedule `Now (Network (Tx (src, msg)));
         (* recursive sharing of dependent vertices *)
         List.iter share (Dag.parents state.global_view msg))
     in
@@ -341,7 +352,7 @@ let handle_event state ev =
         then (
           (* only schedule new event if it enables faster delivery *)
           Float.Array.set received_at link.dest t';
-          schedule delay (Network (Rx (link.dest, msg)))))
+          schedule (`Delay delay) (Network (Rx (link.dest, msg)))))
       state.network.nodes.(src).links
   | Network (Rx (dst, msg)) ->
     let received_at msg = Float.Array.get (Dag.data msg).received_at dst in
@@ -358,11 +369,11 @@ let handle_event state ev =
       else
         ((* deliver *)
          Float.Array.set (Dag.data msg).delivered_at dst state.clock.now;
-         schedule 0. (ForNode (dst, Deliver msg));
+         schedule `Now (ForNode (dst, Deliver msg));
          (* continue broadcast *)
          let () =
            match state.network.dissemination with
-           | Flooding -> schedule 0. (Network (Tx (dst, msg)))
+           | Flooding -> schedule `Now (Network (Tx (dst, msg)))
            | Simple -> ()
          in
          (* reconsider now unlocked dependent DAG vertices recursively *)
@@ -374,7 +385,7 @@ let handle_event state ev =
 
 let dequeue state =
   OrderedQueue.dequeue state.clock.queue
-  |> Option.map (fun (now, ev, queue) ->
+  |> Option.map (fun ((_prio, now), ev, queue) ->
          assert (now >= state.clock.now);
          state.clock.now <- now;
          state.clock.queue <- queue;
