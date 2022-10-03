@@ -168,10 +168,7 @@ let print_dag oc (sim, confirmed, rewards, legend, label_vtx) =
     let open Simulator in
     [ ( "label"
       , debug_info ~describe:label_vtx n
-        @ [ ( "reward"
-            , Array.fold_left (fun s x -> s ^ "|" ^ Printf.sprintf "%.2f" x) "[|" rewards
-              ^ "]" )
-          ]
+        @ [ "reward", Printf.sprintf "%.2f" rewards.(Dag.id n) ]
         |> List.map (function
                | "", s | s, "" -> s
                | k, v -> k ^ ": " ^ v)
