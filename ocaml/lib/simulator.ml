@@ -312,8 +312,8 @@ let handle_event state ev =
       then (
         d.released_at <- min d.released_at state.clock.now;
         schedule 0. (Network (Tx (src, msg)));
-        (* recursive *)
-        List.iter share (Dag.parents (Dag.filter node.visibility state.global_view) msg))
+        (* recursive sharing of dependent vertices *)
+        List.iter share (Dag.parents state.global_view msg))
     in
     share msg
   | Network (Tx (src, msg)) ->
