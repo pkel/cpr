@@ -217,14 +217,14 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     ;;
 
     let prepare (state : state) event =
-      let vote_filter = vote_filter state in
       let state =
-        let pending = state.pending_private_to_public_messages in
+        (* deliver to defender the messages sent by attacker during last step *)
         List.fold_left
           (fun state msg -> handle_public state (Deliver msg))
           { state with pending_private_to_public_messages = [] }
-          pending
+          state.pending_private_to_public_messages
       and attempt_summary state =
+        let vote_filter = vote_filter state in
         match Private.next_summary' ~vote_filter state.private_ with
         | Some private_ -> { state with private_ }
         | None -> state
@@ -277,14 +277,11 @@ module Make (Parameters : Tailstorm.Parameters) = struct
 
     let interpret { state = s; common } action =
       let release kind =
-        let vertices =
-          Dag.iterate_descendants view [ common ]
-          |> Seq.filter (fun x -> not (released x))
-        in
         let module Map = Map.Make (Int) in
-        let rec h release_now = function
-          | Seq.Nil -> release_now (* override not possible; release all *)
-          | Seq.Cons (x, vertices) ->
+        let rec h release_now seq =
+          match seq () with
+          | Seq.Nil -> release_now (* override/match not possible; release all *)
+          | Seq.Cons (x, seq) ->
             let release_now' = Map.add (Dag.id x) x release_now in
             let module N =
               Honest (struct
@@ -294,15 +291,23 @@ module Make (Parameters : Tailstorm.Parameters) = struct
                 let view = Dag.filter visibility view
               end)
             in
-            if s.public $!= (N.handler s.public (Deliver x)).state
+            if s.public
+               $!= (N.handler
+                      s.public
+                      (Deliver x) (* this is stateful. Deliver might add summary! *))
+                     .state
             then (
               (* release_now' is just enough to override; release_now was not enough; *)
               match kind with
               | `Override -> release_now'
               | `Match -> release_now)
-            else h release_now' (vertices ())
+            else h release_now' seq
         in
-        h Map.empty (vertices ()) |> Map.bindings |> List.map snd
+        Dag.iterate_descendants view [ common ]
+        |> Seq.filter (fun x -> not (released x))
+        |> h Map.empty
+        |> Map.bindings
+        |> List.map snd
       in
       match (action : Action.t) with
       | Adopt_Proceed -> [], { s with epoch = `Proceed; private_ = s.public }

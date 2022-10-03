@@ -539,23 +539,16 @@ module Make (Parameters : Parameters) = struct
 
     let handler preferred = function
       | PuzzleSolved v ->
-        let share = [ v ] in
         (match next_summary preferred with
-        | Some state -> { share; state }
-        | None -> { share; state = preferred })
+        | Some sum -> { share = [ sum ]; state = sum }
+        | None -> { share = [ v ]; state = preferred })
       | Deliver x ->
         (* We only prefer summaries. For received votes, reconsider parent summary. *)
-        let s = last_summary x in
-        let consider =
-          (* prefer best block of all blocks involved *)
-          List.fold_left
-            (fun preferred consider -> update_head ~preferred ~consider)
-            preferred
-        in
-        (* propose if possible *)
-        (match next_summary s with
-        | Some sum -> { share = []; state = consider [ s; sum ] }
-        | None -> { share = []; state = consider [ s ] })
+        let x = last_summary x in
+        (* new summarize if possible *)
+        (match next_summary x with
+        | Some x -> { share = [ x ]; state = update_head ~consider:x ~preferred }
+        | None -> { share = []; state = update_head ~consider:x ~preferred })
     ;;
   end
 
