@@ -185,7 +185,12 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     module Public_view = struct
       include V
 
-      let visibility x = released x
+      let rec visibility x =
+        released x
+        || (not (appended_by_me x))
+        || (is_summary x && List.for_all visibility (Dag.parents view x))
+      ;;
+
       let view = Dag.filter visibility view
 
       let appended_by_me _vertex =
