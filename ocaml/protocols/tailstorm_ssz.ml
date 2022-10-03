@@ -186,8 +186,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       include V
 
       let rec visibility x =
-        released x
-        || (not (appended_by_me x))
+        delivered x
+        || (appended_by_me x && released x)
         || (is_summary x && List.for_all visibility (Dag.parents view x))
       ;;
 
@@ -225,7 +225,20 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       let state =
         (* deliver to defender the messages sent by attacker during last step *)
         List.fold_left
-          (fun state msg -> handle_public state (Deliver msg))
+          (fun state msg ->
+            if not (Public_view.visibility msg)
+            then
+              (* TODO. WIP. find out why this happens. The pending messages have been
+                 shared, so I think they should also be released. Apparently they are not.
+                 Maybe there is a problem with zero message delays? *)
+              failwith
+                (Printf.sprintf
+                   "visibility bug: delivered=%b appended=%b released=%b summary=%b"
+                   (delivered msg)
+                   (appended_by_me msg)
+                   (released msg)
+                   (is_summary msg));
+            handle_public state (Deliver msg))
           { state with pending_private_to_public_messages = [] }
           state.pending_private_to_public_messages
       and attempt_summary state =
@@ -292,7 +305,13 @@ module Make (Parameters : Tailstorm.Parameters) = struct
               Honest (struct
                 include V
 
-                let visibility x = released x || Map.mem (Dag.id x) release_now'
+                let visibility x =
+                  delivered x
+                  || released x
+                  || is_summary x
+                  || Map.mem (Dag.id x) release_now'
+                ;;
+
                 let view = Dag.filter visibility view
               end)
             in
@@ -309,7 +328,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
             else h release_now' seq
         in
         Dag.iterate_descendants view [ common ]
-        |> Seq.filter (fun x -> not (released x))
+        |> Seq.filter (fun x -> appended_by_me x && not (released x))
         |> h Map.empty
         |> Map.bindings
         |> List.map snd

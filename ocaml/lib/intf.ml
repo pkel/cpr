@@ -69,6 +69,9 @@ module type LocalView = sig
   (** when was the DAG vertex delivered locally? *)
   val delivered_at : env Dag.vertex -> float
 
+  (** delivered_at <= now *)
+  val delivered : env Dag.vertex -> bool
+
   (** was the local vertex already shared with the network? *)
   val released : env Dag.vertex -> bool
 

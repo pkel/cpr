@@ -280,7 +280,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
         if Option.is_some (Dag.data vertex).pow_hash then incr n_pow else ();
         t.reward_function
           ~assign:(fun reward vertex ->
-            match (Dag.data vertex).appended_by with
+            match reward_recipient vertex with
             | None -> ()
             | Some 0 -> reward_attacker := !reward_attacker +. reward
             | Some _ -> reward_defender := !reward_defender +. reward)
@@ -288,7 +288,8 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       in
       Ref.history head |> Seq.iter f
     in
-    let chain_time = (Dag.data head).appended_at
+    let chain_time =
+      Float.Array.fold_left Float.min Float.infinity (Dag.data head).appended_at
     and sim_time = t.sim.clock.now in
     (* Calculate return/info metrics *)
     let reward = !reward_attacker -. t.last_reward_attacker

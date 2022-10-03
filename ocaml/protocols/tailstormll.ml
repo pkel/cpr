@@ -99,7 +99,9 @@ module Make (Parameters : Parameters) = struct
         match Dag.parents view x with
         | [ x ] -> last_block x
         | parents ->
-          dag_fail (x :: parents) "last_block: votes have one parent by dag_validity")
+          dag_fail
+            (x :: parents)
+            "last_block: votes have exactly one parent by dag_validity")
     ;;
 
     (* smaller is better *)

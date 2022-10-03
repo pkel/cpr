@@ -129,7 +129,8 @@ let run task =
         ; incentive_scheme = rewardfn.key
         ; incentive_scheme_description = rewardfn.info
         ; reward
-        ; ca_time = (Dag.data head).appended_at
+        ; ca_time =
+            Float.Array.fold_left Float.min Float.infinity (Dag.data head).appended_at
         ; ca_height = Protocol.height (Dag.data head).value
         ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
         ; error = ""

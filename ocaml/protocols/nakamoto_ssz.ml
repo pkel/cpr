@@ -169,9 +169,7 @@ module Agent (V : LocalView with type data = data) = struct
 
   (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-  let public_visibility (s : state) x =
-    Dag.partial_order s.common x >= 0 || not (appended_by_me x)
-  ;;
+  let public_visibility (_s : state) x = delivered x || released x
 
   let public_view (s : state) : (env, data) local_view =
     (module struct

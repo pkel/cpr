@@ -165,7 +165,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    let public_visibility x = released x
+    let public_visibility x = delivered x || released x
 
     module Public = Honest (struct
       include V

@@ -185,7 +185,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
     module Public_view = struct
       include V
 
-      let visibility x = released x
+      let visibility x = delivered x || released x
       let view = Dag.filter visibility view
 
       let appended_by_me _vertex =
@@ -290,7 +290,10 @@ module Make (Parameters : Tailstormll.Parameters) = struct
               Honest (struct
                 include V
 
-                let visibility x = released x || Map.mem (Dag.id x) release_now'
+                let visibility x =
+                  Public_view.visibility x || Map.mem (Dag.id x) release_now'
+                ;;
+
                 let view = Dag.filter visibility view
               end)
             in

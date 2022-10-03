@@ -4,9 +4,8 @@ type 'a env =
   ; received_at : floatarray
   ; delivered_at : floatarray
         (* delivery happens when all dependencies in the DAG are fulfilled *)
-  ; appended_by : int option
-  ; appended_at : float
-  ; mutable released_at : float
+  ; appended_at : floatarray
+  ; released_at : floatarray
   ; pow_hash : (int * int) option
   ; signed_by : int option
   }
@@ -59,7 +58,6 @@ type 'prot_data clock =
 type ('prot_data, 'node_state) node' =
   { mutable state : 'node_state
   ; view : ('prot_data env, 'prot_data) Intf.local_view
-  ; visibility : 'prot_data env Dag.vertex -> bool
   ; handler :
       'node_state
       -> 'prot_data env Intf.event
@@ -104,51 +102,69 @@ let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
     dag
     x.parents
     { value = x.data
-    ; received_at =
+    ; appended_at =
         Float.Array.init n_nodes (fun i ->
             if i = node_id then clock.now else Float.infinity)
-    ; delivered_at =
-        Float.Array.init n_nodes (fun i ->
-            if i = node_id then clock.now else Float.infinity)
-    ; appended_at = clock.now
-    ; appended_by = Some node_id
+    ; released_at = Float.Array.make n_nodes Float.infinity
+    ; received_at = Float.Array.make n_nodes Float.infinity
+    ; delivered_at = Float.Array.make n_nodes Float.infinity
     ; pow_hash
     ; signed_by = (if x.sign then Some node_id else None)
-    ; released_at = Float.infinity
     }
 ;;
 
-(** deterministic appends; required for tailstorm.
-    TODO: with this change, it's not clear anymore who appended what. It might interact badly with reward calculation. Maybe we should pay reward via signatures. *)
+(** deterministic appends; required for Tailstorm. *)
 let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
   let default () = extend_dag ~pow ~n_nodes clock dag node_id x in
   if pow || x.sign (* assuming non-deterministic signatures here *)
   then default ()
   else (
-    match x.parents with
-    | [] -> default ()
-    | hd :: _tl ->
-      let view = Dag.view dag in
-      let siblings = Dag.children view hd in
-      let eq y =
-        let dy = Dag.data y in
-        dy.value = x.data
-        && dy.signed_by = None
-        && List.for_all2 (fun a b -> Dag.id a = Dag.id b) (Dag.parents view y) x.parents
+    let view = Dag.view dag in
+    let candidates =
+      match x.parents with
+      | [] -> Dag.roots dag
+      | hd :: _tl -> Dag.children view hd (* siblings *)
+    in
+    let eq y =
+      let dy = Dag.data y in
+      dy.value = x.data
+      && dy.signed_by = None
+      && List.for_all2 (fun a b -> Dag.id a = Dag.id b) (Dag.parents view y) x.parents
+    in
+    match List.find_opt eq candidates with
+    | Some x ->
+      let dx = Dag.data x in
+      let set_now arr =
+        Float.Array.set arr node_id (min clock.now (Float.Array.get arr node_id))
       in
-      (match List.find_opt eq siblings with
-      | Some x ->
-        let dx = Dag.data x in
-        Float.Array.set
-          dx.delivered_at
-          node_id
-          (min clock.now (Float.Array.get dx.delivered_at node_id));
-        Float.Array.set
-          dx.received_at
-          node_id
-          (min clock.now (Float.Array.get dx.received_at node_id));
-        x
-      | _ -> default ()))
+      set_now dx.appended_at;
+      x
+    | _ -> default ())
+;;
+
+let debug_info ?describe x =
+  let x = Dag.data x in
+  let array a =
+    Float.Array.fold_left (fun s x -> s ^ "|" ^ Printf.sprintf "%.2f" x) "[|" a ^ "]"
+  in
+  let protocol_info =
+    match describe with
+    | None -> []
+    | Some f -> [ f x.value, "" ]
+  in
+  protocol_info
+  @ [ "appended", array x.appended_at
+    ; "released", array x.released_at
+    ; "received", array x.received_at
+    ; "delivered", array x.delivered_at
+    ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
+    ; "signed", Option.map string_of_int x.signed_by |> Option.value ~default:"n/a"
+    ]
+;;
+
+let visibility clock node_id x =
+  Float.Array.get (Dag.data x).delivered_at node_id <= clock.now
+  || Float.Array.get (Dag.data x).appended_at node_id <= clock.now
 ;;
 
 let init
@@ -176,19 +192,17 @@ let init
   in
   (* let module _ : Intf.GlobalView = GlobalView in *)
   let roots =
-    let delivered_at = Float.Array.make n_nodes 0.
-    and received_at = Float.Array.make n_nodes 0. in
+    let array = Float.Array.make n_nodes in
     List.map
       (fun value ->
         Dag.append
           dag
           []
           { value
-          ; delivered_at
-          ; received_at
-          ; appended_by = None
-          ; appended_at = 0.
-          ; released_at = 0.
+          ; delivered_at = array 0.
+          ; received_at = array 0.
+          ; appended_at = array Float.infinity
+          ; released_at = array Float.infinity
           ; signed_by = None
           ; pow_hash = None
           })
@@ -204,36 +218,33 @@ let init
   let check_dag vertex =
     (* We guarantee that invalid extensions are never delivered elsewhere *)
     if not (Ref.dag_validity vertex)
-    then (
-      let info x =
-        let x = Dag.data x in
-        [ Protocol.describe x.value, ""
-        ; "node", Option.map string_of_int x.appended_by |> Option.value ~default:"n/a"
-        ; "time", Printf.sprintf "%.2f" x.appended_at
-        ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
-        ]
-      in
-      Dag.Exn.raise Ref.view info (vertex :: Dag.parents Ref.view vertex) "invalid append")
+    then
+      Dag.Exn.raise
+        Ref.view
+        (debug_info ~describe:Protocol.describe)
+        (vertex :: Dag.parents Ref.view vertex)
+        "invalid append"
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
-        let visibility x =
-          Float.Array.get (Dag.data x).delivered_at node_id <= clock.now
-        in
         let module LocalView = struct
           include Ref
 
           let my_id = node_id
-          let view = Dag.filter visibility Ref.view
-          let delivered_at n = Float.Array.get (Dag.data n).delivered_at node_id
-          let appended_by_me n = (Dag.data n).appended_by = Some node_id
+          let view = Dag.filter (visibility clock node_id) Ref.view
+          let delivered_at x = Float.Array.get (Dag.data x).delivered_at node_id
+          let delivered x = delivered_at x <= clock.now
+
+          let appended_by_me x =
+            Float.Array.get (Dag.data x).appended_at node_id <= clock.now
+          ;;
 
           let data x =
-            assert (visibility x);
+            assert (visibility clock node_id x);
             data x
           ;;
 
-          let released x = (Dag.data x).released_at <= clock.now
+          let released x = Float.Array.get (Dag.data x).released_at node_id <= clock.now
 
           let extend_dag x =
             let v = extend_dag ~pow:false ~n_nodes clock dag node_id x in
@@ -246,7 +257,6 @@ let init
         Node
           { state = Node.init ~roots
           ; view = (module LocalView)
-          ; visibility
           ; puzzle_payload = Node.puzzle_payload
           ; handler = Node.handler
           ; preferred = Node.preferred
@@ -304,13 +314,16 @@ let handle_event state ev =
     schedule 0. (ForNode (node_id, PuzzleSolved vertex))
   | FromNode (src, Share msg) ->
     (* implements recursive sharing *)
-    let (Node node) = state.nodes.(src) in
     let rec share msg =
-      assert (node.visibility msg);
+      assert (visibility state.clock src msg);
       let d = Dag.data msg in
-      if d.released_at > state.clock.now
+      let released_at = Float.Array.get d.released_at src
+      and appended_at = Float.Array.get d.appended_at src in
+      if appended_at < Float.infinity && released_at > state.clock.now
       then (
-        d.released_at <- min d.released_at state.clock.now;
+        (* appended by src but not yet released *)
+        assert (appended_at <= state.clock.now);
+        Float.Array.set d.released_at src state.clock.now;
         schedule 0. (Network (Tx (src, msg)));
         (* recursive sharing of dependent vertices *)
         List.iter share (Dag.parents state.global_view msg))
@@ -331,16 +344,15 @@ let handle_event state ev =
           schedule delay (Network (Rx (link.dest, msg)))))
       state.network.nodes.(src).links
   | Network (Rx (dst, msg)) ->
-    let delivered_at msg = Float.Array.get (Dag.data msg).delivered_at dst
-    and received_at msg = Float.Array.get (Dag.data msg).received_at dst in
+    let received_at msg = Float.Array.get (Dag.data msg).received_at dst in
     (* implements in-order delivery of vertices and flooding *)
     let rec h msg =
       (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
          vertices have been delivered *)
-      if delivered_at msg <= state.clock.now
+      if visibility state.clock dst msg
       then (* msg was delivered before, ignore *) ()
       else if List.exists
-                (fun dep -> delivered_at dep > state.clock.now)
+                (fun dep -> not (visibility state.clock dst dep))
                 (Dag.parents state.global_view msg)
       then (* dependencies are not yet fulfilled, wait *) ()
       else
@@ -384,12 +396,21 @@ let rec loop ~activations state =
     loop ~activations state
 ;;
 
+let reward_recipient vertex =
+  (Dag.data vertex).appended_at
+  |> Float.Array.to_list
+  |> List.mapi (fun i x -> i, x)
+  |> List.filter (fun (_i, x) -> x < Float.infinity)
+  |> function
+  | [] -> None
+  | [ (i, _) ] -> Some i
+  | _ -> failwith "cannot assign reward to vertex appended by multiple nodes"
+;;
+
 let apply_reward_function' (fn : _ Intf.reward_function) seq state =
   let arr = Array.make (Array.length state.nodes) 0. in
-  let assign x n =
-    match (Dag.data n).appended_by with
-    | Some i -> arr.(i) <- arr.(i) +. x
-    | None -> ()
+  let assign x vertex =
+    reward_recipient vertex |> Option.iter (fun i -> arr.(i) <- arr.(i) +. x)
   in
   Seq.iter (fn ~assign) seq;
   arr

@@ -276,31 +276,13 @@ let%test_module "policy" =
       in
       if observed_orphan_rate > orphan_rate_limit
       then (
-        let meta x =
-          let d : _ Simulator.env = Dag.data x in
-          let who =
-            match d.appended_by with
-            | None -> "n/a"
-            | Some i -> string_of_int i
-          in
-          [ ( Printf.sprintf
-                "%s | %s | t:%.1f%s"
-                (A.Protocol.describe d.value)
-                who
-                d.appended_at
-                (if d.released_at <> d.appended_at
-                then Printf.sprintf "-%.1f" d.released_at
-                else "")
-            , "" )
-          ]
-        in
         let all =
           let open Dag in
           iterate_descendants env.global_view (roots env.dag) |> List.of_seq
         in
         Dag.Exn.raise
           env.global_view
-          meta
+          (Simulator.debug_info ~describe:A.Protocol.describe)
           all
           (* failwith *)
           (Printf.sprintf

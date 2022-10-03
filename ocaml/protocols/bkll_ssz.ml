@@ -144,7 +144,7 @@ module Make (Parameters : Bkll.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    let public_visibility _state x = released x
+    let public_visibility _state x = delivered x || released x
 
     let public_view s : (env, data) local_view =
       (module struct
