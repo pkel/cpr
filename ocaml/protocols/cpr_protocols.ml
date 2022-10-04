@@ -217,13 +217,6 @@ let%test_module "protocol" =
         (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
     ;;
 
-    let%test_unit "tailstorm32block/hard" =
-      test
-        ~activation_delay:1.
-        ~orphan_rate_limit:0.1
-        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
-    ;;
-
     let%test_unit "tailstormll8constant/easy" =
       test
         ~activation_delay:10.

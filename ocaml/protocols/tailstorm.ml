@@ -5,16 +5,14 @@ type reward_scheme =
   | Constant
   | Punish
   | Hybrid
-  | Block
 
-let reward_schemes = [ Discount; Constant; Punish; Hybrid; Block ]
+let reward_schemes = [ Discount; Constant; Punish; Hybrid ]
 
 let reward_key = function
   | Constant -> "constant"
   | Discount -> "discount"
   | Punish -> "punish"
   | Hybrid -> "hybrid"
-  | Block -> "block"
 ;;
 
 let reward_info = function
@@ -26,7 +24,6 @@ let reward_info = function
   | Hybrid ->
     "max k per confirmed block, d/k per pow solution on longest chain of votes (d ∊ 1..k \
      = height since last block)"
-  | Block -> "1 per confirmed (strong) block"
 ;;
 
 type subblock_selection =
@@ -182,10 +179,6 @@ module Make (Parameters : Parameters) = struct
           | next :: _ -> Some (this, next))
     ;;
 
-    let constant_block c : _ reward_function =
-     fun ~assign x -> if is_summary x then assign c x
-   ;;
-
     let reward' ~max_reward_per_block ~discount ~punish : env reward_function =
       let k = float_of_int k in
       let c = max_reward_per_block /. k in
@@ -193,13 +186,13 @@ module Make (Parameters : Parameters) = struct
         if is_summary x
         then (
           match Dag.parents votes_only x with
-          | [] -> (* Either genesis or k=1 *) assign c x
-          | hd :: _ ->
+          | [] -> ()
+          | hd :: _ as parents ->
             let depth = depth hd in
             let r = if discount then float_of_int depth /. k *. c else c in
             if punish
             then Dag.iterate_ancestors votes_only [ hd ] |> Seq.iter (assign r)
-            else Dag.iterate_ancestors votes_only [ x ] |> Seq.iter (assign r))
+            else Dag.iterate_ancestors votes_only parents |> Seq.iter (assign r))
     ;;
 
     let reward =
@@ -209,7 +202,6 @@ module Make (Parameters : Parameters) = struct
       | Discount -> reward ~discount:true ~punish:false
       | Punish -> reward ~discount:false ~punish:true
       | Hybrid -> reward ~discount:true ~punish:true
-      | Block -> constant_block 1.
     ;;
 
     (* TODO: add tests for reward functions *)
@@ -452,12 +444,11 @@ module Make (Parameters : Parameters) = struct
               let reward =
                 let rewarded_votes =
                   match rewards with
-                  | Block -> Seq.empty
                   | Constant | Discount -> Dag.iterate_ancestors votes_only leaves
                   | Punish | Hybrid -> Dag.iterate_ancestors votes_only [ List.hd leaves ]
                 and per_vote =
                   match rewards with
-                  | Block | Constant | Punish -> 1.
+                  | Constant | Punish -> 1.
                   | Discount | Hybrid ->
                     let depth = List.hd leaves |> depth in
                     float_of_int (depth + 1) /. float_of_int k
