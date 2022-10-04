@@ -563,14 +563,14 @@ module Make (Parameters : Parameters) = struct
     let handler preferred = function
       | PuzzleSolved v ->
         (match next_summary preferred with
-        | Some sum -> { share = [ v ]; state = sum }
+        | Some sum -> { share = [ sum; v ]; state = sum }
         | None -> { share = [ v ]; state = preferred })
       | Deliver x ->
         (* We only prefer summaries. For received votes, reconsider parent summary. *)
         let x = last_summary x in
         (* new summarize if possible *)
         (match next_summary x with
-        | Some x -> { share = []; state = update_head ~consider:x ~preferred }
+        | Some x -> { share = [ x ]; state = update_head ~consider:x ~preferred }
         | None -> { share = []; state = update_head ~consider:x ~preferred })
     ;;
   end

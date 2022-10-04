@@ -357,6 +357,8 @@ let handle_event state ev =
   | Network (Rx (dst, msg)) ->
     let received_at msg = Float.Array.get (Dag.data msg).received_at dst in
     (* implements in-order delivery of vertices and flooding *)
+    (* TODO. We might have a problem here. Vertices turning visible through deterministic
+       appends w/o being delivered might break the delivery logic. *)
     let rec h msg =
       (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
          vertices have been delivered *)
