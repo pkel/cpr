@@ -525,7 +525,39 @@ module Make (Parameters : Parameters) = struct
       let count x =
         Dag.iterate_descendants votes_only [ x ] |> Seq.fold_left (fun n _ -> n + 1) 0
       in
-      if height c > height p || (height c = height p && count c > count p) then c else p
+      let hc, hp = height c, height p in
+      if hc > hp
+      then (* longest chain of summaries *) c
+      else if hc = hp
+      then (
+        let cc, cp = count c, count p in
+        if cc > cp
+        then (* A_k embedding to disambiguate summaries of same height *) c
+        else if cc = cp
+        then (
+          (* disambiguate summaries w/o confirming votes. Needed because summaries are
+             cheap and formed opportunistically. TODO. This effort to disambiguate
+             security does not (fully) mitigate the inequality problems of the protocol as
+             compared to tailstorm/ll. If the inequality is caused by a different bug,
+             then come here and revise. Maybe what we do here is not required. *)
+          let depth_first_parent x =
+            Dag.parents view x
+            |> function
+            | [] -> 0
+            | hd :: _ -> depth hd
+          in
+          let dfpc, dfpp = depth_first_parent c, depth_first_parent p in
+          if dfpc > dfpp
+          then c
+          else if dfpc = dfpp
+          then (
+            let oracle x =
+              Dag.parents view x |> List.fold_left (fun acc x -> Hashtbl.hash (acc, x)) 0
+            in
+            if oracle c > oracle p then c else p)
+          else p)
+        else p)
+      else p
     ;;
 
     let handler preferred = function
