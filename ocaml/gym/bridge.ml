@@ -202,6 +202,34 @@ let () =
      fun () -> Proto (Engine.of_module (bkll_ssz ~k) ~reward) |> python_of_protocol);
   Py_module.set
     m
+    "tailstorm"
+    (let%map reward =
+       keyword "reward" string ~default:"constant" ~docstring:"reward function"
+     and k = keyword "k" int ~docstring:"puzzles per block" in
+     let reward_ =
+       match
+         List.find_opt (fun x -> Tailstorm.reward_key x = reward) Tailstorm.reward_schemes
+       with
+       | Some x -> x
+       | None ->
+         let msg =
+           "unkown reward function '"
+           ^ reward
+           ^ "'. Try "
+           ^ (List.map Tailstorm.reward_key Tailstorm.reward_schemes
+             |> Engine.numeration ~conj:" or ")
+           ^ "."
+         in
+         failwith msg
+     in
+     fun () ->
+       Proto
+         (Engine.of_module
+            (tailstorm_ssz ~subblock_selection:Optimal ~rewards:reward_ ~k)
+            ~reward)
+       |> python_of_protocol);
+  Py_module.set
+    m
     "tailstormll"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
