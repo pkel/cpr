@@ -122,7 +122,7 @@ module Make (Parameters : Parameters) = struct
     (* smaller is better *)
     let compare_votes_in_block =
       let get x =
-        let hash = pow_hash x |> Option.value ~default:(0, 0) in
+        let hash = pow x |> Option.value ~default:(0, 0) in
         depth x, hash
       and ty = Compare.(tuple (neg int) (tuple int int)) in
       Compare.(by ty get)
@@ -135,7 +135,7 @@ module Make (Parameters : Parameters) = struct
       match data vertex, Dag.parents view vertex with
       | Vote child, [ parent ] ->
         child.depth > 0
-        && pow_hash vertex |> Option.is_some
+        && pow vertex |> Option.is_some
         && child.height = height parent
         && child.depth = depth parent + 1
       | Summary child, (vote0 :: votetl as votes) ->
@@ -149,7 +149,7 @@ module Make (Parameters : Parameters) = struct
           Compare.is_sorted ~unique:true compare_votes_in_block votes
         in
         child.height > 0
-        && pow_hash vertex = None
+        && pow vertex = None
         && same_summary ()
         && sorted_votes ()
         && List.for_all is_vote votes
@@ -233,6 +233,12 @@ module Make (Parameters : Parameters) = struct
       | roots -> dag_fail roots "init: expected single root"
     ;;
 
+    let appended_by_me x =
+      match visibility x with
+      | `Withheld | `Released -> true
+      | `Received -> false
+    ;;
+
     (** Algorithm for selecting sub blocks quickly.
 
         This version picks the longest branches first. If a branches does not
@@ -273,7 +279,7 @@ module Make (Parameters : Parameters) = struct
            Compare.(
              by
                (tuple (neg int) (tuple int float))
-               (fun x -> depth x, ((if appended_by_me x then 0 else 1), delivered_at x)))
+               (fun x -> depth x, ((if appended_by_me x then 0 else 1), visible_since x)))
       |> f IntSet.empty 0 []
       |> Option.map
            (List.sort
@@ -281,7 +287,7 @@ module Make (Parameters : Parameters) = struct
                 by
                   (tuple (neg int) (tuple int int))
                   (fun x ->
-                    let hash = pow_hash x |> Option.value ~default:max_pow_hash in
+                    let hash = pow x |> Option.value ~default:max_pow in
                     depth x, hash)))
     ;;
 
@@ -515,8 +521,7 @@ module Make (Parameters : Parameters) = struct
     let next_summary' ~vote_filter b =
       quorum ~vote_filter b
       |> Option.map (fun q ->
-             extend_dag
-               { parents = q; data = Summary { height = height b + 1 }; sign = false })
+             { parents = q; data = Summary { height = height b + 1 }; sign = false })
     ;;
 
     let next_summary = next_summary' ~vote_filter:(fun _ -> true)
@@ -561,17 +566,18 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let handler preferred = function
-      | PuzzleSolved v ->
-        (match next_summary preferred with
-        | Some sum -> { share = [ sum; v ]; state = sum }
-        | None -> { share = [ v ]; state = preferred })
-      | Deliver x ->
-        (* We only prefer summaries. For received votes, reconsider parent summary. *)
-        let x = last_summary x in
-        (* new summarize if possible *)
-        (match next_summary x with
-        | Some x -> { share = [ x ]; state = update_head ~consider:x ~preferred }
-        | None -> { share = []; state = update_head ~consider:x ~preferred })
+      | Append x | Network x | ProofOfWork x ->
+        let s = last_summary x in
+        let append =
+          match next_summary s with
+          | Some block -> [ block ]
+          | None -> []
+        and share =
+          match visibility x with
+          | `Withheld (* TODO when is_vote x *) -> [ x ]
+          | _ -> []
+        in
+        update_head ~preferred ~consider:s |> return ~append ~share
     ;;
   end
 

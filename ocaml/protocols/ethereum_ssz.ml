@@ -360,14 +360,16 @@ module Make (Parameters : Ethereum.Parameters) = struct
     module Public_view = struct
       include V
 
-      let visibility x = released x
-      let view = Dag.filter visibility view
+      let my_id = -1
 
-      let appended_by_me _vertex =
-        (* The attacker simulates an honest node on the public view. This node should not
-           interpret attacker vertices as own vertices. *)
-        false
+      let filter x =
+        match visibility x with
+        | `Released | `Received -> true
+        | `Withheld -> false
       ;;
+
+      let view = Dag.filter filter view
+      let visibility _x = `Received
     end
 
     module Public = Honest (Public_view)
@@ -383,8 +385,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
     let puzzle_payload (s : state) =
       Private.puzzle_payload'
         ~uncle_filter:(fun x ->
-          (s.mining.own && appended_by_me x)
-          || (s.mining.foreign && not (appended_by_me x)))
+          (s.mining.own && Private.appended_by_me x)
+          || (s.mining.foreign && not (Private.appended_by_me x)))
         s.private_
     ;;
 
@@ -397,22 +399,23 @@ module Make (Parameters : Ethereum.Parameters) = struct
       let state =
         let pending = state.pending_private_to_public_messages in
         List.fold_left
-          (fun state msg -> handle_public state (Deliver msg))
+          (fun state msg -> handle_public state (Network msg))
           (State.update ~pending_private_to_public_messages:[] state)
           pending
       in
       let state =
         match event with
-        | PuzzleSolved _ ->
+        | Append _ -> failwith "not implemented"
+        | ProofOfWork _ ->
           (* work on private chain *)
           `PoW, handle_private state event
-        | Deliver x ->
+        | Network x ->
           let state =
             (* simulate defender *)
             handle_public state event
           in
           (* deliver visible (not ignored) messages *)
-          if Public_view.visibility x
+          if Public_view.filter x
           then `Deliver, handle_private state event
           else `Deliver, state
       in
@@ -480,6 +483,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
     let conclude (pending_private_to_public_messages, state) =
       { share = pending_private_to_public_messages
       ; state = State.update ~pending_private_to_public_messages state
+      ; append = []
       }
     ;;
 

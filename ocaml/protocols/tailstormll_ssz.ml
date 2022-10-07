@@ -185,14 +185,16 @@ module Make (Parameters : Tailstormll.Parameters) = struct
     module Public_view = struct
       include V
 
-      let visibility x = delivered x || released x
-      let view = Dag.filter visibility view
+      let my_id = -1
 
-      let appended_by_me _vertex =
-        (* The attacker simulates an honest node on the public view. This node should not
-           interpret attacker vertices as own vertices. *)
-        false
+      let filter x =
+        match visibility x with
+        | `Withheld -> false
+        | `Released | `Received -> true
       ;;
+
+      let view = Dag.filter filter view
+      let visibility _ = `Received
     end
 
     module Public = Honest (Public_view)
@@ -215,7 +217,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
         ~vote_filter:(fun x ->
           match s.epoch with
           | `Proceed -> true
-          | `Prolong -> appended_by_me x)
+          | `Prolong -> Private.appended_by_me x)
         s.private_
     ;;
 
@@ -223,15 +225,16 @@ module Make (Parameters : Tailstormll.Parameters) = struct
       let state =
         let pending = state.pending_private_to_public_messages in
         List.fold_left
-          (fun state msg -> handle_public state (Deliver msg))
+          (fun state msg -> handle_public state (Network msg))
           { state with pending_private_to_public_messages = [] }
           pending
       in
       match event with
-      | PuzzleSolved _ ->
+      | Append _ -> failwith "not implemented"
+      | ProofOfWork _ ->
         (* work on private chain *)
         handle_private state event
-      | Deliver _ ->
+      | Network _ ->
         let state =
           (* simulate defender *)
           handle_public state event
@@ -279,7 +282,10 @@ module Make (Parameters : Tailstormll.Parameters) = struct
       let release kind =
         let vertices =
           Dag.iterate_descendants view [ common ]
-          |> Seq.filter (fun x -> not (released x))
+          |> Seq.filter (fun x ->
+                 match visibility x with
+                 | `Withheld -> true
+                 | _ -> false)
         in
         let module Map = Map.Make (Int) in
         let rec h release_now = function
@@ -290,14 +296,11 @@ module Make (Parameters : Tailstormll.Parameters) = struct
               Honest (struct
                 include V
 
-                let visibility x =
-                  Public_view.visibility x || Map.mem (Dag.id x) release_now'
-                ;;
-
-                let view = Dag.filter visibility view
+                let filter x = Public_view.filter x || Map.mem (Dag.id x) release_now'
+                let view = Dag.filter filter view
               end)
             in
-            if s.public $!= (N.handler s.public (Deliver x)).state
+            if s.public $!= (N.handler s.public (Network x)).state
             then (
               (* release_now' is just enough to override; release_now was not enough; *)
               match kind with
@@ -321,6 +324,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
     let conclude (pending_private_to_public_messages, state) =
       { share = pending_private_to_public_messages
       ; state = { state with pending_private_to_public_messages }
+      ; append = []
       }
     ;;
 

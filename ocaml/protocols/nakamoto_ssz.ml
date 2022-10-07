@@ -169,17 +169,19 @@ module Agent (V : LocalView with type data = data) = struct
 
   (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-  let public_visibility (_s : state) x = delivered x || released x
+  let public_visibility (_s : state) x =
+    match visibility x with
+    | `Withheld -> false
+    | `Received | `Released -> true
+  ;;
 
   let public_view (s : state) : (env, data) local_view =
     (module struct
       include V
 
+      let my_id = -1
       let view = Dag.filter (public_visibility s) view
-
-      (* The attacker simulates an honest node on the public view. This node should not
-         interpret attacker vertices as own vertices. *)
-      let appended_by_me _vertex = false
+      let visibility _x = `Received
     end)
   ;;
 
@@ -187,7 +189,11 @@ module Agent (V : LocalView with type data = data) = struct
      blocks *)
 
   let private_visibility (s : state) x =
-    Dag.partial_order s.common x >= 0 || appended_by_me x
+    Dag.partial_order s.common x >= 0
+    ||
+    match visibility x with
+    | `Withheld | `Released -> true
+    | `Received -> false
   ;;
 
   let private_view (s : state) : (env, data) local_view =
@@ -218,21 +224,22 @@ module Agent (V : LocalView with type data = data) = struct
     let state =
       let pending = state.pending_private_to_public_messages in
       List.fold_left
-        (fun state msg -> handle_public state (Deliver msg))
+        (fun state msg -> handle_public state (Network msg))
         (State.update ~pending_private_to_public_messages:[] state)
         pending
     in
     match event with
-    | PuzzleSolved _ ->
-      (* work on private chain *)
-      handle_private state event
-    | Deliver x ->
+    | Append _ -> failwith "not implemented"
+    | Network x ->
       let state =
         (* simulate defender *)
         handle_public state event
       in
       (* deliver visible (not ignored) messages *)
       if private_visibility state x then handle_private state event else state
+    | ProofOfWork _ ->
+      (* work on private chain *)
+      handle_private state event
   ;;
 
   let prepare s e = Observable (prepare s e)
@@ -274,9 +281,8 @@ module Agent (V : LocalView with type data = data) = struct
   ;;
 
   let conclude (pending_private_to_public_messages, state) =
-    { share = pending_private_to_public_messages
-    ; state = State.update ~pending_private_to_public_messages state
-    }
+    State.update ~pending_private_to_public_messages state
+    |> return ~share:pending_private_to_public_messages
   ;;
 
   let apply (Observable state) action = interpret state action |> conclude

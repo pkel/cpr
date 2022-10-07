@@ -144,22 +144,30 @@ module Make (Parameters : Bkll.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    let public_visibility _state x = delivered x || released x
+    let public_visibility _state x =
+      match visibility x with
+      | `Released | `Received -> true
+      | `Withheld -> false
+    ;;
 
     let public_view s : (env, data) local_view =
       (module struct
         include V
 
+        let my_id = -1
         let view = Dag.filter (public_visibility s) view
-        let appended_by_me _vertex = false
-
-        (* The attacker simulates an honest node on the public view. This node should not
-           interpret attacker vertices as own vertices. *)
+        let visibility _x = `Received
       end)
     ;;
 
     (* the attacker works on a subset of the total information: he ignores new defender
        blocks *)
+
+    let appended_by_me x =
+      match visibility x with
+      | `Released | `Withheld -> true
+      | `Received -> false
+    ;;
 
     let private_visibility (s : state) vertex =
       (* defender votes for the attacker's preferred block *)
@@ -204,15 +212,16 @@ module Make (Parameters : Bkll.Parameters) = struct
       let state =
         let pending = state.pending_private_to_public_messages in
         List.fold_left
-          (fun state msg -> handle_public state (Deliver msg))
+          (fun state msg -> handle_public state (Network msg))
           (State.update ~pending_private_to_public_messages:[] state)
           pending
       in
       match event with
-      | PuzzleSolved _ ->
+      | Append _ -> failwith "not implemented"
+      | ProofOfWork _ ->
         (* work on private chain *)
         handle_private state event
-      | Deliver x ->
+      | Network x ->
         let state =
           (* simulate defender *)
           handle_public state event
@@ -286,7 +295,7 @@ module Make (Parameters : Bkll.Parameters) = struct
           else block, nvotes
         in
         let votes = Dag.children Private.view block |> List.filter is_vote in
-        match Compare.first Compare.(by float delivered_at) nvotes votes with
+        match Compare.first Compare.(by float visible_since) nvotes votes with
         | Some subset -> block :: subset
         | None ->
           (* not enough votes, release all *)
@@ -306,6 +315,7 @@ module Make (Parameters : Bkll.Parameters) = struct
     let conclude (pending_private_to_public_messages, state) =
       { share = pending_private_to_public_messages
       ; state = State.update ~pending_private_to_public_messages state
+      ; append = []
       }
     ;;
 

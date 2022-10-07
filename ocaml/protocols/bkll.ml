@@ -64,7 +64,7 @@ module Make (Parameters : Parameters) = struct
     let blocks_only = Dag.filter is_block view
 
     let dag_validity vertex =
-      match pow_hash vertex, data vertex, Dag.parents view vertex with
+      match pow vertex, data vertex, Dag.parents view vertex with
       | Some _, Vote x, [ p ] -> is_block p && x.height = height p
       | Some _, Block b, [ pblock ] when k = 1 ->
         (match data pblock with
@@ -76,9 +76,9 @@ module Make (Parameters : Parameters) = struct
           let ordered_votes, _, nvotes =
             List.fold_left
               (fun (ok, h, i) x ->
-                let h' = pow_hash x |> Option.get in
+                let h' = pow x |> Option.get in
                 is_vote x && h' > h && ok, h', i + 1)
-              (true, pow_hash vote0 |> Option.get, 1)
+              (true, pow vote0 |> Option.get, 1)
               votes
           in
           p.height + 1 = b.height && nvotes = k - 1 && ordered_votes
@@ -152,13 +152,19 @@ module Make (Parameters : Parameters) = struct
       | _ -> failwith "invalid roots"
     ;;
 
+    let appended_by_me x =
+      match visibility x with
+      | `Received -> false
+      | `Withheld | `Released -> true
+    ;;
+
     let compare_blocks =
       let open Compare in
       let cmp =
         by int block_height_exn
         $ by int (fun x -> List.length (Dag.children votes_only x))
         $ by int (fun x -> if appended_by_me x then 1 else 0)
-        $ by (neg float) delivered_at
+        $ by (neg float) visible_since
       in
       skip_eq Dag.vertex_eq cmp
     ;;
@@ -168,7 +174,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let puzzle_payload preferred =
-      let pow_hash_exn x = pow_hash x |> Option.get in
+      let pow_hash_exn x = pow x |> Option.get in
       let votes = Dag.children votes_only preferred in
       if List.length votes >= k - 1
       then (
@@ -177,7 +183,7 @@ module Make (Parameters : Parameters) = struct
           preferred
           :: (Compare.first
                 Compare.(
-                  by (tuple (neg bool) float) (fun x -> appended_by_me x, delivered_at x))
+                  by (tuple (neg bool) float) (fun x -> appended_by_me x, visible_since x))
                 (k - 1)
                 votes
              |> Option.get
@@ -190,14 +196,14 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let handler preferred = function
-      | PuzzleSolved v ->
-        if is_block v
-        then { share = [ v ]; state = v }
-        else { share = [ v ]; state = preferred }
-      | Deliver v ->
-        (* We only prefer blocks. For received votes, reconsider parent block. *)
-        let consider = last_block v in
-        { share = []; state = update_head ~preferred ~consider }
+      | Append _ -> failwith "not implemented"
+      | ProofOfWork vertex | Network vertex ->
+        let share =
+          match visibility vertex with
+          | `Withheld -> [ vertex ]
+          | `Received | `Released -> []
+        and consider = last_block vertex in
+        update_head ~consider ~preferred |> return ~share
     ;;
   end
 

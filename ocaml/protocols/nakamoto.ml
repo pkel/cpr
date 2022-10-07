@@ -15,7 +15,7 @@ module Referee (V : GlobalView with type data = data) = struct
   include V
 
   let dag_validity vertex =
-    match pow_hash vertex, Dag.parents view vertex with
+    match pow vertex, Dag.parents view vertex with
     | Some _, [ p ] ->
       let child = data vertex
       and p = data p in
@@ -66,13 +66,12 @@ module Honest (V : LocalView with type data = data) = struct
   ;;
 
   let handler state = function
-    | PuzzleSolved vertex -> { state = vertex; share = [ vertex ] }
-    | Deliver vertex ->
+    | Append _ -> failwith "not implemented"
+    | Network vertex ->
       let consider = data vertex
       and preferred = data state in
-      { share = []
-      ; state = (if consider.height > preferred.height then vertex else state)
-      }
+      return (if consider.height > preferred.height then vertex else state)
+    | ProofOfWork vertex -> return ~share:[ vertex ] vertex
   ;;
 end
 

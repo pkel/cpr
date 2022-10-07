@@ -165,16 +165,18 @@ module Make (Parameters : Tailstormll.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    let public_visibility x = delivered x || released x
+    let public_visibility x =
+      match visibility x with
+      | `Withheld -> false
+      | `Released | `Received -> true
+    ;;
 
     module Public = Honest (struct
       include V
 
+      let my_id = -1
       let view = Dag.filter public_visibility view
-      let appended_by_me _vertex = false
-
-      (* The attacker simulates an honest node on the public view. This node should not
-         interpret attacker vertices as own vertices. *)
+      let visibility _ = `Received
     end)
 
     (* the attacker emulates a defending node. This describes the defender node *)
@@ -197,15 +199,16 @@ module Make (Parameters : Tailstormll.Parameters) = struct
     let prepare (state : state) event =
       let state =
         List.fold_left
-          (fun state msg -> handle_public state (Deliver msg))
+          (fun state msg -> handle_public state (Network msg))
           { state with pending_private_to_public_messages = [] }
           state.pending_private_to_public_messages
       in
       match event with
-      | PuzzleSolved _ ->
+      | Append _ -> failwith "not implemented"
+      | ProofOfWork _ ->
         (* work on private chain *)
         handle_private state event
-      | Deliver _ ->
+      | Network _ ->
         let state =
           (* simulate defender *)
           handle_public state event
@@ -275,6 +278,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
       in
       { share = pending_private_to_public_messages
       ; state = { state with pending_private_to_public_messages }
+      ; append = []
       }
     ;;
 

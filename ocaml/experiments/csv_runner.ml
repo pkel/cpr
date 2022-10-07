@@ -132,7 +132,7 @@ let run task =
         ; incentive_scheme = rewardfn.key
         ; incentive_scheme_description = rewardfn.info
         ; reward
-        ; head_time = Float.Array.fold_left Float.min Float.infinity head.appended_at
+        ; head_time = timestamp head
         ; head_height = Protocol.height head.value
         ; head_progress = Protocol.progress head.value
         ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s

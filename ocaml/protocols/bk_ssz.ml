@@ -140,7 +140,7 @@ module Make (Parameters : Bk.Parameters) = struct
     module State = Ssz_tools.State8 (V)
 
     type state = State.t
-    type observable_state = Observable of state
+    type observable_state = Observable of (state * (env, data) draft_vertex list)
 
     let preferred (s : state) = s.private_
 
@@ -151,30 +151,35 @@ module Make (Parameters : Bk.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    let public_visibility _ x = delivered x || released x
+    let public_visibility (_s : state) x =
+      match visibility x with
+      | `Withheld -> false
+      | `Received | `Released -> true
+    ;;
 
     let public_view s : (env, data) local_view =
       (module struct
         include V
 
+        let my_id = -1
         let view = Dag.filter (public_visibility s) view
-        let appended_by_me _vertex = false
-
-        (* The attacker simulates an honest node on the public view. This node should not
-           interpret attacker vertices as own vertices. *)
+        let visibility _ = `Received
       end)
     ;;
 
     (* the attacker works on a subset of the total information: he ignores new defender
        blocks *)
 
-    let private_visibility (s : state) vertex =
+    let private_visibility (s : state) x =
       (* defender votes for the attacker's preferred block *)
       (* || anything mined by the attacker *)
       (* || anything on the common chain *)
-      (s.epoch = `Proceed && is_vote vertex && last_block vertex $== s.private_)
-      || appended_by_me vertex
-      || Dag.partial_order s.common vertex >= 0
+      (s.epoch = `Proceed && is_vote x && last_block x $== s.private_)
+      || Dag.partial_order s.common x >= 0
+      ||
+      match visibility x with
+      | `Withheld | `Released -> true
+      | `Received -> false
     ;;
 
     let private_view (s : state) : _ local_view =
@@ -197,8 +202,9 @@ module Make (Parameters : Bk.Parameters) = struct
     let handle_private (s : state) event =
       let (module V) = private_view s in
       let open Honest (V) in
-      let private_ = (handler s.private_ event).state in
-      State.update ~private_ s
+      let action = handler s.private_ event in
+      let private_ = action.state in
+      State.update ~private_ s, action.append
     ;;
 
     let puzzle_payload (s : state) =
@@ -211,26 +217,24 @@ module Make (Parameters : Bk.Parameters) = struct
       let state =
         let pending = state.pending_private_to_public_messages in
         List.fold_left
-          (fun state msg -> handle_public state (Deliver msg))
+          (fun state msg ->
+            assert (public_visibility state msg);
+            handle_public state (Network msg))
           (State.update ~pending_private_to_public_messages:[] state)
           pending
       in
       match event with
-      | PuzzleSolved _ ->
-        (* work on private chain *)
-        handle_private state event
-      | Deliver x ->
+      | Append x | ProofOfWork x | Network x ->
         let state =
-          (* simulate defender *)
-          handle_public state event
+          if public_visibility state x then handle_public state event else state
         in
         (* deliver visible (not ignored) messages *)
-        if private_visibility state x then handle_private state event else state
+        if private_visibility state x then handle_private state event else state, []
     ;;
 
     let prepare s e = Observable (prepare s e)
 
-    let observe (Observable s) =
+    let observe (Observable (s, _append)) =
       let open Observation in
       let (module Private) = private_view s in
       let (module Public) = public_view s in
@@ -245,13 +249,13 @@ module Make (Parameters : Bk.Parameters) = struct
         | votes ->
           let leader =
             Compare.first
-              Compare.(by (tuple int int) (fun n -> pow_hash n |> Option.get))
+              Compare.(by (tuple int int) (fun n -> pow n |> Option.get))
               1
               votes
             |> Option.get
             |> List.hd
           in
-          appended_by_me leader
+          signature leader = Some my_id
       and ca = last_block s.common in
       let ca_height = block_height_exn ca
       and private_height = block_height_exn s.private_
@@ -270,7 +274,7 @@ module Make (Parameters : Bk.Parameters) = struct
       }
     ;;
 
-    let interpret (s : state) action =
+    let interpret (Observable (s, append)) action =
       let parent_block x =
         match Dag.parents view x with
         | hd :: _ when is_block hd -> Some hd
@@ -307,30 +311,32 @@ module Make (Parameters : Bk.Parameters) = struct
           else block, nvotes
         in
         let votes = Dag.children Private.view block |> List.filter is_vote in
-        match Compare.first Compare.(by float delivered_at) nvotes votes with
+        match Compare.first Compare.(by float visible_since) nvotes votes with
         | Some subset -> block :: subset
         | None ->
           (* not enough votes, release all *)
           block :: votes
       in
-      match (action : Action.t) with
-      | Adopt_Proceed -> [], State.update ~epoch:`Proceed ~private_:s.public s
-      | Adopt_Prolong -> [], State.update ~epoch:`Prolong ~private_:s.public s
-      | Match_Proceed -> release `Match, State.update ~epoch:`Proceed s
-      | Match_Prolong -> release `Match, State.update ~epoch:`Prolong s
-      | Override_Proceed -> release `Override, State.update ~epoch:`Proceed s
-      | Override_Prolong -> release `Override, State.update ~epoch:`Prolong s
-      | Wait_Proceed -> [], State.update ~epoch:`Proceed s
-      | Wait_Prolong -> [], State.update ~epoch:`Prolong s
+      let b, c =
+        match (action : Action.t) with
+        | Adopt_Proceed -> [], State.update ~epoch:`Proceed ~private_:s.public s
+        | Adopt_Prolong -> [], State.update ~epoch:`Prolong ~private_:s.public s
+        | Match_Proceed -> release `Match, State.update ~epoch:`Proceed s
+        | Match_Prolong -> release `Match, State.update ~epoch:`Prolong s
+        | Override_Proceed -> release `Override, State.update ~epoch:`Proceed s
+        | Override_Prolong -> release `Override, State.update ~epoch:`Prolong s
+        | Wait_Proceed -> [], State.update ~epoch:`Proceed s
+        | Wait_Prolong -> [], State.update ~epoch:`Prolong s
+      in
+      append, b, c
     ;;
 
-    let conclude (pending_private_to_public_messages, state) =
-      { share = pending_private_to_public_messages
-      ; state = State.update ~pending_private_to_public_messages state
-      }
+    let conclude (append, pending_private_to_public_messages, state) =
+      State.update ~pending_private_to_public_messages state
+      |> return ~share:pending_private_to_public_messages ~append
     ;;
 
-    let apply (Observable state) action = interpret state action |> conclude
+    let apply state action = interpret state action |> conclude
   end
 
   let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =

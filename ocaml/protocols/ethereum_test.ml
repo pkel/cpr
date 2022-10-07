@@ -10,13 +10,13 @@ module TestView (P : Protocol) = struct
     ; signed_by : int option
     }
 
-  let min_pow_hash = 0, 0
-  let max_pow_hash = 100, 100
+  let min_pow = 0, 0
+  let max_pow = 100, 100
   let dag : env Dag.t = Dag.create ()
   let view = Dag.view dag
   let data x = (Dag.data x).value
-  let pow_hash x = (Dag.data x).pow_hash
-  let signed_by x = (Dag.data x).signed_by
+  let pow x = (Dag.data x).pow_hash
+  let signature x = (Dag.data x).signed_by
 end
 
 module Ethereum = Ethereum.Make (Ethereum.Byzantium)

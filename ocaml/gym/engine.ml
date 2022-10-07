@@ -72,12 +72,12 @@ end
 type 'data agent =
   | Agent :
       { preferred : 'state -> 'data Simulator.env Dag.vertex
-      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) vertex_proposal
+      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) draft_vertex
       ; init : roots:'data Simulator.env Dag.vertex list -> 'state
       ; prepare : 'state -> 'data Simulator.env event -> 'observable
       ; observe : 'observable -> floatarray
       ; observe_hum : 'observable -> string
-      ; apply : 'observable -> int -> ('data Simulator.env, 'state) handler_return
+      ; apply : 'observable -> int -> ('data Simulator.env, 'data, 'state) action
       ; mutable state : 'observable
       }
       -> 'data agent
@@ -141,11 +141,16 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     let open Simulator in
     match dequeue sim with
     | Some (ForNode (0, ev)) -> ev
-    | Some (FromNode (0, PuzzleProposal _)) ->
+    | Some (FromNode (0, PowProposal _)) ->
       let payload = puzzle_payload () in
-      let vertex = extend_dag ~pow:true sim 0 payload in
-      let () = sim.check_dag vertex in
-      schedule sim.clock `Now (ForNode (0, PuzzleSolved vertex));
+      let vertex =
+        match append ~pow:true sim 0 payload with
+        | `Global_fresh x ->
+          let () = sim.check_dag x in
+          x
+        | `Local_fresh _ | `Redundant _ -> assert false
+      in
+      schedule sim.clock `Now (ForNode (0, ProofOfWork vertex));
       skip_to_interaction sim puzzle_payload
     | Some ev ->
       handle_event sim ev;
@@ -279,7 +284,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     let () =
       let f vertex =
         let open Simulator in
-        if Option.is_some (Dag.data vertex).pow_hash then incr n_pow else ();
+        if Option.is_some (Dag.data vertex).pow then incr n_pow else ();
         t.reward_function
           ~assign:(fun reward vertex ->
             match reward_recipient vertex with
@@ -290,8 +295,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       in
       Ref.history head |> Seq.iter f
     in
-    let chain_time =
-      Float.Array.fold_left Float.min Float.infinity (Dag.data head).appended_at
+    let chain_time = Simulator.timestamp (Dag.data head)
     and sim_time = t.sim.clock.now in
     (* Calculate return/info metrics *)
     let reward = !reward_attacker -. t.last_reward_attacker

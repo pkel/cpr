@@ -166,6 +166,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     type observable_state =
       { state : state
       ; common : env Dag.vertex
+      ; append : (env, data) draft_vertex list
       }
 
     let preferred (s : state) = s.private_
@@ -185,19 +186,14 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     module Public_view = struct
       include V
 
-      let rec visibility x =
-        delivered x
-        || released x
-        || (is_summary x && List.for_all visibility (Dag.parents view x))
+      let rec filter x =
+        match visibility x with
+        | `Received | `Released -> true
+        | `Withheld -> is_summary x && List.for_all filter (Dag.parents view x)
       ;;
 
-      let view = Dag.filter visibility view
-
-      let appended_by_me _vertex =
-        (* The attacker simulates an honest node on the public view. This node should not
-           interpret attacker vertices as own vertices. *)
-        false
-      ;;
+      let view = Dag.filter filter view
+      let visibility _vertex = `Received
     end
 
     module Public = Honest (Public_view)
@@ -213,7 +209,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     let vote_filter state x =
       match state.epoch with
       | `Proceed -> true
-      | `Prolong -> appended_by_me x
+      | `Prolong -> Private.appended_by_me x
     ;;
 
     let puzzle_payload (s : state) =
@@ -226,35 +222,22 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         (* deliver to defender the messages sent by attacker during last step *)
         List.fold_left
           (fun state msg ->
-            assert (Public_view.visibility msg);
-            handle_public state (Deliver msg))
+            assert (Public_view.filter msg);
+            handle_public state (Network msg))
           { state with pending_private_to_public_messages = [] }
           state.pending_private_to_public_messages
-      and attempt_summary state =
-        let vote_filter = vote_filter state in
-        match Private.next_summary' ~vote_filter state.private_ with
-        | Some private_ -> { state with private_ }
-        | None -> state
       in
       match event with
-      | PuzzleSolved _ ->
-        (* work on private chain *)
-        attempt_summary state
-      | Deliver _x ->
-        let state =
-          (* simulate defender *)
-          handle_public state event
-        in
-        attempt_summary state
+      | Append x | ProofOfWork x | Network x ->
+        let state = if Public_view.filter x then handle_public state event else state in
+        let act = Private.handler state.private_ event in
+        { append = act.append
+        ; state = { state with private_ = act.state }
+        ; common = Dag.common_ancestor view state.public act.state |> Option.get
+        }
     ;;
 
-    let prepare s e =
-      { state = prepare s e
-      ; common = Dag.common_ancestor view s.public s.private_ |> Option.get
-      }
-    ;;
-
-    let observe { state = s; common } =
+    let observe { state = s; common; _ } =
       let open Observation in
       let private_depth, private_votes =
         Dag.iterate_descendants votes_only [ s.private_ ]
@@ -282,7 +265,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       }
     ;;
 
-    let interpret { state = s; common } action =
+    let interpret { state = s; common; _ } action =
       let release kind =
         let module Map = Map.Make (Int) in
         let rec h release_now seq =
@@ -294,11 +277,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
               Honest (struct
                 include V
 
-                let visibility x =
-                  Public_view.visibility x || Map.mem (Dag.id x) release_now'
-                ;;
-
-                let view = Dag.filter visibility view
+                let filter x = Public_view.filter x || Map.mem (Dag.id x) release_now'
+                let view = Dag.filter filter view
               end)
             in
             if s.public $!= N.update_head ~consider:x ~preferred:s.public
@@ -310,7 +290,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
             else h release_now' seq
         in
         Dag.iterate_descendants view [ common ]
-        |> Seq.filter (fun x -> not (Public_view.visibility x))
+        |> Seq.filter (fun x -> not (Public_view.filter x))
         |> h Map.empty
         |> Map.bindings
         |> List.map snd
@@ -326,13 +306,14 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       | Wait_Prolong -> [], { s with epoch = `Prolong }
     ;;
 
-    let conclude (pending_private_to_public_messages, state) =
+    let conclude { append; _ } (pending_private_to_public_messages, state) =
       { share = pending_private_to_public_messages
       ; state = { state with pending_private_to_public_messages }
+      ; append
       }
     ;;
 
-    let apply state action = interpret state action |> conclude
+    let apply state action = interpret state action |> conclude state
   end
 
   let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =

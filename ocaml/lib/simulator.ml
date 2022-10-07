@@ -1,22 +1,32 @@
 (* data attached to each DAG vertex *)
 type 'a env =
   { value : 'a (* protocol data *)
-  ; received_at : floatarray
-  ; delivered_at : floatarray
-        (* delivery happens when all dependencies in the DAG are fulfilled *)
-  ; appended_at : floatarray
-  ; released_at : floatarray
-  ; pow_hash : (int * int) option
-  ; signed_by : int option
+  ; pow : (int * int) option
+  ; signature : int option
+  ; visibility :
+      [ `Invisible | `Visible of float * [ `Received | `Released | `Withheld ] ] array
+  ; received_at : floatarray (* received but potentially not yet visible *)
   }
+
+let timestamp x =
+  Array.map
+    (function
+      | `Invisible -> Float.infinity
+      | `Visible (x, _) -> x)
+    x.visibility
+  |> Array.fold_left Float.min Float.infinity
+;;
 
 type 'a network_event =
   | Rx of int * 'a env Dag.vertex
   | Tx of int * 'a env Dag.vertex
 
+(* TODO. These feel a bit superfluous. But yesterday's attempt to remove did not succeed.
+   Take a look at the RL engine before the next try. *)
 type 'a from_node_event =
   | Share of 'a env Dag.vertex
-  | PuzzleProposal of ('a env, 'a) Intf.vertex_proposal
+  | Append of ('a env, 'a) Intf.draft_vertex
+  | PowProposal of ('a env, 'a) Intf.draft_vertex
 
 type 'prot_data event =
   | StochasticClock
@@ -39,19 +49,21 @@ let string_of_event view =
     sprintf "Network/Rx (dst %i, msg %s)" dst (string_of_vertex view msg)
   | Network (Tx (src, msg)) ->
     sprintf "Network/Tx (src %i, msg %s)" src (string_of_vertex view msg)
-  | ForNode (node, PuzzleSolved x) ->
-    sprintf "ForNode (node %i, PuzzleSolved %s)" node (string_of_vertex view x)
-  | ForNode (node, Deliver x) ->
-    sprintf "ForNode (node %i, Deliver %s)" node (string_of_vertex view x)
+  | ForNode (node, Append x) ->
+    sprintf "ForNode (node %i, Append %s)" node (string_of_vertex view x)
+  | ForNode (node, ProofOfWork x) ->
+    sprintf "ForNode (node %i, ProofOfWork %s)" node (string_of_vertex view x)
+  | ForNode (node, Network x) ->
+    sprintf "ForNode (node %i, Network %s)" node (string_of_vertex view x)
+  | FromNode (node, Append _) -> sprintf "FromNode (node %i, Append _)" node
+  | FromNode (node, PowProposal _) -> sprintf "FromNode (node %i, PuzzleProposal _)" node
   | FromNode (node, Share x) ->
     sprintf "FromNode (node %i, Share %s)" node (string_of_vertex view x)
-  | FromNode (node, PuzzleProposal _) ->
-    sprintf "FromNode (node %i, PuzzleProposal _)" node
 ;;
 
 type 'prot_data clock =
   { mutable now : float
-  ; mutable queue : (int * float, 'prot_data event) OrderedQueue.t
+  ; mutable queue : (float * int, 'prot_data event) OrderedQueue.t
   ; mutable c_activations : int
   }
 
@@ -61,8 +73,8 @@ type ('prot_data, 'node_state) node' =
   ; handler :
       'node_state
       -> 'prot_data env Intf.event
-      -> ('prot_data env, 'node_state) Intf.handler_return
-  ; puzzle_payload : 'node_state -> ('prot_data env, 'prot_data) Intf.vertex_proposal
+      -> ('prot_data env, 'prot_data, 'node_state) Intf.action
+  ; puzzle_payload : 'node_state -> ('prot_data env, 'prot_data) Intf.draft_vertex
   ; preferred : 'node_state -> 'prot_data env Dag.vertex
   }
 
@@ -83,45 +95,50 @@ type 'prot_data state =
   ; mutable done_ : bool (* set to true for shutdown *)
   }
 
-let schedule clock delay event =
-  let prio, delay =
-    match delay with
-    | `Immediate -> 0, 0.
-    | `Now -> 1, 0.
-    | `Delay x -> 1, x
-  in
-  clock.queue <- OrderedQueue.queue (prio, clock.now +. delay) event clock.queue
-;;
-
-let schedule_proof_of_work state =
-  let x = Distributions.sample state.activation_delay_distr in
-  schedule state.clock (`Delay x) StochasticClock
-;;
-
 let string_of_pow_hash (nonce, _serial) =
   Printf.sprintf "%.3f" (float_of_int nonce /. (2. ** 29.))
 ;;
 
-let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
-  let pow_hash = if pow then Some (Random.bits (), Dag.size dag) else None in
+let debug_info ?describe x =
+  let x = Dag.data x in
+  let vis i = function
+    | `Visible (x, `Received) -> Some (Printf.sprintf "n%i received at %.2f" i x, "")
+    | `Visible (x, `Withheld) ->
+      Some (Printf.sprintf "n%i appended at %.2f, withheld" i x, "")
+    | `Visible (x, `Released) ->
+      Some (Printf.sprintf "n%i appended at %.2f, released" i x, "")
+    | `Invisible -> None
+  in
+  [ Option.map (fun f -> f x.value, "") describe
+  ; Option.map (fun x -> "pow", string_of_pow_hash x) x.pow
+  ; Option.map (fun x -> "signed by " ^ string_of_int x, "") x.signature
+  ]
+  @ (Array.mapi vis x.visibility |> Array.to_list)
+  |> List.filter_map Fun.id
+;;
+
+let raw_append ~pow ~n_nodes clock dag node_id (x : _ Intf.draft_vertex) =
+  let pow = if pow then Some (Random.bits (), Dag.size dag) else None
+  and signature = if x.sign then Some node_id else None
+  and visibility =
+    let a = Array.make n_nodes `Invisible in
+    a.(node_id) <- `Visible (clock.now, `Withheld);
+    a
+  in
   Dag.append
     dag
     x.parents
     { value = x.data
-    ; appended_at =
-        Float.Array.init n_nodes (fun i ->
-            if i = node_id then clock.now else Float.infinity)
-    ; released_at = Float.Array.make n_nodes Float.infinity
+    ; pow
+    ; signature
+    ; visibility
     ; received_at = Float.Array.make n_nodes Float.infinity
-    ; delivered_at = Float.Array.make n_nodes Float.infinity
-    ; pow_hash
-    ; signed_by = (if x.sign then Some node_id else None)
     }
 ;;
 
 (** deterministic appends; required for Tailstorm. *)
-let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
-  let default () = extend_dag ~pow ~n_nodes clock dag node_id x in
+let append ~pow ~n_nodes clock dag node_id (x : _ Intf.draft_vertex) =
+  let default () = `Global_fresh (raw_append ~pow ~n_nodes clock dag node_id x) in
   if pow || x.sign (* assuming non-deterministic signatures here *)
   then default ()
   else (
@@ -134,43 +151,33 @@ let extend_dag ~pow ~n_nodes clock dag node_id (x : _ Intf.vertex_proposal) =
     let eq y =
       let dy = Dag.data y in
       dy.value = x.data
-      && dy.signed_by = None
+      && dy.signature = None
       && List.for_all2 (fun a b -> Dag.id a = Dag.id b) (Dag.parents view y) x.parents
     in
     match List.find_opt eq candidates with
     | Some x ->
       let dx = Dag.data x in
-      let set_now arr =
-        Float.Array.set arr node_id (min clock.now (Float.Array.get arr node_id))
-      in
-      set_now dx.appended_at;
-      x
+      (match dx.visibility.(node_id) with
+      | `Invisible ->
+        dx.visibility.(node_id) <- `Visible (clock.now, `Withheld);
+        `Local_fresh x
+      | _ -> `Redundant x)
     | _ -> default ())
 ;;
 
-let debug_info ?describe x =
-  let x = Dag.data x in
-  let array a =
-    Float.Array.fold_left (fun s x -> s ^ "|" ^ Printf.sprintf "%.2f" x) "[" a ^ "|]"
+let schedule clock delay event =
+  let delay, prio =
+    match delay with
+    | `Immediate -> 0., 0
+    | `Now -> 0., 1
+    | `Delay x -> x, 1
   in
-  let protocol_info =
-    match describe with
-    | None -> []
-    | Some f -> [ f x.value, "" ]
-  in
-  protocol_info
-  @ [ "appended", array x.appended_at
-    ; "released", array x.released_at
-    ; "received", array x.received_at
-    ; "delivered", array x.delivered_at
-    ; "hash", Option.map string_of_pow_hash x.pow_hash |> Option.value ~default:"n/a"
-    ; "signed", Option.map string_of_int x.signed_by |> Option.value ~default:"n/a"
-    ]
+  clock.queue <- OrderedQueue.queue (clock.now +. delay, prio) event clock.queue
 ;;
 
-let visibility clock node_id x =
-  Float.Array.get (Dag.data x).delivered_at node_id <= clock.now
-  || Float.Array.get (Dag.data x).appended_at node_id <= clock.now
+let schedule_proof_of_work state =
+  let x = Distributions.sample state.activation_delay_distr in
+  schedule state.clock (`Delay x) StochasticClock
 ;;
 
 let init
@@ -190,32 +197,29 @@ let init
 
         let view = Dag.view dag
         let data n = (Dag.data n).value
-        let signed_by n = (Dag.data n).signed_by
-        let pow_hash n = (Dag.data n).pow_hash
-        let max_pow_hash = max_int, max_int
-        let min_pow_hash = min_int, 0
+        let signature n = (Dag.data n).signature
+        let pow n = (Dag.data n).pow
+        let max_pow = max_int, max_int
+        let min_pow = min_int, 0
       end)
   in
   (* let module _ : Intf.GlobalView = GlobalView in *)
   let roots =
-    let array = Float.Array.make n_nodes in
     List.map
       (fun value ->
         Dag.append
           dag
           []
           { value
-          ; delivered_at = array 0.
-          ; received_at = array 0.
-          ; appended_at = array Float.infinity
-          ; released_at = array Float.infinity
-          ; signed_by = None
-          ; pow_hash = None
+          ; signature = None
+          ; pow = None
+          ; received_at = Float.Array.make n_nodes 0.
+          ; visibility = Array.make n_nodes (`Visible (0., `Received))
           })
       Protocol.dag_roots
   in
   let clock =
-    { queue = OrderedQueue.init Compare.(tuple int float); now = 0.; c_activations = 0 }
+    { queue = OrderedQueue.init Compare.(tuple float int); now = 0.; c_activations = 0 }
   in
   let patch = Option.value patch ~default:(fun _ -> None) in
   let impl node_id =
@@ -239,25 +243,30 @@ let init
           include Ref
 
           let my_id = node_id
-          let view = Dag.filter (visibility clock node_id) Ref.view
-          let delivered_at x = Float.Array.get (Dag.data x).delivered_at node_id
-          let delivered x = delivered_at x <= clock.now
 
-          let appended_by_me x =
-            Float.Array.get (Dag.data x).appended_at node_id <= clock.now
+          let visible x =
+            match (Dag.data x).visibility.(node_id) with
+            | `Visible _ -> true
+            | `Invisible -> false
+          ;;
+
+          let view = Dag.filter visible Ref.view
+
+          let visibility x =
+            match (Dag.data x).visibility.(node_id) with
+            | `Visible (_, x) -> x
+            | _ -> failwith "invalid access"
+          ;;
+
+          let visible_since x =
+            match (Dag.data x).visibility.(node_id) with
+            | `Visible (x, _) -> x
+            | _ -> failwith "invalid access"
           ;;
 
           let data x =
-            assert (visibility clock node_id x);
+            assert (visible x);
             data x
-          ;;
-
-          let released x = Float.Array.get (Dag.data x).released_at node_id <= clock.now
-
-          let extend_dag x =
-            let v = extend_dag ~pow:false ~n_nodes clock dag node_id x in
-            check_dag v;
-            v
           ;;
         end
         in
@@ -294,50 +303,58 @@ let init
   state
 ;;
 
-let extend_dag state =
-  extend_dag ~n_nodes:(Array.length state.nodes) state.clock state.dag
-;;
+let append state = append ~n_nodes:(Array.length state.nodes) state.clock state.dag
 
 let handle_event state ev =
   let schedule = schedule state.clock in
   match ev with
   | ForNode (id, ev) ->
     let (Node node) = state.nodes.(id) in
-    let ret : _ Intf.handler_return = node.handler node.state ev in
-    (* It's important to schedule this immediately. From now on, the agent might rely on
-       the vertices being marked as released. This marking happens in the FromNode
-       handler. *)
-    List.iter (fun m -> schedule `Immediate (FromNode (id, Share m))) ret.share;
-    node.state <- ret.state
+    let act : _ Intf.action = node.handler node.state ev in
+    node.state <- act.state;
+    (* Share vertices. It's important to schedule this immediately. From now on, the agent
+       might rely on the vertices being marked as released. This marking happens in the
+       FromNode handler. *)
+    List.iter (fun m -> schedule `Immediate (FromNode (id, Share m))) act.share;
+    (* Append vertices. *)
+    List.iter (fun m -> schedule `Now (FromNode (id, Append m))) act.append
   | StochasticClock ->
     if not state.done_
     then (
       let node_id = Distributions.sample state.assign_pow_distr in
       let (Node node) = state.nodes.(node_id) in
-      let payload = node.puzzle_payload node.state in
-      schedule `Now (FromNode (node_id, PuzzleProposal payload));
+      let draft = node.puzzle_payload node.state in
+      schedule `Now (FromNode (node_id, PowProposal draft));
       state.clock.c_activations <- state.clock.c_activations + 1;
       state.activations.(node_id) <- state.activations.(node_id) + 1;
       schedule_proof_of_work state)
-  | FromNode (node_id, PuzzleProposal payload) ->
-    let vertex = extend_dag ~pow:true state node_id payload in
+  | FromNode (node_id, PowProposal draft) ->
+    let vertex =
+      match append ~pow:true state node_id draft with
+      | `Global_fresh x -> x
+      | _ -> assert false
+    in
     let () = state.check_dag vertex in
-    schedule `Now (ForNode (node_id, PuzzleSolved vertex))
+    schedule `Now (ForNode (node_id, ProofOfWork vertex))
+  | FromNode (node_id, Append draft) ->
+    (match append ~pow:false state node_id draft with
+    | `Redundant _ -> ()
+    | `Global_fresh x | `Local_fresh x ->
+      let () = state.check_dag x in
+      schedule `Now (ForNode (node_id, Append x)))
   | FromNode (src, Share msg) ->
-    (* implements recursive sharing *)
+    (* recursive sharing *)
     let rec share msg =
-      assert (visibility state.clock src msg);
       let d = Dag.data msg in
-      let released_at = Float.Array.get d.released_at src
-      and appended_at = Float.Array.get d.appended_at src in
-      if appended_at < Float.infinity && released_at > state.clock.now
-      then (
-        (* appended by src but not yet released *)
-        assert (appended_at <= state.clock.now);
-        Float.Array.set d.released_at src state.clock.now;
+      match d.visibility.(src) with
+      | `Invisible -> failwith "invalid share"
+      | `Visible (x, `Withheld) ->
         schedule `Now (Network (Tx (src, msg)));
+        d.visibility.(src) <- `Visible (x, `Released);
         (* recursive sharing of dependent vertices *)
-        List.iter share (Dag.parents state.global_view msg))
+        List.iter share (Dag.parents state.global_view msg)
+      | `Visible (_, `Released) -> () (* shared before *)
+      | `Visible (_, `Received) -> () (* shared by someone else *)
     in
     share msg
   | Network (Tx (src, msg)) ->
@@ -362,32 +379,37 @@ let handle_event state ev =
     let rec h msg =
       (* deliver DAG vertex exactly once to each network node as soon as all parent DAG
          vertices have been delivered *)
-      if visibility state.clock dst msg
-      then (* msg was delivered before, ignore *) ()
-      else if List.exists
-                (fun dep -> not (visibility state.clock dst dep))
-                (Dag.parents state.global_view msg)
-      then (* dependencies are not yet fulfilled, wait *) ()
-      else
-        ((* deliver *)
-         Float.Array.set (Dag.data msg).delivered_at dst state.clock.now;
-         schedule `Now (ForNode (dst, Deliver msg));
-         (* continue broadcast *)
-         let () =
-           match state.network.dissemination with
-           | Flooding -> schedule `Now (Network (Tx (dst, msg)))
-           | Simple -> ()
-         in
-         (* reconsider now unlocked dependent DAG vertices recursively *)
-         List.iter (fun msg -> if received_at msg <= state.clock.now then h msg))
-          (Dag.children state.global_view msg)
+      match (Dag.data msg).visibility.(dst) with
+      | `Visible _ -> ()
+      | `Invisible ->
+        if List.exists
+             (fun dep ->
+               match (Dag.data dep).visibility.(dst) with
+               | `Invisible -> true
+               | _ -> false)
+             (Dag.parents state.global_view msg)
+        then (* dependencies are not yet fulfilled, wait *) ()
+        else
+          ((* deliver *)
+           assert (received_at msg <= state.clock.now);
+           (Dag.data msg).visibility.(dst) <- `Visible (state.clock.now, `Received);
+           schedule `Now (ForNode (dst, Network msg));
+           (* continue broadcast *)
+           let () =
+             match state.network.dissemination with
+             | Flooding -> schedule `Now (Network (Tx (dst, msg)))
+             | Simple -> ()
+           in
+           (* reconsider now unlocked dependent DAG vertices recursively *)
+           List.iter (fun msg -> if received_at msg <= state.clock.now then h msg))
+            (Dag.children state.global_view msg)
     in
     h msg
 ;;
 
 let dequeue state =
   OrderedQueue.dequeue state.clock.queue
-  |> Option.map (fun ((_prio, now), ev, queue) ->
+  |> Option.map (fun ((now, _prio), ev, queue) ->
          assert (now >= state.clock.now);
          state.clock.now <- now;
          state.clock.queue <- queue;
@@ -410,10 +432,13 @@ let rec loop ~activations state =
 ;;
 
 let reward_recipient vertex =
-  (Dag.data vertex).appended_at
-  |> Float.Array.to_list
+  (Dag.data vertex).visibility
+  |> Array.to_list
   |> List.mapi (fun i x -> i, x)
-  |> List.filter (fun (_i, x) -> x < Float.infinity)
+  |> List.filter (function
+         | _i, `Visible (_, `Released) -> true
+         | _i, `Visible (_, `Withheld) -> true
+         | _ -> false)
   |> function
   | [] -> None
   | [ (i, _) ] -> Some i

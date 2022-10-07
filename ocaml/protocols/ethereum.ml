@@ -64,7 +64,7 @@ module Make (Parameters : Parameters) = struct
     include V
 
     let dag_validity b =
-      match pow_hash b, Dag.parents view b with
+      match pow b, Dag.parents view b with
       | Some _, p :: uncles ->
         let pd = data p
         and bd = data b
@@ -186,6 +186,12 @@ module Make (Parameters : Parameters) = struct
       | _ -> failwith "invalid roots"
     ;;
 
+    let appended_by_me x =
+      match visibility x with
+      | `Received -> false
+      | `Withheld | `Released -> true
+    ;;
+
     let uncle_preference =
       let open Compare in
       (* better is lower | better is first after sorting *)
@@ -237,13 +243,18 @@ module Make (Parameters : Parameters) = struct
     let puzzle_payload = puzzle_payload' ~uncle_filter:(fun _ -> true)
 
     let handler state = function
-      | PuzzleSolved vertex -> { state = vertex; share = [ vertex ] }
-      | Deliver vertex ->
-        let consider = data vertex
-        and preferred = data state in
-        { share = []
-        ; state = (if preference consider > preference preferred then vertex else state)
-        }
+      | Append _ -> failwith "not implemented"
+      | ProofOfWork vertex | Network vertex ->
+        let state =
+          let consider = data vertex
+          and preferred = data state in
+          if preference consider > preference preferred then vertex else state
+        and share =
+          match visibility vertex with
+          | `Withheld -> [ vertex ]
+          | `Received | `Released -> []
+        in
+        return ~share state
     ;;
   end
 

@@ -108,7 +108,7 @@ module Make (Parameters : Parameters) = struct
     let compare_votes_in_block =
       let get x =
         let d = data x
-        and hash = pow_hash x |> Option.value ~default:(0, 0) in
+        and hash = pow x |> Option.value ~default:(0, 0) in
         d.vote, hash
       and ty = Compare.(tuple (neg int) (tuple int int)) in
       Compare.(by ty get)
@@ -122,7 +122,7 @@ module Make (Parameters : Parameters) = struct
       child.block >= 0
       && child.vote >= 0
       && child.vote < k
-      && pow_hash vertex |> Option.is_some
+      && pow vertex |> Option.is_some
       &&
       match is_vote vertex, Dag.parents view vertex with
       | true, [ p ] ->
@@ -227,6 +227,12 @@ module Make (Parameters : Parameters) = struct
       | roots -> dag_fail roots "init: expected single root"
     ;;
 
+    let appended_by_me x =
+      match visibility x with
+      | `Received -> false
+      | `Withheld | `Released -> true
+    ;;
+
     (** Algorithm for selecting sub blocks quickly.
 
         This version picks the longest branches first. If a branches does not
@@ -268,7 +274,7 @@ module Make (Parameters : Parameters) = struct
              by
                (tuple (neg int) (tuple int float))
                (fun x ->
-                 (data x).vote, ((if appended_by_me x then 0 else 1), delivered_at x)))
+                 (data x).vote, ((if appended_by_me x then 0 else 1), visible_since x)))
       |> f IntSet.empty 0 []
       |> Option.map
            (List.sort
@@ -277,7 +283,7 @@ module Make (Parameters : Parameters) = struct
                   (tuple (neg int) (tuple int int))
                   (fun x ->
                     let d = data x
-                    and hash = pow_hash x |> Option.value ~default:max_pow_hash in
+                    and hash = pow x |> Option.value ~default:max_pow in
                     d.vote, hash)))
     ;;
 
@@ -518,19 +524,22 @@ module Make (Parameters : Parameters) = struct
     let puzzle_payload = puzzle_payload' ~vote_filter:(fun _ -> true)
 
     let handler b = function
-      | PuzzleSolved v -> { state = last_block v; share = [ v ] }
-      | Deliver c ->
-        (* Prefer longest chain of votes after longest chain of blocks *)
-        let c = last_block c in
-        let count x =
-          Dag.iterate_descendants votes_only [ x ] |> Seq.fold_left (fun n _ -> n + 1) 0
-        in
-        let pref =
+      | Append _x -> failwith "not implemented"
+      | ProofOfWork x | Network x ->
+        let share =
+          match visibility x with
+          | `Withheld -> [ x ]
+          | _ -> []
+        and pref =
+          let c = last_block x in
+          let count x =
+            Dag.iterate_descendants votes_only [ x ] |> Seq.fold_left (fun n _ -> n + 1) 0
+          in
           if height c > height b || (height c = height b && count c > count b)
           then c
           else b
         in
-        { state = pref; share = [] }
+        return ~share pref
     ;;
   end
 
