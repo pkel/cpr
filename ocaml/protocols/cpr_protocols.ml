@@ -138,13 +138,13 @@ let%test_module "protocol" =
         in
         Simulator.init (module P) network
       in
-      let target_progress = 1000 in
-      Simulator.loop ~activations:(target_progress * P.puzzles_per_block) env;
+      let target_progress = 10000 in
+      Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
       let observed_progress = P.progress (Dag.data head).value in
       let observed_orphan_rate =
-        (float_of_int target_progress -. observed_progress)
-        /. float_of_int target_progress
+        let target_progress = float_of_int target_progress in
+        (target_progress -. observed_progress) /. target_progress
       in
       if observed_orphan_rate > orphan_rate_limit
       then
