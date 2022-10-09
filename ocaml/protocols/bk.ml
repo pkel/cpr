@@ -198,8 +198,8 @@ module Make (Parameters : Parameters) = struct
         List.fold_left
           (fun (my_hash, replace_hash, mine, nmine, theirs, ntheirs) x ->
             match data x with
-            | Vote _ ->
-              if signature x = Some my_id
+            | Vote v ->
+              if v.id = my_id
               then
                 ( min my_hash (pow_hash_exn x)
                 , replace_hash
