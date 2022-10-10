@@ -48,6 +48,9 @@ module type Referee = sig
       Invalid extensions are not delivered to other nodes. *)
   val dag_validity : env Dag.vertex -> bool
 
+  (** Provide metadata for DAG vertex *)
+  val info : data -> Info.t
+
   (** When calculating rewards, the simulator will consider the preferred vertices of all
       nodes. This functions determines the best vertex. The reward function will be
       applied from the best vertex backwards to the roots. *)

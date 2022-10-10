@@ -83,6 +83,13 @@ module Make (Parameters : Parameters) = struct
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
+    let info x =
+      let open Info in
+      if is_vote x
+      then [ string "kind" "vote"; int "height" x.block; int "depth" x.vote ]
+      else [ string "kind" "summary"; int "height" x.block ]
+    ;;
+
     let dag_fail (type a) vertices msg : a =
       let meta x = [ describe (data x), "" ] in
       Dag.Exn.raise view meta vertices msg

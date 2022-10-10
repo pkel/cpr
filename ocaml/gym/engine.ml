@@ -126,7 +126,11 @@ let dummy_node
     end)
 ;;
 
-let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
+let of_module
+    ?(logger = Log.dummy_logger)
+    (AttackSpace (module M))
+    ~(reward : string)
+    (p : Parameters.t)
     : instance ref env
   =
   let network =
@@ -146,7 +150,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       let vertex =
         match append ~pow:true sim 0 payload with
         | `Global_fresh x ->
-          let () = sim.check_dag x in
+          let () = check_vertex sim x in
           x
         | `Local_fresh _ | `Redundant _ -> assert false
       in
@@ -163,7 +167,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       | 0 -> Some (dummy_node (module M.Protocol))
       | _ -> None
     in
-    let sim = init ~patch (module M.Protocol) network in
+    let sim = init ~logger ~patch (module M.Protocol) network in
     let reward_function =
       let (module Ref) = sim.referee in
       match Collection.get reward Ref.reward_functions with

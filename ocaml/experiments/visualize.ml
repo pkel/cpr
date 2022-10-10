@@ -162,12 +162,12 @@ let tasks =
       Tailstormll.reward_schemes
 ;;
 
-let print_dag oc (sim, confirmed, rewards, legend, label_vtx) =
+let print_dag oc (sim, confirmed, rewards, legend, vtx_info) =
   let open Simulator in
   let node_attr n =
     let open Simulator in
     [ ( "label"
-      , debug_info ~describe:label_vtx n
+      , debug_info ~info:vtx_info n
         @ [ "reward", Printf.sprintf "%.2f" rewards.(Dag.id n) ]
         |> List.map (function
                | "", s | s, "" -> s
@@ -215,7 +215,7 @@ let run (Csv_runner.Task t) =
           File.with_oc
             path
             print_dag
-            (env, confirmed, rewards, legend (Task t) ~rewardfn, Protocol.describe))
+            (env, confirmed, rewards, legend (Task t) ~rewardfn, Ref.info))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
     Ref.reward_functions

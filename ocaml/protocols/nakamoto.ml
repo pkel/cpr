@@ -14,6 +14,11 @@ let dag_roots = [ { height = 0 } ]
 module Referee (V : GlobalView with type data = data) = struct
   include V
 
+  let info x =
+    let open Info in
+    [ "height", Int x.height ]
+  ;;
+
   let dag_validity vertex =
     match pow vertex, Dag.parents view vertex with
     | Some _, [ p ] ->

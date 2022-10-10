@@ -63,6 +63,11 @@ module Make (Parameters : Parameters) = struct
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
+    let info x =
+      let open Info in
+      [ int "height" x.height; int "work" x.work ]
+    ;;
+
     let dag_validity b =
       match pow b, Dag.parents view b with
       | Some _, p :: uncles ->

@@ -44,6 +44,13 @@ module Make (Parameters : Parameters) = struct
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
+    let info x =
+      let open Info in
+      match x with
+      | Vote x -> [ string "kind" "vote"; int "height" x.height; int "id" x.id ]
+      | Block x -> [ string "kind" "block"; int "height" x.height ]
+    ;;
+
     let is_vote x =
       match data x with
       | Vote _ -> true
