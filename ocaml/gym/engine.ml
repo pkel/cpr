@@ -144,17 +144,17 @@ let of_module
   let rec skip_to_interaction sim puzzle_payload =
     let open Simulator in
     match dequeue sim with
-    | Some (ForNode (0, ev)) -> ev
-    | Some (FromNode (0, PowProposal _)) ->
-      let payload = puzzle_payload () in
+    | Some (OnNode (0, ev)) -> ev
+    | Some (Dag (0, `ProofOfWork, _draft)) ->
+      let draft = puzzle_payload () in
       let vertex =
-        match append ~pow:true sim 0 payload with
-        | `Global_fresh x ->
+        match append ~pow:true sim 0 draft with
+        | `Fresh, x ->
           let () = check_vertex sim x in
           x
-        | `Local_fresh _ | `Redundant _ -> assert false
+        | `Redundant, _ -> failwith "proof-of-work appended vertices should be fresh"
       in
-      schedule sim.clock `Now (ForNode (0, ProofOfWork vertex));
+      schedule sim.clock `Now (MakeVisible (0, `ProofOfWork, vertex));
       skip_to_interaction sim puzzle_payload
     | Some ev ->
       handle_event sim ev;
@@ -242,14 +242,9 @@ let of_module
     let (module Protocol) = t.protocol in
     (* Apply action i to the simulator state. *)
     let state =
-      let ret = a.apply a.state action in
-      let () =
-        let open Simulator in
-        List.iter
-          (fun m -> schedule t.sim.clock `Immediate (FromNode (0, Share m)))
-          ret.share
-      in
-      ret.state
+      let act = a.apply a.state action in
+      Simulator.handle_action t.sim 0 act;
+      act.state
     in
     let () = t.episode_steps <- t.episode_steps + 1 in
     (* Fast forward simulation till next attacker action. *)
