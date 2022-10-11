@@ -101,3 +101,33 @@ end = struct
       }
   ;;
 end
+
+let emulated_view
+    (type a b)
+    ~pretend_not_me
+    ~filter
+    (module V : LocalView with type data = a and type env = b)
+  =
+  (module struct
+    type env = V.env
+    type data = V.data
+
+    let view = Dag.filter filter V.view
+
+    let guard f x =
+      if filter x then f x else failwith "visibility violation in emulated_view"
+    ;;
+
+    let data = guard V.data
+    let visibility x = if pretend_not_me then `Received else V.visibility x
+    let visibility = guard visibility
+    let visible_since = guard V.visible_since
+    let pow = guard V.pow
+    let signature = guard V.signature
+    let my_id = if pretend_not_me then -1 else V.my_id
+    let min_pow = V.min_pow
+    let max_pow = V.max_pow
+  end : LocalView
+    with type data = a
+     and type env = b)
+;;

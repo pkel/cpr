@@ -183,20 +183,18 @@ module Make (Parameters : Tailstorm.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    module Public_view = struct
-      include V
+    let rec public_filter x =
+      match visibility x with
+      | `Received | `Released -> true
+      | `Withheld -> is_summary x && List.for_all public_filter (Dag.parents view x)
+    ;;
 
-      let rec filter x =
-        match visibility x with
-        | `Received | `Released -> true
-        | `Withheld -> is_summary x && List.for_all filter (Dag.parents view x)
-      ;;
-
-      let view = Dag.filter filter view
-      let visibility _vertex = `Received
-    end
-
-    module Public = Honest (Public_view)
+    module Public =
+      Honest
+        ((val Ssz_tools.emulated_view
+                ~pretend_not_me:true
+                ~filter:public_filter
+                (module V)))
 
     (* the attacker emulates a defending node. This describes the defender node *)
     let handle_public (s : state) event =
@@ -222,14 +220,14 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         (* deliver to defender the messages sent by attacker during last step *)
         List.fold_left
           (fun state msg ->
-            assert (Public_view.filter msg);
+            assert (public_filter msg);
             handle_public state (Network msg))
           { state with pending_private_to_public_messages = [] }
           state.pending_private_to_public_messages
       in
       match event with
       | Append x | ProofOfWork x | Network x ->
-        let state = if Public_view.filter x then handle_public state event else state in
+        let state = if public_filter x then handle_public state event else state in
         let act = Private.handler state.private_ event in
         { append = act.append
         ; state = { state with private_ = act.state }
@@ -273,13 +271,10 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           | Seq.Nil -> release_now (* override/match not possible; release all *)
           | Seq.Cons (x, seq) ->
             let release_now' = Map.add (Dag.id x) x release_now in
+            let filter x = public_filter x || Map.mem (Dag.id x) release_now' in
             let module N =
-              Honest (struct
-                include V
-
-                let filter x = Public_view.filter x || Map.mem (Dag.id x) release_now'
-                let view = Dag.filter filter view
-              end)
+              Honest
+                ((val Ssz_tools.emulated_view ~pretend_not_me:true ~filter (module V)))
             in
             if s.public $!= N.update_head ~consider:x ~preferred:s.public
             then (
@@ -290,7 +285,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
             else h release_now' seq
         in
         Dag.iterate_descendants view [ common ]
-        |> Seq.filter (fun x -> not (Public_view.filter x))
+        |> Seq.filter (fun x -> not (public_filter x))
         |> h Map.empty
         |> Map.bindings
         |> List.map snd

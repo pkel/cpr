@@ -357,20 +357,17 @@ module Make (Parameters : Ethereum.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    module Public_view = struct
-      include V
+    let public_visibility x =
+      match visibility x with
+      | `Released | `Received -> true
+      | `Withheld -> false
+    ;;
 
-      let my_id = -1
-
-      let filter x =
-        match visibility x with
-        | `Released | `Received -> true
-        | `Withheld -> false
-      ;;
-
-      let view = Dag.filter filter view
-      let visibility _x = `Received
-    end
+    module Public_view =
+      (val Ssz_tools.emulated_view
+             ~pretend_not_me:true
+             ~filter:public_visibility
+             (module V))
 
     module Public = Honest (Public_view)
 
@@ -415,7 +412,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
             handle_public state event
           in
           (* deliver visible (not ignored) messages *)
-          if Public_view.filter x
+          if public_visibility x
           then `Deliver, handle_private state event
           else `Deliver, state
       in

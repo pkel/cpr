@@ -171,13 +171,12 @@ module Make (Parameters : Tailstormll.Parameters) = struct
       | `Released | `Received -> true
     ;;
 
-    module Public = Honest (struct
-      include V
-
-      let my_id = -1
-      let view = Dag.filter public_visibility view
-      let visibility _ = `Received
-    end)
+    module Public =
+      Honest
+        ((val Ssz_tools.emulated_view
+                ~pretend_not_me:true
+                ~filter:public_visibility
+                (module V)))
 
     (* the attacker emulates a defending node. This describes the defender node *)
     let handle_public (s : state) event =

@@ -182,22 +182,18 @@ module Make (Parameters : Tailstormll.Parameters) = struct
 
     (* the attacker emulates a defending node. This is the local_view of the defender *)
 
-    module Public_view = struct
-      include V
+    let public_filter x =
+      match visibility x with
+      | `Withheld -> false
+      | `Released | `Received -> true
+    ;;
 
-      let my_id = -1
-
-      let filter x =
-        match visibility x with
-        | `Withheld -> false
-        | `Released | `Received -> true
-      ;;
-
-      let view = Dag.filter filter view
-      let visibility _ = `Received
-    end
-
-    module Public = Honest (Public_view)
+    module Public =
+      Honest
+        ((val Ssz_tools.emulated_view
+                ~pretend_not_me:true
+                ~filter:public_filter
+                (module V)))
 
     (* the attacker emulates a defending node. This describes the defender node *)
     let handle_public (s : state) event =
@@ -292,13 +288,10 @@ module Make (Parameters : Tailstormll.Parameters) = struct
           | Seq.Nil -> release_now (* override not possible; release all *)
           | Seq.Cons (x, vertices) ->
             let release_now' = Map.add (Dag.id x) x release_now in
+            let filter x = public_filter x || Map.mem (Dag.id x) release_now' in
             let module N =
-              Honest (struct
-                include V
-
-                let filter x = Public_view.filter x || Map.mem (Dag.id x) release_now'
-                let view = Dag.filter filter view
-              end)
+              Honest
+                ((val Ssz_tools.emulated_view ~pretend_not_me:true ~filter (module V)))
             in
             if s.public $!= (N.handler s.public (Network x)).state
             then (

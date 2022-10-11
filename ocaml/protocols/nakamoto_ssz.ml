@@ -175,14 +175,8 @@ module Agent (V : LocalView with type data = data) = struct
     | `Received | `Released -> true
   ;;
 
-  let public_view (s : state) : (env, data) local_view =
-    (module struct
-      include V
-
-      let my_id = -1
-      let view = Dag.filter (public_visibility s) view
-      let visibility _x = `Received
-    end)
+  let public_view s : (env, data) local_view =
+    Ssz_tools.emulated_view ~pretend_not_me:true ~filter:(public_visibility s) (module V)
   ;;
 
   (* the attacker works on a subset of the total information: he ignores new defender
@@ -196,12 +190,11 @@ module Agent (V : LocalView with type data = data) = struct
     | `Received -> false
   ;;
 
-  let private_view (s : state) : (env, data) local_view =
-    (module struct
-      include V
-
-      let view = Dag.filter (private_visibility s) view
-    end)
+  let private_view (s : state) : _ local_view =
+    Ssz_tools.emulated_view
+      ~pretend_not_me:false
+      ~filter:(private_visibility s)
+      (module V)
   ;;
 
   (* the attacker emulates a defending node. This describes the defender node *)
