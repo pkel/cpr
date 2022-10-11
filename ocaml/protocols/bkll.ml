@@ -184,9 +184,9 @@ module Make (Parameters : Parameters) = struct
       if compare_blocks consider preferred > 0 then consider else preferred
     ;;
 
-    let puzzle_payload preferred =
+    let puzzle_payload' ~vote_filter preferred =
       let pow_hash_exn x = pow x |> Option.get in
-      let votes = Dag.children votes_only preferred in
+      let votes = Dag.children votes_only preferred |> List.filter vote_filter in
       if List.length votes >= k - 1
       then (
         let height = block_height_exn preferred + 1 in
@@ -205,6 +205,8 @@ module Make (Parameters : Parameters) = struct
         let height = height preferred in
         { parents = [ preferred ]; data = Vote { height }; sign = false })
     ;;
+
+    let puzzle_payload = puzzle_payload' ~vote_filter:(Fun.const true)
 
     let handler preferred = function
       | Append _ -> failwith "not implemented"

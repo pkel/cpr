@@ -204,8 +204,7 @@ module Make (Parameters : Bk.Parameters) = struct
     ;;
 
     let puzzle_payload (s : state) =
-      let (module Private) = private_view s in
-      let open Honest (Private) in
+      let open Honest (V) in
       puzzle_payload s.private_
     ;;
 
@@ -219,13 +218,31 @@ module Make (Parameters : Bk.Parameters) = struct
           (State.update ~pending_private_to_public_messages:[] state)
           pending
       in
+      let module N = Honest (V) in
       match event with
       | Append x | ProofOfWork x | Network x ->
-        let state =
-          if public_visibility state x then handle_public state event else state
+        let b = last_block x in
+        let public =
+          if public_visibility state x
+          then
+            N.update_head ~vote_filter:(public_visibility state) ~preferred:state.public b
+          else state.public
+        and private_ =
+          (* TODO. this looks fishy. Make sure that attacker does not automatically adopt
+             longer public chain *)
+          if private_visibility state x
+          then
+            N.update_head
+              ~vote_filter:(private_visibility state)
+              ~preferred:state.private_
+              b
+          else state.private_
+        and append =
+          match N.propose ~vote_filter:(private_visibility state) b with
+          | Some block -> [ block ]
+          | None -> []
         in
-        (* deliver visible (not ignored) messages *)
-        if private_visibility state x then handle_private state event else state, []
+        State.update ~private_ ~public state, append
     ;;
 
     let prepare s e = Observable (prepare s e)

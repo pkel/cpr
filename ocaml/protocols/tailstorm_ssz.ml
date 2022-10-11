@@ -228,6 +228,8 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       match event with
       | Append x | ProofOfWork x | Network x ->
         let state = if public_filter x then handle_public state event else state in
+        (* TODO. this looks fishy. Make sure that attacker does not automatically adopt
+           longer public chain *)
         let act = Private.handler state.private_ event in
         { append = act.append
         ; state = { state with private_ = act.state }

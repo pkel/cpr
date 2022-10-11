@@ -188,22 +188,23 @@ module Make (Parameters : Parameters) = struct
         max_pow
     ;;
 
-    let compare_blocks =
+    let compare_blocks ~vote_filter =
       let open Compare in
       let cmp =
         by int block_height_exn
-        $ by int (fun x -> List.length (Dag.children votes_only x))
+        $ by int (fun x ->
+              List.length (Dag.children votes_only x |> List.filter vote_filter))
         $ by (tuple int int |> neg) leader_hash_exn
         $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
       in
       skip_eq Dag.vertex_eq cmp
     ;;
 
-    let update_head ~preferred ~consider =
-      if compare_blocks consider preferred > 0 then consider else preferred
+    let update_head ?(vote_filter = Fun.const true) ~preferred consider =
+      if compare_blocks ~vote_filter consider preferred > 0 then consider else preferred
     ;;
 
-    let quorum b =
+    let quorum ~vote_filter b =
       let pow_hash_exn x = pow x |> Option.get in
       let my_hash, replace_hash, mine, nmine, theirs, ntheirs =
         List.fold_left
@@ -222,7 +223,7 @@ module Make (Parameters : Parameters) = struct
             | Block _ ->
               my_hash, min replace_hash (leader_hash_exn x), mine, nmine, theirs, ntheirs)
           (max_pow, max_pow, [], 0, [], 0)
-          (Dag.children view b)
+          (Dag.children view b |> List.filter vote_filter)
       in
       if replace_hash <= my_hash || nmine + ntheirs < k
       then (* fast path *) None
@@ -260,8 +261,8 @@ module Make (Parameters : Parameters) = struct
       }
     ;;
 
-    let propose b =
-      quorum b
+    let propose ?(vote_filter = Fun.const true) b =
+      quorum ~vote_filter b
       |> Option.map (fun q ->
              { parents = b :: q
              ; data = Block { height = block_height_exn b + 1 }
@@ -281,7 +282,7 @@ module Make (Parameters : Parameters) = struct
           | `Withheld -> [ x ]
           | _ -> []
         in
-        update_head ~preferred ~consider:b |> return ~append ~share
+        update_head ~preferred b |> return ~append ~share
     ;;
   end
 

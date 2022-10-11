@@ -199,9 +199,8 @@ module Make (Parameters : Bkll.Parameters) = struct
     ;;
 
     let puzzle_payload (s : state) =
-      let (module Private) = private_view s in
-      let open Honest (Private) in
-      puzzle_payload s.private_
+      let open Honest (V) in
+      puzzle_payload' ~vote_filter:(private_visibility s) s.private_
     ;;
 
     let prepare (state : state) event =
@@ -212,17 +211,22 @@ module Make (Parameters : Bkll.Parameters) = struct
           (State.update ~pending_private_to_public_messages:[] state)
           pending
       in
+      let open Honest (V) in
       match event with
       | Append _ -> failwith "not implemented"
-      | ProofOfWork _ ->
+      | ProofOfWork v ->
         (* work on private chain *)
-        handle_private state event
+        let consider = last_block v in
+        let private_ = update_head ~preferred:state.private_ ~consider in
+        State.update ~private_ state
       | Network x ->
         let state =
           (* simulate defender *)
           handle_public state event
         in
         (* deliver visible (not ignored) messages *)
+        (* TODO. is this required? Make sure that attacker does not automatically adopt
+           longer public chain *)
         if private_visibility state x then handle_private state event else state
     ;;
 
