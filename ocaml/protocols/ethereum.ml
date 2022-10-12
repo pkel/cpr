@@ -247,13 +247,16 @@ module Make (Parameters : Parameters) = struct
 
     let puzzle_payload = puzzle_payload' ~uncle_filter:(fun _ -> true)
 
+    let update_head ~old candidate =
+      let o = data old
+      and c = data candidate in
+      if preference c > preference o then candidate else old
+    ;;
+
     let handler state = function
       | Append _ -> failwith "not implemented"
       | ProofOfWork vertex | Network vertex ->
-        let state =
-          let consider = data vertex
-          and preferred = data state in
-          if preference consider > preference preferred then vertex else state
+        let state = update_head ~old:state vertex
         and share =
           match visibility vertex with
           | `Withheld -> [ vertex ]

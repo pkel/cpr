@@ -10,12 +10,27 @@ module Observation = struct
     { public_blocks : int (** number of blocks after common ancestor *)
     ; private_blocks : int (** number of blocks after common ancestor *)
     ; diff_blocks : int (** private_blocks - public_blocks *)
+    ; event : int (* What is currently going on? *)
     }
   [@@deriving fields]
 
   let length = List.length Fields.names
-  let low = { public_blocks = 0; private_blocks = 0; diff_blocks = min_int }
-  let high = { public_blocks = max_int; private_blocks = max_int; diff_blocks = max_int }
+
+  let low =
+    { public_blocks = 0
+    ; private_blocks = 0
+    ; diff_blocks = min_int
+    ; event = Ssz_tools.Event.low
+    }
+  ;;
+
+  let high =
+    { public_blocks = max_int
+    ; private_blocks = max_int
+    ; diff_blocks = max_int
+    ; event = Ssz_tools.Event.high
+    }
+  ;;
 
   let to_floatarray t =
     let a = Float.Array.make length Float.nan in
@@ -24,14 +39,27 @@ module Observation = struct
       i + 1
     in
     let int = set float_of_int in
-    let _ = Fields.fold ~init:0 ~public_blocks:int ~private_blocks:int ~diff_blocks:int in
+    let _ =
+      Fields.fold
+        ~init:0
+        ~public_blocks:int
+        ~private_blocks:int
+        ~diff_blocks:int
+        ~event:int
+    in
     a
   ;;
 
   let of_floatarray =
     let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
     let int = get int_of_float in
-    fst (Fields.make_creator 0 ~public_blocks:int ~private_blocks:int ~diff_blocks:int)
+    fst
+      (Fields.make_creator
+         0
+         ~public_blocks:int
+         ~private_blocks:int
+         ~diff_blocks:int
+         ~event:int)
   ;;
 
   let to_string t =
@@ -42,7 +70,7 @@ module Observation = struct
         (to_s (Fieldslib.Field.get field t))
     in
     let int = conv string_of_int in
-    Fields.to_list ~public_blocks:int ~private_blocks:int ~diff_blocks:int
+    Fields.to_list ~public_blocks:int ~private_blocks:int ~diff_blocks:int ~event:int
     |> String.concat "\n"
   ;;
 
@@ -52,6 +80,7 @@ module Observation = struct
         { public_blocks = Random.bits ()
         ; private_blocks = Random.bits ()
         ; diff_blocks = Random.bits ()
+        ; event = Random.bits ()
         }
       in
       t = (to_floatarray t |> of_floatarray)
@@ -123,16 +152,17 @@ module Agent (V : LocalView with type data = data) = struct
         { public : env Dag.vertex
         ; private_ : env Dag.vertex
         ; common : env Dag.vertex
+        ; event : [ `ProofOfWork | `Network ]
         }
-
-  let preferred (BetweenActions s) = s.private_
-  let puzzle_payload (BetweenActions s) = N.puzzle_payload s.private_
 
   let init ~roots =
     let root = N.init ~roots in
     BetweenActions
       { private_ = root; public = root; pending_private_to_public_messages = [] }
   ;;
+
+  let preferred (BetweenActions s) = s.private_
+  let puzzle_payload (BetweenActions s) = N.puzzle_payload s.private_
 
   let deliver_private_to_public_messages (BetweenActions state) =
     let public =
@@ -145,18 +175,18 @@ module Agent (V : LocalView with type data = data) = struct
   ;;
 
   let prepare (BeforeAction state) event =
-    let public, private_ =
+    let public, private_, event =
       match event with
       | Append _ -> failwith "not implemented"
       | Network x ->
         (* simulate defender *)
-        N.update_head ~old:state.public x, state.private_
+        N.update_head ~old:state.public x, state.private_, `Network
       | ProofOfWork x ->
         (* work on private chain *)
-        state.public, x
+        state.public, x, `ProofOfWork
     in
     let common = Dag.common_ancestor view public private_ |> Option.get in
-    Observable { public; private_; common }
+    Observable { public; private_; common; event }
   ;;
 
   let prepare state = deliver_private_to_public_messages state |> prepare
@@ -170,6 +200,7 @@ module Agent (V : LocalView with type data = data) = struct
     { private_blocks = private_height - ca_height
     ; public_blocks = public_height - ca_height
     ; diff_blocks = private_height - public_height
+    ; event = Ssz_tools.Event.to_int state.event
     }
   ;;
 
