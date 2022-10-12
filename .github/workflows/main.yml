@@ -12,8 +12,8 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-18.04
-          - macos-11
+          - ubuntu-20.04
+          - macos-12
         ocaml-compiler:
           - 4.12.1
 
@@ -45,7 +45,7 @@ jobs:
           opam exec -- dune build --release
 
       - name: Upload the gym shared object
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
           path: _build/default/ocaml/gym/bridge.so
@@ -54,8 +54,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-18.04
           - ubuntu-20.04
+          - ubuntu-22.04
         python-version:
           - 3.6
           - 3.9
@@ -66,16 +66,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download gym shared object
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: ubuntu-18.04-ocaml-4.12.1
           path: python/gym/cpr_gym
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -102,19 +102,19 @@ jobs:
 
     steps:
       - name: Download gym shared object (linux)
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: ubuntu-18.04-ocaml-4.12.1
           path: linux
 
       - name: Download gym shared object (macos)
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: macos-11-ocaml-4.12.1
           path: macos
 
       - name: Deploy to GitHub Pages
-        uses: crazy-max/ghaction-github-pages@v2
+        uses: crazy-max/ghaction-github-pages@v3
         with:
           target_branch: gh-pages
           build_dir: .
