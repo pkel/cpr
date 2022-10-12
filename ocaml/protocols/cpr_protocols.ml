@@ -257,7 +257,17 @@ let%test_module "protocol" =
         n
         ~activation_delay:1.
         ~orphan_rate_limit:0.3
-        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+        (tailstorm ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+    ;;
+
+    let n = "tailstorm32punish/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Punish)
     ;;
 
     let n = "tailstormll8constant/easy"
@@ -350,6 +360,10 @@ let%test_module "policy" =
 
     let%test_unit [%name n] = test n ~policy:"honest" ~orphan_rate_limit:0.01 nakamoto_ssz
 
+    let n = "ethereum/ssz/honest"
+
+    let%test_unit [%name n] = test n ~policy:"honest" ~orphan_rate_limit:0.01 ethereum_ssz
+
     let n = "bk8/ssz/honest"
 
     let%test_unit [%name n] =
@@ -369,7 +383,17 @@ let%test_module "policy" =
         n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
+
+    let n = "tailstorm8discount/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstorm_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
 
     let n = "tailstormll8constant/ssz/honest"
@@ -380,6 +404,16 @@ let%test_module "policy" =
         ~policy:"honest"
         ~orphan_rate_limit:0.01
         (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
+
+    let n = "tailstormll8discount/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstormll_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
 
     let n = "tailstormll8constant/draft/honest"
@@ -471,7 +505,7 @@ let%test_module "random" =
     let n = "tailstorm8discount/ssz/random"
 
     let%test_unit [%name n] =
-      test n (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+      test n (tailstorm_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
 
     let n = "tailstormll8constant/ssz/random"
@@ -483,7 +517,7 @@ let%test_module "random" =
     let n = "tailstormll8discount/draft/random"
 
     let%test_unit [%name n] =
-      test n (tailstormll_draft ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+      test n (tailstormll_draft ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
   end)
 ;;
