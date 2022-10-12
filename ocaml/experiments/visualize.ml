@@ -149,15 +149,6 @@ let tasks =
           ; tasks_per_attack_space
               (tailstormll_ssz ~subblock_selection:Optimal ~rewards ~k:1)
               20
-          ; tasks_per_attack_space
-              (tailstormll_draft ~subblock_selection:Optimal ~rewards ~k:8)
-              100
-          ; tasks_per_attack_space
-              (tailstormll_draft ~subblock_selection:Optimal ~rewards ~k:4)
-              50
-          ; tasks_per_attack_space
-              (tailstormll_draft ~subblock_selection:Optimal ~rewards ~k:1)
-              20
           ])
       Tailstormll.reward_schemes
 ;;

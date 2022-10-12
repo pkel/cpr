@@ -100,19 +100,8 @@ let tasks ~n_activations =
                 n_activations)
             k)
       Tailstormll.[ Constant; Discount ]
-  and tailstormll' =
-    List.concat_map
-      (fun rewards ->
-        List.concat_map
-          (fun k ->
-            let subblock_selection =
-              if k > 8 then Tailstormll.Heuristic else Tailstormll.Optimal
-            in
-            two_agents (tailstormll_draft ~subblock_selection ~rewards ~k) n_activations)
-          k)
-      Tailstormll.[ Constant; Discount ]
   in
-  List.concat [ nakamoto; ethereum; bk; bkll; tailstorm; tailstormll; tailstormll' ]
+  List.concat [ nakamoto; ethereum; bk; bkll; tailstorm; tailstormll ]
 ;;
 
 open Cmdliner

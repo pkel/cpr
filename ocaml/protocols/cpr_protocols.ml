@@ -115,18 +115,6 @@ let tailstormll_ssz ~subblock_selection ~k ~rewards =
   AttackSpace (module M)
 ;;
 
-(** Deprecated draft attack space against {!tailstormll}. *)
-let tailstormll_draft ~subblock_selection ~k ~rewards =
-  let module M =
-    Tailstormll_draft.Make (struct
-      let k = k
-      let rewards = rewards
-      let subblock_selection = subblock_selection
-    end)
-  in
-  AttackSpace (module M)
-;;
-
 let%test_module "protocol" =
   (module struct
     let test name ~activation_delay ~orphan_rate_limit (Protocol (module P)) =
@@ -415,16 +403,6 @@ let%test_module "policy" =
         ~orphan_rate_limit:0.01
         (tailstormll_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
-
-    let n = "tailstormll8constant/draft/honest"
-
-    let%test_unit [%name n] =
-      test
-        n
-        ~policy:"honest"
-        ~orphan_rate_limit:0.01
-        (tailstormll_draft ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
-    ;;
   end)
 ;;
 
@@ -514,10 +492,10 @@ let%test_module "random" =
       test n (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
-    let n = "tailstormll8discount/draft/random"
+    let n = "tailstormll8discount/ssz/random"
 
     let%test_unit [%name n] =
-      test n (tailstormll_draft ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+      test n (tailstormll_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
   end)
 ;;
