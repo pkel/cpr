@@ -11,7 +11,10 @@ let honest_clique ~activation_delay ~n protocol =
           net.nodes
     }
   in
-  let it () = Simulator.init protocol net in
+  let it () =
+    let log, logger = Log.GraphLogger.create net in
+    Simulator.init ~logger protocol net, log
+  in
   ( Collection.
       { it
       ; key = Printf.sprintf "honest-clique-%i" n
@@ -33,7 +36,8 @@ let two_agents ~alpha protocol attack =
       | 0 -> Some attack.Collection.it
       | _ -> None
     in
-    Simulator.init ~patch protocol net
+    let log, logger = Log.GraphLogger.create net in
+    Simulator.init ~logger ~patch protocol net, log
   in
   ( Collection.
       { it
@@ -66,7 +70,8 @@ let selfish_mining ?(msg_delay = 1. /. 10000.) ~defenders ~alpha gamma protocol 
       | 0 -> Some attack.Collection.it
       | _ -> None
     in
-    Simulator.init ~patch protocol net
+    let log, logger = Log.GraphLogger.create net in
+    Simulator.init ~logger ~patch protocol net, log
   in
   ( Collection.
       { it

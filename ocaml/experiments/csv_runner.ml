@@ -10,7 +10,7 @@ type task =
            -> ('dag_data Simulator.env, 'dag_data) node)
           Collection.entry
           option
-      ; sim : (unit -> 'dag_data Simulator.state) Collection.entry
+      ; sim : (unit -> 'dag_data Simulator.state * Log.GraphLogger.state) Collection.entry
       }
       -> task
 
@@ -116,7 +116,7 @@ let run task =
   let clock = Mtime_clock.counter () in
   try
     let open Simulator in
-    let sim = t.sim.it () in
+    let sim, _logger = t.sim.it () in
     let (module Ref) = sim.referee in
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)

@@ -1,7 +1,7 @@
 open Cpr_lib
 open Models
 
-let fpath (Csv_runner.Task t) ~rewardfn =
+let fpath ~ext (Csv_runner.Task t) ~rewardfn =
   let (module Protocol) = t.protocol in
   let l =
     let open Collection in
@@ -16,7 +16,7 @@ let fpath (Csv_runner.Task t) ~rewardfn =
     | Some x -> [ x.key; Printf.sprintf "alpha=%g" t.network.nodes.(0).compute ]
     | None -> []
   in
-  Fpath.v (String.concat ":" l ^ ".dot")
+  Fpath.v (String.concat ":" l ^ "." ^ ext)
 ;;
 
 let legend (Csv_runner.Task t) ~rewardfn =
@@ -36,7 +36,8 @@ let legend (Csv_runner.Task t) ~rewardfn =
 
 (* TODO : this should be part of the scenario *)
 let node_name (Csv_runner.Task t) =
-  if Array.length (t.sim.it ()).nodes = 2
+  let env, _ = t.sim.it () in
+  if Array.length env.nodes = 2
   then
     function
     | None -> "genesis"
@@ -180,7 +181,7 @@ let run (Csv_runner.Task t) =
   (* simulate *)
   let open Simulator in
   let (module Protocol) = t.protocol in
-  let env = t.sim.it () in
+  let env, log = t.sim.it () in
   let (module Ref) = env.referee in
   loop ~activations:t.activations env;
   let confirmed = Array.make (Dag.size env.dag) false in
@@ -196,19 +197,31 @@ let run (Csv_runner.Task t) =
               n)
           (Ref.history (head env))
       in
-      let path =
+      let dotpath =
         let open Fpath in
-        v "." / "fig" / "chains" // fpath (Task t) ~rewardfn
+        v "." / "fig" / "chains" // fpath ~ext:"dot" (Task t) ~rewardfn
+      and graphmlpath =
+        let open Fpath in
+        v "." / "fig" / "chains" // fpath ~ext:"graphml" (Task t) ~rewardfn
       in
       let open Bos.OS in
-      let d = Dir.create ~path:true (Fpath.parent path) in
-      Result.bind d (fun _ ->
+      let result =
+        let open ResultSyntax in
+        let* _dir = Dir.create ~path:true (Fpath.parent dotpath) in
+        let* _dot =
           File.with_oc
-            path
+            dotpath
             print_dag
-            (env, confirmed, rewards, legend (Task t) ~rewardfn, Ref.info))
-      |> Result.join
-      |> Rresult.R.failwith_error_msg)
+            (env, confirmed, rewards, legend (Task t) ~rewardfn, Ref.info)
+          |> Result.join
+        in
+        let+ _graphml =
+          let g = Log.GraphLogger.to_graphml log in
+          GraphML.write_graph g graphmlpath
+        in
+        ()
+      in
+      Rresult.R.failwith_error_msg result)
     Ref.reward_functions
 ;;
 
