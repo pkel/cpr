@@ -10,15 +10,15 @@ module Make (Parameters : Bk.Parameters) = struct
 
   module Observation = struct
     type t =
-      { public_blocks : int (** number of blocks after common ancestor *)
+      { public_blocks : int (** number of public blocks after common ancestor *)
+      ; private_blocks : int (** number of private blocks after common ancestor *)
+      ; diff_blocks : int (** private_blocks - public_blocks *)
       ; public_votes : int
             (** number of public votes confirming the public leading block *)
-      ; private_blocks : int (** number of blocks after common ancestor *)
       ; private_votes_inclusive : int
             (** number of votes confirming the private leading block *)
       ; private_votes_exclusive : int
             (** number of private votes confirming the private leading block *)
-      ; diff_blocks : int (** private_blocks - public_blocks *)
       ; lead : bool (** attacker is truthful leader on leading public block *)
       ; event : int
       }
@@ -28,11 +28,11 @@ module Make (Parameters : Bk.Parameters) = struct
 
     let low =
       { public_blocks = 0
-      ; public_votes = 0
       ; private_blocks = 0
+      ; diff_blocks = min_int
+      ; public_votes = 0
       ; private_votes_inclusive = 0
       ; private_votes_exclusive = 0
-      ; diff_blocks = min_int
       ; lead = false
       ; event = Ssz_tools.Event.low
       }
@@ -40,11 +40,11 @@ module Make (Parameters : Bk.Parameters) = struct
 
     let high =
       { public_blocks = max_int
-      ; public_votes = max_int
       ; private_blocks = max_int
+      ; diff_blocks = max_int
+      ; public_votes = max_int
       ; private_votes_inclusive = max_int
       ; private_votes_exclusive = max_int
-      ; diff_blocks = max_int
       ; lead = true
       ; event = Ssz_tools.Event.high
       }
@@ -62,11 +62,11 @@ module Make (Parameters : Bk.Parameters) = struct
         Fields.fold
           ~init:0
           ~public_blocks:int
-          ~public_votes:int
           ~private_blocks:int
+          ~diff_blocks:int
+          ~public_votes:int
           ~private_votes_inclusive:int
           ~private_votes_exclusive:int
-          ~diff_blocks:int
           ~lead:bool
           ~event:int
       in
@@ -86,11 +86,11 @@ module Make (Parameters : Bk.Parameters) = struct
         (Fields.make_creator
            0
            ~public_blocks:int
-           ~public_votes:int
            ~private_blocks:int
+           ~diff_blocks:int
+           ~public_votes:int
            ~private_votes_inclusive:int
            ~private_votes_exclusive:int
-           ~diff_blocks:int
            ~lead:bool
            ~event:int)
     ;;
@@ -106,11 +106,11 @@ module Make (Parameters : Bk.Parameters) = struct
       and bool = conv string_of_bool in
       Fields.to_list
         ~public_blocks:int
-        ~public_votes:int
         ~private_blocks:int
+        ~diff_blocks:int
+        ~public_votes:int
         ~private_votes_inclusive:int
         ~private_votes_exclusive:int
-        ~diff_blocks:int
         ~lead:bool
         ~event:int
       |> String.concat "\n"
@@ -120,11 +120,11 @@ module Make (Parameters : Bk.Parameters) = struct
       let run _i =
         let t =
           { public_blocks = Random.bits ()
-          ; public_votes = Random.bits ()
           ; private_blocks = Random.bits ()
+          ; diff_blocks = Random.bits ()
+          ; public_votes = Random.bits ()
           ; private_votes_inclusive = Random.bits ()
           ; private_votes_exclusive = Random.bits ()
-          ; diff_blocks = Random.bits ()
           ; lead = Random.bool ()
           ; event = Random.bits ()
           }
@@ -255,7 +255,7 @@ module Make (Parameters : Bk.Parameters) = struct
       }
     ;;
 
-    let apply (Observable s) action =
+    let apply (Observable state) action =
       let parent_block x =
         match Dag.parents view x with
         | hd :: _ when is_block hd -> Some hd
@@ -263,9 +263,9 @@ module Make (Parameters : Bk.Parameters) = struct
       in
       let release kind =
         let height, nvotes =
-          let height = block_height_exn s.public
+          let height = block_height_exn state.public
           and nvotes =
-            Dag.children view s.public
+            Dag.children view state.public
             |> List.filter public_visibility
             |> List.filter is_vote
             |> List.length
@@ -279,7 +279,7 @@ module Make (Parameters : Bk.Parameters) = struct
           let rec h b =
             if block_height_exn b <= height then b else parent_block b |> Option.get |> h
           in
-          h s.private_
+          h state.private_
           (* NOTE: if private height is smaller public height, then private head is marked
              for release. *)
         in
@@ -301,17 +301,17 @@ module Make (Parameters : Bk.Parameters) = struct
       in
       let share, private_ =
         match (action : Action.t) with
-        | Adopt_Proceed | Adopt_Prolong -> [], s.public
-        | Match_Proceed | Match_Prolong -> release `Match, s.private_
-        | Override_Proceed | Override_Prolong -> release `Override, s.private_
-        | Wait_Proceed | Wait_Prolong -> [], s.private_
+        | Adopt_Proceed | Adopt_Prolong -> [], state.public
+        | Match_Proceed | Match_Prolong -> release `Match, state.private_
+        | Override_Proceed | Override_Prolong -> release `Override, state.private_
+        | Wait_Proceed | Wait_Prolong -> [], state.private_
       in
       let append =
         let vote_filter =
           match action with
           | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
             vote_filter `Inclusive
-          | Adopt_Prolong | Match_Prolong | Override_Prolong | Wait_Prolong ->
+          | Adopt_Prolong | Override_Prolong | Match_Prolong | Wait_Prolong ->
             vote_filter `Exclusive
         in
         match N.propose ~vote_filter private_ with
@@ -319,7 +319,7 @@ module Make (Parameters : Bk.Parameters) = struct
         | None -> []
       in
       BetweenActions
-        { public = s.public; private_; pending_private_to_public_messages = share }
+        { public = state.public; private_; pending_private_to_public_messages = share }
       |> return ~append ~share
     ;;
   end

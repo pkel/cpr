@@ -13,19 +13,19 @@ module Make (Parameters : Ethereum.Parameters) = struct
             (** defender chain, number of sequential blocks after common ancestor *)
       ; public_work : int
             (** defender chain, number of blocks after common ancestor, including uncles *)
-      ; public_orphans : int
-            (** number of orphans that could be included as uncles in the public chain *)
       ; private_height : int
             (** attacker chain, number of sequential blocks after common ancestor *)
       ; private_work : int
             (** attacker chain, number of blocks after common ancestor, including uncles *)
+      ; diff_height : int (** private_height - public_height *)
+      ; diff_work : int (** private_work - public_work *)
+      ; public_orphans : int
+            (** number of orphans that could be included as uncles in the public chain *)
       ; private_orphans_inclusive : int
             (** number of orphans that could be included as uncles in the attacker chain; including defender orphans *)
       ; private_orphans_exclusive : int
             (** number of orphans that could be included as uncles in the attacker chain; excluding defender orphans *)
-      ; diff_height : int (** private_height - public_height *)
-      ; diff_work : int (** private_work - public_work *)
-      ; event : int
+      ; event : int (* What is currently going on? *)
       }
     [@@deriving fields]
 
@@ -34,13 +34,13 @@ module Make (Parameters : Ethereum.Parameters) = struct
     let low =
       { public_height = 0
       ; public_work = 0
-      ; public_orphans = 0
       ; private_height = 0
       ; private_work = 0
-      ; private_orphans_inclusive = 0
-      ; private_orphans_exclusive = 0
       ; diff_height = min_int
       ; diff_work = min_int
+      ; public_orphans = 0
+      ; private_orphans_inclusive = 0
+      ; private_orphans_exclusive = 0
       ; event = Ssz_tools.Event.low
       }
     ;;
@@ -48,13 +48,13 @@ module Make (Parameters : Ethereum.Parameters) = struct
     let high =
       { public_height = max_int
       ; public_work = max_int
-      ; public_orphans = max_int
       ; private_height = max_int
       ; private_work = max_int
-      ; private_orphans_inclusive = max_int
-      ; private_orphans_exclusive = max_int
       ; diff_height = max_int
       ; diff_work = max_int
+      ; public_orphans = max_int
+      ; private_orphans_inclusive = max_int
+      ; private_orphans_exclusive = max_int
       ; event = Ssz_tools.Event.high
       }
     ;;
@@ -71,13 +71,13 @@ module Make (Parameters : Ethereum.Parameters) = struct
           ~init:0
           ~public_height:int
           ~public_work:int
-          ~public_orphans:int
           ~private_height:int
           ~private_work:int
-          ~private_orphans_inclusive:int
-          ~private_orphans_exclusive:int
           ~diff_height:int
           ~diff_work:int
+          ~public_orphans:int
+          ~private_orphans_inclusive:int
+          ~private_orphans_exclusive:int
           ~event:int
       in
       a
@@ -91,13 +91,13 @@ module Make (Parameters : Ethereum.Parameters) = struct
            0
            ~public_height:int
            ~public_work:int
-           ~public_orphans:int
            ~private_height:int
            ~private_work:int
-           ~private_orphans_inclusive:int
-           ~private_orphans_exclusive:int
            ~diff_height:int
            ~diff_work:int
+           ~public_orphans:int
+           ~private_orphans_inclusive:int
+           ~private_orphans_exclusive:int
            ~event:int)
     ;;
 
@@ -112,13 +112,13 @@ module Make (Parameters : Ethereum.Parameters) = struct
       Fields.to_list
         ~public_height:int
         ~public_work:int
-        ~public_orphans:int
         ~private_height:int
         ~private_work:int
-        ~private_orphans_inclusive:int
-        ~private_orphans_exclusive:int
         ~diff_height:int
         ~diff_work:int
+        ~public_orphans:int
+        ~private_orphans_inclusive:int
+        ~private_orphans_exclusive:int
         ~event:int
       |> String.concat "\n"
     ;;
@@ -128,13 +128,13 @@ module Make (Parameters : Ethereum.Parameters) = struct
         let t =
           { public_height = Random.bits ()
           ; public_work = Random.bits ()
-          ; public_orphans = Random.bits ()
           ; private_height = Random.bits ()
           ; private_work = Random.bits ()
-          ; private_orphans_inclusive = Random.bits ()
-          ; private_orphans_exclusive = Random.bits ()
           ; diff_height = Random.bits ()
           ; diff_work = Random.bits ()
+          ; public_orphans = Random.bits ()
+          ; private_orphans_inclusive = Random.bits ()
+          ; private_orphans_exclusive = Random.bits ()
           ; event = Random.bits ()
           }
         in

@@ -180,8 +180,8 @@ module Make (Parameters : Parameters) = struct
       skip_eq Dag.vertex_eq cmp
     ;;
 
-    let update_head ~preferred ~consider =
-      if compare_blocks consider preferred > 0 then consider else preferred
+    let update_head ~old consider =
+      if compare_blocks consider old > 0 then consider else old
     ;;
 
     let puzzle_payload' ~vote_filter preferred =
@@ -215,8 +215,8 @@ module Make (Parameters : Parameters) = struct
           match visibility vertex with
           | `Withheld -> [ vertex ]
           | `Received | `Released -> []
-        and consider = last_block vertex in
-        update_head ~consider ~preferred |> return ~share
+        in
+        update_head ~old:preferred (last_block vertex) |> return ~share
     ;;
   end
 

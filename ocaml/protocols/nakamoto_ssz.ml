@@ -7,8 +7,8 @@ let info = "SSZ'16 attack space"
 
 module Observation = struct
   type t =
-    { public_blocks : int (** number of blocks after common ancestor *)
-    ; private_blocks : int (** number of blocks after common ancestor *)
+    { public_blocks : int (** number of public blocks after common ancestor *)
+    ; private_blocks : int (** number of private blocks after common ancestor *)
     ; diff_blocks : int (** private_blocks - public_blocks *)
     ; event : int (* What is currently going on? *)
     }
