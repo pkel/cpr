@@ -176,6 +176,12 @@ module Make (Parameters : Parameters) = struct
       | _ -> failwith "invalid roots"
     ;;
 
+    let appended_by_me x =
+      match visibility x with
+      | `Received -> false
+      | `Withheld | `Released -> true
+    ;;
+
     let leader_hash_exn x =
       if not (is_block x) then raise (Invalid_argument "not a block");
       match Dag.parents view x with
@@ -200,8 +206,8 @@ module Make (Parameters : Parameters) = struct
       skip_eq Dag.vertex_eq cmp
     ;;
 
-    let update_head ?(vote_filter = Fun.const true) ~preferred consider =
-      if compare_blocks ~vote_filter consider preferred > 0 then consider else preferred
+    let update_head ?(vote_filter = Fun.const true) ~old consider =
+      if compare_blocks ~vote_filter consider old > 0 then consider else old
     ;;
 
     let quorum ~vote_filter b =
@@ -282,7 +288,7 @@ module Make (Parameters : Parameters) = struct
           | `Withheld -> [ x ]
           | _ -> []
         in
-        update_head ~preferred b |> return ~append ~share
+        update_head ~old:preferred b |> return ~append ~share
     ;;
   end
 
