@@ -70,12 +70,15 @@ module Honest (V : LocalView with type data = data) = struct
     { sign = false; parents = [ state ]; data = { height = (data state).height + 1 } }
   ;;
 
+  let update_head ~old candidate =
+    let o = data old
+    and c = data candidate in
+    if c.height > o.height then candidate else old
+  ;;
+
   let handler state = function
     | Append _ -> failwith "not implemented"
-    | Network vertex ->
-      let consider = data vertex
-      and preferred = data state in
-      return (if consider.height > preferred.height then vertex else state)
+    | Network vertex -> update_head ~old:state vertex |> return
     | ProofOfWork vertex -> return ~share:[ vertex ] vertex
   ;;
 end
