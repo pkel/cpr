@@ -312,12 +312,13 @@ let%test_module "policy" =
           (module A.Protocol)
           network
       in
-      let target_height = 1000 in
-      Simulator.loop ~activations:(target_height * A.Protocol.puzzles_per_block) env;
+      let target_progress = 1000 in
+      Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
-      let observed_height = A.Protocol.height (Dag.data head).value in
+      let observed_progress = A.Protocol.progress (Dag.data head).value in
       let observed_orphan_rate =
-        float_of_int (target_height - observed_height) /. float_of_int target_height
+        let target_progress = float_of_int target_progress in
+        (target_progress -. observed_progress) /. target_progress
       in
       if observed_orphan_rate > orphan_rate_limit
       then (
@@ -426,12 +427,13 @@ let%test_module "random" =
           (module A.Protocol)
           network
       in
-      let target_height = 1000 in
-      Simulator.loop ~activations:(target_height * A.Protocol.puzzles_per_block) env;
+      let target_progress = 1000 in
+      Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
-      let observed_height = A.Protocol.height (Dag.data head).value in
+      let observed_progress = A.Protocol.progress (Dag.data head).value in
       let observed_orphan_rate =
-        float_of_int (target_height - observed_height) /. float_of_int target_height
+        let target_progress = float_of_int target_progress in
+        (target_progress -. observed_progress) /. target_progress
       in
       if observed_orphan_rate > 0.5
       then (
