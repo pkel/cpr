@@ -3,6 +3,7 @@ module Ethereum = Ethereum
 module Bk = Bk
 module Bkll = Bkll
 module Tailstorm = Tailstorm
+module Tailstormll = Tailstormll
 open Cpr_lib
 
 (** Original proof-of-work consensus as described by Nakamoto. 2008. *)
@@ -64,7 +65,7 @@ let bkll_ssz ~k =
   AttackSpace (module M)
 ;;
 
-(** Tailstorm protocol with k - 1 subblocks per (strong) block *)
+(** Tailstorm protocol with k subblocks per (strong) block, subblocks require proof-of-work, strong blocks don't. *)
 let tailstorm ~subblock_selection ~k ~rewards =
   let module M =
     Tailstorm.Make (struct
@@ -88,10 +89,24 @@ let tailstorm_ssz ~subblock_selection ~k ~rewards =
   AttackSpace (module M)
 ;;
 
-(** Deprecated draft attack space against {!tailstorm}. *)
-let tailstorm_draft ~subblock_selection ~k ~rewards =
+(** Modified Tailstorm protocol with k - 1 subblocks per (strong) block, all
+ * blocks (including strong ones) require a proof-of-work. I append ll because
+ * this protocol is to {!tailstorm}, what {!bkll} is to {!bk}. *)
+let tailstormll ~subblock_selection ~k ~rewards =
   let module M =
-    Tailstorm_draft.Make (struct
+    Tailstormll.Make (struct
+      let k = k
+      let rewards = rewards
+      let subblock_selection = subblock_selection
+    end)
+  in
+  Protocol (module M)
+;;
+
+(** {!nakamoto_ssz} adapted for {!tailstormll}. *)
+let tailstormll_ssz ~subblock_selection ~k ~rewards =
+  let module M =
+    Tailstormll_ssz.Make (struct
       let k = k
       let rewards = rewards
       let subblock_selection = subblock_selection
@@ -102,213 +117,387 @@ let tailstorm_draft ~subblock_selection ~k ~rewards =
 
 let%test_module "protocol" =
   (module struct
-    let test ~activation_delay ~orphan_rate_limit (Protocol (module P)) =
-      let env =
-        let network =
-          let propagation_delay = Distributions.exponential ~ev:1. in
-          let n_nodes = 7 in
-          Network.T.symmetric_clique ~activation_delay ~propagation_delay n_nodes
-        in
-        Simulator.init (module P) network
+    let test name ~activation_delay ~orphan_rate_limit (Protocol (module P)) =
+      let network =
+        let propagation_delay = Distributions.exponential ~ev:1. in
+        let n_nodes = 7 in
+        Network.T.symmetric_clique ~activation_delay ~propagation_delay n_nodes
       in
+      let log, logger = Log.GraphLogger.create network in
+      let env = Simulator.init ~logger (module P) network in
       let target_progress = 1000 in
-      Simulator.loop ~activations:(target_progress * P.puzzles_per_block) env;
+      Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
       let observed_progress = P.progress (Dag.data head).value in
       let observed_orphan_rate =
-        (float_of_int target_progress -. observed_progress)
-        /. float_of_int target_progress
+        let target_progress = float_of_int target_progress in
+        (target_progress -. observed_progress) /. target_progress
       in
       if observed_orphan_rate > orphan_rate_limit
-      then
-        failwith
-          (Printf.sprintf
-             "too many orphans: got %.2f, expected %.2f"
-             observed_orphan_rate
-             orphan_rate_limit)
+      then (
+        let g = Log.GraphLogger.to_graphml log in
+        let file =
+          "failed_"
+          ^ String.map
+              (function
+                | '/' -> '_'
+                | x -> x)
+              name
+          |> Fpath.of_string
+          |> Rresult.R.failwith_error_msg
+          |> Fpath.set_ext "graphml"
+        in
+        GraphML.write_graph g file |> Rresult.R.failwith_error_msg;
+        Format.kasprintf
+          failwith
+          "too many orphans: got %.2f, expected %.2f; see %a"
+          observed_orphan_rate
+          orphan_rate_limit
+          Fpath.pp
+          file)
       else ()
     ;;
 
-    let%test_unit "nakamoto/easy" =
-      test ~activation_delay:16. ~orphan_rate_limit:0.1 nakamoto
-    ;;
+    let n = "nakamoto/easy"
 
-    let%test_unit "nakamoto/hard" =
-      test ~activation_delay:1. ~orphan_rate_limit:0.5 nakamoto
-    ;;
+    let%test_unit [%name n] = test n ~activation_delay:16. ~orphan_rate_limit:0.1 nakamoto
 
-    let%test_unit "ethereum/easy" =
+    let n = "nakamoto/hard"
+
+    let%test_unit [%name n] = test n ~activation_delay:1. ~orphan_rate_limit:0.5 nakamoto
+
+    let n = "ethereum/easy"
+
+    let%test_unit [%name n] =
       (* even nakamoto achieves this! *)
-      test ~activation_delay:16. ~orphan_rate_limit:0.1 ethereum
+      test n ~activation_delay:16. ~orphan_rate_limit:0.1 ethereum
     ;;
 
-    let%test_unit "ethereum/hard" =
+    let n = "ethereum/hard"
+
+    let%test_unit [%name n] =
       (* ethereum should collect most blocks that would be orphans as uncles *)
-      test ~activation_delay:1. ~orphan_rate_limit:0.2 ethereum
+      test n ~activation_delay:1. ~orphan_rate_limit:0.2 ethereum
     ;;
 
-    let%test_unit "ethereum/real" =
+    let n = "ethereum/real"
+
+    let%test_unit [%name n] =
       (* ethereum should collect most blocks that would be orphans as uncles *)
-      test ~activation_delay:6. ~orphan_rate_limit:0.01 ethereum
+      test n ~activation_delay:6. ~orphan_rate_limit:0.01 ethereum
     ;;
 
-    let%test_unit "ethereum/extreme" =
+    let n = "ethereum/extreme"
+
+    let%test_unit [%name n] =
       (* fuzzing the uncle inclusion rule *)
-      test ~activation_delay:0.3 ~orphan_rate_limit:0.9 ethereum
+      test n ~activation_delay:0.3 ~orphan_rate_limit:0.9 ethereum
     ;;
 
-    let%test_unit "bk8/easy" = test ~activation_delay:10. ~orphan_rate_limit:0.1 (bk ~k:8)
-    let%test_unit "bk8/hard" = test ~activation_delay:1. ~orphan_rate_limit:0.3 (bk ~k:8)
+    let n = "bk8/easy"
 
-    let%test_unit "bk32/hard" =
-      test ~activation_delay:1. ~orphan_rate_limit:0.1 (bk ~k:32)
+    let%test_unit [%name n] =
+      test n ~activation_delay:10. ~orphan_rate_limit:0.1 (bk ~k:8)
     ;;
 
-    let%test_unit "bkll8/easy" =
-      test ~activation_delay:10. ~orphan_rate_limit:0.1 (bkll ~k:8)
+    let n = "bk8/hard"
+
+    let%test_unit [%name n] = test n ~activation_delay:1. ~orphan_rate_limit:0.3 (bk ~k:8)
+
+    let n = "bk32/hard"
+
+    let%test_unit [%name n] =
+      test n ~activation_delay:1. ~orphan_rate_limit:0.1 (bk ~k:32)
     ;;
 
-    let%test_unit "bkll8/hard" =
-      test ~activation_delay:1. ~orphan_rate_limit:0.3 (bkll ~k:8)
+    let n = "bkll8/easy"
+
+    let%test_unit [%name n] =
+      test n ~activation_delay:10. ~orphan_rate_limit:0.1 (bkll ~k:8)
     ;;
 
-    let%test_unit "bkll32/hard" =
-      test ~activation_delay:1. ~orphan_rate_limit:0.1 (bkll ~k:32)
+    let n = "bkll8/hard"
+
+    let%test_unit [%name n] =
+      test n ~activation_delay:1. ~orphan_rate_limit:0.3 (bkll ~k:8)
     ;;
 
-    let%test_unit "tailstorm8constant/easy" =
+    let n = "bkll32/hard"
+
+    let%test_unit [%name n] =
+      test n ~activation_delay:1. ~orphan_rate_limit:0.1 (bkll ~k:32)
+    ;;
+
+    let n = "tailstorm8constant/easy"
+
+    let%test_unit [%name n] =
       test
+        n
         ~activation_delay:10.
         ~orphan_rate_limit:0.1
         (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
-    let%test_unit "tailstorm8discount/hard" =
+    let n = "tailstorm8discount/hard"
+
+    let%test_unit [%name n] =
       test
+        n
         ~activation_delay:1.
         ~orphan_rate_limit:0.3
-        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+        (tailstorm ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
 
-    let%test_unit "tailstorm32block/hard" =
+    let n = "tailstorm32punish/hard"
+
+    let%test_unit [%name n] =
       test
+        n
         ~activation_delay:1.
         ~orphan_rate_limit:0.1
-        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
+        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Punish)
+    ;;
+
+    let n = "tailstormll8constant/easy"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (tailstormll ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
+
+    let n = "tailstormll8discount/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (tailstormll ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+    ;;
+
+    let n = "tailstormll32block/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (tailstormll ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
     ;;
   end)
 ;;
 
 let%test_module "policy" =
   (module struct
-    let test ~policy ~orphan_rate_limit (AttackSpace (module A)) =
+    let test name ~policy ~orphan_rate_limit (AttackSpace (module A)) =
+      let network =
+        let propagation_delay = Distributions.exponential ~ev:1. in
+        let n_nodes = 3 in
+        Network.T.symmetric_clique ~activation_delay:100. ~propagation_delay n_nodes
+      in
+      let log, logger = Log.GraphLogger.create network in
       let env =
-        let network =
-          let propagation_delay = Distributions.exponential ~ev:1. in
-          let n_nodes = 3 in
-          Network.T.symmetric_clique ~activation_delay:100. ~propagation_delay n_nodes
-        in
         let honest =
           let policy = Collection.get policy A.policies |> Option.get in
           A.attacker policy.it
         in
         Simulator.init
+          ~logger
           ~patch:(function
             | 0 -> Some honest
             | _ -> None)
           (module A.Protocol)
           network
       in
-      let target_height = 1000 in
-      Simulator.loop ~activations:(target_height * A.Protocol.puzzles_per_block) env;
+      let target_progress = 1000 in
+      Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
-      let observed_height = A.Protocol.height (Dag.data head).value in
+      let observed_progress = A.Protocol.progress (Dag.data head).value in
       let observed_orphan_rate =
-        float_of_int (target_height - observed_height) /. float_of_int target_height
+        let target_progress = float_of_int target_progress in
+        (target_progress -. observed_progress) /. target_progress
       in
       if observed_orphan_rate > orphan_rate_limit
-      then
-        failwith
-          (Printf.sprintf
-             "too many orphans: got %.2f, expected %.2f"
-             observed_orphan_rate
-             orphan_rate_limit)
+      then (
+        let g = Log.GraphLogger.to_graphml log in
+        let file =
+          "failed_"
+          ^ String.map
+              (function
+                | '/' -> '_'
+                | x -> x)
+              name
+          |> Fpath.of_string
+          |> Rresult.R.failwith_error_msg
+          |> Fpath.set_ext "graphml"
+        in
+        GraphML.write_graph g file |> Rresult.R.failwith_error_msg;
+        Format.kasprintf
+          failwith
+          "too many orphans: got %.2f, expected %.2f; see %a"
+          observed_orphan_rate
+          orphan_rate_limit
+          Fpath.pp
+          file)
       else ()
     ;;
 
-    let%test_unit "nakamoto/ssz/honest" =
-      test ~policy:"honest" ~orphan_rate_limit:0.01 nakamoto_ssz
+    let n = "nakamoto/ssz/honest"
+
+    let%test_unit [%name n] = test n ~policy:"honest" ~orphan_rate_limit:0.01 nakamoto_ssz
+
+    let n = "ethereum/ssz/honest"
+
+    let%test_unit [%name n] = test n ~policy:"honest" ~orphan_rate_limit:0.01 ethereum_ssz
+
+    let n = "bk8/ssz/honest"
+
+    let%test_unit [%name n] =
+      test n ~policy:"honest" ~orphan_rate_limit:0.01 (bk_ssz ~k:8)
     ;;
 
-    let%test_unit "bk8/ssz/honest" =
-      test ~policy:"honest" ~orphan_rate_limit:0.01 (bk_ssz ~k:8)
+    let n = "bkll8/ssz/honest"
+
+    let%test_unit [%name n] =
+      test n ~policy:"honest" ~orphan_rate_limit:0.01 (bkll_ssz ~k:8)
     ;;
 
-    let%test_unit "bkll8/ssz/honest" =
-      test ~policy:"honest" ~orphan_rate_limit:0.01 (bkll_ssz ~k:8)
-    ;;
+    let n = "tailstorm8constant/ssz/honest"
 
-    let%test_unit "tailstorm8constant/ssz/honest" =
+    let%test_unit [%name n] =
       test
+        n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
         (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
-    let%test_unit "tailstorm8constant/draft/honest" =
+    let n = "tailstorm8discount/ssz/honest"
+
+    let%test_unit [%name n] =
       test
+        n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_draft ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstorm_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+    ;;
+
+    let n = "tailstormll8constant/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
+
+    let n = "tailstormll8discount/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstormll_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
   end)
 ;;
 
 let%test_module "random" =
   (module struct
-    let test (AttackSpace (module A)) =
+    let test name (AttackSpace (module A)) =
+      let network =
+        let propagation_delay = Distributions.exponential ~ev:1. in
+        let n_nodes = 3 in
+        Network.T.symmetric_clique ~activation_delay:100. ~propagation_delay n_nodes
+      in
+      let log, logger = Log.GraphLogger.create network in
       let env =
-        let network =
-          let propagation_delay = Distributions.exponential ~ev:1. in
-          let n_nodes = 3 in
-          Network.T.symmetric_clique ~activation_delay:100. ~propagation_delay n_nodes
-        in
         let policy _ = Random.int A.Action.n |> A.Action.of_int in
         let random = A.attacker policy in
         Simulator.init
+          ~logger
           ~patch:(function
             | 0 -> Some random
             | _ -> None)
           (module A.Protocol)
           network
       in
-      let target_height = 1000 in
-      Simulator.loop ~activations:(target_height * A.Protocol.puzzles_per_block) env;
+      let target_progress = 1000 in
+      Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
-      let observed_height = A.Protocol.height (Dag.data head).value in
+      let observed_progress = A.Protocol.progress (Dag.data head).value in
       let observed_orphan_rate =
-        float_of_int (target_height - observed_height) /. float_of_int target_height
+        let target_progress = float_of_int target_progress in
+        (target_progress -. observed_progress) /. target_progress
       in
       if observed_orphan_rate > 0.5
-      then
-        failwith
-          (Printf.sprintf
-             "too many orphans: got %.2f, expected %.2f"
-             observed_orphan_rate
-             0.5)
+      then (
+        let g = Log.GraphLogger.to_graphml log in
+        let file =
+          "failed_"
+          ^ String.map
+              (function
+                | '/' -> '_'
+                | x -> x)
+              name
+          |> Fpath.of_string
+          |> Rresult.R.failwith_error_msg
+          |> Fpath.set_ext "graphml"
+        in
+        GraphML.write_graph g file |> Rresult.R.failwith_error_msg;
+        Format.kasprintf
+          failwith
+          "too many orphans: got %.2f, expected %.2f; see %a"
+          observed_orphan_rate
+          0.5
+          Fpath.pp
+          file)
       else ()
     ;;
 
-    let%test_unit "nakamoto/random" = test nakamoto_ssz
-    let%test_unit "bk8/ssz/random" = test (bk_ssz ~k:8)
-    let%test_unit "bkll8/ssz/random" = test (bkll_ssz ~k:8)
+    let n = "nakamoto/random"
 
-    let%test_unit "tailstorm8constant/ssz/random" =
-      test (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    let%test_unit [%name n] = test n nakamoto_ssz
+
+    let n = "ethereum/random"
+
+    let%test_unit [%name n] = test n ethereum_ssz
+
+    let n = "bk8/ssz/random"
+
+    let%test_unit [%name n] = test n (bk_ssz ~k:8)
+
+    let n = "bkll8/ssz/random"
+
+    let%test_unit [%name n] = test n (bkll_ssz ~k:8)
+
+    let n = "tailstorm8constant/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
     ;;
 
-    let%test_unit "tailstorm8discount/draft/random" =
-      test (tailstorm_draft ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+    let n = "tailstorm8discount/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (tailstorm_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+    ;;
+
+    let n = "tailstormll8constant/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+    ;;
+
+    let n = "tailstormll8discount/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (tailstormll_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
     ;;
   end)
 ;;

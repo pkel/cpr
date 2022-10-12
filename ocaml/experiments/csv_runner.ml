@@ -30,8 +30,9 @@ type row =
   ; strategy : string
   ; strategy_description : string
   ; reward : float array
-  ; ca_time : float
-  ; ca_height : int
+  ; head_time : float
+  ; head_height : int
+  ; head_progress : float
   ; machine_duration_s : float
   ; error : string
   ; version : string
@@ -63,8 +64,9 @@ let save_rows_as_tsv filename l =
       ~strategy:string
       ~strategy_description:string
       ~reward:(array string_of_float)
-      ~ca_time:float
-      ~ca_height:int
+      ~head_time:float
+      ~head_height:int
+      ~head_progress:float
       ~machine_duration_s:float
       ~error:string
       ~version:string
@@ -98,8 +100,9 @@ let prepare_row (Task { activations; network; protocol; attack; sim }) =
   ; strategy
   ; strategy_description
   ; reward = [||]
-  ; ca_time = 0.
-  ; ca_height = 0
+  ; head_time = 0.
+  ; head_height = 0
+  ; head_progress = 0.
   ; machine_duration_s = Float.nan
   ; error = ""
   ; version = Cpr_lib.version
@@ -118,7 +121,7 @@ let run task =
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
     loop ~activations:t.activations sim;
-    let head = head sim in
+    let head = head sim |> Dag.data in
     (* incentive stats *)
     Collection.map_to_list
       (fun rewardfn ->
@@ -129,8 +132,9 @@ let run task =
         ; incentive_scheme = rewardfn.key
         ; incentive_scheme_description = rewardfn.info
         ; reward
-        ; ca_time = (Dag.data head).appended_at
-        ; ca_height = Protocol.height (Dag.data head).value
+        ; head_time = timestamp head
+        ; head_height = Protocol.height head.value
+        ; head_progress = Protocol.progress head.value
         ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
         ; error = ""
         })

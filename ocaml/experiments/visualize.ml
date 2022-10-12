@@ -91,10 +91,36 @@ let tasks_per_attack_space (AttackSpace (module A)) n_activations =
               })
           A.policies)
       [ 0.25; 0.33; 0.5 ]
+  @ List.concat_map
+      (fun alpha ->
+        Collection.map_to_list
+          (fun policy ->
+            let attack =
+              Collection.
+                { key = A.key ^ "-" ^ policy.key
+                ; info = A.info ^ "; " ^ policy.info
+                ; it = A.attacker policy.it
+                }
+            in
+            let sim, network = selfish_mining ~defenders:10 ~alpha 0.9 protocol attack in
+            Csv_runner.Task
+              { activations = n_activations
+              ; protocol
+              ; attack = Some attack
+              ; sim
+              ; network
+              })
+          A.policies)
+      [ 0.25; 0.33; 0.5 ]
 ;;
 
 let tasks =
   let open Cpr_protocols in
+  let tailstorm, tailstorm_ssz =
+    let open Tailstorm in
+    ( tailstorm ~subblock_selection:Optimal ~rewards:Discount
+    , tailstorm_ssz ~subblock_selection:Optimal ~rewards:Discount )
+  in
   List.concat
     [ tasks_per_attack_space nakamoto_ssz 30
     ; tasks_per_attack_space ethereum_ssz 30
@@ -104,47 +130,40 @@ let tasks =
     ; tasks_per_attack_space (bkll_ssz ~k:8) 100
     ; tasks_per_attack_space (bkll_ssz ~k:4) 50
     ; tasks_per_attack_space (bkll_ssz ~k:1) 20
+    ; tasks_per_attack_space (tailstorm_ssz ~k:8) 50
+    ; tasks_per_attack_space (tailstorm_ssz ~k:4) 25
+    ; tasks_per_attack_space (tailstorm_ssz ~k:1) 20
+    ; tasks_per_protocol (tailstorm ~k:8) 50
+    ; tasks_per_protocol (tailstorm ~k:4) 25
+    ; tasks_per_protocol (tailstorm ~k:1) 20
     ]
   @ List.concat_map
       (fun rewards ->
         List.concat
           [ tasks_per_attack_space
-              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k:8)
+              (tailstormll_ssz ~subblock_selection:Optimal ~rewards ~k:8)
               100
           ; tasks_per_attack_space
-              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k:4)
+              (tailstormll_ssz ~subblock_selection:Optimal ~rewards ~k:4)
               50
           ; tasks_per_attack_space
-              (tailstorm_ssz ~subblock_selection:Optimal ~rewards ~k:1)
-              20
-          ; tasks_per_attack_space
-              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k:8)
-              100
-          ; tasks_per_attack_space
-              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k:4)
-              50
-          ; tasks_per_attack_space
-              (tailstorm_draft ~subblock_selection:Optimal ~rewards ~k:1)
+              (tailstormll_ssz ~subblock_selection:Optimal ~rewards ~k:1)
               20
           ])
-      Tailstorm.reward_schemes
+      Tailstormll.reward_schemes
 ;;
 
-let print_dag oc (sim, confirmed, rewards, legend, label_vtx, label_node) =
+let print_dag oc (sim, confirmed, rewards, legend, vtx_info) =
   let open Simulator in
   let node_attr n =
     let open Simulator in
-    let d = Dag.data n in
     [ ( "label"
-      , Printf.sprintf
-          "%s | %s | t:%.1f%s | r:%.2g"
-          (label_vtx d.value)
-          (label_node d.appended_by)
-          d.appended_at
-          (if d.released_at <> d.appended_at
-          then Printf.sprintf "-%.1f" d.released_at
-          else "")
-          rewards.(Dag.id n) )
+      , debug_info ~info:vtx_info n
+        @ [ "reward", Printf.sprintf "%.2f" rewards.(Dag.id n) ]
+        |> List.map (function
+               | "", s | s, "" -> s
+               | k, v -> k ^ ": " ^ v)
+        |> String.concat "\\n" )
     ; ("color", if confirmed.(Dag.id n) then "black" else "red")
     ]
   in
@@ -187,12 +206,7 @@ let run (Csv_runner.Task t) =
           File.with_oc
             path
             print_dag
-            ( env
-            , confirmed
-            , rewards
-            , legend (Task t) ~rewardfn
-            , Protocol.describe
-            , node_name (Task t) ))
+            (env, confirmed, rewards, legend (Task t) ~rewardfn, Ref.info))
       |> Result.join
       |> Rresult.R.failwith_error_msg)
     Ref.reward_functions

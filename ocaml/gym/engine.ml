@@ -72,12 +72,12 @@ end
 type 'data agent =
   | Agent :
       { preferred : 'state -> 'data Simulator.env Dag.vertex
-      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) vertex_proposal
+      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) draft_vertex
       ; init : roots:'data Simulator.env Dag.vertex list -> 'state
       ; prepare : 'state -> 'data Simulator.env event -> 'observable
       ; observe : 'observable -> floatarray
       ; observe_hum : 'observable -> string
-      ; apply : 'observable -> int -> ('data Simulator.env, 'state) handler_return
+      ; apply : 'observable -> int -> ('data Simulator.env, 'data, 'state) action
       ; mutable state : 'observable
       }
       -> 'data agent
@@ -126,7 +126,11 @@ let dummy_node
     end)
 ;;
 
-let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
+let of_module
+    ?(logger = Log.dummy_logger)
+    (AttackSpace (module M))
+    ~(reward : string)
+    (p : Parameters.t)
     : instance ref env
   =
   let network =
@@ -140,12 +144,17 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
   let rec skip_to_interaction sim puzzle_payload =
     let open Simulator in
     match dequeue sim with
-    | Some (ForNode (0, ev)) -> ev
-    | Some (FromNode (0, PuzzleProposal _)) ->
-      let payload = puzzle_payload () in
-      let vertex = extend_dag ~pow:true sim 0 payload in
-      let () = sim.check_dag vertex in
-      schedule sim.clock 0. (ForNode (0, PuzzleSolved vertex));
+    | Some (OnNode (0, ev)) -> ev
+    | Some (Dag (0, `ProofOfWork, _draft)) ->
+      let draft = puzzle_payload () in
+      let vertex =
+        match append ~pow:true sim 0 draft with
+        | `Fresh, x ->
+          let () = check_vertex sim x in
+          x
+        | `Redundant, _ -> failwith "proof-of-work appended vertices should be fresh"
+      in
+      schedule sim.clock `Now (MakeVisible (0, `ProofOfWork, vertex));
       skip_to_interaction sim puzzle_payload
     | Some ev ->
       handle_event sim ev;
@@ -158,7 +167,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       | 0 -> Some (dummy_node (module M.Protocol))
       | _ -> None
     in
-    let sim = init ~patch (module M.Protocol) network in
+    let sim = init ~logger ~patch (module M.Protocol) network in
     let reward_function =
       let (module Ref) = sim.referee in
       match Collection.get reward Ref.reward_functions with
@@ -233,12 +242,9 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     let (module Protocol) = t.protocol in
     (* Apply action i to the simulator state. *)
     let state =
-      let ret = a.apply a.state action in
-      let () =
-        let open Simulator in
-        List.iter (fun m -> schedule t.sim.clock 0. (FromNode (0, Share m))) ret.share
-      in
-      ret.state
+      let act = a.apply a.state action in
+      Simulator.handle_action t.sim 0 act;
+      act.state
     in
     let () = t.episode_steps <- t.episode_steps + 1 in
     (* Fast forward simulation till next attacker action. *)
@@ -277,10 +283,10 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
     let () =
       let f vertex =
         let open Simulator in
-        if Option.is_some (Dag.data vertex).pow_hash then incr n_pow else ();
+        if Option.is_some (Dag.data vertex).pow then incr n_pow else ();
         t.reward_function
           ~assign:(fun reward vertex ->
-            match (Dag.data vertex).appended_by with
+            match reward_recipient vertex with
             | None -> ()
             | Some 0 -> reward_attacker := !reward_attacker +. reward
             | Some _ -> reward_defender := !reward_defender +. reward)
@@ -288,7 +294,7 @@ let of_module (AttackSpace (module M)) ~(reward : string) (p : Parameters.t)
       in
       Ref.history head |> Seq.iter f
     in
-    let chain_time = (Dag.data head).appended_at
+    let chain_time = Simulator.timestamp (Dag.data head)
     and sim_time = t.sim.clock.now in
     (* Calculate return/info metrics *)
     let reward = !reward_attacker -. t.last_reward_attacker

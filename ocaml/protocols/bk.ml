@@ -28,7 +28,11 @@ module Make (Parameters : Parameters) = struct
     | Block x -> x.height
   ;;
 
-  let progress x = (height x * k) + 1 |> float_of_int
+  let progress x =
+    match x with
+    | Vote _ -> (height x * k) + 1 |> float_of_int
+    | Block _ -> height x * k |> float_of_int
+  ;;
 
   let describe = function
     | Vote x -> "vote by " ^ string_of_int x.id
@@ -39,6 +43,13 @@ module Make (Parameters : Parameters) = struct
 
   module Referee (V : GlobalView with type data = data) = struct
     include V
+
+    let info x =
+      let open Info in
+      match x with
+      | Vote x -> [ string "kind" "vote"; int "height" x.height; int "id" x.id ]
+      | Block x -> [ string "kind" "block"; int "height" x.height ]
+    ;;
 
     let is_vote x =
       match data x with
@@ -77,8 +88,8 @@ module Make (Parameters : Parameters) = struct
     let blocks_only = Dag.filter is_block view
 
     let dag_validity vertex =
-      let has_pow x = pow_hash x |> Option.is_some
-      and pow_hash x = pow_hash x |> Option.get in
+      let has_pow x = pow x |> Option.is_some
+      and pow_hash x = pow x |> Option.get in
       match data vertex, Dag.parents view vertex with
       | Vote v, [ p ] -> has_pow vertex && is_block p && v.height = height p
       | Block b, pblock :: vote0 :: votes ->
@@ -95,7 +106,7 @@ module Make (Parameters : Parameters) = struct
           p.height + 1 = b.height
           && nvotes = k
           && ordered_votes
-          && signed_by vertex = Some leader.id
+          && signature vertex = Some leader.id
         | _ -> false)
       | _ -> false
     ;;
@@ -165,41 +176,48 @@ module Make (Parameters : Parameters) = struct
       | _ -> failwith "invalid roots"
     ;;
 
+    let appended_by_me x =
+      match visibility x with
+      | `Received -> false
+      | `Withheld | `Released -> true
+    ;;
+
     let leader_hash_exn x =
       if not (is_block x) then raise (Invalid_argument "not a block");
       match Dag.parents view x with
       | _b :: v0 :: _ ->
-        (match pow_hash v0 with
+        (match pow v0 with
         | Some x -> x
         | None -> raise (Invalid_argument "invalid dag / vote"))
       | _ ->
         (* happens for genesis node *)
-        max_pow_hash
+        max_pow
     ;;
 
-    let compare_blocks =
+    let compare_blocks ~vote_filter =
       let open Compare in
       let cmp =
         by int block_height_exn
-        $ by int (fun x -> List.length (Dag.children votes_only x))
+        $ by int (fun x ->
+              List.length (Dag.children votes_only x |> List.filter vote_filter))
         $ by (tuple int int |> neg) leader_hash_exn
-        $ by (neg float) delivered_at
+        $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
       in
       skip_eq Dag.vertex_eq cmp
     ;;
 
-    let update_head ~preferred ~consider =
-      if compare_blocks consider preferred > 0 then consider else preferred
+    let update_head ?(vote_filter = Fun.const true) ~old consider =
+      if compare_blocks ~vote_filter consider old > 0 then consider else old
     ;;
 
-    let quorum b =
-      let pow_hash_exn x = pow_hash x |> Option.get in
+    let quorum ~vote_filter b =
+      let pow_hash_exn x = pow x |> Option.get in
       let my_hash, replace_hash, mine, nmine, theirs, ntheirs =
         List.fold_left
           (fun (my_hash, replace_hash, mine, nmine, theirs, ntheirs) x ->
             match data x with
-            | Vote _ ->
-              if appended_by_me x
+            | Vote v ->
+              if v.id = my_id
               then
                 ( min my_hash (pow_hash_exn x)
                 , replace_hash
@@ -210,8 +228,8 @@ module Make (Parameters : Parameters) = struct
               else my_hash, replace_hash, mine, nmine, x :: theirs, ntheirs + 1
             | Block _ ->
               my_hash, min replace_hash (leader_hash_exn x), mine, nmine, theirs, ntheirs)
-          (max_pow_hash, max_pow_hash, [], 0, [], 0)
-          (Dag.children view b)
+          (max_pow, max_pow, [], 0, [], 0)
+          (Dag.children view b |> List.filter vote_filter)
       in
       if replace_hash <= my_hash || nmine + ntheirs < k
       then (* fast path *) None
@@ -231,7 +249,11 @@ module Make (Parameters : Parameters) = struct
         then (* fast path *) None
         else (
           let theirs =
-            Compare.first Compare.(by float delivered_at) (k - nmine) theirs |> Option.get
+            Compare.first
+              Compare.(by float visible_since (* TODO maybe use received_at? *))
+              (k - nmine)
+              theirs
+            |> Option.get
           in
           mine @ theirs
           |> List.sort Compare.(by (tuple int int) pow_hash_exn)
@@ -245,37 +267,28 @@ module Make (Parameters : Parameters) = struct
       }
     ;;
 
-    let propose b =
-      quorum b
+    let propose ?(vote_filter = Fun.const true) b =
+      quorum ~vote_filter b
       |> Option.map (fun q ->
-             let block =
-               extend_dag
-                 { parents = b :: q
-                 ; data = Block { height = block_height_exn b + 1 }
-                 ; sign = true
-                 }
-             in
-             { state = block; share = [ block ] })
+             { parents = b :: q
+             ; data = Block { height = block_height_exn b + 1 }
+             ; sign = true
+             })
     ;;
 
     let handler preferred = function
-      | PuzzleSolved v ->
-        (match propose preferred with
-        | Some ret -> ret
-        | None -> { share = [ v ]; state = preferred })
-      | Deliver x ->
-        (* We only prefer blocks. For received votes, reconsider parent block. *)
+      | Append x | Network x | ProofOfWork x ->
         let b = last_block x in
-        let consider =
-          (* prefer best block of all blocks involved *)
-          List.fold_left
-            (fun preferred consider -> update_head ~preferred ~consider)
-            preferred
+        let append =
+          match propose b with
+          | Some block -> [ block ]
+          | None -> []
+        and share =
+          match visibility x with
+          | `Withheld -> [ x ]
+          | _ -> []
         in
-        (* propose if possible *)
-        (match propose b with
-        | Some ret -> { ret with state = consider [ b; ret.state ] }
-        | None -> { share = []; state = consider [ b ] })
+        update_head ~old:preferred b |> return ~append ~share
     ;;
   end
 

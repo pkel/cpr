@@ -7,15 +7,30 @@ let info = "SSZ'16 attack space"
 
 module Observation = struct
   type t =
-    { public_blocks : int (** number of blocks after common ancestor *)
-    ; private_blocks : int (** number of blocks after common ancestor *)
+    { public_blocks : int (** number of public blocks after common ancestor *)
+    ; private_blocks : int (** number of private blocks after common ancestor *)
     ; diff_blocks : int (** private_blocks - public_blocks *)
+    ; event : int (* What is currently going on? *)
     }
   [@@deriving fields]
 
   let length = List.length Fields.names
-  let low = { public_blocks = 0; private_blocks = 0; diff_blocks = min_int }
-  let high = { public_blocks = max_int; private_blocks = max_int; diff_blocks = max_int }
+
+  let low =
+    { public_blocks = 0
+    ; private_blocks = 0
+    ; diff_blocks = min_int
+    ; event = Ssz_tools.Event.low
+    }
+  ;;
+
+  let high =
+    { public_blocks = max_int
+    ; private_blocks = max_int
+    ; diff_blocks = max_int
+    ; event = Ssz_tools.Event.high
+    }
+  ;;
 
   let to_floatarray t =
     let a = Float.Array.make length Float.nan in
@@ -24,14 +39,27 @@ module Observation = struct
       i + 1
     in
     let int = set float_of_int in
-    let _ = Fields.fold ~init:0 ~public_blocks:int ~private_blocks:int ~diff_blocks:int in
+    let _ =
+      Fields.fold
+        ~init:0
+        ~public_blocks:int
+        ~private_blocks:int
+        ~diff_blocks:int
+        ~event:int
+    in
     a
   ;;
 
   let of_floatarray =
     let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
     let int = get int_of_float in
-    fst (Fields.make_creator 0 ~public_blocks:int ~private_blocks:int ~diff_blocks:int)
+    fst
+      (Fields.make_creator
+         0
+         ~public_blocks:int
+         ~private_blocks:int
+         ~diff_blocks:int
+         ~event:int)
   ;;
 
   let to_string t =
@@ -42,7 +70,7 @@ module Observation = struct
         (to_s (Fieldslib.Field.get field t))
     in
     let int = conv string_of_int in
-    Fields.to_list ~public_blocks:int ~private_blocks:int ~diff_blocks:int
+    Fields.to_list ~public_blocks:int ~private_blocks:int ~diff_blocks:int ~event:int
     |> String.concat "\n"
   ;;
 
@@ -52,6 +80,7 @@ module Observation = struct
         { public_blocks = Random.bits ()
         ; private_blocks = Random.bits ()
         ; diff_blocks = Random.bits ()
+        ; event = Random.bits ()
         }
       in
       t = (to_floatarray t |> of_floatarray)
@@ -102,156 +131,80 @@ end
 
 module Agent (V : LocalView with type data = data) = struct
   include V
+  module N = Honest (V)
 
-  module State : sig
-    type t = private
-      { public : env Dag.vertex (* defender's preferred block *)
-      ; private_ : env Dag.vertex (* attacker's preferred block *)
-      ; common : env Dag.vertex (* common chain *)
-      ; pending_private_to_public_messages : env Dag.vertex list
-      }
-
-    val init : env Dag.vertex -> t
-
-    (* Set fields in state; updates common chain *)
-    val update
-      :  ?public:env Dag.vertex
-      -> ?private_:env Dag.vertex
-      -> ?pending_private_to_public_messages:env Dag.vertex list
-      -> t
-      -> t
-  end = struct
-    type t =
-      { public : env Dag.vertex
-      ; private_ : env Dag.vertex
-      ; common : env Dag.vertex
-      ; pending_private_to_public_messages : env Dag.vertex list
-      }
-
-    let init x =
-      { public = x; private_ = x; common = x; pending_private_to_public_messages = [] }
-    ;;
-
-    (* call this whenever public or private_ changes *)
-    let set_common state =
-      let common = Dag.common_ancestor view state.public state.private_ in
-      assert (Option.is_some common) (* all our protocols maintain this invariant *);
-      { state with common = Option.get common }
-    ;;
-
-    let update ?public ?private_ ?pending_private_to_public_messages t =
-      set_common
-        { public = Option.value ~default:t.public public
-        ; private_ = Option.value ~default:t.private_ private_
-        ; common = t.common
-        ; pending_private_to_public_messages =
-            Option.value
-              ~default:t.pending_private_to_public_messages
-              pending_private_to_public_messages
+  type state =
+    | BetweenActions of
+        { public : env Dag.vertex (* defender's preferred block *)
+        ; private_ : env Dag.vertex (* attacker's preferred block *)
+        ; pending_private_to_public_messages :
+            env Dag.vertex list (* messages sent with last action *)
         }
-    ;;
-  end
 
-  type state = State.t
-  type observable_state = Observable of state
+  type state_before_action =
+    | BeforeAction of
+        { public : env Dag.vertex
+        ; private_ : env Dag.vertex
+        }
 
-  let preferred (s : state) = s.private_
-
-  let puzzle_payload (s : state) =
-    let module N = Honest (V) in
-    N.puzzle_payload s.private_
-  ;;
+  type observable_state =
+    | Observable of
+        { public : env Dag.vertex
+        ; private_ : env Dag.vertex
+        ; common : env Dag.vertex
+        ; event : [ `ProofOfWork | `Network ]
+        }
 
   let init ~roots =
-    let module N = Honest (V) in
-    N.init ~roots |> State.init
+    let root = N.init ~roots in
+    BetweenActions
+      { private_ = root; public = root; pending_private_to_public_messages = [] }
   ;;
 
-  (* the attacker emulates a defending node. This is the local_view of the defender *)
+  let preferred (BetweenActions s) = s.private_
+  let puzzle_payload (BetweenActions s) = N.puzzle_payload s.private_
 
-  let public_visibility (s : state) x =
-    Dag.partial_order s.common x >= 0 || not (appended_by_me x)
-  ;;
-
-  let public_view (s : state) : (env, data) local_view =
-    (module struct
-      include V
-
-      let view = Dag.filter (public_visibility s) view
-
-      (* The attacker simulates an honest node on the public view. This node should not
-         interpret attacker vertices as own vertices. *)
-      let appended_by_me _vertex = false
-    end)
-  ;;
-
-  (* the attacker works on a subset of the total information: he ignores new defender
-     blocks *)
-
-  let private_visibility (s : state) x =
-    Dag.partial_order s.common x >= 0 || appended_by_me x
-  ;;
-
-  let private_view (s : state) : (env, data) local_view =
-    (module struct
-      include V
-
-      let view = Dag.filter (private_visibility s) view
-    end)
-  ;;
-
-  (* the attacker emulates a defending node. This describes the defender node *)
-  let handle_public (s : state) event =
-    let (module V) = public_view s in
-    let open Honest (V) in
-    let public = (handler s.public event).state in
-    State.update ~public s
-  ;;
-
-  (* this describes the attacker node *)
-  let handle_private (s : state) event =
-    let (module V) = private_view s in
-    let open Honest (V) in
-    let private_ = (handler s.private_ event).state in
-    State.update ~private_ s
-  ;;
-
-  let prepare (state : state) event =
-    let state =
-      let pending = state.pending_private_to_public_messages in
+  let deliver_private_to_public_messages (BetweenActions state) =
+    let public =
       List.fold_left
-        (fun state msg -> handle_public state (Deliver msg))
-        (State.update ~pending_private_to_public_messages:[] state)
-        pending
+        (fun old consider -> N.update_head ~old consider)
+        state.public
+        state.pending_private_to_public_messages
     in
-    match event with
-    | PuzzleSolved _ ->
-      (* work on private chain *)
-      handle_private state event
-    | Deliver x ->
-      let state =
-        (* simulate defender *)
-        handle_public state event
-      in
-      (* deliver visible (not ignored) messages *)
-      if private_visibility state x then handle_private state event else state
+    BeforeAction { public; private_ = state.private_ }
   ;;
 
-  let prepare s e = Observable (prepare s e)
+  let prepare (BeforeAction state) event =
+    let public, private_, event =
+      match event with
+      | Append _ -> failwith "not implemented"
+      | Network x ->
+        (* simulate defender *)
+        N.update_head ~old:state.public x, state.private_, `Network
+      | ProofOfWork x ->
+        (* work on private chain *)
+        state.public, x, `ProofOfWork
+    in
+    let common = Dag.common_ancestor view public private_ |> Option.get in
+    Observable { public; private_; common; event }
+  ;;
 
-  let observe (Observable s) =
+  let prepare state = deliver_private_to_public_messages state |> prepare
+
+  let observe (Observable state) =
     let open Observation in
     let block_height vertex = height (data vertex) in
-    let ca_height = block_height s.common
-    and private_height = block_height s.private_
-    and public_height = block_height s.public in
+    let ca_height = block_height state.common
+    and private_height = block_height state.private_
+    and public_height = block_height state.public in
     { private_blocks = private_height - ca_height
     ; public_blocks = public_height - ca_height
     ; diff_blocks = private_height - public_height
+    ; event = Ssz_tools.Event.to_int state.event
     }
   ;;
 
-  let interpret (s : state) action =
+  let apply (Observable state) action =
     let parent vtx =
       match Dag.parents view vtx with
       | [ x ] -> Some x
@@ -260,28 +213,25 @@ module Agent (V : LocalView with type data = data) = struct
     let match_ offset =
       let h =
         (* height of to be released block *)
-        height (data s.public) + offset
+        height (data state.public) + offset
       in
       (* look for to be released block backwards from private head *)
       let rec f b = if height (data b) <= h then b else parent b |> Option.get |> f in
-      [ f s.private_ ]
+      [ f state.private_ ]
       (* NOTE: if private height is smaller target height, then private head is
          released. *)
     in
-    match (action : Action.t) with
-    | Adopt -> [], State.update ~private_:s.public s
-    | Match -> match_ 0, s
-    | Override -> match_ 1, s
-    | Wait -> [], s
+    let share, private_ =
+      match (action : Action.t) with
+      | Adopt -> [], state.public
+      | Match -> match_ 0, state.private_
+      | Override -> match_ 1, state.private_
+      | Wait -> [], state.private_
+    in
+    BetweenActions
+      { private_; public = state.public; pending_private_to_public_messages = share }
+    |> return ~share
   ;;
-
-  let conclude (pending_private_to_public_messages, state) =
-    { share = pending_private_to_public_messages
-    ; state = State.update ~pending_private_to_public_messages state
-    }
-  ;;
-
-  let apply (Observable state) action = interpret state action |> conclude
 end
 
 let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =

@@ -37,7 +37,7 @@ let two_agents ~alpha protocol attack =
   in
   ( Collection.
       { it
-      ; key = Printf.sprintf "two-agents-%g" alpha
+      ; key = Printf.sprintf "two-agents"
       ; info =
           Printf.sprintf "2 nodes, alpha=%g, no propagation delays" alpha
           (* TODO: describe delay distribution *)
@@ -70,7 +70,7 @@ let selfish_mining ?(msg_delay = 1. /. 10000.) ~defenders ~alpha gamma protocol 
   in
   ( Collection.
       { it
-      ; key = Printf.sprintf "gamma-%g-alpha-%g" gamma alpha
+      ; key = Printf.sprintf "gamma-%g" gamma
       ; info =
           Printf.sprintf
             "1 attacker, alpha=%g, %i symmetric defenders, constant propagation delays \

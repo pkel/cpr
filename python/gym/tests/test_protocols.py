@@ -127,3 +127,28 @@ def test_tailstorm(capsys):
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(env.policy(obs, "override-catchup"))
+
+
+def test_tailstormll(capsys):
+    env = gym.make(
+        "cpr_gym:core-v0",
+        proto=protocols.tailstormll(k=13, reward="discount"),
+        alpha=0.33,
+        gamma=0.8,
+        defenders=5,
+    )
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == (
+        "Tailstorm/ll with k=13, 'discount' rewards, and 'optimal' sub block selection; "
+        "SSZ'16-like attack space; α=0.33 attacker"
+    )
+    assert env.puzzles_per_block() == 13
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "override-catchup"))
