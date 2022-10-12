@@ -1,0 +1,25 @@
+{
+  "name": "cpr-logviewer",
+  "version": "0.0.0",
+  "description": "This is a (WIP) viewer for protocol executions",
+  "main": "index.js",
+  "scripts": {
+    "start": "kotatsu serve --typescript index.ts"
+  },
+  "kotatsu": {
+    "progress": true,
+    "public": ["/", "./public"]
+  },
+  "license": "MIT",
+  "dependencies": {
+    "graphology": "^0.23.0",
+    "graphology-graphml": "^0.5.1",
+    "graphology-layout": "^0.6.1",
+    "graphology-layout-forceatlas2": "^0.9.2",
+    "sigma": "^2.3.1"
+  },
+  "devDependencies": {
+    "kotatsu": "^0.22.3",
+    "typescript": "^4.8.0"
+  }
+}
