@@ -13,7 +13,7 @@ let fpath (Csv_runner.Task t) ~rewardfn =
     ]
     @
     match t.attack with
-    | Some x -> [ x.key ]
+    | Some x -> [ x.key; Printf.sprintf "alpha=%g" t.network.nodes.(0).compute ]
     | None -> []
   in
   Fpath.v (String.concat ":" l ^ ".dot")
