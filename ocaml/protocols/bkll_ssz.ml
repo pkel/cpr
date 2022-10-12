@@ -280,14 +280,10 @@ module Make (Parameters : Bkll.Parameters) = struct
       in
       let share, private_ =
         match (action : Action.t) with
-        | Adopt_Proceed -> [], state.public
-        | Adopt_Prolong -> [], state.public
-        | Match_Proceed -> release `Match, state.private_
-        | Match_Prolong -> release `Match, state.private_
-        | Override_Proceed -> release `Override, state.private_
-        | Override_Prolong -> release `Override, state.private_
-        | Wait_Proceed -> [], state.private_
-        | Wait_Prolong -> [], state.private_
+        | Adopt_Proceed | Adopt_Prolong -> [], state.public
+        | Match_Proceed | Match_Prolong -> release `Match, state.private_
+        | Override_Proceed | Override_Prolong -> release `Override, state.private_
+        | Wait_Proceed | Wait_Prolong -> [], state.private_
       and mining =
         match action with
         | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed -> `Inclusive

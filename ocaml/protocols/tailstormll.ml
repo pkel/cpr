@@ -69,6 +69,7 @@ module Make (Parameters : Parameters) = struct
     }
 
   let height h = h.block
+  let depth h = h.vote
   let progress x = (x.block * k) + x.vote |> float_of_int
   let is_vote h = h.vote > 0
   let is_block h = h.vote = 0
@@ -98,6 +99,7 @@ module Make (Parameters : Parameters) = struct
     let is_vote x = is_vote (data x)
     let is_block x = is_block (data x)
     let height x = height (data x)
+    let depth x = depth (data x)
 
     let rec last_block x =
       if is_block x
@@ -530,23 +532,35 @@ module Make (Parameters : Parameters) = struct
 
     let puzzle_payload = puzzle_payload' ~vote_filter:(fun _ -> true)
 
-    let handler b = function
+    let compare_blocks ~vote_filter =
+      let open Compare in
+      let count x =
+        Dag.iterate_descendants votes_only [ x ]
+        |> Seq.filter vote_filter
+        |> Seq.fold_left (fun n _ -> n + 1) 0
+      in
+      let cmp =
+        by int height
+        $ by int count (* embed A_k *)
+        $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
+      in
+      skip_eq Dag.vertex_eq cmp
+    ;;
+
+    let update_head ?(vote_filter = Fun.const true) ~old consider =
+      if compare_blocks ~vote_filter consider old > 0 then consider else old
+    ;;
+
+    let handler preferred = function
       | Append _x -> failwith "not implemented"
       | ProofOfWork x | Network x ->
+        let b = last_block x in
         let share =
           match visibility x with
           | `Withheld -> [ x ]
           | _ -> []
-        and pref =
-          let c = last_block x in
-          let count x =
-            Dag.iterate_descendants votes_only [ x ] |> Seq.fold_left (fun n _ -> n + 1) 0
-          in
-          if height c > height b || (height c = height b && count c > count b)
-          then c
-          else b
         in
-        return ~share pref
+        update_head ~old:preferred b |> return ~share
     ;;
   end
 
