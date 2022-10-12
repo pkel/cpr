@@ -533,43 +533,32 @@ module Make (Parameters : Parameters) = struct
 
     let next_summary = next_summary' ~vote_filter:(fun _ -> true)
 
-    let update_head ~preferred:p ~consider:c =
+    let compare_blocks ~vote_filter =
+      let open Compare in
       let count x =
-        Dag.iterate_descendants votes_only [ x ] |> Seq.fold_left (fun n _ -> n + 1) 0
+        Dag.iterate_descendants votes_only [ x ]
+        |> Seq.filter vote_filter
+        |> Seq.fold_left (fun n _ -> n + 1) 0
+      and depth_first_parent x =
+        (* disambiguate summaries w/o confirming votes. Needed because summaries are cheap
+           and formed opportunistically. *)
+        Dag.parents view x
+        |> function
+        | [] -> 0
+        | hd :: _ -> depth hd
       in
-      let hc, hp = height c, height p in
-      if hc > hp
-      then (* longest chain of summaries *) c
-      else if hc = hp
-      then (
-        let cc, cp = count c, count p in
-        if cc > cp
-        then (* A_k embedding to disambiguate summaries of same height *) c
-        else if cc = cp
-        then (
-          (* disambiguate summaries w/o confirming votes. Needed because summaries are
-             cheap and formed opportunistically. TODO. This effort to disambiguate
-             security does not (fully) mitigate the inequality problems of the protocol as
-             compared to tailstorm/ll. If the inequality is caused by a different bug,
-             then come here and revise. Maybe what we do here is not required. *)
-          let depth_first_parent x =
-            Dag.parents view x
-            |> function
-            | [] -> 0
-            | hd :: _ -> depth hd
-          in
-          let dfpc, dfpp = depth_first_parent c, depth_first_parent p in
-          if dfpc > dfpp
-          then c
-          else if dfpc = dfpp
-          then (
-            let oracle x =
-              Dag.parents view x |> List.fold_left (fun acc x -> Hashtbl.hash (acc, x)) 0
-            in
-            if oracle c > oracle p then c else p)
-          else p)
-        else p)
-      else p
+      let cmp =
+        by int height
+        $ by int count (* embed A_k *)
+        $ by int depth_first_parent
+          (* TODO. prefer most reward block? Or the one with the lowest hash? *)
+        $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
+      in
+      skip_eq Dag.vertex_eq cmp
+    ;;
+
+    let update_head ?(vote_filter = Fun.const true) ~old consider =
+      if compare_blocks ~vote_filter consider old > 0 then consider else old
     ;;
 
     let handler preferred = function
@@ -584,7 +573,7 @@ module Make (Parameters : Parameters) = struct
           | `Withheld (* TODO when is_vote x *) -> [ x ]
           | _ -> []
         in
-        update_head ~preferred ~consider:s |> return ~append ~share
+        update_head ~old:preferred s |> return ~append ~share
     ;;
   end
 
