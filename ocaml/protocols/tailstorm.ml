@@ -570,7 +570,7 @@ module Make (Parameters : Parameters) = struct
           | None -> []
         and share =
           match visibility x with
-          | `Withheld (* TODO when is_vote x *) -> [ x ]
+          | `Withheld when is_vote x -> [ x ]
           | _ -> []
         in
         update_head ~old:preferred s |> return ~append ~share
