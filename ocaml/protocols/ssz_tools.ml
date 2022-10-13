@@ -1,5 +1,23 @@
 open Cpr_lib
 
+module Event = struct
+  let events = [ `Append; `Network; `ProofOfWork ]
+
+  let to_int = function
+    | `Append -> 0
+    | `Network -> 1
+    | `ProofOfWork -> 2
+  ;;
+
+  let of_int =
+    let a = Array.of_list events in
+    fun i -> a.(i)
+  ;;
+
+  let low = List.map to_int events |> List.fold_left min max_int
+  let high = List.map to_int events |> List.fold_left max min_int
+end
+
 module Action8 = struct
   type t =
     | Adopt_Prolong

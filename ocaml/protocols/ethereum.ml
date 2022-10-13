@@ -63,8 +63,13 @@ module Make (Parameters : Parameters) = struct
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
+    let info x =
+      let open Info in
+      [ int "height" x.height; int "work" x.work ]
+    ;;
+
     let dag_validity b =
-      match pow_hash b, Dag.parents view b with
+      match pow b, Dag.parents view b with
       | Some _, p :: uncles ->
         let pd = data p
         and bd = data b
@@ -186,6 +191,12 @@ module Make (Parameters : Parameters) = struct
       | _ -> failwith "invalid roots"
     ;;
 
+    let appended_by_me x =
+      match visibility x with
+      | `Received -> false
+      | `Withheld | `Released -> true
+    ;;
+
     let uncle_preference =
       let open Compare in
       (* better is lower | better is first after sorting *)
@@ -236,14 +247,22 @@ module Make (Parameters : Parameters) = struct
 
     let puzzle_payload = puzzle_payload' ~uncle_filter:(fun _ -> true)
 
+    let update_head ~old candidate =
+      let o = data old
+      and c = data candidate in
+      if preference c > preference o then candidate else old
+    ;;
+
     let handler state = function
-      | PuzzleSolved vertex -> { state = vertex; share = [ vertex ] }
-      | Deliver vertex ->
-        let consider = data vertex
-        and preferred = data state in
-        { share = []
-        ; state = (if preference consider > preference preferred then vertex else state)
-        }
+      | Append _ -> failwith "not implemented"
+      | ProofOfWork vertex | Network vertex ->
+        let state = update_head ~old:state vertex
+        and share =
+          match visibility vertex with
+          | `Withheld -> [ vertex ]
+          | `Received | `Released -> []
+        in
+        return ~share state
     ;;
   end
 

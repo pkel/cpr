@@ -80,19 +80,28 @@ let tasks ~n_activations =
               selfish_mining (tailstorm_ssz ~subblock_selection ~rewards ~k) n_activations)
             k)
       Tailstorm.[ Constant; Discount ]
-  and tailstorm' =
+  and tailstormll =
     List.concat_map
       (fun rewards ->
         List.concat_map
           (fun k ->
             let subblock_selection =
-              if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
+              if k > 8 then Tailstormll.Heuristic else Tailstormll.Optimal
             in
-            two_agents (tailstorm_draft ~subblock_selection ~rewards ~k) n_activations)
-          k)
-      Tailstorm.[ Constant; Discount ]
+            two_agents (tailstormll_ssz ~subblock_selection ~rewards ~k) n_activations)
+          k
+        @ List.concat_map
+            (fun k ->
+              let subblock_selection =
+                if k > 8 then Tailstormll.Heuristic else Tailstormll.Optimal
+              in
+              selfish_mining
+                (tailstormll_ssz ~subblock_selection ~rewards ~k)
+                n_activations)
+            k)
+      Tailstormll.[ Constant; Discount ]
   in
-  List.concat [ nakamoto; ethereum; bk; bkll; tailstorm; tailstorm' ]
+  List.concat [ nakamoto; ethereum; bk; bkll; tailstorm; tailstormll ]
 ;;
 
 open Cmdliner

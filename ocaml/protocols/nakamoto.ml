@@ -14,8 +14,13 @@ let dag_roots = [ { height = 0 } ]
 module Referee (V : GlobalView with type data = data) = struct
   include V
 
+  let info x =
+    let open Info in
+    [ "height", Int x.height ]
+  ;;
+
   let dag_validity vertex =
-    match pow_hash vertex, Dag.parents view vertex with
+    match pow vertex, Dag.parents view vertex with
     | Some _, [ p ] ->
       let child = data vertex
       and p = data p in
@@ -65,14 +70,16 @@ module Honest (V : LocalView with type data = data) = struct
     { sign = false; parents = [ state ]; data = { height = (data state).height + 1 } }
   ;;
 
+  let update_head ~old candidate =
+    let o = data old
+    and c = data candidate in
+    if c.height > o.height then candidate else old
+  ;;
+
   let handler state = function
-    | PuzzleSolved vertex -> { state = vertex; share = [ vertex ] }
-    | Deliver vertex ->
-      let consider = data vertex
-      and preferred = data state in
-      { share = []
-      ; state = (if consider.height > preferred.height then vertex else state)
-      }
+    | Append _ -> failwith "not implemented"
+    | Network vertex -> update_head ~old:state vertex |> return
+    | ProofOfWork vertex -> return ~share:[ vertex ] vertex
   ;;
 end
 

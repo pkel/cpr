@@ -19,7 +19,11 @@ let uniform ~lower ~upper =
 ;;
 
 let exponential ~ev =
-  let sample () = -1. *. ev *. log (Random.float 1.) in
+  let sample () =
+    let x = -1. *. ev *. log (Random.float 1.) in
+    assert (x > 0.);
+    x
+  in
   { sample; string = lazy (Printf.sprintf "exponential %g" ev) }
 ;;
 

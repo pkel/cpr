@@ -1,7 +1,10 @@
-(** Simulator events as they are applied to single network nodes *)
+(** Simulator events as they are applied to single network nodes. Something
+  turns visible on the DAG. Either appended on request, received from the
+    network, or authorized with proof-of-work. *)
 type 'env event =
-  | PuzzleSolved of 'env Dag.vertex
-  | Deliver of 'env Dag.vertex
+  | Append of 'env Dag.vertex
+  | Network of 'env Dag.vertex
+  | ProofOfWork of 'env Dag.vertex
 
 module type GlobalView = sig
   (** what the simulator stores on each DAG vertex. Opaque to the protocol *)
@@ -17,14 +20,16 @@ module type GlobalView = sig
   val data : env Dag.vertex -> data
 
   (** return the id of the signer, if the DAG vertex was signed. *)
-  val signed_by : env Dag.vertex -> int option
+  val signature : env Dag.vertex -> int option
 
   (** return the proof-of-work hash of the DAG vertex, if the vertex was attached with
       proof-of-work authorization. *)
-  val pow_hash : env Dag.vertex -> (int * int) option
+  val pow : env Dag.vertex -> (int * int) option
 
-  val max_pow_hash : int * int
-  val min_pow_hash : int * int
+  val max_pow : int * int
+  val min_pow : int * int
+
+  (* TODO. Hide type of hash. Provide comparison here. *)
 end
 
 type ('a, 'b) global_view = (module GlobalView with type env = 'a and type data = 'b)
@@ -33,12 +38,18 @@ type ('a, 'b) global_view = (module GlobalView with type env = 'a and type data 
     Typically this is called on the history of the winning chain. *)
 type 'a reward_function = assign:(float -> 'a Dag.vertex -> unit) -> 'a Dag.vertex -> unit
 
+(* TODO change reward function to something more coinbase-like: *)
+(* type 'a reward_function = 'a Dag.vertex -> (int * float) list *)
+
 module type Referee = sig
   include GlobalView
 
   (** restrict DAG extensions. The simulator checks validity for each appended DAG vertex.
       Invalid extensions are not delivered to other nodes. *)
   val dag_validity : env Dag.vertex -> bool
+
+  (** Provide metadata for DAG vertex *)
+  val info : data -> Info.t
 
   (** When calculating rewards, the simulator will consider the preferred vertices of all
       nodes. This functions determines the best vertex. The reward function will be
@@ -55,7 +66,7 @@ end
 
 type ('a, 'b) referee = (module Referee with type env = 'a and type data = 'b)
 
-type ('env, 'data) vertex_proposal =
+type ('env, 'data) draft_vertex =
   { parents : 'env Dag.vertex list (** hash-references to previous DAG vertices *)
   ; data : 'data (** protocol data attached to the DAG vertices *)
   ; sign : bool (** whether to include a signature or not *)
@@ -66,27 +77,26 @@ module type LocalView = sig
 
   val my_id : int
 
-  (** when was the DAG vertex delivered locally? *)
-  val delivered_at : env Dag.vertex -> float
+  (* Who sees the vertex? Received implies that vertex was first received via network.
+     Released implies that the vertex was appended locally and then shared. Withheld
+     implies appended locally but not (yet) shared. *)
+  val visibility : env Dag.vertex -> [ `Received | `Released | `Withheld ]
 
-  (** was the local vertex already shared with the network? *)
-  val released : env Dag.vertex -> bool
-
-  (** was the vertex appended locally (true) or by another node (false) *)
-  val appended_by_me : env Dag.vertex -> bool
-
-  val extend_dag : (env, data) vertex_proposal -> env Dag.vertex
+  (** Since when is the DAG vertex visible? *)
+  val visible_since : env Dag.vertex -> float
 end
 
 type ('a, 'b) local_view = (module LocalView with type env = 'a and type data = 'b)
 
-(** decisions to be made by a node handler *)
-type ('env, 'state) handler_return =
-  { state : 'state (** new state *)
+type ('env, 'data, 'state) action =
+  { state : 'state (** future state *)
   ; share : 'env Dag.vertex list
-        (** vertices to be shared with the other nodes. All vertices are shared
-            recursively, i.e., including their parents *)
+        (** vertices to be shared with the other nodes. Withheld vertices are
+            shared recursively, i.e., including their parents. *)
+  ; append : ('env, 'data) draft_vertex list (** vertices to be appended to the DAG *)
   }
+
+let return ?(share = []) ?(append = []) state = { state; share; append }
 
 module type Node = sig
   include LocalView
@@ -98,14 +108,14 @@ module type Node = sig
   val init : roots:env Dag.vertex list -> state
 
   (** event handlers *)
-  val handler : state -> env event -> (env, state) handler_return
+  val handler : state -> env event -> (env, data, state) action
 
   (** [puzzle_payload state] defines the content and parents of the currently mined
       vertex. When the node solves a proof-of-work puzzle, the simulator calls
       [puzzle_payload], constructs a corresponding DAG vertex, and hands it to the mining
       node. The simulator raises {Invalid_argument} if the proposed extension does not
       satisfy the DAG invariant specified by the simulated protocol. *)
-  val puzzle_payload : state -> (env, data) vertex_proposal
+  val puzzle_payload : state -> (env, data) draft_vertex
 
   (** returns a node's preferred DAG vertex, typically a leave. Rewards are calculated
       backwards from here *)
@@ -135,7 +145,7 @@ module type Protocol = sig
   (** used for pretty printing protocol DAG vertices. *)
   val describe : data -> string
 
-  (** block height *)
+  (** block height. *)
   val height : data -> int
 
   (** blockchain progress. Measures work spent on the blockchain. Equals height for
@@ -189,11 +199,11 @@ module type AttackSpace = sig
     type observable_state
 
     val preferred : state -> env Dag.vertex
-    val puzzle_payload : state -> (env, data) vertex_proposal
+    val puzzle_payload : state -> (env, data) draft_vertex
     val init : roots:env Dag.vertex list -> state
     val prepare : state -> env event -> observable_state
     val observe : observable_state -> Observation.t
-    val apply : observable_state -> Action.t -> (env, state) handler_return
+    val apply : observable_state -> Action.t -> (env, data, state) action
   end
 
   val policies : (Observation.t -> Action.t) Collection.t
