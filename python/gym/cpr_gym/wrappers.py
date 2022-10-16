@@ -66,7 +66,7 @@ class DenseRewardPerProgressWrapper(gym.Wrapper):
         self.drpb_max_progress = episode_len
         self.drpb_factor = 1 / self.drpb_max_progress
 
-        for k in ["max_steps", "max_time", "max_height", "max_progress"]:
+        for k in ["max_steps", "max_time", "max_progress"]:
             if k in self.env.core_kwargs.keys():
                 self.env.core_kwargs.pop(k, None)
                 warnings.warn(

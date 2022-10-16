@@ -11,12 +11,20 @@ let _ = OS.Dir.create ~path:true outdir |> R.failwith_error_msg
 let protocols =
   let open Cpr_protocols in
   nakamoto
+  :: ethereum ~incentive_scheme:`Discount
   :: List.concat_map
        (fun k ->
-         [ bk ~k; bkll ~k ]
-         @ List.map
-             (fun rewards -> tailstormll ~subblock_selection:Optimal ~k ~rewards)
-             Tailstormll.reward_schemes)
+         List.concat_map
+           (fun incentive_scheme ->
+             [ bk ~k ~incentive_scheme; bkll ~k ~incentive_scheme ])
+           [ `Block; `Constant ]
+         @ List.concat_map
+             (fun incentive_scheme ->
+               let subblock_selection = if k > 8 then `Heuristic else `Optimal in
+               [ tailstorm ~subblock_selection ~incentive_scheme ~k
+               ; tailstormll ~subblock_selection ~incentive_scheme ~k
+               ])
+             [ `Constant; `Discount ])
        [ 1; 2; 4; 8; 16; 32; 64 ]
 ;;
 

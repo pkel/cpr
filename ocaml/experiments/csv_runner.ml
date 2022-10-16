@@ -19,9 +19,7 @@ type row =
   ; network_description : string
   ; compute : float array
   ; protocol : string
-  ; k : int
   ; protocol_description : string
-  ; block_interval : float
   ; activation_delay : float
   ; number_activations : int
   ; activations : int array
@@ -29,9 +27,8 @@ type row =
   ; incentive_scheme_description : string
   ; strategy : string
   ; strategy_description : string
-  ; reward : float array
+  ; reward : floatarray
   ; head_time : float
-  ; head_height : int
   ; head_progress : float
   ; machine_duration_s : float
   ; error : string
@@ -39,6 +36,7 @@ type row =
   }
 [@@deriving fields]
 
+(* TODO save Protocol.info and (Referee.info head) *)
 let save_rows_as_tsv filename l =
   let open Owl_dataframe in
   let df = Fields_of_row.names |> Array.of_list |> make in
@@ -46,7 +44,10 @@ let save_rows_as_tsv filename l =
     let string _ _ x = String x
     and float _ _ x = Float x
     and int _ _ x = Int x
-    and array f _ _ arr = String (Array.to_list arr |> List.map f |> String.concat "|") in
+    and array f _ _ arr = String (Array.to_list arr |> List.map f |> String.concat "|")
+    and floatarray _ _ arr =
+      String (Float.Array.to_list arr |> List.map string_of_float |> String.concat "|")
+    in
     Fields_of_row.Direct.to_list
       row
       ~number_activations:int
@@ -55,17 +56,14 @@ let save_rows_as_tsv filename l =
       ~compute:(array string_of_float)
       ~protocol:string
       ~protocol_description:string
-      ~k:int
-      ~block_interval:float
       ~activation_delay:float
       ~activations:(array string_of_int)
       ~incentive_scheme:string
       ~incentive_scheme_description:string
       ~strategy:string
       ~strategy_description:string
-      ~reward:(array string_of_float)
+      ~reward:floatarray
       ~head_time:float
-      ~head_height:int
       ~head_progress:float
       ~machine_duration_s:float
       ~error:string
@@ -87,21 +85,17 @@ let prepare_row (Task { activations; network; protocol; attack; sim }) =
   { network = sim.key
   ; network_description = sim.info
   ; protocol = Protocol.key
-  ; protocol_description = Protocol.info
-  ; k = Protocol.puzzles_per_block
+  ; protocol_description = Protocol.description
   ; activation_delay = network.activation_delay
   ; number_activations = activations
   ; activations = [||]
   ; compute = [||]
-  ; block_interval =
-      network.activation_delay *. (Protocol.puzzles_per_block |> float_of_int)
   ; incentive_scheme = "none"
   ; incentive_scheme_description = ""
   ; strategy
   ; strategy_description
-  ; reward = [||]
+  ; reward = Float.Array.create 0
   ; head_time = 0.
-  ; head_height = 0
   ; head_progress = 0.
   ; machine_duration_s = Float.nan
   ; error = ""
@@ -121,44 +115,36 @@ let run task =
     let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
     loop ~activations:t.activations sim;
-    let head = head sim |> Dag.data in
-    (* incentive stats *)
-    Collection.map_to_list
-      (fun rewardfn ->
-        let reward = apply_reward_function ~history:Ref.history rewardfn.it sim in
-        { row with
-          activations = sim.activations
-        ; compute
-        ; incentive_scheme = rewardfn.key
-        ; incentive_scheme_description = rewardfn.info
-        ; reward
-        ; head_time = timestamp head
-        ; head_height = Protocol.height head.value
-        ; head_progress = Protocol.progress head.value
-        ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
-        ; error = ""
-        })
-      Ref.reward_functions
+    let head = head sim in
+    let headd = Dag.data head in
+    { row with
+      activations = sim.activations
+    ; compute
+    ; reward = headd.rewards
+    ; head_time = timestamp headd
+    ; head_progress = Ref.progress head
+    ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
+    ; error = ""
+    }
   with
   | e ->
     let bt = Printexc.get_backtrace () in
     let () =
+      ignore (failwith "TODO. Print protocol.info");
       Printf.eprintf
-        "\nRUN:\tnetwork:%s\tprotocol:%s\tk:%d\tstrategy:%s\n"
+        "\nRUN:\tnetwork:%s\tprotocol:%s\tstrategy:%s\n"
         t.sim.key
         Protocol.key
-        Protocol.puzzles_per_block
         (match t.attack with
         | None -> "n/a"
         | Some a -> a.key);
       Printf.eprintf "ERROR:\t%s\n%s" (Printexc.to_string e) bt;
       flush stderr
     in
-    [ { row with
-        error = Printexc.to_string e
-      ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
-      }
-    ]
+    { row with
+      error = Printexc.to_string e
+    ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
+    }
 ;;
 
 let main tasks n_activations n_cores filename =
@@ -185,7 +171,7 @@ let main tasks n_activations n_cores filename =
                  progress 1;
                  l)
                tasks);
-  let rows = List.concat (List.rev !acc) in
+  let rows = List.rev !acc in
   save_rows_as_tsv filename rows
 ;;
 

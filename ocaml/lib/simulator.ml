@@ -6,6 +6,7 @@ type 'a env =
   ; visibility :
       [ `Invisible | `Visible of float * [ `Received | `Released | `Withheld ] ] array
   ; received_at : floatarray (* received but potentially not yet visible *)
+  ; rewards : floatarray (* accumulated rewards up to this vertex *)
   }
 
 let timestamp x =
@@ -132,6 +133,7 @@ let raw_append ~pow ~n_nodes dag node_id (x : _ Intf.draft_vertex) =
     ; signature
     ; visibility
     ; received_at = Float.Array.make n_nodes Float.infinity
+    ; rewards = Float.Array.make n_nodes Float.nan
     }
 ;;
 
@@ -178,7 +180,7 @@ let log_vertex log clock view info v =
   let d = Dag.data v in
   let info =
     Option.map (fun x -> float "pow" (float_of_pow_hash x)) d.pow
-    :: (info d.value |> List.map Option.some)
+    :: (info v |> List.map Option.some)
     |> List.filter_map Fun.id
   in
   log
@@ -226,8 +228,9 @@ let init
           ; pow = None
           ; received_at = Float.Array.make n_nodes 0.
           ; visibility = Array.make n_nodes (`Visible (0., `Received))
+          ; rewards = Float.Array.make n_nodes 0.
           })
-      Protocol.dag_roots
+      Protocol.roots
   in
   let clock =
     { queue = OrderedQueue.init Compare.(tuple float int); now = 0.; c_activations = 0 }
@@ -304,7 +307,7 @@ let init
 ;;
 
 let debug_info ?(info = fun _ -> []) x =
-  let x = Dag.data x in
+  let d = Dag.data x in
   let vis i = function
     | `Visible (x, `Received) -> Some (Printf.sprintf "n%i received at %.2f" i x, "")
     | `Visible (x, `Withheld) ->
@@ -313,18 +316,18 @@ let debug_info ?(info = fun _ -> []) x =
       Some (Printf.sprintf "n%i appended at %.2f, released" i x, "")
     | `Invisible -> None
   in
-  List.map (fun (k, v) -> Some (k, Info.string_of_value v)) (info x.value)
-  @ [ Option.map (fun x -> "pow", string_of_pow_hash x) x.pow
-    ; Option.map (fun x -> "signed by " ^ string_of_int x, "") x.signature
+  List.map (fun (k, v) -> Some (k, Info.string_of_value v)) (info x)
+  @ [ Option.map (fun x -> "pow", string_of_pow_hash x) d.pow
+    ; Option.map (fun x -> "signed by " ^ string_of_int x, "") d.signature
     ]
-  @ (Array.mapi vis x.visibility |> Array.to_list)
+  @ (Array.mapi vis d.visibility |> Array.to_list)
   |> List.filter_map Fun.id
 ;;
 
 (* We guarantee that invalid extensions are never delivered elsewhere *)
 let check_vertex (type a) state vertex =
   let ((module Ref) : (a env, a) Intf.referee) = state.referee in
-  if not (Ref.dag_validity vertex)
+  if not (Ref.validity vertex)
   then
     Dag.Exn.raise
       Ref.view
@@ -346,7 +349,29 @@ let log_for_node state node_id =
   | Network x -> state.logger state.clock.now (Event (node_id, Learns (Dag.id x)))
 ;;
 
-let append state = append ~n_nodes:(Array.length state.nodes) state.dag
+let set_rewards (type a) state vertex =
+  let ((module Ref) : (a env, a) Intf.referee) = state.referee in
+  match Ref.precursor vertex with
+  | None -> failwith "Referee.precursor should go back to DAG root."
+  | Some p ->
+    let open Float.Array in
+    let r = (Dag.data vertex).rewards in
+    (* copy values from precursor *)
+    iteri (fun i x -> set r i x) (Dag.data p).rewards;
+    (* add rewards for successor *)
+    Ref.reward vertex |> List.iter (fun (i, x) -> set r i (get r i +. x))
+;;
+
+let append (type a) state ~pow node_id draft =
+  let ((module Ref) : (a env, a) Intf.referee) = state.referee in
+  match append ~n_nodes:(Array.length state.nodes) state.dag ~pow node_id draft with
+  | `Redundant, x -> x
+  | `Fresh, x ->
+    check_vertex state x;
+    set_rewards state x;
+    log_vertex state x;
+    x
+;;
 
 let handle_action state node_id (act : _ Intf.action) =
   let schedule = schedule state.clock in
@@ -426,14 +451,7 @@ let handle_event state ev =
       | `ProofOfWork -> true, `ProofOfWork
       | `Append -> false, `Append
     in
-    let freshness, vertex = append ~pow state node_id draft in
-    let () =
-      match freshness with
-      | `Redundant -> ()
-      | `Fresh ->
-        check_vertex state vertex;
-        log_vertex state vertex
-    in
+    let vertex = append ~pow state node_id draft in
     schedule `Now (MakeVisible (node_id, kind, vertex))
   | Network (src, `Tx, msg) ->
     List.iter
@@ -489,29 +507,6 @@ let loop ~activations state =
   continue activations
 ;;
 
-let reward_recipient vertex =
-  (Dag.data vertex).visibility
-  |> Array.to_list
-  |> List.mapi (fun i x -> i, x)
-  |> List.filter (function
-         | _i, `Visible (_, `Released) -> true
-         | _i, `Visible (_, `Withheld) -> true
-         | _ -> false)
-  |> function
-  | [] -> None
-  | [ (i, _) ] -> Some i
-  | _ -> failwith "cannot assign reward to vertex appended by multiple nodes"
-;;
-
-let apply_reward_function' (fn : _ Intf.reward_function) seq state =
-  let arr = Array.make (Array.length state.nodes) 0. in
-  let assign x vertex =
-    reward_recipient vertex |> Option.iter (fun i -> arr.(i) <- arr.(i) +. x)
-  in
-  Seq.iter (fn ~assign) seq;
-  arr
-;;
-
 let head (type a) (state : a state) =
   let (module Ref) = state.referee in
   Array.map
@@ -522,6 +517,15 @@ let head (type a) (state : a state) =
   |> Ref.winner
 ;;
 
-let apply_reward_function ~history (fn : _ Intf.reward_function) state =
-  apply_reward_function' fn (history (head state)) state
+let history (type a) (state : a state) =
+  let (module Ref) = state.referee in
+  head state
+  |> Seq.unfold (fun this -> Ref.precursor this |> Option.map (fun next -> this, next))
+;;
+
+let iter_coinbases (type a) (state : a state) =
+  let (module Ref) = state.referee in
+  head state
+  |> Seq.unfold (fun this -> Ref.precursor this |> Option.map (fun next -> this, next))
+  |> Seq.flat_map (fun x -> Ref.reward x |> List.to_seq)
 ;;

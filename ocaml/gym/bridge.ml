@@ -22,6 +22,18 @@ let (penv, python_of_protocol, _python_to_protocol) =
   (encapsulate "ocaml.protocol" : protocol capsule)
 ;;
 
+let python_of_info i =
+  Py.Dict.of_bindings_map
+    python_of_string
+    (let open Cpr_lib.Info in
+    function
+    | Bool x -> python_of_bool x
+    | Int x -> python_of_int x
+    | Float x -> python_of_float x
+    | String x -> python_of_string x)
+    i
+;;
+
 let () =
   if not (Py.is_initialized ()) then Py.initialize ();
   Random.self_init ();
@@ -52,12 +64,6 @@ let () =
          int
          ~docstring:"maximum number of attacker steps before terminating the simulation"
          ~default:1000
-     and max_height =
-       keyword
-         "max_height"
-         int
-         ~docstring:"maximum block height before terminating the simulation"
-         ~default:Int.max_int
      and max_progress =
        keyword
          "max_progress"
@@ -79,7 +85,6 @@ let () =
          ~defenders
          ~activation_delay
          ~max_steps
-         ~max_height
          ~max_progress
          ~max_time
      in
@@ -103,7 +108,7 @@ let () =
          [| Py.Array.numpy obs
           ; Py.Float.of_float r
           ; Py.Bool.of_bool d
-          ; Py.Dict.of_bindings_string info
+          ; python_of_info info
          |]);
   Py_module.set
     m
@@ -134,13 +139,6 @@ let () =
            name, Py.Callable.of_function pyfn)
          t.policies
        |> Py.Dict.of_bindings_string);
-  Py_module.set
-    m
-    "puzzles_per_block"
-    (let%map (IEnv (t, _)) =
-       positional "ienv" ienv ~docstring:"OCaml gym environment instance"
-     in
-     fun () -> Py.Int.of_int t.puzzles_per_block);
   Py_module.set
     m
     "to_string"
@@ -175,58 +173,47 @@ let () =
   Py_module.set
     m
     "nakamoto"
-    (let%map reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
-     in
-     fun () -> Proto (Engine.of_module nakamoto_ssz ~reward) |> python_of_protocol);
+    (Defunc.return (fun () -> Proto (Engine.of_module nakamoto_ssz) |> python_of_protocol));
   Py_module.set
     m
     "ethereum"
     (let%map reward =
        keyword "reward" string ~default:"discount" ~docstring:"reward function"
      in
-     fun () -> Proto (Engine.of_module ethereum_ssz ~reward) |> python_of_protocol);
+     let incentive_scheme = Options.of_string_exn [ `Discount; `Constant ] reward in
+     fun () ->
+       Proto (Engine.of_module (ethereum_ssz ~incentive_scheme)) |> python_of_protocol);
   Py_module.set
     m
     "bk"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     fun () -> Proto (Engine.of_module (bk_ssz ~k) ~reward) |> python_of_protocol);
+     let incentive_scheme = Options.of_string_exn [ `Block; `Constant ] reward in
+     fun () ->
+       Proto (Engine.of_module (bk_ssz ~k ~incentive_scheme)) |> python_of_protocol);
   Py_module.set
     m
     "bkll"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     fun () -> Proto (Engine.of_module (bkll_ssz ~k) ~reward) |> python_of_protocol);
+     let incentive_scheme = Options.of_string_exn [ `Block; `Constant ] reward in
+     fun () ->
+       Proto (Engine.of_module (bkll_ssz ~k ~incentive_scheme)) |> python_of_protocol);
   Py_module.set
     m
     "tailstorm"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     let reward_ =
-       match
-         List.find_opt (fun x -> Tailstorm.reward_key x = reward) Tailstorm.reward_schemes
-       with
-       | Some x -> x
-       | None ->
-         let msg =
-           "unkown reward function '"
-           ^ reward
-           ^ "'. Try "
-           ^ (List.map Tailstorm.reward_key Tailstorm.reward_schemes
-             |> Engine.numeration ~conj:" or ")
-           ^ "."
-         in
-         failwith msg
+     let incentive_scheme =
+       Options.of_string_exn [ `Constant; `Discount; `Punish; `Hybrid ] reward
      in
      fun () ->
        Proto
          (Engine.of_module
-            (tailstorm_ssz ~subblock_selection:Optimal ~rewards:reward_ ~k)
-            ~reward)
+            (tailstorm_ssz ~subblock_selection:`Optimal ~incentive_scheme ~k))
        |> python_of_protocol);
   Py_module.set
     m
@@ -234,28 +221,12 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     let reward_ =
-       match
-         List.find_opt
-           (fun x -> Tailstormll.reward_key x = reward)
-           Tailstormll.reward_schemes
-       with
-       | Some x -> x
-       | None ->
-         let msg =
-           "unkown reward function '"
-           ^ reward
-           ^ "'. Try "
-           ^ (List.map Tailstormll.reward_key Tailstormll.reward_schemes
-             |> Engine.numeration ~conj:" or ")
-           ^ "."
-         in
-         failwith msg
+     let incentive_scheme =
+       Options.of_string_exn [ `Constant; `Discount; `Punish; `Hybrid ] reward
      in
      fun () ->
        Proto
          (Engine.of_module
-            (tailstormll_ssz ~subblock_selection:Optimal ~rewards:reward_ ~k)
-            ~reward)
+            (tailstormll_ssz ~subblock_selection:`Optimal ~incentive_scheme ~k))
        |> python_of_protocol)
 ;;
