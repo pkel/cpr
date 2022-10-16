@@ -34,34 +34,44 @@ end
 
 type ('a, 'b) global_view = (module GlobalView with type env = 'a and type data = 'b)
 
-(** Calculate and assign rewards for the vertex and (potentially) its neighbours.
-    Typically this is called on the history of the winning chain. *)
-type 'a reward_function = assign:(float -> 'a Dag.vertex -> unit) -> 'a Dag.vertex -> unit
-
-(* TODO change reward function to something more coinbase-like: *)
-(* type 'a reward_function = 'a Dag.vertex -> (int * float) list *)
-
 module type Referee = sig
   include GlobalView
 
-  (** restrict DAG extensions. The simulator checks validity for each appended DAG vertex.
+  (** Restrict DAG extensions. The simulator checks validity for each appended DAG vertex.
       Invalid extensions are not delivered to other nodes. *)
-  val dag_validity : env Dag.vertex -> bool
+  val validity : env Dag.vertex -> bool
 
-  (** Provide metadata for DAG vertex *)
-  val info : data -> Info.t
+  (** Label DAG vertex *)
+  val label : env Dag.vertex -> string
 
-  (** When calculating rewards, the simulator will consider the preferred vertices of all
-      nodes. This functions determines the best vertex. The reward function will be
-      applied from the best vertex backwards to the roots. *)
+  (** Provide debug information *)
+  val info : env Dag.vertex -> Info.t
+
+  (** Work spent on the blockchain. Equals block height for
+      Nakamoto. Includes uncles for (variants of) Ethereum. Counts votes in
+      B_k and Tailstorm.
+
+      DAA tries to maintain constant progress per time. *)
+  val progress : env Dag.vertex -> float
+
+  (* Coinbase transaction. Assign rewards to participants. *)
+  val reward : env Dag.vertex -> (int * float) list
+
+  (** Disambiguation in case of forks. The simulator uses this function
+      to determine the globally preferred chain. *)
   val winner : env Dag.vertex list -> env Dag.vertex
 
-  (** Extract linear history of the given (tip of) chain. For Bitcoin, this returns the
-      blockchain in reverse order. For Ethereum it returns the sequence of blocks w/o
-      uncles in reverse order. *)
-  val history : env Dag.vertex -> env Dag.vertex Seq.t
+  (** Extract the linear history of the given (tip of) chain. Selects one path
+      from the (globally preferred) tip of the chain back to the DAG roots.
 
-  val reward_functions : env reward_function Collection.t
+      For Bitcoin, this iterates the blockchain in reverse order. For Ethereum
+      it iterates the sequence of blocks w/o uncles in reverse order.
+
+      When calculating accumulated rewards for a blockchain, the simulator uses
+      this function to iterate one path in the DAG. Coinbase transactions on
+      blocks off this path (e.g. coinbase on Ethereum uncles) are ignored.
+  *)
+  val precursor : env Dag.vertex -> env Dag.vertex option
 end
 
 type ('a, 'b) referee = (module Referee with type env = 'a and type data = 'b)
@@ -104,7 +114,7 @@ module type Node = sig
   type state
 
   (** initialization. The [roots] argument holds references to global versions of
-      {protocol.dag_roots}. The roots are visible to all nodes from the beginning. *)
+      {protocol.roots}. The roots are visible to all nodes from the beginning. *)
   val init : roots:env Dag.vertex list -> state
 
   (** event handlers *)
@@ -136,26 +146,13 @@ module type Protocol = sig
   val key : string
 
   (** a concise description of the protocol *)
-  val info : string
+  val description : string
 
-  (** some protocols accumulate multiple puzzle solutions into a single block. E.g., Bₖ
-      has k puzzles per block. Nakamoto has one per block. *)
-  val puzzles_per_block : int
+  (** protocol family and parameters *)
+  val info : Info.t
 
-  (** used for pretty printing protocol DAG vertices. *)
-  val describe : data -> string
-
-  (** block height. *)
-  val height : data -> int
-
-  (** blockchain progress. Measures work spent on the blockchain. Equals height for
-      Nakamoto. Includes uncles for Ethereum. Counts votes in B_k.
-
-      DAA tries to keep progress/time constant. *)
-  val progress : data -> float
-
-  (** specify the roots of the DAG. *)
-  val dag_roots : data list
+  (** specify the DAG roots *)
+  val roots : data list
 
   (** specification of global truths *)
   val referee : ('env, data) global_view -> ('env, data) referee

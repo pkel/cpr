@@ -15,16 +15,6 @@ def test_default(capsys):
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.25 attacker"
 
 
-def test_config(capsys):
-    env = gym.make(
-        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.1, defenders=10
-    )
-    env.render()
-    captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Bₖ with k=8; SSZ'16-like attack space; α=0.33 attacker"
-    assert env.puzzles_per_block() == 8
-
-
 def test_policies_honest():
     env = gym.make(
         "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
@@ -54,7 +44,6 @@ def test_nakamoto(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.33 attacker"
-    assert env.puzzles_per_block() == 1
 
     obs = env.reset()
     for x in range(600):
@@ -76,10 +65,44 @@ def test_ethereum(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
-        "Ethereum's adaptation of GHOST with height-preference, work-progress, and uncle cap 2; "
+        "Ethereum with heaviest_chain-preference, work-progress, uncle cap 2, "
+        "and discount-rewards; "
         "SSZ'16-like attack space; α=0.13 attacker"
     )
-    assert env.puzzles_per_block() == 1
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "selfish_discard"))
+
+
+def test_bk(capsys):
+    env = gym.make(
+        "cpr_gym:core-v0",
+        proto=protocols.bk(k=42),
+        alpha=0.33,
+        gamma=0.3,
+        defenders=4,
+    )
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert (
+        captured
+        == "Bₖ with k=42 and constant rewards; SSZ'16-like attack space; α=0.33 attacker"
+    )
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, info = env.step(env.policy(obs, "selfish"))
+
+    assert info["protocol_k"] == 42
 
 
 def test_bkll(capsys):
@@ -92,8 +115,10 @@ def test_bkll(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Bₖ/ll with k=17; SSZ'16-like attack space; α=0.33 attacker"
-    assert env.puzzles_per_block() == 17
+    assert (
+        captured
+        == "Bₖ/ll with k=17 and constant rewards; SSZ'16-like attack space; α=0.33 attacker"
+    )
 
     obs = env.reset()
     for x in range(600):
@@ -101,7 +126,9 @@ def test_bkll(capsys):
 
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(env.policy(obs, "selfish"))
+        obs, _, _, info = env.step(env.policy(obs, "selfish"))
+
+    assert info["protocol_k"] == 17
 
 
 def test_tailstorm(capsys):
@@ -115,10 +142,9 @@ def test_tailstorm(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
-        "Tailstorm with k=13, 'discount' rewards, and 'optimal' sub block selection; "
+        "Tailstorm with k=13, discount rewards, and optimal sub-block selection; "
         "SSZ'16-like attack space; α=0.33 attacker"
     )
-    assert env.puzzles_per_block() == 13
 
     obs = env.reset()
     for x in range(600):
@@ -126,7 +152,9 @@ def test_tailstorm(capsys):
 
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(env.policy(obs, "override-catchup"))
+        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
+
+    assert info["protocol_k"] == 13
 
 
 def test_tailstormll(capsys):
@@ -140,10 +168,9 @@ def test_tailstormll(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
-        "Tailstorm/ll with k=13, 'discount' rewards, and 'optimal' sub block selection; "
+        "Tailstorm/ll with k=13, discount rewards, and optimal sub-block selection; "
         "SSZ'16-like attack space; α=0.33 attacker"
     )
-    assert env.puzzles_per_block() == 13
 
     obs = env.reset()
     for x in range(600):
@@ -151,4 +178,6 @@ def test_tailstormll(capsys):
 
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(env.policy(obs, "override-catchup"))
+        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
+
+    assert info["protocol_k"] == 13

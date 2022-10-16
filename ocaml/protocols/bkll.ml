@@ -5,11 +5,24 @@ module type Parameters = Bk.Parameters
 module Make (Parameters : Parameters) = struct
   open Parameters
 
-  let key = "bkll"
-  let info = "Bₖ/ll with k=" ^ string_of_int k
-  let puzzles_per_block = k
+  let key = Format.asprintf "bkll-%i-%a" k Options.pp incentive_scheme
 
-  type data_ = { height : int }
+  let description =
+    Format.asprintf "Bₖ/ll with k=%i and %a rewards" k Options.pp incentive_scheme
+  ;;
+
+  let info =
+    let open Info in
+    [ string "family" "bkll"
+    ; int "k" k
+    ; Options.to_string incentive_scheme |> string "incentive_scheme"
+    ]
+  ;;
+
+  type data_ =
+    { height : int
+    ; miner : int option
+    }
 
   and data =
     | Vote of data_
@@ -25,21 +38,22 @@ module Make (Parameters : Parameters) = struct
     | Block _ -> height x * k |> float_of_int
   ;;
 
-  let describe = function
-    | Vote _ -> "vote"
-    | Block { height } -> "block " ^ string_of_int height
-  ;;
-
-  let dag_roots = [ Block { height = 0 } ]
+  let roots = [ Block { height = 0; miner = None } ]
 
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
     let info x =
       let open Info in
-      match x with
+      match data x with
       | Vote x -> [ string "kind" "vote"; int "height" x.height ]
       | Block x -> [ string "kind" "block"; int "height" x.height ]
+    ;;
+
+    let label x =
+      match data x with
+      | Vote _ -> "vote"
+      | Block { height; _ } -> "block " ^ string_of_int height
     ;;
 
     let is_vote x =
@@ -64,24 +78,23 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let height x = data x |> height
-
-    let block_height_exn x =
-      match data x with
-      | Block b -> b.height
-      | _ -> raise (Invalid_argument "not a block")
-    ;;
-
+    let progress x = data x |> progress
     let votes_only = Dag.filter is_vote view
     let blocks_only = Dag.filter is_block view
 
-    let dag_validity vertex =
+    let validity vertex =
       match pow vertex, data vertex, Dag.parents view vertex with
-      | Some _, Vote x, [ p ] -> is_block p && x.height = height p
+      | Some _, Vote x, [ p ] ->
+        is_block p && x.height = height p && Option.is_some x.miner
       | Some _, Block b, [ pblock ] when k = 1 ->
+        Option.is_some b.miner
+        &&
         (match data pblock with
         | Block p -> p.height + 1 = b.height
         | _ -> false)
       | Some _, Block b, pblock :: vote0 :: votes ->
+        Option.is_some b.miner
+        &&
         (match data pblock with
         | Block p ->
           let ordered_votes, _, nvotes =
@@ -101,8 +114,7 @@ module Make (Parameters : Parameters) = struct
     let compare_blocks =
       let open Compare in
       let cmp =
-        by int block_height_exn
-        $ by int (fun x -> List.length (Dag.children votes_only x))
+        by int height $ by int (fun x -> List.length (Dag.children votes_only x))
       in
       skip_eq Dag.vertex_eq cmp
     ;;
@@ -114,32 +126,32 @@ module Make (Parameters : Parameters) = struct
       |> List.hd
     ;;
 
-    let history =
-      Seq.unfold (fun this ->
-          Dag.parents view this
-          |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
+    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+
+    let assign c x =
+      match data x with
+      | Block x | Vote x ->
+        (match x.miner with
+        | Some x -> [ x, c ]
+        | None -> [])
     ;;
 
-    let constant_pow c : env reward_function =
-     fun ~assign x ->
-      if not (is_block x)
-      then failwith "reward function should only be called for linear history of blocks";
-      assign c x;
-      Dag.parents view x |> List.iteri (fun i p -> if i > 0 then assign c p)
-   ;;
+    let constant x =
+      match data x with
+      | Block _ -> x :: Dag.parents votes_only x |> List.concat_map (assign 1.)
+      | _ -> []
+    ;;
 
-    let constant_block c : env reward_function =
-     fun ~assign x ->
-      if not (is_block x)
-      then failwith "reward function should only be called for linear history of blocks";
-      assign c x
-   ;;
+    let block x =
+      match data x with
+      | Block _ -> assign (float_of_int k) x
+      | _ -> []
+    ;;
 
-    let reward_functions =
-      let open Collection in
-      empty
-      |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
-      |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.)
+    let reward =
+      match incentive_scheme with
+      | `Block -> block
+      | `Constant -> constant
     ;;
   end
 
@@ -172,7 +184,7 @@ module Make (Parameters : Parameters) = struct
     let compare_blocks =
       let open Compare in
       let cmp =
-        by int block_height_exn
+        by int height
         $ by int (fun x -> List.length (Dag.children votes_only x))
         $ by int (fun x -> if appended_by_me x then 1 else 0)
         $ by (neg float) visible_since
@@ -189,7 +201,7 @@ module Make (Parameters : Parameters) = struct
       let votes = Dag.children votes_only preferred |> List.filter vote_filter in
       if List.length votes >= k - 1
       then (
-        let height = block_height_exn preferred + 1 in
+        let height = height preferred + 1 in
         let parents =
           preferred
           :: (Compare.first
@@ -200,10 +212,13 @@ module Make (Parameters : Parameters) = struct
              |> Option.get
              |> List.sort Compare.(by (tuple int int) pow_hash_exn))
         in
-        { parents; data = Block { height }; sign = false })
+        { parents; data = Block { height; miner = Some my_id }; sign = false })
       else (
         let height = height preferred in
-        { parents = [ preferred ]; data = Vote { height }; sign = false })
+        { parents = [ preferred ]
+        ; data = Vote { height; miner = Some my_id }
+        ; sign = false
+        })
     ;;
 
     let puzzle_payload = puzzle_payload' ~vote_filter:(Fun.const true)

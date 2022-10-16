@@ -1,16 +1,11 @@
 open Cpr_lib
 open Models
 
-let fpath (Csv_runner.Task t) ~rewardfn =
+let fpath (Csv_runner.Task t) =
   let (module Protocol) = t.protocol in
   let l =
     let open Collection in
-    [ t.sim.key
-    ; Printf.sprintf "d=%g" t.network.activation_delay
-    ; Protocol.key
-    ; Printf.sprintf "k=%i" Protocol.puzzles_per_block
-    ; rewardfn.key
-    ]
+    [ t.sim.key; Printf.sprintf "d=%g" t.network.activation_delay; Protocol.key ]
     @
     match t.attack with
     | Some x -> [ x.key; Printf.sprintf "alpha=%g" t.network.nodes.(0).compute ]
@@ -19,14 +14,12 @@ let fpath (Csv_runner.Task t) ~rewardfn =
   Fpath.v (String.concat ":" l ^ ".dot")
 ;;
 
-let legend (Csv_runner.Task t) ~rewardfn =
+let legend (Csv_runner.Task t) =
   let (module Protocol) = t.protocol in
   let open Collection in
   [ "Network", t.sim.info
   ; "Activation Delay", string_of_float t.network.activation_delay
-  ; "Protocol", Protocol.info
-  ; "PoW per Block (k)", string_of_int Protocol.puzzles_per_block
-  ; "Incentive Scheme", rewardfn.info
+  ; "Protocol", Protocol.description
   ]
   @
   match t.attack with
@@ -48,7 +41,8 @@ let node_name (Csv_runner.Task t) =
     | Some i -> "n" ^ string_of_int i
 ;;
 
-let tasks_per_protocol (Protocol (module P)) n_activations =
+let tasks_per_protocol f n_activations incentive_scheme =
+  let (Protocol (module P)) = f ~incentive_scheme in
   List.map
     (fun activation_delay ->
       let sim, network = honest_clique ~activation_delay ~n:7 (module P) in
@@ -62,7 +56,10 @@ let tasks_per_protocol (Protocol (module P)) n_activations =
     [ 1.; 2.; 4. ]
 ;;
 
-let tasks_per_attack_space (AttackSpace (module A)) n_activations =
+let tasks_per_protocol f i = List.concat_map (tasks_per_protocol f i)
+
+let tasks_per_attack_space f n_activations incentive_scheme =
+  let (AttackSpace (module A)) = f ~incentive_scheme in
   let protocol = (module A.Protocol : Protocol with type data = _) in
   List.map
     (fun activation_delay ->
@@ -114,52 +111,46 @@ let tasks_per_attack_space (AttackSpace (module A)) n_activations =
       [ 0.25; 0.33; 0.5 ]
 ;;
 
+let tasks_per_attack_space f i = List.concat_map (tasks_per_attack_space f i)
+
 let tasks =
   let open Cpr_protocols in
-  let tailstorm, tailstorm_ssz =
-    let open Tailstorm in
-    ( tailstorm ~subblock_selection:Optimal ~rewards:Discount
-    , tailstorm_ssz ~subblock_selection:Optimal ~rewards:Discount )
-  in
+  let tailstorm = tailstorm ~subblock_selection:`Optimal
+  and tailstorm_ssz = tailstorm_ssz ~subblock_selection:`Optimal
+  and tailstormll = tailstormll ~subblock_selection:`Optimal
+  and tailstormll_ssz = tailstormll_ssz ~subblock_selection:`Optimal
+  and nakamoto_ssz ~incentive_scheme:_ = nakamoto_ssz in
   List.concat
-    [ tasks_per_attack_space nakamoto_ssz 30
-    ; tasks_per_attack_space ethereum_ssz 30
-    ; tasks_per_attack_space (bk_ssz ~k:8) 100
-    ; tasks_per_attack_space (bk_ssz ~k:4) 50
-    ; tasks_per_attack_space (bk_ssz ~k:1) 20
-    ; tasks_per_attack_space (bkll_ssz ~k:8) 100
-    ; tasks_per_attack_space (bkll_ssz ~k:4) 50
-    ; tasks_per_attack_space (bkll_ssz ~k:1) 20
-    ; tasks_per_attack_space (tailstorm_ssz ~k:8) 50
-    ; tasks_per_attack_space (tailstorm_ssz ~k:4) 25
-    ; tasks_per_attack_space (tailstorm_ssz ~k:1) 20
-    ; tasks_per_protocol (tailstorm ~k:8) 50
-    ; tasks_per_protocol (tailstorm ~k:4) 25
-    ; tasks_per_protocol (tailstorm ~k:1) 20
+    [ tasks_per_attack_space nakamoto_ssz 30 [ `Dummy ]
+    ; tasks_per_attack_space ethereum_ssz 30 [ `Discount ]
+    ; tasks_per_attack_space (bk_ssz ~k:8) 100 [ `Constant ]
+    ; tasks_per_attack_space (bk_ssz ~k:4) 50 [ `Constant ]
+    ; tasks_per_attack_space (bk_ssz ~k:1) 20 [ `Constant ]
+    ; tasks_per_attack_space (bkll_ssz ~k:8) 100 [ `Constant ]
+    ; tasks_per_attack_space (bkll_ssz ~k:4) 50 [ `Constant ]
+    ; tasks_per_attack_space (bkll_ssz ~k:1) 20 [ `Constant ]
+    ; tasks_per_attack_space (tailstorm_ssz ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (tailstorm_ssz ~k:4) 25 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (tailstorm_ssz ~k:1) 20 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (tailstormll_ssz ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (tailstormll_ssz ~k:4) 25 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (tailstormll_ssz ~k:1) 20 [ `Constant; `Discount ]
+    ; tasks_per_protocol (tailstorm ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_protocol (tailstorm ~k:4) 25 [ `Constant; `Discount ]
+    ; tasks_per_protocol (tailstorm ~k:1) 20 [ `Constant; `Discount ]
+    ; tasks_per_protocol (tailstormll ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_protocol (tailstormll ~k:4) 25 [ `Constant; `Discount ]
+    ; tasks_per_protocol (tailstormll ~k:1) 20 [ `Constant; `Discount ]
     ]
-  @ List.concat_map
-      (fun rewards ->
-        List.concat
-          [ tasks_per_attack_space
-              (tailstormll_ssz ~subblock_selection:Optimal ~rewards ~k:8)
-              100
-          ; tasks_per_attack_space
-              (tailstormll_ssz ~subblock_selection:Optimal ~rewards ~k:4)
-              50
-          ; tasks_per_attack_space
-              (tailstormll_ssz ~subblock_selection:Optimal ~rewards ~k:1)
-              20
-          ])
-      Tailstormll.reward_schemes
 ;;
 
 let print_dag oc (sim, confirmed, rewards, legend, vtx_info) =
   let open Simulator in
+  let reward n = List.fold_left (fun s (_, x) -> s +. x) 0. rewards.(Dag.id n) in
   let node_attr n =
     let open Simulator in
     [ ( "label"
-      , debug_info ~info:vtx_info n
-        @ [ "reward", Printf.sprintf "%.2f" rewards.(Dag.id n) ]
+      , debug_info ~info:vtx_info n @ [ "reward", Printf.sprintf "%.2f" (reward n) ]
         |> List.map (function
                | "", s | s, "" -> s
                | k, v -> k ^ ": " ^ v)
@@ -184,32 +175,23 @@ let run (Csv_runner.Task t) =
   let (module Ref) = env.referee in
   loop ~activations:t.activations env;
   let confirmed = Array.make (Dag.size env.dag) false in
-  Collection.iter
-    (fun rewardfn ->
-      let rewards = Array.make (Dag.size env.dag) 0. in
-      let () =
-        Seq.iter
-          (fun n ->
-            confirmed.(Dag.id n) <- true;
-            rewardfn.it
-              ~assign:(fun x n -> rewards.(Dag.id n) <- rewards.(Dag.id n) +. x)
-              n)
-          (Ref.history (head env))
-      in
-      let path =
-        let open Fpath in
-        v "." / "fig" / "chains" // fpath (Task t) ~rewardfn
-      in
-      let open Bos.OS in
-      let d = Dir.create ~path:true (Fpath.parent path) in
-      Result.bind d (fun _ ->
-          File.with_oc
-            path
-            print_dag
-            (env, confirmed, rewards, legend (Task t) ~rewardfn, Ref.info))
-      |> Result.join
-      |> Rresult.R.failwith_error_msg)
-    Ref.reward_functions
+  let rewards = Array.make (Dag.size env.dag) [] in
+  let () =
+    Simulator.history env
+    |> Seq.iter (fun vtx ->
+           confirmed.(Dag.id vtx) <- true;
+           rewards.(Dag.id vtx) <- Ref.reward vtx)
+  in
+  let path =
+    let open Fpath in
+    v "." / "fig" / "chains" // fpath (Task t)
+  in
+  let open Bos.OS in
+  let d = Dir.create ~path:true (Fpath.parent path) in
+  Result.bind d (fun _ ->
+      File.with_oc path print_dag (env, confirmed, rewards, legend (Task t), Ref.info))
+  |> Result.join
+  |> Rresult.R.failwith_error_msg
 ;;
 
 let () =

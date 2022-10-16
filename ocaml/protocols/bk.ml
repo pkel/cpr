@@ -3,14 +3,23 @@ open Cpr_lib
 module type Parameters = sig
   (** number of votes (= puzzle solutions) per block *)
   val k : int
+
+  val incentive_scheme : [ `Block | `Constant ]
 end
 
 module Make (Parameters : Parameters) = struct
   open Parameters
 
-  let key = "bk"
-  let info = Printf.sprintf "Bₖ with k=%i" k
-  let puzzles_per_block = k
+  let key = Format.asprintf "bk-%i-%a" k Options.pp incentive_scheme
+
+  let description =
+    Format.asprintf "Bₖ with k=%i and %a rewards" k Options.pp incentive_scheme
+  ;;
+
+  let info =
+    let open Info in
+    [ string "family" "bk"; int "k" k; Options.info "incentive_scheme" incentive_scheme ]
+  ;;
 
   type block_data = { height : int }
 
@@ -34,21 +43,22 @@ module Make (Parameters : Parameters) = struct
     | Block _ -> height x * k |> float_of_int
   ;;
 
-  let describe = function
-    | Vote x -> "vote by " ^ string_of_int x.id
-    | Block { height } -> "block " ^ string_of_int height
-  ;;
-
-  let dag_roots = [ Block { height = 0 } ]
+  let roots = [ Block { height = 0 } ]
 
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
     let info x =
       let open Info in
-      match x with
+      match data x with
       | Vote x -> [ string "kind" "vote"; int "height" x.height; int "id" x.id ]
       | Block x -> [ string "kind" "block"; int "height" x.height ]
+    ;;
+
+    let label x =
+      match data x with
+      | Vote _x -> "vote"
+      | Block { height } -> "block " ^ string_of_int height
     ;;
 
     let is_vote x =
@@ -75,6 +85,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let height x = data x |> height
+    let progress x = data x |> progress
 
     let block_height_exn x =
       match data x with
@@ -87,7 +98,7 @@ module Make (Parameters : Parameters) = struct
     let votes_only = Dag.filter is_vote view
     let blocks_only = Dag.filter is_block view
 
-    let dag_validity vertex =
+    let validity vertex =
       let has_pow x = pow x |> Option.is_some
       and pow_hash x = pow x |> Option.get in
       match data vertex, Dag.parents view vertex with
@@ -128,31 +139,32 @@ module Make (Parameters : Parameters) = struct
       |> List.hd
     ;;
 
-    let history =
-      Seq.unfold (fun this ->
-          Dag.parents view this
-          |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
+    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+
+    let constant x =
+      if is_block x
+      then
+        Dag.parents view x
+        |> List.filter_map (fun y ->
+               match data y with
+               | Vote v -> Some (v.id, 1.)
+               | Block _ -> None)
+      else []
     ;;
 
-    let constant_pow c : env reward_function =
-     fun ~assign x ->
-      if not (is_block x)
-      then failwith "reward function should only be called for linear history of blocks";
-      Dag.parents view x |> List.iteri (fun i p -> if i > 0 then assign c p)
-   ;;
+    let block x =
+      if is_block x
+      then (
+        match signature x with
+        | Some i -> [ i, float_of_int k ]
+        | None -> [])
+      else []
+    ;;
 
-    let constant_block c : env reward_function =
-     fun ~assign x ->
-      if not (is_block x)
-      then failwith "reward function should only be called for linear history of blocks";
-      assign c x
-   ;;
-
-    let reward_functions =
-      let open Collection in
-      empty
-      |> add ~info:"1 per confirmed block" "block" (constant_block 1.)
-      |> add ~info:"1 per confirmed pow solution" "constant" (constant_pow 1.)
+    let reward =
+      match incentive_scheme with
+      | `Block -> block
+      | `Constant -> constant
     ;;
   end
 

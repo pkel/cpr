@@ -221,9 +221,9 @@ module Make (Parameters : Bkll.Parameters) = struct
         |> List.length
       in
       let ca = last_block state.common in
-      let ca_height = block_height_exn ca
-      and private_height = block_height_exn state.private_
-      and public_height = block_height_exn state.public in
+      let ca_height = height ca
+      and private_height = height state.private_
+      and public_height = height state.public in
       { private_blocks = private_height - ca_height
       ; public_blocks = public_height - ca_height
       ; diff_blocks = private_height - public_height
@@ -241,8 +241,8 @@ module Make (Parameters : Bkll.Parameters) = struct
         | _ -> None
       in
       let release kind =
-        let height, nvotes =
-          let height = block_height_exn state.public
+        let to_height, nvotes =
+          let to_height = height state.public
           and nvotes =
             Dag.children view state.public
             |> List.filter public_visibility
@@ -250,13 +250,13 @@ module Make (Parameters : Bkll.Parameters) = struct
             |> List.length
           in
           match kind with
-          | `Match -> height, nvotes
-          | `Override -> if nvotes >= k then height + 1, 0 else height, nvotes + 1
+          | `Match -> to_height, nvotes
+          | `Override -> if nvotes >= k then to_height + 1, 0 else to_height, nvotes + 1
         in
         let block =
           (* find block to be released backwards from private head *)
           let rec h b =
-            if block_height_exn b <= height then b else parent_block b |> Option.get |> h
+            if height b <= to_height then b else parent_block b |> Option.get |> h
           in
           h state.private_
           (* NOTE: if private height is smaller public height, then private head is marked

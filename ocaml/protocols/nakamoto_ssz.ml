@@ -193,10 +193,9 @@ module Agent (V : LocalView with type data = data) = struct
 
   let observe (Observable state) =
     let open Observation in
-    let block_height vertex = height (data vertex) in
-    let ca_height = block_height state.common
-    and private_height = block_height state.private_
-    and public_height = block_height state.public in
+    let ca_height = data state.common |> height
+    and private_height = data state.private_ |> height
+    and public_height = data state.public |> height in
     { private_blocks = private_height - ca_height
     ; public_blocks = public_height - ca_height
     ; diff_blocks = private_height - public_height
