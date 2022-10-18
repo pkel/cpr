@@ -397,7 +397,7 @@ module Make (Parameters : Parameters) = struct
        Calculating rewards will be interesting. We cannot use the reward function of the
        referee, because the block is not yet appended. But maybe we can reuse parts to
        avoid error-prone redundancy. *)
-    let optimal_quorum ~vote_filter b =
+    let optimal_quorum ~max_options ~vote_filter b =
       assert (is_block b);
       if k = 1
       then Some []
@@ -408,7 +408,9 @@ module Make (Parameters : Parameters) = struct
           |> Array.of_seq
         in
         let n = Array.length a in
-        if n < k - 1
+        if Combinatorics.n_choose_k n k > max_options
+        then heuristic_quorum ~vote_filter b
+        else if n < k - 1
         then None
         else (
           let a' =
@@ -505,7 +507,7 @@ module Make (Parameters : Parameters) = struct
       match subblock_selection with
       | Altruistic -> altruistic_quorum
       | Heuristic -> heuristic_quorum
-      | Optimal -> optimal_quorum
+      | Optimal -> optimal_quorum ~max_options:100
     ;;
 
     let puzzle_payload' ~vote_filter b =
