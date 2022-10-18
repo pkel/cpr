@@ -71,7 +71,7 @@ jobs:
       - name: Download gym shared object
         uses: actions/download-artifact@v3
         with:
-          name: ubuntu-18.04-ocaml-4.12.1
+          name: ubuntu-20.04-ocaml-4.12.1
           path: python/gym/cpr_gym
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -104,13 +104,13 @@ jobs:
       - name: Download gym shared object (linux)
         uses: actions/download-artifact@v3
         with:
-          name: ubuntu-18.04-ocaml-4.12.1
+          name: ubuntu-20.04-ocaml-4.12.1
           path: linux
 
       - name: Download gym shared object (macos)
         uses: actions/download-artifact@v3
         with:
-          name: macos-11-ocaml-4.12.1
+          name: macos-12-ocaml-4.12.1
           path: macos
 
       - name: Deploy to GitHub Pages
