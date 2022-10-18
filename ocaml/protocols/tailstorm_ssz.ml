@@ -330,8 +330,6 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       let open Action in
       if o.private_blocks < o.public_blocks
       then Adopt_Proceed
-      else if o.private_blocks = 0 && o.public_blocks = 0
-      then Wait_Proceed
       else if o.public_blocks = 0
       then Wait_Proceed
       else Override_Proceed
