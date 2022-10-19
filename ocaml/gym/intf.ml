@@ -5,14 +5,15 @@ type 'instance env =
   ; observation_length : int
   ; create : unit -> 'instance
   ; reset : 'instance -> floatarray
-  ; step :
-      'instance -> action:int -> floatarray * float * bool * (string * Py.Object.t) list
+  ; step : 'instance -> action:int -> floatarray * float * bool * Cpr_lib.Info.t
   ; to_string : 'instance -> string
   ; low : floatarray
   ; high : floatarray
   ; policies : (string * (floatarray -> int)) list
-  ; puzzles_per_block : int
   }
+
+(* Not sure since when the following is here. Must be a draft for an engine rework. TODO.
+   remove *)
 
 module Sim = struct
   type state = S of int

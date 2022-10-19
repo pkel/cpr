@@ -4,6 +4,7 @@ module Bk = Bk
 module Bkll = Bkll
 module Tailstorm = Tailstorm
 module Tailstormll = Tailstormll
+module Options = Options
 open Cpr_lib
 
 (** Original proof-of-work consensus as described by Nakamoto. 2008. *)
@@ -15,30 +16,48 @@ let nakamoto = Protocol (module Nakamoto)
 let nakamoto_ssz = AttackSpace (module Nakamoto_ssz)
 
 (** Simplified version of GHOST as used in the Ethereum Platform *)
-let ethereum =
+let ethereum ~incentive_scheme:is =
   let open Ethereum in
-  Protocol (module Make (Byzantium))
+  let module M =
+    Make (struct
+      include Byzantium
+
+      let incentive_scheme = is
+    end)
+  in
+  Protocol (module M)
 ;;
 
 (** {!nakamoto_ssz} adapted for Ethereum. *)
-let ethereum_ssz = AttackSpace (module Ethereum_ssz.Make (Ethereum.Byzantium))
+let ethereum_ssz ~incentive_scheme:is =
+  let module M =
+    Ethereum_ssz.Make (struct
+      include Ethereum.Byzantium
+
+      let incentive_scheme = is
+    end)
+  in
+  AttackSpace (module M)
+;;
 
 (** Bₖ as proposed by Keller and Böhme. Parallel Proof-of-Work with Concrete Bounds. 2022.
     {{:https://arxiv.org/abs/2204.00034}Paper.} *)
-let bk ~k =
+let bk ~k ~incentive_scheme =
   let module M =
     Bk.Make (struct
       let k = k
+      let incentive_scheme = incentive_scheme
     end)
   in
   Protocol (module M)
 ;;
 
 (** {!nakamoto_ssz} adapted for Bₖ. *)
-let bk_ssz ~k =
+let bk_ssz ~k ~incentive_scheme =
   let module M =
     Bk_ssz.Make (struct
       let k = k
+      let incentive_scheme = incentive_scheme
     end)
   in
   AttackSpace (module M)
@@ -46,31 +65,33 @@ let bk_ssz ~k =
 
 (** {!bk} with alternative leader selection mechanism: k - 1 votes, the k-th proof-of-work
     authorizes the next block. *)
-let bkll ~k =
+let bkll ~k ~incentive_scheme =
   let module M =
     Bkll.Make (struct
       let k = k
+      let incentive_scheme = incentive_scheme
     end)
   in
   Protocol (module M)
 ;;
 
 (** {!nakamoto_ssz} adapted for {!bkll}. *)
-let bkll_ssz ~k =
+let bkll_ssz ~k ~incentive_scheme =
   let module M =
     Bkll_ssz.Make (struct
       let k = k
+      let incentive_scheme = incentive_scheme
     end)
   in
   AttackSpace (module M)
 ;;
 
 (** Tailstorm protocol with k subblocks per (strong) block, subblocks require proof-of-work, strong blocks don't. *)
-let tailstorm ~subblock_selection ~k ~rewards =
+let tailstorm ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstorm.Make (struct
       let k = k
-      let rewards = rewards
+      let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
     end)
   in
@@ -78,11 +99,11 @@ let tailstorm ~subblock_selection ~k ~rewards =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!tailstorm}. *)
-let tailstorm_ssz ~subblock_selection ~k ~rewards =
+let tailstorm_ssz ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstorm_ssz.Make (struct
       let k = k
-      let rewards = rewards
+      let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
     end)
   in
@@ -92,11 +113,11 @@ let tailstorm_ssz ~subblock_selection ~k ~rewards =
 (** Modified Tailstorm protocol with k - 1 subblocks per (strong) block, all
  * blocks (including strong ones) require a proof-of-work. I append ll because
  * this protocol is to {!tailstorm}, what {!bkll} is to {!bk}. *)
-let tailstormll ~subblock_selection ~k ~rewards =
+let tailstormll ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstormll.Make (struct
       let k = k
-      let rewards = rewards
+      let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
     end)
   in
@@ -104,11 +125,11 @@ let tailstormll ~subblock_selection ~k ~rewards =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!tailstormll}. *)
-let tailstormll_ssz ~subblock_selection ~k ~rewards =
+let tailstormll_ssz ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstormll_ssz.Make (struct
       let k = k
-      let rewards = rewards
+      let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
     end)
   in
@@ -128,7 +149,8 @@ let%test_module "protocol" =
       let target_progress = 1000 in
       Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
-      let observed_progress = P.progress (Dag.data head).value in
+      let (module Ref) = env.referee in
+      let observed_progress = Ref.progress head in
       let observed_orphan_rate =
         let target_progress = float_of_int target_progress in
         (target_progress -. observed_progress) /. target_progress
@@ -170,62 +192,104 @@ let%test_module "protocol" =
 
     let%test_unit [%name n] =
       (* even nakamoto achieves this! *)
-      test n ~activation_delay:16. ~orphan_rate_limit:0.1 ethereum
+      test
+        n
+        ~activation_delay:16.
+        ~orphan_rate_limit:0.1
+        (ethereum ~incentive_scheme:`Constant)
     ;;
 
     let n = "ethereum/hard"
 
     let%test_unit [%name n] =
       (* ethereum should collect most blocks that would be orphans as uncles *)
-      test n ~activation_delay:1. ~orphan_rate_limit:0.2 ethereum
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.2
+        (ethereum ~incentive_scheme:`Discount)
     ;;
 
     let n = "ethereum/real"
 
     let%test_unit [%name n] =
       (* ethereum should collect most blocks that would be orphans as uncles *)
-      test n ~activation_delay:6. ~orphan_rate_limit:0.01 ethereum
+      test
+        n
+        ~activation_delay:6.
+        ~orphan_rate_limit:0.01
+        (ethereum ~incentive_scheme:`Discount)
     ;;
 
     let n = "ethereum/extreme"
 
     let%test_unit [%name n] =
       (* fuzzing the uncle inclusion rule *)
-      test n ~activation_delay:0.3 ~orphan_rate_limit:0.9 ethereum
+      test
+        n
+        ~activation_delay:0.3
+        ~orphan_rate_limit:0.9
+        (ethereum ~incentive_scheme:`Discount)
     ;;
 
     let n = "bk8/easy"
 
     let%test_unit [%name n] =
-      test n ~activation_delay:10. ~orphan_rate_limit:0.1 (bk ~k:8)
+      test
+        n
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (bk ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "bk8/hard"
 
-    let%test_unit [%name n] = test n ~activation_delay:1. ~orphan_rate_limit:0.3 (bk ~k:8)
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (bk ~k:8 ~incentive_scheme:`Block)
+    ;;
 
     let n = "bk32/hard"
 
     let%test_unit [%name n] =
-      test n ~activation_delay:1. ~orphan_rate_limit:0.1 (bk ~k:32)
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (bk ~k:32 ~incentive_scheme:`Constant)
     ;;
 
     let n = "bkll8/easy"
 
     let%test_unit [%name n] =
-      test n ~activation_delay:10. ~orphan_rate_limit:0.1 (bkll ~k:8)
+      test
+        n
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (bkll ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "bkll8/hard"
 
     let%test_unit [%name n] =
-      test n ~activation_delay:1. ~orphan_rate_limit:0.3 (bkll ~k:8)
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (bkll ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "bkll32/hard"
 
     let%test_unit [%name n] =
-      test n ~activation_delay:1. ~orphan_rate_limit:0.1 (bkll ~k:32)
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (bkll ~k:32 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstorm8constant/easy"
@@ -235,7 +299,7 @@ let%test_module "protocol" =
         n
         ~activation_delay:10.
         ~orphan_rate_limit:0.1
-        (tailstorm ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstorm ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstorm8discount/hard"
@@ -245,7 +309,7 @@ let%test_module "protocol" =
         n
         ~activation_delay:1.
         ~orphan_rate_limit:0.3
-        (tailstorm ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+        (tailstorm ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstorm32punish/hard"
@@ -255,7 +319,7 @@ let%test_module "protocol" =
         n
         ~activation_delay:1.
         ~orphan_rate_limit:0.1
-        (tailstorm ~subblock_selection:Altruistic ~k:32 ~rewards:Punish)
+        (tailstorm ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Punish)
     ;;
 
     let n = "tailstormll8constant/easy"
@@ -265,7 +329,7 @@ let%test_module "protocol" =
         n
         ~activation_delay:10.
         ~orphan_rate_limit:0.1
-        (tailstormll ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstormll ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstormll8discount/hard"
@@ -275,17 +339,17 @@ let%test_module "protocol" =
         n
         ~activation_delay:1.
         ~orphan_rate_limit:0.3
-        (tailstormll ~subblock_selection:Optimal ~k:8 ~rewards:Discount)
+        (tailstormll ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Discount)
     ;;
 
-    let n = "tailstormll32block/hard"
+    let n = "tailstormll32hybrid/hard"
 
     let%test_unit [%name n] =
       test
         n
         ~activation_delay:1.
         ~orphan_rate_limit:0.1
-        (tailstormll ~subblock_selection:Altruistic ~k:32 ~rewards:Block)
+        (tailstormll ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Hybrid)
     ;;
   end)
 ;;
@@ -315,7 +379,8 @@ let%test_module "policy" =
       let target_progress = 1000 in
       Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
-      let observed_progress = A.Protocol.progress (Dag.data head).value in
+      let (module Ref) = env.referee in
+      let observed_progress = Ref.progress head in
       let observed_orphan_rate =
         let target_progress = float_of_int target_progress in
         (target_progress -. observed_progress) /. target_progress
@@ -351,18 +416,32 @@ let%test_module "policy" =
 
     let n = "ethereum/ssz/honest"
 
-    let%test_unit [%name n] = test n ~policy:"honest" ~orphan_rate_limit:0.01 ethereum_ssz
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (ethereum_ssz ~incentive_scheme:`Constant)
+    ;;
 
     let n = "bk8/ssz/honest"
 
     let%test_unit [%name n] =
-      test n ~policy:"honest" ~orphan_rate_limit:0.01 (bk_ssz ~k:8)
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (bk_ssz ~k:8 ~incentive_scheme:`Block)
     ;;
 
     let n = "bkll8/ssz/honest"
 
     let%test_unit [%name n] =
-      test n ~policy:"honest" ~orphan_rate_limit:0.01 (bkll_ssz ~k:8)
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (bkll_ssz ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstorm8constant/ssz/honest"
@@ -372,7 +451,7 @@ let%test_module "policy" =
         n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstorm_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstorm8discount/ssz/honest"
@@ -382,7 +461,7 @@ let%test_module "policy" =
         n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstorm_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+        (tailstorm_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstormll8constant/ssz/honest"
@@ -392,7 +471,7 @@ let%test_module "policy" =
         n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+        (tailstormll_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstormll8discount/ssz/honest"
@@ -402,7 +481,7 @@ let%test_module "policy" =
         n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (tailstormll_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+        (tailstormll_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
   end)
 ;;
@@ -430,7 +509,8 @@ let%test_module "random" =
       let target_progress = 1000 in
       Simulator.loop ~activations:target_progress env;
       let head = Simulator.head env in
-      let observed_progress = A.Protocol.progress (Dag.data head).value in
+      let (module Ref) = env.referee in
+      let observed_progress = Ref.progress head in
       let observed_orphan_rate =
         let target_progress = float_of_int target_progress in
         (target_progress -. observed_progress) /. target_progress
@@ -466,38 +546,44 @@ let%test_module "random" =
 
     let n = "ethereum/random"
 
-    let%test_unit [%name n] = test n ethereum_ssz
+    let%test_unit [%name n] = test n (ethereum_ssz ~incentive_scheme:`Discount)
 
     let n = "bk8/ssz/random"
 
-    let%test_unit [%name n] = test n (bk_ssz ~k:8)
+    let%test_unit [%name n] = test n (bk_ssz ~k:8 ~incentive_scheme:`Block)
 
     let n = "bkll8/ssz/random"
 
-    let%test_unit [%name n] = test n (bkll_ssz ~k:8)
+    let%test_unit [%name n] = test n (bkll_ssz ~k:8 ~incentive_scheme:`Constant)
 
     let n = "tailstorm8constant/ssz/random"
 
     let%test_unit [%name n] =
-      test n (tailstorm_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+      test n (tailstorm_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstorm8discount/ssz/random"
 
     let%test_unit [%name n] =
-      test n (tailstorm_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+      test
+        n
+        (tailstorm_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstormll8constant/ssz/random"
 
     let%test_unit [%name n] =
-      test n (tailstormll_ssz ~subblock_selection:Optimal ~k:8 ~rewards:Constant)
+      test
+        n
+        (tailstormll_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
     ;;
 
     let n = "tailstormll8discount/ssz/random"
 
     let%test_unit [%name n] =
-      test n (tailstormll_ssz ~subblock_selection:Heuristic ~k:8 ~rewards:Discount)
+      test
+        n
+        (tailstormll_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
   end)
 ;;

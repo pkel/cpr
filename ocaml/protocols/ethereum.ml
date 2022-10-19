@@ -1,74 +1,103 @@
 open Cpr_lib
 
-type height_or_work =
-  | Height (** Nakamoto / longest chain *)
-  | Work (** GHOST / heaviest chain *)
-[@@deriving variants]
-
 module type Parameters = sig
-  val preference : height_or_work
-  val progress : height_or_work
-  val max_uncles : int
+  val preference : [ `LongestChain | `HeaviestChain ]
+  val progress : [ `Height | `Work ]
+  val max_uncles : [ `Infinity | `Int of int ]
+  val incentive_scheme : [ `Constant | `Discount ]
 end
 
 module Whitepaper = struct
-  let preference = Height
-  let progress = Height
-  let max_uncles = Int.max_int
+  let preference = `LongestChain
+  let progress = `Height
+  let max_uncles = `Infinity
+  let incentive_scheme = `Constant
 end
 
 module Byzantium = struct
-  let preference = Height
-  let progress = Work
-  let max_uncles = 2
+  let preference = `HeaviestChain
+  let progress = `Work
+  let max_uncles = `Int 2
+  let incentive_scheme = `Discount
 end
 
 module Make (Parameters : Parameters) = struct
   open Parameters
 
-  let key = "ethereum"
-
-  let info =
-    Printf.sprintf
-      "Ethereum's adaptation of GHOST with %s-preference, %s-progress, and uncle cap %i"
-      (Variants_of_height_or_work.to_name preference |> String.lowercase_ascii)
-      (Variants_of_height_or_work.to_name progress |> String.lowercase_ascii)
+  let key =
+    let open Options in
+    Format.asprintf
+      "eth-%a-%a-%a-%a"
+      pp
+      preference
+      pp
+      progress
+      pp
       max_uncles
+      pp
+      incentive_scheme
   ;;
 
-  let puzzles_per_block = 1
+  let description =
+    let open Options in
+    Format.asprintf
+      "Ethereum with %a-preference, %a-progress, uncle cap %a, and %a-rewards"
+      pp
+      preference
+      pp
+      progress
+      pp
+      max_uncles
+      pp
+      incentive_scheme
+  ;;
+
+  let info =
+    let open Options in
+    [ info "preference" preference
+    ; info "progress" progress
+    ; info "max_uncles" max_uncles
+    ; info "incentive_scheme" incentive_scheme
+    ]
+  ;;
 
   type data =
     { height : int
     ; work : int
+    ; miner : int option
     }
 
   let height data = data.height
 
   let progress data =
     match progress with
-    | Height -> float_of_int data.height
-    | Work -> float_of_int data.work
+    | `Height -> float_of_int data.height
+    | `Work -> float_of_int data.work
   ;;
 
   let preference =
     match preference with
-    | Height -> fun x -> x.height
-    | Work -> fun x -> x.work
+    | `HeaviestChain -> fun x -> x.height
+    | `LongestChain -> fun x -> x.work
   ;;
 
   let describe { height; _ } = Printf.sprintf "block %i" height
-  let dag_roots = [ { height = 0; work = 0 } ]
+  let roots = [ { height = 0; work = 0; miner = None } ]
 
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
     let info x =
+      let x = data x in
       let open Info in
       [ int "height" x.height; int "work" x.work ]
     ;;
 
-    let dag_validity b =
+    let label x = Printf.sprintf "block %i" (data x).height
+    let height x = data x |> height
+    let progress x = data x |> progress
+
+    let validity b =
       match pow b, Dag.parents view b with
       | Some _, p :: uncles ->
         let pd = data p
@@ -86,7 +115,10 @@ module Make (Parameters : Parameters) = struct
         in
         let check_height () = bd.height = pd.height + 1
         and check_work () = bd.work = pd.work + 1 + List.length uncles
-        and check_max_uncles () = List.length uncles <= max_uncles
+        and check_max_uncles () =
+          match max_uncles with
+          | `Infinity -> true
+          | `Int i -> List.length uncles <= i
         and check_recent u =
           let ud = data u in
           let k = bd.height - ud.height in
@@ -103,6 +135,7 @@ module Make (Parameters : Parameters) = struct
         in
         check_height ()
         && check_work ()
+        && Option.is_some bd.miner
         && check_max_uncles ()
         && List.for_all
              (fun u ->
@@ -125,50 +158,40 @@ module Make (Parameters : Parameters) = struct
       List.fold_left (fun acc x -> if prop x > prop acc then x else acc) (List.hd l) l
     ;;
 
-    let history =
-      (* uncles are not part of the linear history *)
-      Seq.unfold (fun this ->
-          Dag.parents view this
-          |> fun parents -> List.nth_opt parents 0 |> Option.map (fun next -> this, next))
+    (* uncles are not part of the linear history *)
+    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+
+    let assign c x =
+      match (data x).miner with
+      | Some x -> [ x, c ]
+      | None -> []
     ;;
 
     (* described in whitepaper *)
-    let constant base_reward : env reward_function =
-     fun ~assign v ->
-      let uncles = uncles v in
-      List.iter (assign (0.9375 *. base_reward)) uncles;
+    let constant base_reward x =
+      let uncles = uncles x in
       let n_uncles = List.length uncles |> float_of_int in
-      let r = 1. +. (n_uncles *. 0.03125 *. base_reward) in
-      assign r v
-   ;;
+      assign (1. +. (n_uncles *. 0.03125 *. base_reward)) x
+      @ List.concat_map (assign (0.9375 *. base_reward)) uncles
+    ;;
 
     (* actually used; source: https://www.doi.org/10.1109/ICDCS.2019.00131 *)
-    let discount base_reward : env reward_function =
-     fun ~assign v ->
-      let uncles = uncles v in
-      let vheight = height (data v) in
-      List.iter
-        (fun u ->
-          (* discount based on age *)
-          let delta = vheight - height (data u) |> float_of_int in
-          assign ((8. -. delta) /. 8. *. base_reward) u)
-        uncles;
+    let discount base_reward x =
+      let uncles = uncles x in
+      let h = height x in
       let n_uncles = List.length uncles |> float_of_int in
-      let r = 1. +. (n_uncles *. 0.03125 *. base_reward) in
-      assign r v
-   ;;
+      assign (1. +. (n_uncles *. 0.03125 *. base_reward)) x
+      @ List.concat_map
+          (fun u ->
+            let delta = h - height u |> float_of_int in
+            assign ((8. -. delta) /. 8. *. base_reward) u)
+          uncles
+    ;;
 
-    let reward_functions =
-      let open Collection in
-      empty
-      |> add
-           ~info:"base reward 1; uncles yield 3.215% and (8 - d) / 8"
-           "discount"
-           (discount 1.)
-      |> add
-           ~info:"base reward 1; uncles yield 3.215% and 93.75%"
-           "constant"
-           (constant 1.)
+    let reward =
+      match incentive_scheme with
+      | `Constant -> constant 1.
+      | `Discount -> discount 1.
     ;;
   end
 
@@ -218,6 +241,11 @@ module Make (Parameters : Parameters) = struct
           in
           f 0 ([], [ preferred ]) preferred
         in
+        let max_uncles =
+          match max_uncles with
+          | `Infinity -> Int.max_int
+          | `Int i -> i
+        in
         List.fold_left
           (fun acc b ->
             let uncles =
@@ -239,8 +267,8 @@ module Make (Parameters : Parameters) = struct
       in
       let n_uncles = List.length uncles in
       let data =
-        let { height; work } = data state in
-        { height = height + 1; work = work + 1 + n_uncles }
+        let { height; work; _ } = data state in
+        { height = height + 1; work = work + 1 + n_uncles; miner = Some my_id }
       in
       { sign = false; parents = preferred :: uncles; data }
     ;;

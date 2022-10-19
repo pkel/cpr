@@ -1,71 +1,38 @@
 open Cpr_lib
 
-type reward_scheme =
-  | Discount
-  | Constant
-  | Punish
-  | Hybrid
-  | Block
-
-let reward_schemes = [ Discount; Constant; Punish; Hybrid; Block ]
-
-let reward_key = function
-  | Constant -> "constant"
-  | Discount -> "discount"
-  | Punish -> "punish"
-  | Hybrid -> "hybrid"
-  | Block -> "block"
-;;
-
-let reward_info = function
-  | Constant -> "1 per confirmed puzzle solution"
-  | Discount ->
-    "max k per confirmed block, d/k per confirmed pow solution (d ∊ 1..k = height since \
-     last block)"
-  | Punish -> "max k per confirmed block, 1 per pow solution on longest chain of votes"
-  | Hybrid ->
-    "max k per confirmed block, d/k per pow solution on longest chain of votes (d ∊ 1..k \
-     = height since last block)"
-  | Block -> "1 per confirmed (strong) block"
-;;
-
-type subblock_selection =
-  | Altruistic
-  | Heuristic
-  | Optimal
-
-let subblock_selection_key = function
-  | Altruistic -> "altruistic"
-  | Heuristic -> "heuristic"
-  | Optimal -> "optimal"
-;;
-
-module type Parameters = sig
-  (** number of votes (= puzzle solutions) per block *)
-  val k : int
-
-  val rewards : reward_scheme
-  val subblock_selection : subblock_selection
-end
+module type Parameters = Tailstorm.Parameters
 
 module Make (Parameters : Parameters) = struct
   open Parameters
 
-  let key = "tailstormll"
-
-  let info =
-    Printf.sprintf
-      "Tailstorm/ll with k=%i, '%s' rewards, and '%s' sub block selection"
-      Parameters.k
-      (reward_key Parameters.rewards)
-      (subblock_selection_key Parameters.subblock_selection)
+  let key =
+    let open Options in
+    Format.asprintf "tailstormll-%i-%a-%a" k pp incentive_scheme pp subblock_selection
   ;;
 
-  let puzzles_per_block = k
+  let description =
+    Format.asprintf
+      "Tailstorm/ll with k=%i, %a rewards, and %a sub-block selection"
+      Parameters.k
+      Options.pp
+      incentive_scheme
+      Options.pp
+      subblock_selection
+  ;;
+
+  let info =
+    let open Info in
+    [ string "family" "tailstormll"
+    ; int "k" k
+    ; Options.info "rewards" incentive_scheme
+    ; Options.info "subblock_selection" subblock_selection
+    ]
+  ;;
 
   type data =
     { block : int
     ; vote : int
+    ; miner : int option
     }
 
   let height h = h.block
@@ -79,16 +46,24 @@ module Make (Parameters : Parameters) = struct
     Printf.sprintf "%s (%i|%i)" ty h.block h.vote
   ;;
 
-  let dag_roots = [ { block = 0; vote = 0 } ]
+  let roots = [ { block = 0; vote = 0; miner = None } ]
 
   module Referee (V : GlobalView with type data = data) = struct
     include V
 
     let info x =
+      let x = data x in
       let open Info in
       if is_vote x
       then [ string "kind" "vote"; int "height" x.block; int "depth" x.vote ]
       else [ string "kind" "summary"; int "height" x.block ]
+    ;;
+
+    let label x =
+      let x = data x in
+      if is_vote x
+      then Printf.sprintf "summary %i" x.block
+      else Printf.sprintf "vote (%i|%i)" x.block x.vote
     ;;
 
     let dag_fail (type a) vertices msg : a =
@@ -100,6 +75,7 @@ module Make (Parameters : Parameters) = struct
     let is_block x = is_block (data x)
     let height x = height (data x)
     let depth x = depth (data x)
+    let progress x = progress (data x)
 
     let rec last_block x =
       if is_block x
@@ -126,12 +102,13 @@ module Make (Parameters : Parameters) = struct
     let votes_only = Dag.filter is_vote view
     let blocks_only = Dag.filter is_block view
 
-    let dag_validity vertex =
+    let validity vertex =
       let child = data vertex in
       child.block >= 0
       && child.vote >= 0
       && child.vote < k
       && pow vertex |> Option.is_some
+      && child.miner |> Option.is_some
       &&
       match is_vote vertex, Dag.parents view vertex with
       | true, [ p ] ->
@@ -167,52 +144,46 @@ module Make (Parameters : Parameters) = struct
       Compare.first (Compare.neg compare_blocks) 1 l |> Option.get |> List.hd
     ;;
 
-    let history =
-      (* TODO: we could adapt the implementation to not include the last block as first
-         parent but to infer it with last_block where needed *)
-      Seq.unfold (fun this ->
-          List.nth_opt (Dag.parents view this) (if is_block this && k > 1 then 1 else 0)
-          |> Option.map (fun next -> this, next))
+    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+
+    let assign c x =
+      match (data x).miner with
+      | Some x -> [ x, c ]
+      | None -> []
     ;;
 
-    let constant_block c : _ reward_function =
-     fun ~assign x -> if is_block x then assign c x
-   ;;
-
-    let reward' ~max_reward_per_block ~discount ~punish : env reward_function =
+    let reward' ~max_reward_per_block ~discount ~punish x =
       let k = float_of_int k in
       let c = max_reward_per_block /. k in
-      fun ~assign x ->
-        if is_block x
-        then (
-          match Dag.parents votes_only x with
-          | [] -> (* Either genesis or k=1 *) assign c x
-          | hd :: _ ->
-            let depth = (data hd).vote in
-            let r = if discount then (float_of_int depth +. 1.) /. k *. c else c in
-            if punish
-            then (
-              assign r x;
-              Dag.iterate_ancestors votes_only [ hd ] |> Seq.iter (assign r))
-            else Dag.iterate_ancestors votes_only [ x ] |> Seq.iter (assign r))
+      if is_block x
+      then (
+        match Dag.parents votes_only x with
+        | [] -> []
+        | hd :: _ ->
+          let depth = depth hd in
+          let r = if discount then (float_of_int depth +. 1.) /. k *. c else c in
+          if punish
+          then
+            assign r x
+            @ (Dag.iterate_ancestors votes_only [ hd ]
+              |> Seq.map (assign r)
+              |> List.of_seq
+              |> List.concat)
+          else
+            Dag.iterate_ancestors votes_only [ x ]
+            |> Seq.map (assign r)
+            |> List.of_seq
+            |> List.concat)
+      else []
     ;;
 
     let reward =
       let reward = reward' ~max_reward_per_block:(float_of_int k) in
-      match Parameters.rewards with
-      | Constant -> reward ~discount:false ~punish:false
-      | Discount -> reward ~discount:true ~punish:false
-      | Punish -> reward ~discount:false ~punish:true
-      | Hybrid -> reward ~discount:true ~punish:true
-      | Block -> constant_block 1.
-    ;;
-
-    (* TODO: add tests for reward functions *)
-
-    let reward_functions =
-      let open Collection in
-      let x = Parameters.rewards in
-      empty |> add ~info:(reward_info x) (reward_key x) reward
+      match incentive_scheme with
+      | `Constant -> reward ~discount:false ~punish:false
+      | `Discount -> reward ~discount:true ~punish:false
+      | `Punish -> reward ~discount:false ~punish:true
+      | `Hybrid -> reward ~discount:true ~punish:true
     ;;
   end
 
@@ -397,7 +368,7 @@ module Make (Parameters : Parameters) = struct
        Calculating rewards will be interesting. We cannot use the reward function of the
        referee, because the block is not yet appended. But maybe we can reuse parts to
        avoid error-prone redundancy. *)
-    let optimal_quorum ~vote_filter b =
+    let optimal_quorum ~max_options ~vote_filter b =
       assert (is_block b);
       if k = 1
       then Some []
@@ -408,7 +379,9 @@ module Make (Parameters : Parameters) = struct
           |> Array.of_seq
         in
         let n = Array.length a in
-        if n < k - 1
+        if Combinatorics.n_choose_k n k > max_options
+        then heuristic_quorum ~vote_filter b
+        else if n < k - 1
         then None
         else (
           let a' =
@@ -457,15 +430,14 @@ module Make (Parameters : Parameters) = struct
                 in
                 let reward =
                   let rewarded_votes =
-                    match rewards with
-                    | Block -> Seq.empty
-                    | Constant | Discount -> Dag.iterate_ancestors votes_only leaves
-                    | Punish | Hybrid ->
+                    match incentive_scheme with
+                    | `Constant | `Discount -> Dag.iterate_ancestors votes_only leaves
+                    | `Punish | `Hybrid ->
                       Dag.iterate_ancestors votes_only [ List.hd leaves ]
                   and per_vote =
-                    match rewards with
-                    | Block | Constant | Punish -> 1.
-                    | Discount | Hybrid ->
+                    match incentive_scheme with
+                    | `Constant | `Punish -> 1.
+                    | `Discount | `Hybrid ->
                       let depth = (List.hd leaves |> data).vote in
                       float_of_int (depth + 1) /. float_of_int k
                   in
@@ -503,16 +475,19 @@ module Make (Parameters : Parameters) = struct
 
     let quorum =
       match subblock_selection with
-      | Altruistic -> altruistic_quorum
-      | Heuristic -> heuristic_quorum
-      | Optimal -> optimal_quorum
+      | `Altruistic -> altruistic_quorum
+      | `Heuristic -> heuristic_quorum
+      | `Optimal -> optimal_quorum ~max_options:100
     ;;
 
     let puzzle_payload' ~vote_filter b =
       assert (is_block b);
       match quorum ~vote_filter b with
       | Some q ->
-        { parents = b :: q; sign = false; data = { block = height b + 1; vote = 0 } }
+        { parents = b :: q
+        ; sign = false
+        ; data = { block = height b + 1; vote = 0; miner = Some my_id }
+        }
       | None ->
         let votes =
           Dag.iterate_descendants (Dag.filter vote_filter votes_only) [ b ]
@@ -526,7 +501,7 @@ module Make (Parameters : Parameters) = struct
         in
         { parents = [ parent ]
         ; sign = false
-        ; data = { block = height b; vote = (data parent).vote + 1 }
+        ; data = { block = height b; vote = (data parent).vote + 1; miner = Some my_id }
         }
     ;;
 

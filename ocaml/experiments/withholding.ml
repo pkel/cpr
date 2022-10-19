@@ -3,7 +3,7 @@ open Models
 
 let alphas = [ 0.1; 0.2; 0.25; 0.33; 0.4; 0.45; 0.5 ]
 
-let two_agents (AttackSpace (module A)) n_activations =
+let two_agents n_activations (AttackSpace (module A)) =
   let protocol = (module A.Protocol : Protocol with type data = _) in
   List.concat_map
     (fun net ->
@@ -23,7 +23,7 @@ let two_agents (AttackSpace (module A)) n_activations =
     (List.map (fun alpha -> two_agents ~alpha) alphas)
 ;;
 
-let selfish_mining (AttackSpace (module A)) n_activations =
+let selfish_mining n_activations (AttackSpace (module A)) =
   let protocol = (module A.Protocol : Protocol with type data = _) in
   (* let gammas = [ 0.; 0.25; 0.5; 0.75; 0.9 ] in *)
   let gammas = [ 0.; 0.5; 0.75; 0.9 ] in
@@ -54,54 +54,27 @@ let selfish_mining (AttackSpace (module A)) n_activations =
 
 (* Run all combinations of protocol, attack, network and block_interval. *)
 let tasks ~n_activations =
+  let two_agents = two_agents n_activations
+  and selfish_mining = selfish_mining n_activations in
   let open Cpr_protocols in
-  let k = [ 1; 2; 4; 8; 16; 32 ] in
-  let nakamoto =
-    two_agents nakamoto_ssz n_activations @ selfish_mining nakamoto_ssz n_activations
-  and ethereum =
-    two_agents ethereum_ssz n_activations @ selfish_mining ethereum_ssz n_activations
-  and bk = List.concat_map (fun k -> two_agents (bk_ssz ~k) n_activations) k
-  and bkll = List.concat_map (fun k -> two_agents (bkll_ssz ~k) n_activations) k
-  and tailstorm =
-    List.concat_map
-      (fun rewards ->
+  two_agents nakamoto_ssz
+  @ selfish_mining nakamoto_ssz
+  @ two_agents (ethereum_ssz ~incentive_scheme:`Discount)
+  @ selfish_mining (ethereum_ssz ~incentive_scheme:`Discount)
+  @ List.concat_map
+      (fun k ->
         List.concat_map
-          (fun k ->
-            let subblock_selection =
-              if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
-            in
-            two_agents (tailstorm_ssz ~subblock_selection ~rewards ~k) n_activations)
-          k
+          (fun incentive_scheme ->
+            two_agents (bk_ssz ~k ~incentive_scheme)
+            @ two_agents (bkll_ssz ~k ~incentive_scheme))
+          [ `Block; `Constant ]
         @ List.concat_map
-            (fun k ->
-              let subblock_selection =
-                if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
-              in
-              selfish_mining (tailstorm_ssz ~subblock_selection ~rewards ~k) n_activations)
-            k)
-      Tailstorm.[ Constant; Discount ]
-  and tailstormll =
-    List.concat_map
-      (fun rewards ->
-        List.concat_map
-          (fun k ->
-            let subblock_selection =
-              if k > 8 then Tailstormll.Heuristic else Tailstormll.Optimal
-            in
-            two_agents (tailstormll_ssz ~subblock_selection ~rewards ~k) n_activations)
-          k
-        @ List.concat_map
-            (fun k ->
-              let subblock_selection =
-                if k > 8 then Tailstormll.Heuristic else Tailstormll.Optimal
-              in
-              selfish_mining
-                (tailstormll_ssz ~subblock_selection ~rewards ~k)
-                n_activations)
-            k)
-      Tailstormll.[ Constant; Discount ]
-  in
-  List.concat [ nakamoto; ethereum; bk; bkll; tailstorm; tailstormll ]
+            (fun incentive_scheme ->
+              let subblock_selection = if k > 8 then `Heuristic else `Optimal in
+              two_agents (tailstorm_ssz ~subblock_selection ~incentive_scheme ~k)
+              @ two_agents (tailstormll_ssz ~subblock_selection ~incentive_scheme ~k))
+            [ `Constant; `Discount ])
+      [ 1; 2; 4; 8; 16; 32 ]
 ;;
 
 open Cmdliner

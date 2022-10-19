@@ -9,7 +9,6 @@ module Parameters : sig
     ; defenders : int (** number of defenders; 1 <= x *)
     ; activation_delay : float (** difficulty; 0 < x *)
     ; max_steps : int (** termination criterion, number of attacker steps; 1 <= x *)
-    ; max_height : int (** termination criterion, block height; 0 < x *)
     ; max_progress : float (** termination criterion, block float; 0 < x *)
     ; max_time : float (** termination criterion, simulated time; 0 < x *)
     }
@@ -21,7 +20,6 @@ module Parameters : sig
     -> defenders:int
     -> activation_delay:float
     -> max_steps:int
-    -> max_height:int
     -> max_progress:float
     -> max_time:float
     -> t
@@ -32,40 +30,21 @@ end = struct
     ; defenders : int
     ; activation_delay : float
     ; max_steps : int
-    ; max_height : int
     ; max_progress : float
     ; max_time : float
     }
 
-  let t
-      ~alpha
-      ~gamma
-      ~defenders
-      ~activation_delay
-      ~max_steps
-      ~max_height
-      ~max_progress
-      ~max_time
-    =
+  let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_progress ~max_time =
     let () =
       if alpha < 0. || alpha > 1. then failwith "alpha < 0 || alpha > 1";
       if gamma < 0. || gamma > 1. then failwith "gamma < 0 || gamma > 1";
       if defenders < 1 then failwith "defenders < 0";
       if activation_delay <= 0. then failwith "activation_delay <= 0";
       if max_steps <= 0 then failwith "max_steps <= 0";
-      if max_height <= 0 then failwith "max_height <= 0";
       if max_progress <= 0. then failwith "max_progress <= 0";
       if max_time <= 0. then failwith "max_time <= 0"
     in
-    { alpha
-    ; gamma
-    ; defenders
-    ; activation_delay
-    ; max_steps
-    ; max_height
-    ; max_progress
-    ; max_time
-    }
+    { alpha; gamma; defenders; activation_delay; max_steps; max_progress; max_time }
   ;;
 end
 
@@ -87,29 +66,15 @@ type instance =
   | Instance :
       { sim : 'data Simulator.state
       ; agent : 'data agent
-      ; reward_function : 'data Simulator.env reward_function
       ; protocol : (module Protocol with type data = 'data)
       ; mutable episode_steps : int
+      ; mutable last_progress : float
       ; mutable last_chain_time : float
       ; mutable last_sim_time : float
       ; mutable last_reward_attacker : float
       ; mutable last_reward_defender : float
-      ; mutable last_n_pow : int
       }
       -> instance
-
-let numeration ?(sep = ", ") ?(conj = " and ") =
-  let rec f acc = function
-    | [] -> assert false
-    | [ hd ] -> acc ^ sep ^ conj ^ hd
-    | hd :: tl -> f (acc ^ sep ^ hd) tl
-  in
-  function
-  | [] -> ""
-  | [ a ] -> a
-  | [ a; b ] -> a ^ conj ^ b
-  | x -> f "" x
-;;
 
 let dummy_node
     (type env data)
@@ -126,11 +91,7 @@ let dummy_node
     end)
 ;;
 
-let of_module
-    ?(logger = Log.dummy_logger)
-    (AttackSpace (module M))
-    ~(reward : string)
-    (p : Parameters.t)
+let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Parameters.t)
     : instance ref env
   =
   let network =
@@ -147,13 +108,7 @@ let of_module
     | Some (OnNode (0, ev)) -> ev
     | Some (Dag (0, `ProofOfWork, _draft)) ->
       let draft = puzzle_payload () in
-      let vertex =
-        match append ~pow:true sim 0 draft with
-        | `Fresh, x ->
-          let () = check_vertex sim x in
-          x
-        | `Redundant, _ -> failwith "proof-of-work appended vertices should be fresh"
-      in
+      let vertex = append ~pow:true sim 0 draft in
       schedule sim.clock `Now (MakeVisible (0, `ProofOfWork, vertex));
       skip_to_interaction sim puzzle_payload
     | Some ev ->
@@ -168,22 +123,6 @@ let of_module
       | _ -> None
     in
     let sim = init ~logger ~patch (module M.Protocol) network in
-    let reward_function =
-      let (module Ref) = sim.referee in
-      match Collection.get reward Ref.reward_functions with
-      | Some x -> x.it
-      | None ->
-        let msg =
-          "unkown reward function '"
-          ^ reward
-          ^ "'. Try "
-          ^ (Collection.keys Ref.reward_functions
-            |> List.map (fun s -> "'" ^ s ^ "'")
-            |> numeration ~conj:" or ")
-          ^ "."
-        in
-        failwith msg
-    in
     let agent =
       let (Node node) = sim.nodes.(0) in
       let _ = node.view in
@@ -205,14 +144,13 @@ let of_module
     Instance
       { sim
       ; agent
-      ; reward_function
       ; protocol = (module M.Protocol)
       ; episode_steps = 0
+      ; last_progress = 0.
       ; last_chain_time = 0.
       ; last_sim_time = 0.
       ; last_reward_attacker = 0.
       ; last_reward_defender = 0.
-      ; last_n_pow = 0
       }
   in
   let observe (Instance t) =
@@ -265,70 +203,45 @@ let of_module
       |> Array.to_list
     in
     let head = Ref.winner prefs in
-    let height = Protocol.height (Dag.data head).value
-    and progress = Protocol.progress (Dag.data head).value in
+    let progress = Ref.progress head in
     let done_ =
       not
         (t.episode_steps < p.max_steps
-        && height < p.max_height
         && progress < p.max_progress
         && t.sim.clock.now < p.max_time)
     in
-    (* TODO. We calculate rewards for the whole chain on each step, then return the delta.
-       If this turns out to be to expensive, we can record safepoints and use them for
-       caching. *)
-    let reward_attacker = ref 0.
-    and reward_defender = ref 0.
-    and n_pow = ref 0 in
-    let () =
-      let f vertex =
-        let open Simulator in
-        if Option.is_some (Dag.data vertex).pow then incr n_pow else ();
-        t.reward_function
-          ~assign:(fun reward vertex ->
-            match reward_recipient vertex with
-            | None -> ()
-            | Some 0 -> reward_attacker := !reward_attacker +. reward
-            | Some _ -> reward_defender := !reward_defender +. reward)
-          vertex
-      in
-      Ref.history head |> Seq.iter f
-    in
-    let chain_time = Simulator.timestamp (Dag.data head)
+    let reward_attacker, reward_defender, _ =
+      Float.Array.fold_left
+        (fun (a, d, i) x -> if i = 0 then a +. x, d, i + 1 else a, d +. x, i + 1)
+        (0., 0., 0)
+        (Dag.data head).rewards
+    and chain_time = Simulator.timestamp (Dag.data head)
     and sim_time = t.sim.clock.now in
     (* Calculate return/info metrics *)
-    let reward = !reward_attacker -. t.last_reward_attacker
+    let reward = reward_attacker -. t.last_reward_attacker
     and info =
-      let float = Py.Float.of_float
-      and int = Py.Int.of_int in
-      [ "step_reward_attacker", float (!reward_attacker -. t.last_reward_attacker)
-      ; "step_reward_defender", float (!reward_defender -. t.last_reward_defender)
-      ; "step_n_pow", int (!n_pow - t.last_n_pow)
-      ; "step_chain_time", float (chain_time -. t.last_chain_time)
-      ; "step_sim_time", float (sim_time -. t.last_sim_time)
-      ; "episode_reward_attacker", float !reward_attacker
-      ; "episode_reward_defender", float !reward_defender
-      ; "episode_n_pow", int !n_pow
-      ; "episode_chain_time", float chain_time
-      ; "episode_sim_time", float sim_time
-      ; "episode_n_steps", int t.episode_steps
-      ; "episode_height", int height
-      ; "episode_progress", float progress
+      let open Info in
+      [ float "step_reward_attacker" (reward_attacker -. t.last_reward_attacker)
+      ; float "step_reward_defender" (reward_defender -. t.last_reward_defender)
+      ; float "step_progress" (progress -. t.last_progress)
+      ; float "step_chain_time" (chain_time -. t.last_chain_time)
+      ; float "step_sim_time" (sim_time -. t.last_sim_time)
+      ; float "episode_reward_attacker" reward_attacker
+      ; float "episode_reward_defender" reward_defender
+      ; float "episode_progress" progress
+      ; float "episode_chain_time" chain_time
+      ; float "episode_sim_time" sim_time
+      ; int "episode_n_steps" t.episode_steps
       ]
-      @
-      if done_
-      then
-        [ "episode_pow_interval", float (chain_time /. float_of_int !n_pow)
-        ; "episode_block_interval", float (chain_time /. float_of_int height)
-        ]
-      else []
+      @ List.map (fun (k, v) -> "protocol_" ^ k, v) Protocol.info
+      @ List.map (fun (k, v) -> "head_" ^ k, v) (Ref.info head)
     in
     (* update state *)
     t.last_chain_time <- chain_time;
     t.last_sim_time <- sim_time;
-    t.last_reward_attacker <- !reward_attacker;
-    t.last_reward_defender <- !reward_defender;
-    t.last_n_pow <- !n_pow;
+    t.last_reward_attacker <- reward_attacker;
+    t.last_reward_defender <- reward_defender;
+    t.last_progress <- progress;
     (* return *)
     observe (Instance t), reward, done_, info
   and low = M.Observation.(low |> to_floatarray)
@@ -336,7 +249,7 @@ let of_module
   and to_string t =
     Printf.sprintf
       "%s; %s; α=%.2f attacker\n%s\nActions: %s"
-      M.Protocol.info
+      M.Protocol.description
       M.info
       p.alpha
       (observe_hum !t)
@@ -355,6 +268,5 @@ let of_module
   ; high
   ; to_string
   ; policies
-  ; puzzles_per_block = M.Protocol.puzzles_per_block
   }
 ;;

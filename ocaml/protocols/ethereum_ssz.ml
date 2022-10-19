@@ -444,8 +444,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
         | `Discard -> Adopt_discard
       and private_pref, public_pref =
         match Parameters.preference with
-        | Height -> o.private_height, o.public_height
-        | Work -> o.private_work, o.public_work
+        | `LongestChain -> o.private_height, o.public_height
+        | `HeaviestChain -> o.private_work, o.public_work
       in
       if private_pref < public_pref
       then adopt, mining

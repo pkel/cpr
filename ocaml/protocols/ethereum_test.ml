@@ -24,16 +24,20 @@ module V = TestView (Ethereum)
 module Ref = Ethereum.Referee (V)
 
 let env value = V.{ value; pow_hash = Some (1, 1); signed_by = None }
-let root = Dag.append V.dag [] (env { height = 43; work = 47 })
+let root = Dag.append V.dag [] (env { height = 43; work = 47; miner = None })
 
 let mine parent uncles =
   let value =
     let parent = V.data parent in
     env
-      Ethereum.{ height = parent.height + 1; work = parent.work + List.length uncles + 1 }
+      Ethereum.
+        { height = parent.height + 1
+        ; work = parent.work + List.length uncles + 1
+        ; miner = Some 42
+        }
   in
   let r = Dag.append V.dag (parent :: uncles) value in
-  if Ref.dag_validity r then Some r else None
+  if Ref.validity r then Some r else None
 ;;
 
 let mine_exn p u =

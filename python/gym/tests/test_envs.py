@@ -87,13 +87,11 @@ def test_alphaScheduleWrapper():
 
 def test_EpisodeRecorderWrapper():
     env = gym.make("cpr_gym:core-v0")
-    env = wrappers.EpisodeRecorderWrapper(
-        env, n=10, info_keys=["episode_block_interval"]
-    )
+    env = wrappers.EpisodeRecorderWrapper(env, n=10, info_keys=["head_height"])
     check_env(env)
     for i in range(42):
         run_episode(env, "honest")
     assert len(env.erw_history) == 10
     for entry in env.erw_history:
         assert "episode_reward" in entry.keys()
-        assert "episode_block_interval" in entry.keys()
+        assert "head_height" in entry.keys()

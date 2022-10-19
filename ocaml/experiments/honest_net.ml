@@ -1,50 +1,38 @@
 open Cpr_lib
 open Models
 
-let block_intervals = [ 30.; 60.; 120.; 300.; 600. ]
-
-let activation_delay ~block_interval ~puzzles_per_block =
-  block_interval /. (puzzles_per_block |> float_of_int)
-;;
+let activation_delays = [ 30.; 60.; 120.; 300.; 600. ]
 
 let tasks_per_protocol ~n_activations (Protocol protocol) =
   let (module P) = protocol in
   List.concat_map
     (fun net ->
       List.map
-        (fun block_interval ->
-          let activation_delay =
-            let open P in
-            activation_delay ~block_interval ~puzzles_per_block
-          in
+        (fun activation_delay ->
           let sim, network = net ~activation_delay protocol in
           Csv_runner.Task
             { activations = n_activations; protocol; attack = None; sim; network })
-        block_intervals)
+        activation_delays)
     [ honest_clique ~n:10 ]
 ;;
 
 let protocols =
   let open Cpr_protocols in
   nakamoto
-  :: ethereum
+  :: ethereum ~incentive_scheme:`Discount
   :: List.concat_map
        (fun k ->
-         [ bk ~k; bkll ~k ]
-         @ List.map
-             (fun rewards ->
-               let subblock_selection =
-                 if k > 8 then Tailstorm.Heuristic else Tailstorm.Optimal
-               in
-               tailstorm ~subblock_selection ~rewards ~k)
-             Tailstorm.reward_schemes
-         @ List.map
-             (fun rewards ->
-               let subblock_selection =
-                 if k > 8 then Tailstormll.Heuristic else Tailstormll.Optimal
-               in
-               tailstormll ~subblock_selection ~rewards ~k)
-             Tailstormll.reward_schemes)
+         List.concat_map
+           (fun incentive_scheme ->
+             [ bk ~k ~incentive_scheme; bkll ~k ~incentive_scheme ])
+           [ `Block; `Constant ]
+         @ List.concat_map
+             (fun incentive_scheme ->
+               let subblock_selection = if k > 8 then `Heuristic else `Optimal in
+               [ tailstorm ~subblock_selection ~incentive_scheme ~k
+               ; tailstormll ~subblock_selection ~incentive_scheme ~k
+               ])
+             [ `Constant; `Discount ])
        [ 1; 2; 4; 8; 16; 32 ]
 ;;
 
