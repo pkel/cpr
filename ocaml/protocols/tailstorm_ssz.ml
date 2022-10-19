@@ -167,7 +167,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           { public : env Dag.vertex
           ; private_ : env Dag.vertex
           ; common : env Dag.vertex
-          ; event : [ `Append | `ProofOfWork | `Network ]
+          ; event : [ `Append | `ProofOfWork | `Network ] * env Dag.vertex
           }
 
     let init ~roots =
@@ -203,15 +203,16 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     ;;
 
     let prepare (BeforeAction state) event =
-      let public, private_, event =
+      let public, private_, event, fresh =
         match event with
-        | Append x -> state.public, x, `Append
-        | ProofOfWork _x -> state.public, state.private_, `ProofOfWork
+        | Append x -> state.public, x, `Append, x
+        | ProofOfWork x -> state.public, state.private_, `ProofOfWork, x
         | Network x ->
           let b = last_summary x
           and vote_filter = public_visibility in
-          N.update_head ~vote_filter ~old:state.public b, state.private_, `Network
+          N.update_head ~vote_filter ~old:state.public b, state.private_, `Network, x
       in
+      let event = event, fresh in
       let common = Dag.common_ancestor view public private_ |> Option.get in
       Observable { public; private_; common; event }
     ;;
@@ -244,7 +245,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       ; public_depth
       ; private_depth_inclusive
       ; private_depth_exclusive
-      ; event = Ssz_tools.Event.to_int state.event
+      ; event = Ssz_tools.Event.to_int (fst state.event)
       }
     ;;
 
@@ -279,16 +280,20 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         | Wait_Proceed | Wait_Prolong -> [], state.private_
       in
       let append =
-        let vote_filter =
-          match action with
-          | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
-            vote_filter `Inclusive
-          | Adopt_Prolong | Override_Prolong | Match_Prolong | Wait_Prolong ->
-            vote_filter `Exclusive
-        in
-        match N.next_summary' ~vote_filter private_ with
-        | Some summary -> [ summary ]
-        | None -> []
+        let x = snd state.event in
+        if is_vote x
+        then (
+          let vote_filter =
+            match action with
+            | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
+              vote_filter `Inclusive
+            | Adopt_Prolong | Override_Prolong | Match_Prolong | Wait_Prolong ->
+              vote_filter `Exclusive
+          in
+          match last_summary x |> N.next_summary' ~vote_filter with
+          | Some summary -> [ summary ]
+          | None -> [])
+        else []
       in
       BetweenActions
         { public = state.public; private_; pending_private_to_public_messages = share }

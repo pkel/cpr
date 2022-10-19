@@ -178,12 +178,12 @@ module Make (Parameters : Parameters) = struct
       | Summary _ -> []
     ;;
 
-    let reward' ~max_reward_per_block ~discount ~punish x =
+    let reward' ~discount ~punish x =
       let k = float_of_int k in
-      let c = max_reward_per_block /. k in
-      if is_summary x
-      then (
-        match Dag.parents votes_only x with
+      let c = (* max reward per vote *) 1. in
+      match x.data with
+      | Summary _ ->
+        (match x.parents with
         | [] -> []
         | hd :: _ as parents ->
           let depth = depth hd in
@@ -199,17 +199,25 @@ module Make (Parameters : Parameters) = struct
             |> Seq.map (assign r)
             |> List.of_seq
             |> List.concat)
-      else []
+      | Vote _x -> []
     ;;
 
-    let reward =
-      let reward = reward' ~max_reward_per_block:(float_of_int k) in
+    let reward' =
       match incentive_scheme with
-      | `Constant -> reward ~discount:false ~punish:false
-      | `Discount -> reward ~discount:true ~punish:false
-      | `Punish -> reward ~discount:false ~punish:true
-      | `Hybrid -> reward ~discount:true ~punish:true
+      | `Constant -> reward' ~discount:false ~punish:false
+      | `Discount -> reward' ~discount:true ~punish:false
+      | `Punish -> reward' ~discount:false ~punish:true
+      | `Hybrid -> reward' ~discount:true ~punish:true
     ;;
+
+    let vertex_to_draft b : _ draft_vertex =
+      { parents = Dag.parents view b
+      ; data = data b
+      ; sign = signature b |> Option.is_some
+      }
+    ;;
+
+    let reward x = vertex_to_draft x |> reward'
   end
 
   let referee (type a) (module V : GlobalView with type env = a and type data = data)
@@ -393,6 +401,11 @@ module Make (Parameters : Parameters) = struct
        avoid error-prone redundancy. *)
     let optimal_quorum ~max_options ~vote_filter b =
       assert (is_summary b);
+      let reward leaves =
+        reward'
+          { data = Summary { height = height b + 1 }; parents = leaves; sign = false }
+        |> List.fold_left (fun acc (n, x) -> if n = my_id then acc +. x else acc) 0.
+      in
       let a =
         Dag.children votes_only b
         |> Dag.iterate_descendants (Dag.filter vote_filter votes_only)
@@ -448,25 +461,7 @@ module Make (Parameters : Parameters) = struct
                 in
                 List.sort compare_votes_in_block !l
               in
-              let reward =
-                let rewarded_votes =
-                  match incentive_scheme with
-                  | `Constant | `Discount -> Dag.iterate_ancestors votes_only leaves
-                  | `Punish | `Hybrid ->
-                    Dag.iterate_ancestors votes_only [ List.hd leaves ]
-                and per_vote =
-                  match incentive_scheme with
-                  | `Constant | `Punish -> 1.
-                  | `Discount | `Hybrid ->
-                    let depth = List.hd leaves |> depth in
-                    float_of_int (depth + 1) /. float_of_int k
-                in
-                Seq.fold_left
-                  (fun acc x -> if appended_by_me x then acc +. per_vote else acc)
-                  1.
-                  rewarded_votes
-              in
-              `Ok (reward, leaves)
+              `Ok (reward leaves, leaves)
           in
           fun c ->
             reset ();
@@ -534,21 +529,13 @@ module Make (Parameters : Parameters) = struct
         Dag.iterate_descendants votes_only [ x ]
         |> Seq.filter vote_filter
         |> Seq.fold_left (fun n _ -> n + 1) 0
-      and depth_first_parent x =
-        (* disambiguate summaries w/o confirming votes. Needed because summaries are cheap
-           and formed opportunistically. *)
-        Dag.parents view x
-        |> function
-        | [] -> 0
-        | hd :: _ -> depth hd
+      and reward x =
+        (* disambiguate summaries w/o confirming votes. W/o this, optimal sub-block
+           selection does not work *)
+        reward x
+        |> List.fold_left (fun sum (i, x) -> if i = my_id then sum +. x else sum) 0.
       in
-      let cmp =
-        by int height
-        $ by int count (* embed A_k *)
-        $ by int depth_first_parent
-          (* TODO. prefer most reward block? Or the one with the lowest hash? *)
-        $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
-      in
+      let cmp = by int height $ by int count (* embed A_k *) $ by float reward in
       skip_eq Dag.vertex_eq cmp
     ;;
 
@@ -558,17 +545,20 @@ module Make (Parameters : Parameters) = struct
 
     let handler preferred = function
       | Append x | Network x | ProofOfWork x ->
-        let s = last_summary x in
-        let append =
-          match next_summary s with
-          | Some block -> [ block ]
-          | None -> []
-        and share =
-          match visibility x with
-          | `Withheld when is_vote x -> [ x ]
-          | _ -> []
-        in
-        update_head ~old:preferred s |> return ~append ~share
+        if is_summary x
+        then update_head ~old:preferred x |> return
+        else (
+          let s = last_summary x in
+          let append =
+            match next_summary s with
+            | Some block -> [ block ]
+            | None -> []
+          and share =
+            match visibility x with
+            | `Withheld when is_vote x -> [ x ]
+            | _ -> []
+          in
+          update_head ~old:preferred s |> return ~append ~share)
     ;;
   end
 
