@@ -43,7 +43,7 @@ module Make (Parameters : Parameters) = struct
     let open Info in
     [ string "family" "tailstorm"
     ; int "k" k
-    ; Options.info "rewards" incentive_scheme
+    ; Options.info "incentive_scheme" incentive_scheme
     ; Options.info "subblock_selection" subblock_selection
     ]
   ;;

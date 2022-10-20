@@ -14,65 +14,25 @@ type task =
       }
       -> task
 
-type row =
-  { network : string
-  ; network_description : string
-  ; compute : float array
-  ; protocol : string
-  ; protocol_description : string
-  ; activation_delay : float
-  ; number_activations : int
-  ; activations : int array
-  ; incentive_scheme : string
-  ; incentive_scheme_description : string
-  ; strategy : string
-  ; strategy_description : string
-  ; reward : floatarray
-  ; head_time : float
-  ; head_progress : float
-  ; machine_duration_s : float
-  ; error : string
-  ; version : string
-  }
-[@@deriving fields]
-
-(* TODO save Protocol.info and (Referee.info head) *)
 let save_rows_as_tsv filename l =
-  let open Owl_dataframe in
-  let df = Fields_of_row.names |> Array.of_list |> make in
-  let record (row : row) =
-    let string _ _ x = String x
-    and float _ _ x = Float x
-    and int _ _ x = Int x
-    and array f _ _ arr = String (Array.to_list arr |> List.map f |> String.concat "|")
-    and floatarray _ _ arr =
-      String (Float.Array.to_list arr |> List.map string_of_float |> String.concat "|")
-    in
-    Fields_of_row.Direct.to_list
-      row
-      ~number_activations:int
-      ~network:string
-      ~network_description:string
-      ~compute:(array string_of_float)
-      ~protocol:string
-      ~protocol_description:string
-      ~activation_delay:float
-      ~activations:(array string_of_int)
-      ~incentive_scheme:string
-      ~incentive_scheme_description:string
-      ~strategy:string
-      ~strategy_description:string
-      ~reward:floatarray
-      ~head_time:float
-      ~head_progress:float
-      ~machine_duration_s:float
-      ~error:string
-      ~version:string
-    |> Array.of_list
-    |> append_row df
-  in
-  List.iter record l;
-  to_csv ~sep:'\t' df filename
+  Bos.OS.File.with_oc
+    (Fpath.v filename)
+    (fun oc () ->
+      Ok
+        (Format.fprintf
+           (Format.formatter_of_out_channel oc)
+           "%a"
+           (Info.pp_rows ~sep:"\t")
+           l))
+    ()
+  |> Rresult.R.join
+  |> Rresult.R.failwith_error_msg
+;;
+
+let array k f arr = Info.string k (Array.to_list arr |> List.map f |> String.concat "|")
+
+let floatarray k arr =
+  Info.string k (Float.Array.to_list arr |> List.map string_of_float |> String.concat "|")
 ;;
 
 let prepare_row (Task { activations; network; protocol; attack; sim }) =
@@ -81,26 +41,22 @@ let prepare_row (Task { activations; network; protocol; attack; sim }) =
     match attack with
     | Some x -> x.Collection.key, x.info
     | None -> "none", ""
-  in
-  { network = sim.key
-  ; network_description = sim.info
-  ; protocol = Protocol.key
-  ; protocol_description = Protocol.description
-  ; activation_delay = network.activation_delay
-  ; number_activations = activations
-  ; activations = [||]
-  ; compute = [||]
-  ; incentive_scheme = "none"
-  ; incentive_scheme_description = ""
-  ; strategy
-  ; strategy_description
-  ; reward = Float.Array.create 0
-  ; head_time = 0.
-  ; head_progress = 0.
-  ; machine_duration_s = Float.nan
-  ; error = ""
-  ; version = Cpr_lib.version
-  }
+  and compute = Array.map (fun x -> x.Network.compute) network.nodes in
+  let open Info in
+  [ string "network" sim.key
+  ; string "network_description" sim.info
+  ; float "activation_delay" network.activation_delay
+  ; array "compute" string_of_float compute
+  ; int "number_activations" activations
+  ; string "strategy" strategy
+  ; string "strategy_description" strategy_description
+  ; string "version" Cpr_lib.version
+  ]
+  @ Info.map_key
+      (function
+        | "family" -> "protocol"
+        | x -> x)
+      Protocol.info
 ;;
 
 let run task =
@@ -112,20 +68,19 @@ let run task =
     let open Simulator in
     let sim = t.sim.it () in
     let (module Ref) = sim.referee in
-    let compute = Array.map (fun x -> x.Network.compute) sim.network.nodes in
     (* simulate *)
     loop ~activations:t.activations sim;
     let head = head sim in
     let headd = Dag.data head in
-    { row with
-      activations = sim.activations
-    ; compute
-    ; reward = headd.rewards
-    ; head_time = timestamp headd
-    ; head_progress = Ref.progress head
-    ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
-    ; error = ""
-    }
+    row
+    @ Info.
+        [ float "machine_duration_s" (Mtime_clock.count clock |> Mtime.Span.to_s)
+        ; array "activations" string_of_int sim.activations
+        ; floatarray "reward" headd.rewards
+        ; float "head_time" (timestamp headd)
+        ; float "head_progress" (Ref.progress head)
+        ]
+    @ Info.prefix_key "head_" (Ref.info head)
   with
   | e ->
     let bt = Printexc.get_backtrace () in
@@ -141,10 +96,11 @@ let run task =
       Printf.eprintf "ERROR:\t%s\n%s" (Printexc.to_string e) bt;
       flush stderr
     in
-    { row with
-      error = Printexc.to_string e
-    ; machine_duration_s = Mtime_clock.count clock |> Mtime.Span.to_s
-    }
+    row
+    @ Info.
+        [ string "error" (Printexc.to_string e)
+        ; float "machine_duration_s" (Mtime_clock.count clock |> Mtime.Span.to_s)
+        ]
 ;;
 
 let main tasks n_activations n_cores filename =

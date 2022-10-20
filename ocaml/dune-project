@@ -17,7 +17,6 @@
   (cmdliner (>= 1.1.1))
   (ezxmlm (>= 1.1.0))
   (ocaml (>= 4.12))
-  (owl-base (>= 1.0))
   (parany (>= 12.2))
   (ppx_expect (>= v0.15))
   (ppx_fields_conv (>= v0.15))
