@@ -113,6 +113,46 @@ class DenseRewardPerProgressWrapper(gym.Wrapper):
         return obs, reward, done, info
 
 
+class ExtendObservationWrapper(gym.Wrapper):
+    """
+    Adds fields from info dict or elsewhere to the observation space.
+    """
+
+    def __init__(self, env, fields):
+        super().__init__(env)
+        self.eow_fields = fields
+        self.eow_n = len(fields)
+        low = numpy.zeros(self.eow_n)
+        high = numpy.zeros(self.eow_n)
+        for i in range(self.eow_n):
+            _fn, l, h, _default = fields[i]
+            low[i] = l
+            high[i] = h
+        low = numpy.append(self.observation_space.low, low)
+        high = numpy.append(self.observation_space.high, high)
+        self.observation_space = gym.spaces.Box(low, high, dtype=numpy.float64)
+
+    def reset(self):
+        raw_obs = self.env.reset()
+        obs = numpy.zeros(self.eow_n)
+        for i in range(self.eow_n):
+            _fn, _low, _high, default = self.eow_fields[i]
+            obs[i] = default
+        return numpy.append(raw_obs, obs)
+
+    def step(self, action):
+        raw_obs, reward, done, info = self.env.step(action)
+        obs = numpy.zeros(self.eow_n)
+        for i in range(self.eow_n):
+            f, _low, _high, _default = self.eow_fields[i]
+            obs[i] = f(self, info)
+        return numpy.append(raw_obs, obs), reward, done, info
+
+    def policy(self, obs, name="honest"):
+        obs = obs[: -self.eow_n]
+        return self.env.policy(obs, name)
+
+
 class AlphaScheduleWrapper(gym.Wrapper):
     """
     Reconfigures alpha on each reset.

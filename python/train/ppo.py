@@ -194,6 +194,12 @@ def env_fn(eval=False, n_recordings=42):
             info_keys=["alpha", "episode_chain_time", "episode_progress"],
         )
 
+    fields = []
+    fields.append(((lambda self, info: info["episode_progress"]), 0, float("inf"), 0))
+    fields.append(((lambda self, info: info["episode_chain_time"]), 0, float("inf"), 0))
+    fields.append(((lambda self, info: info["episode_n_steps"]), 0, float("inf"), 0))
+    env = cpr_gym.wrappers.ExtendObservationWrapper(env, fields)
+
     env = cpr_gym.wrappers.ClearInfoWrapper(env)
 
     return env
