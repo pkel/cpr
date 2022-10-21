@@ -205,7 +205,10 @@ module Make (Parameters : Tailstorm.Parameters) = struct
     let prepare (BeforeAction state) event =
       let public, private_, event, fresh =
         match event with
-        | Append x -> state.public, x, `Append, x
+        | Append x ->
+          assert (is_summary x);
+          let private_ = N.update_head ~old:state.private_ x in
+          state.public, private_, `Append, x
         | ProofOfWork x -> state.public, state.private_, `ProofOfWork, x
         | Network x ->
           let b = last_summary x

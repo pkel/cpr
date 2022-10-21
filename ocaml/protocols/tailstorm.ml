@@ -556,6 +556,11 @@ module Make (Parameters : Parameters) = struct
           and share =
             match visibility x with
             | `Withheld when is_vote x -> [ x ]
+            | `Withheld ->
+              (* TODO. The protocol works w/o this case. However, the Tailstorm_ssz attack
+                 space relies on defenders sharing their summaries. It could reconstruct
+                 defender's summaries locally, but this is not implemented yet *)
+              [ x ]
             | _ -> []
           in
           update_head ~old:preferred s |> return ~append ~share)
