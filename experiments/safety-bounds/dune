@@ -1,0 +1,3 @@
+(executable
+ (name bounds)
+ (libraries cpr_lib))
