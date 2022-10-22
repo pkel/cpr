@@ -545,23 +545,24 @@ module Make (Parameters : Parameters) = struct
 
     let handler preferred = function
       | Append x | Network x | ProofOfWork x ->
+        let share =
+          match visibility x with
+          | `Withheld when is_vote x -> [ x ]
+          | `Withheld ->
+            (* TODO. The protocol works w/o this case. However, the Tailstorm_ssz attack
+               space relies on defenders sharing their summaries. It could reconstruct
+               defender's summaries locally, but this is not implemented yet. *)
+            [ x ]
+          | _ -> []
+        in
         if is_summary x
-        then update_head ~old:preferred x |> return
+        then update_head ~old:preferred x |> return ~share
         else (
           let s = last_summary x in
           let append =
             match next_summary s with
             | Some block -> [ block ]
             | None -> []
-          and share =
-            match visibility x with
-            | `Withheld when is_vote x -> [ x ]
-            | `Withheld ->
-              (* TODO. The protocol works w/o this case. However, the Tailstorm_ssz attack
-                 space relies on defenders sharing their summaries. It could reconstruct
-                 defender's summaries locally, but this is not implemented yet *)
-              [ x ]
-            | _ -> []
           in
           update_head ~old:preferred s |> return ~append ~share)
     ;;
