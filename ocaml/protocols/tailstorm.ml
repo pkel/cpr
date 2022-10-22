@@ -521,6 +521,17 @@ module Make (Parameters : Parameters) = struct
              { parents = q; data = Summary { height = height b + 1 }; sign = false })
     ;;
 
+    let next_summary' ~vote_filter b =
+      Dag.children view b
+      |> Dag.iterate_descendants view
+      |> Seq.filter is_summary
+      |> Seq.filter (fun s -> Dag.children view s <> [])
+      |> fun s ->
+      match s () with
+      | Cons _ -> (* confirmed summaries available. We cannot improve *) None
+      | Nil -> next_summary' ~vote_filter b
+    ;;
+
     let next_summary = next_summary' ~vote_filter:(fun _ -> true)
 
     let compare_blocks ~vote_filter =

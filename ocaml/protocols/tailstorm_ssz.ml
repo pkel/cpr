@@ -283,20 +283,16 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         | Wait_Proceed | Wait_Prolong -> [], state.private_
       in
       let append =
-        let x = snd state.event in
-        if is_vote x
-        then (
-          let vote_filter =
-            match action with
-            | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
-              vote_filter `Inclusive
-            | Adopt_Prolong | Override_Prolong | Match_Prolong | Wait_Prolong ->
-              vote_filter `Exclusive
-          in
-          match last_summary x |> N.next_summary' ~vote_filter with
-          | Some summary -> [ summary ]
-          | None -> [])
-        else []
+        let vote_filter =
+          match action with
+          | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
+            vote_filter `Inclusive
+          | Adopt_Prolong | Override_Prolong | Match_Prolong | Wait_Prolong ->
+            vote_filter `Exclusive
+        in
+        match N.next_summary' ~vote_filter state.private_ with
+        | Some summary -> [ summary ]
+        | None -> []
       in
       BetweenActions
         { public = state.public; private_; pending_private_to_public_messages = share }
