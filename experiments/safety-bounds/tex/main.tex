@@ -1,0 +1,170 @@
+\documentclass{article}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{mathtools}
+\usepackage{amsthm}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{observation}{Observation}
+
+\usepackage{natbib}
+\bibliographystyle{unsrtnat}
+
+\usepackage[ruled,lined,linesnumbered]{algorithm2e}
+
+\usepackage[hidelinks]{hyperref}
+
+\begin{document}
+
+\title{Safety bounds for Nakamoto Consensus}
+\author{Patrik Keller}
+\date{Draft, \today}
+\maketitle
+
+We follow \citet{guo2022BitcoinLatency} who model the mining process as follows.
+Blocks are numbered in the order they are mined.
+A blockchain is a sequence $b_0, b_1, \dots, b_m$.
+All chains start at genesis block $b_0 = 0$.
+Proof-of-work establishes unique predecessors.
+Each block defines a blockchain, hence we use the term interchangeably.
+In the above example, block $b_m$ represents the complete chain $b_0, b_1, \dots, b_m$.
+The height $h_b$ is defined as the index of block $b$ in any blockchain containing~$b$.
+%
+The variable $t_b$ refers to the time when block $b$ was mined.
+The mining delays $t_b - t_{b-1}$ are independent and exponentially distributed with rate $\lambda$.
+It follows that $t_{b_i} \leq t_{b_{i+1}}$ in the above example.
+
+We divide the set of network participants into defenders and attackers.
+Defenders mine defender blocks; attackers mine attacker blocks.
+Each freshly mined block is an attacker block with probability $\alpha$ and a defender block otherwise.
+
+We assume that defenders are honest.
+They always mine on a chain of maximum height they are aware of.
+When they mine a new block, they immediately share it with the other nodes.
+We assume that the other defenders receive blocks within $\Delta$ time after they have been shared by a defender.
+
+Attackers might mine on any chain.
+They see all blocks immediately.
+They can make visible attacker blocks to other participants at their willing with immediate effect.
+
+\begin{definition}
+  Let $D$ be the set of defenders,
+  let $A$ be the set of attackers, and
+  let $h_{n,t}$ be the height of the longest chain visible to $n \in D \cup A$ at time $t \geq 0$.
+  We define
+  \begin{align}
+    d_t & := \max_{n \in D} \, h_{n, t} \,,\\
+    d'_t & := \min_{n \in D} \, h_{n, t} \,, \text{and}\\
+    a_t & := \max_{n \in A} \, h_{n, t} \,.
+  \end{align}
+\end{definition}
+
+\begin{observation}[Communication]
+  Defenders share all blocks, their communication is delayed by at most $\Delta$, hence
+  \begin{align}
+    d'_{t + \Delta} \geq d_t \,.
+  \end{align}
+\end{observation}
+
+\begin{definition}[Time step]
+  Let $e_1, e_2, \dots$ enumerate in order all the points in times when $d_\cdot, d'_\cdot$, or $a_\cdot$ change.
+  Let $t = e_i$. Then $t^-$ is a point in time just before $t$, i.e., $e_{i-1} < t^- < t =  e_i$.
+\end{definition}
+
+\begin{observation}[Defender mining]
+  Defenders always extend a chain of maximum height, hence for each defender block $b$
+  \begin{align}
+    d_{t_b} \geq d'_{t^-_b} + 1\,.
+  \end{align}
+\end{observation}
+
+\begin{observation}[Attacker mining] \label{obs:attackermining}
+  The attacker has to mine on an existing block, hence for each attacker block $b$
+  \begin{align}
+    a_{t_b} \leq \max\left(d_{t_{b}^-}, a_{t_{b}^-}\right) + 1\,.
+  \end{align}
+\end{observation}
+
+\begin{definition}[Safety Attack]
+  At time $\tau$ the defenders are informed about a target transaction.
+  They include this transaction in the next defender block $b^*$.
+  In other words, $b^*$ is the first defender block mined after $\tau$.
+  Let $h$ be the height of block $b^*$.
+  The defenders commit the target transaction when they mine or learn about a blockchain of height at least $h + k - 1$ that includes $b$.
+  The safety is violated if one defender mines a blockchain of height $h + k - 1$ or greater that does not include the target transaction.
+\end{definition}
+
+\begin{observation}
+  In order to violate safety at time $t$, three conditions must hold.
+  \begin{enumerate}
+    \item The commit took place, i.e., $d_t \geq h + k - 1$.
+    \item The attackers can overwrite a defender chain, i.e., $a_t > d'_t$.
+    \item All blocks in the overwriting chain are mined before $b^*$ or by an attacker.
+  \end{enumerate}
+  If (3) is false, the attacker chain contains the target transaction.
+  (3) can be restated as a refinement of the attacker mining rule in Observation~\ref{obs:attackermining}:
+  For all attacker blocks $b$ with $t_b > t_{b^*}$
+  \begin{align}
+    a_{t_b} \leq a_{t_{b}^-} + 1 \,.
+  \end{align}
+\end{observation}
+
+\section{Simulation}
+
+We squeeze our observations into a simulation.
+We then evaluate the simulation repeatedly to obtain an estimate upper safety bound for Nakamoto consensus.
+
+\begin{algorithm}
+  \caption{Simulation for the feasibility of safety violations}
+  \KwIn{$\tau, \alpha, \lambda, \Delta$; cutt-off $c$}
+  \KwData{Variable $t$ tracks the current time.
+    $Q$ is a time-ordered queue of future events.
+    Variable $a$ tracks the (maximal) height of the attacker chain; $d$ and $d'$ track their time-indexed counterparts.
+    Variable $s$ tracks the state of the target transaction.
+  }
+  $t \gets 0$; $a \gets 0$; $d \gets 0$; $d' \gets 0$; $s \gets \texttt{Pending}$\;
+  Sample $x$ from exponential distribution with rate $\lambda$\;
+  Insert \texttt{Proof-of-Work} into $Q$ at time $t + x$\;
+  \While{true}{
+    Pop $(t, e)$ from $Q$\;
+    \If{$ s = \texttt{Pending} $} {
+      $a \gets \max(a, d)$\tcc*{attacker can adopt defender chain}
+    }
+    \Switch{e}{
+      \uCase{\texttt{Proof-of-Work}}{
+        Sample $x$ from Bernoulli distribution with parameter $\alpha$\;
+        \uIf(\tcc*[f]{attacker block}){$x$}{
+          $a \gets a + 1$\;
+        }
+        \Else(\tcc*[f]{defender block}){
+          $d \gets \max(d, d' + 1)$\tcc*{extends shortest chain}
+          \Switch{$s$}{
+            \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}(d)$ }
+            \Case{$\texttt{Included}(h)$ {\normalfont \textbf{with}} $d \geq h + k - 1$}{ $s \gets \texttt{Committed}$ }
+          }
+          Schedule \texttt{Sync}($d$) at time $t + \Delta$\;
+        }
+        Sample $x$ from exponential distribution with rate $\lambda$\;
+        Insert \texttt{Proof-of-Work} into $Q$ at time $t + x$\;
+      }
+      \Case{\texttt{Sync}($h$)}{
+        $d' \gets \max(d', h)$\;
+      }
+    }
+    \uIf{$s = \texttt{Committed} ~\land~ a > d'$}{
+      \tcc{safety violation is feasible}
+      return;
+    }
+    \ElseIf{$a < d' + c$} {
+      \tcc{at some point we have to abort}
+      return\;
+    }
+  }
+\end{algorithm}
+
+
+\bibliography{zotero}
+\end{document}
