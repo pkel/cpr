@@ -87,7 +87,7 @@ let string_of_event view =
 
 type 'prot_data clock =
   { mutable now : float
-  ; mutable queue : (float * int, 'prot_data event) OrderedQueue.t
+  ; mutable queue : (float, 'prot_data event) OrderedQueue.t
   ; mutable c_activations : int
   }
 
@@ -161,13 +161,12 @@ let append ~pow ~n_nodes dag node_id (x : _ Intf.draft_vertex) =
 ;;
 
 let schedule clock delay event =
-  let delay, prio =
+  let delay =
     match delay with
-    | `Immediate -> 0., 0
-    | `Now -> 0., 1
-    | `Delay x -> x, 1
+    | `Now -> 0.
+    | `Delay x -> x
   in
-  clock.queue <- OrderedQueue.queue (clock.now +. delay, prio) event clock.queue
+  clock.queue <- OrderedQueue.queue (clock.now +. delay) event clock.queue
 ;;
 
 let schedule_proof_of_work state =
@@ -233,7 +232,7 @@ let init
       Protocol.roots
   in
   let clock =
-    { queue = OrderedQueue.init Compare.(tuple float int); now = 0.; c_activations = 0 }
+    { queue = OrderedQueue.init Compare.(float); now = 0.; c_activations = 0 }
   in
   let () = List.iter (log_vertex logger clock Ref.view Ref.info) roots in
   let patch = Option.value patch ~default:(fun _ -> None) in
@@ -484,7 +483,7 @@ let handle_event state ev =
 
 let dequeue state =
   OrderedQueue.dequeue state.clock.queue
-  |> Option.map (fun ((now, _prio), ev, queue) ->
+  |> Option.map (fun (now, ev, queue) ->
          assert (now >= state.clock.now);
          state.clock.now <- now;
          state.clock.queue <- queue;
