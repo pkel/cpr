@@ -85,6 +85,20 @@ def test_alphaScheduleWrapper():
     assert len(alphas.keys()) > 30
 
 
+def test_ExtendObservationWrapper():
+    env = gym.make("cpr_gym:core-v0")
+    was_n = len(env.observation_space.low)
+
+    fields = []
+    fields.append(((lambda self, info: info["episode_progress"]), 0, float("inf"), 0))
+    env = wrappers.ExtendObservationWrapper(env, fields)
+
+    n = len(env.observation_space.low)
+    assert n == was_n + len(fields)
+
+    check_env(env)
+
+
 def test_EpisodeRecorderWrapper():
     env = gym.make("cpr_gym:core-v0")
     env = wrappers.EpisodeRecorderWrapper(env, n=10, info_keys=["head_height"])

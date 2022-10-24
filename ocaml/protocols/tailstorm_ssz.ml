@@ -202,15 +202,37 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       BeforeAction { public; private_ = state.private_ }
     ;;
 
+    (* A few things happen unconditionally, before the agent observes the state and
+       chooses an action: *)
     let prepare (BeforeAction state) event =
       let public, private_, event, fresh =
         match event with
-        | Append x -> state.public, x, `Append, x
-        | ProofOfWork x -> state.public, state.private_, `ProofOfWork, x
+        | Append x ->
+          (* The attacker updates preference if he learns new summaries. We make sure
+             elsewhere that the attacker only appends summaries onto his preferred chain.
+             Summaries on the public chain are received from the network, not appended
+             locally *)
+          assert (is_summary x);
+          let private_ = N.update_head ~old:state.private_ x in
+          state.public, private_, `Append, x
+        | ProofOfWork x ->
+          (* The attacker votes on his preferred chain. New votes do affect preferred
+             summaries *)
+          state.public, state.private_, `ProofOfWork, x
         | Network x ->
-          let b = last_summary x
-          and vote_filter = public_visibility in
-          N.update_head ~vote_filter ~old:state.public b, state.private_, `Network, x
+          (* The attacker receives votes and summaries from the network. The received
+             blocks are public knowledge. The attacker emulates what the defender would do
+             and updates the public chain. He does not (yet) take action on the private
+             chain. *)
+          let public =
+            let vote_filter = public_visibility in
+            if is_summary x
+            then N.update_head ~vote_filter ~old:state.public x
+            else (
+              let s = last_summary x in
+              N.update_head ~vote_filter ~old:state.public s)
+          in
+          public, state.private_, `Network, x
       in
       let event = event, fresh in
       let common = Dag.common_ancestor view public private_ |> Option.get in
@@ -280,20 +302,31 @@ module Make (Parameters : Tailstorm.Parameters) = struct
         | Wait_Proceed | Wait_Prolong -> [], state.private_
       in
       let append =
-        let x = snd state.event in
-        if is_vote x
-        then (
-          let vote_filter =
-            match action with
-            | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
-              vote_filter `Inclusive
-            | Adopt_Prolong | Override_Prolong | Match_Prolong | Wait_Prolong ->
-              vote_filter `Exclusive
-          in
-          match last_summary x |> N.next_summary' ~vote_filter with
-          | Some summary -> [ summary ]
-          | None -> [])
-        else []
+        (* Do: replace private tip of chain with better summary, either of same height or
+           of higher height.
+
+           Don't do: append to the public tip of chain if it differs from private tip.
+           This would result in attacker always adopting public chain if longer. (see
+           [prepare])
+
+           Hope I got this right! *)
+        let vote_filter =
+          match action with
+          | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
+            vote_filter `Inclusive
+          | Adopt_Prolong | Override_Prolong | Match_Prolong | Wait_Prolong ->
+            vote_filter `Exclusive
+        and extend =
+          if Dag.children view state.private_ = []
+          then
+            (* replacing state.private_ is feasible, advancing is not *)
+            Dag.parents view state.private_ |> List.hd |> last_summary
+          else (* advancing state.private_ is not feasible, replacing is *)
+            state.private_
+        in
+        match N.next_summary' ~vote_filter extend with
+        | Some summary -> [ summary ]
+        | None -> []
       in
       BetweenActions
         { public = state.public; private_; pending_private_to_public_messages = share }

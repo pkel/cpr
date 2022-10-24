@@ -59,6 +59,7 @@ cast("eval", "alpha_step", float)
 cast("eval", "episodes_per_alpha_per_env", int)
 cast("eval", "recorder_multiple", int)
 cast("eval", "report_alpha", int)
+cast("eval", "start_at_iteration", int)
 
 ###
 # Analyse config
@@ -194,6 +195,12 @@ def env_fn(eval=False, n_recordings=42):
             info_keys=["alpha", "episode_chain_time", "episode_progress"],
         )
 
+    fields = []
+    fields.append(((lambda self, info: info["episode_progress"]), 0, float("inf"), 0))
+    fields.append(((lambda self, info: info["episode_chain_time"]), 0, float("inf"), 0))
+    fields.append(((lambda self, info: info["episode_n_steps"]), 0, float("inf"), 0))
+    env = cpr_gym.wrappers.ExtendObservationWrapper(env, fields)
+
     env = cpr_gym.wrappers.ClearInfoWrapper(env)
 
     return env
@@ -225,11 +232,17 @@ def venv_fn(**kwargs):
 
 
 class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
-    def __init__(self, eval_env, **kwargs):
+    def __init__(self, eval_env, start_at_iteration=0, **kwargs):
         super().__init__(eval_env, **kwargs)
+        self.first_iteration = start_at_iteration
 
     def _on_step(self):
+        # skip first evaluation; deterministic policy might cause massive slowdown
+        if self.n_calls / self.eval_freq < self.first_iteration:
+            return True
+        # do evaluation as usual
         r = super()._on_step()
+        # add own stuff of top
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             # create data frame from buffers in vectorized envs
             buffers = self.eval_env.get_attr("erw_history")
@@ -323,6 +336,7 @@ if __name__ == "__main__":
             ),
             EvalCallback(
                 eval_env,
+                start_at_iteration=config["eval"]["start_at_iteration"],
                 best_model_save_path=log_dir,
                 log_path=log_dir,
                 eval_freq=vec_steps_per_rollout + 1,

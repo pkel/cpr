@@ -1,14 +1,6 @@
 (executables
  (names honest_net igraph visualize withholding)
- (libraries
-  bos.setup
-  cmdliner
-  cpr_lib
-  cpr_protocols
-  mtime
-  owl-base
-  parany
-  progress)
+ (libraries bos.setup cmdliner cpr_lib cpr_protocols mtime parany progress)
  (preprocess
   (pps ppx_fields_conv)))
 

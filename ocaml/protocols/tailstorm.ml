@@ -43,7 +43,7 @@ module Make (Parameters : Parameters) = struct
     let open Info in
     [ string "family" "tailstorm"
     ; int "k" k
-    ; Options.info "rewards" incentive_scheme
+    ; Options.info "incentive_scheme" incentive_scheme
     ; Options.info "subblock_selection" subblock_selection
     ]
   ;;
@@ -543,21 +543,56 @@ module Make (Parameters : Parameters) = struct
       if compare_blocks ~vote_filter consider old > 0 then consider else old
     ;;
 
+    let summary_feasible ~preferred after =
+      let has_confirmation x = Dag.children view x <> []
+      and extended_height = height after + 1
+      and current_height = height preferred in
+      current_height < extended_height
+      || (current_height = extended_height && not (has_confirmation preferred))
+    ;;
+
     let handler preferred = function
       | Append x | Network x | ProofOfWork x ->
+        let share =
+          (* We share everything we know. In principle it'd be enough to share votes and
+             keep the summaries private. The recursive share logic in the simulator
+             implies that summaries are shared together with the confirming vote. Also,
+             summaries can be reconstructed locally on each node. However, local
+             reconstruction is expensive and seems to slow down training. The current
+             version of the SSZ attack space does not try to reconstruct summaries for the
+             defender. It assumes that the defender shares summaries. *)
+          match visibility x with
+          | `Withheld -> [ x ]
+          | _ -> []
+        in
         if is_summary x
-        then update_head ~old:preferred x |> return
+        then
+          (* We are learning about a new summary. It might be received from the network or
+             appended by the node itself. If the summary is better, we remember it as
+             preferred summary *)
+          update_head ~old:preferred x |> return ~share
         else (
           let s = last_summary x in
+          (* We are learning about a new vote (= sub block). It might be received from the
+             network or appended locally with proof-of-work. New votes might make feasible
+             new summaries. Hence we try to append a new optimal summary after the summary
+             which is confirmed by the received vote.
+
+             We only do that, if the new summary has a chance of being picked up as
+             preferred tip of chain. That is, the new summary must have at least the same
+             height as the preferred summary and if the new summary would have the same
+             height as the preferred summary, the preferred summary must not have any vote
+             confirmations. *)
           let append =
-            match next_summary s with
-            | Some block -> [ block ]
-            | None -> []
-          and share =
-            match visibility x with
-            | `Withheld when is_vote x -> [ x ]
-            | _ -> []
+            if summary_feasible ~preferred s
+            then (
+              match next_summary s (* potentially expensive optimization *) with
+              | Some block -> [ block ]
+              | None -> [])
+            else []
           in
+          (* New votes also might change the preferred summary. If two summaries compete
+             on the same height, the node disambiguates by number of confirming votes. *)
           update_head ~old:preferred s |> return ~append ~share)
     ;;
   end
