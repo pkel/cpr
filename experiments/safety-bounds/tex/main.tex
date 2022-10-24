@@ -1,4 +1,5 @@
-\documentclass{article}
+\documentclass[12pt]{article}
+\usepackage[margin=3cm]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[english]{babel}
 \usepackage[utf8]{inputenc}
@@ -9,6 +10,7 @@
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}
 \newtheorem{observation}{Observation}
+\newtheorem{simulation}{Observation}
 
 \usepackage{natbib}
 \bibliographystyle{unsrtnat}
@@ -24,17 +26,19 @@
 \date{Draft, \today}
 \maketitle
 
+\section{Version 1} \label{sec:v1}
+
 We follow \citet{guo2022BitcoinLatency} who model the mining process as follows.
 Blocks are numbered in the order they are mined.
 A blockchain is a sequence $b_0, b_1, \dots, b_m$.
 All chains start at genesis block $b_0 = 0$.
 Proof-of-work establishes unique predecessors.
-Each block defines a blockchain, hence we use the term interchangeably.
+Each block also defines a blockchain, hence we use the terms interchangeably.
 In the above example, block $b_m$ represents the complete chain $b_0, b_1, \dots, b_m$.
-The height $h_b$ is defined as the index of block $b$ in any blockchain containing~$b$.
+We define the height $h_b$ as the index of block $b$ in any blockchain containing~$b$.
 %
 The variable $t_b$ refers to the time when block $b$ was mined.
-The mining delays $t_b - t_{b-1}$ are independent and exponentially distributed with rate $\lambda$.
+The mining delays $t_b - t_{b-1}$ are independent and exponentially distributed with rate~$\lambda$.
 It follows that $t_{b_i} \leq t_{b_{i+1}}$ in the above example.
 
 We divide the set of network participants into defenders and attackers.
@@ -50,54 +54,56 @@ Attackers might mine on any chain.
 They see all blocks immediately.
 They can make visible attacker blocks to other participants at their willing with immediate effect.
 
-\begin{definition}
+\begin{definition} \label{def:ts}
   Let $D$ be the set of defenders,
   let $A$ be the set of attackers, and
-  let $h_{n,t}$ be the height of the longest chain visible to $n \in D \cup A$ at time $t \geq 0$.
+  let $h_{n,t}$ be the height of the longest chain visible to $n \in D \cup A$ at time $t$.
   We define
   \begin{align}
-    d_t & := \max_{n \in D} \, h_{n, t} \,,\\
-    d'_t & := \min_{n \in D} \, h_{n, t} \,, \text{and}\\
-    a_t & := \max_{n \in A} \, h_{n, t} \,.
+    d_t & := \max_{n \in D} \, h_{n, t} ~,\\
+    d'_t & := \min_{n \in D} \, h_{n, t} ~, \text{and}\\
+    a_t & := \max_{n \in A} \, h_{n, t} ~.
   \end{align}
 \end{definition}
 
-\begin{observation}[Communication]
-  Defenders share all blocks, their communication is delayed by at most $\Delta$, hence
+\begin{observation}[Communication] \label{obs:communication}
+  Defenders share all blocks, their communication is delayed by at most $\Delta$, hence for all $t$,
   \begin{align}
     d'_{t + \Delta} \geq d_t \,.
   \end{align}
 \end{observation}
 
+\newcommand{\justbefore}[1]{{#1^{\circ}}}
+
 \begin{definition}[Time step]
-  Let $e_1, e_2, \dots$ enumerate in order all the points in times when $d_\cdot, d'_\cdot$, or $a_\cdot$ change.
-  Let $t = e_i$. Then $t^-$ is a point in time just before $t$, i.e., $e_{i-1} < t^- < t =  e_i$.
+  Let $e_1, e_2, \dots$ enumerate all the points in times when $d_\cdot, d'_\cdot$, or $a_\cdot$ change in ascending order.
+  Let $t = e_i$. We define $\justbefore{t}$ as a point in time satisfying $e_{i-1} < \justbefore{t} < t =  e_i$.
+  Less formally, $\justbefore{t}$ happens just before $t$.
 \end{definition}
 
-\begin{observation}[Defender mining]
-  Defenders always extend a chain of maximum height, hence for each defender block $b$
+\begin{observation}[Defender mining] \label{obs:defendermining}
+  Defenders always extend a chain of maximum height, hence for each defender block $b$,
   \begin{align}
-    d_{t_b} \geq d'_{t^-_b} + 1\,.
+    d_{t_b} \geq d'_\justbefore{t_b} + 1\,.
   \end{align}
 \end{observation}
 
 \begin{observation}[Attacker mining] \label{obs:attackermining}
-  The attacker has to mine on an existing block, hence for each attacker block $b$
+  The attacker has to mine on an existing block, hence for each attacker block $b$,
   \begin{align}
-    a_{t_b} \leq \max\left(d_{t_{b}^-}, a_{t_{b}^-}\right) + 1\,.
+    a_{t_b} \leq \max\left(d_\justbefore{t_b}, a_\justbefore{t_{b}}\right) + 1\,.
   \end{align}
 \end{observation}
 
-\begin{definition}[Safety Attack]
-  At time $\tau$ the defenders are informed about a target transaction.
+\begin{definition}[Safety attack] \label{def:safety}
+  At time $\tau$ the defenders learn about the target transaction~\texttt{tx}.
   They include this transaction in the next defender block $b^*$.
   In other words, $b^*$ is the first defender block mined after $\tau$.
-  Let $h$ be the height of block $b^*$.
-  The defenders commit the target transaction when they mine or learn about a blockchain of height at least $h + k - 1$ that includes $b$.
-  The safety is violated if one defender mines a blockchain of height $h + k - 1$ or greater that does not include the target transaction.
+  The defenders commit the target transaction when they mine or learn about a blockchain of height at least $h_{b^*} + k - 1$ that includes $b^*$.
+  The safety is violated if one defender mines a blockchain of height $h_{b^*} + k - 1$ or greater that does not include the target transaction.
 \end{definition}
 
-\begin{observation}
+\begin{observation} \label{obs:feasibility}
   In order to violate safety at time $t$, three conditions must hold.
   \begin{enumerate}
     \item The commit took place, i.e., $d_t \geq h + k - 1$.
@@ -110,21 +116,33 @@ They can make visible attacker blocks to other participants at their willing wit
   \begin{align}
     a_{t_b} \leq a_{t_{b}^-} + 1 \,.
   \end{align}
+
+  \emph{
+    (3) applies to Def.~\ref{def:safety} but this definition is probably too strict.
+    It results in a setting where the attacker can never steal defender blocks.
+    Let's assume this is true for a moment because it's easier to handle.
+    See Sect.~\ref{sec:v2} for an improved definition of safety.
+  }
 \end{observation}
 
-\section{Simulation}
-
-We squeeze our observations into a simulation.
-We then evaluate the simulation repeatedly to obtain an estimate upper safety bound for Nakamoto consensus.
+\begin{simulation}[Algorithmic safety]
+  Whether safety can be violated or not depends on the realisation of the mining process.
+  Algorithm~\ref{alg:feasibility} simulates one such realization and determines whether safety violation is feasible.
+  It applies Observations~\ref{obs:communication}--\ref{obs:feasibility} as mining realizes over time.
+  Counting outcomes while repeatedly running the algorithm provides an (increasingly accurate) estimate for an upper bound on the probability that a safety violation is possible in any given realization of the mining process.
+\end{simulation}
 
 \begin{algorithm}
   \caption{Simulation for the feasibility of safety violations}
+  \label{alg:feasibility}
+
   \KwIn{$\tau, \alpha, \lambda, \Delta$; cutt-off $c$}
   \KwData{Variable $t$ tracks the current time.
     $Q$ is a time-ordered queue of future events.
     Variable $a$ tracks the (maximal) height of the attacker chain; $d$ and $d'$ track their time-indexed counterparts.
     Variable $s$ tracks the state of the target transaction.
   }
+
   $t \gets 0$; $a \gets 0$; $d \gets 0$; $d' \gets 0$; $s \gets \texttt{Pending}$\;
   Sample $x$ from exponential distribution with rate $\lambda$\;
   Insert \texttt{Proof-of-Work} into $Q$ at time $t + x$\;
@@ -160,11 +178,94 @@ We then evaluate the simulation repeatedly to obtain an estimate upper safety bo
     }
     \ElseIf{$a < d' + c$} {
       \tcc{at some point we have to abort}
+      \tcc{how likely is it that the attacker catches up?}
       return\;
     }
   }
 \end{algorithm}
 
+\section{Version 2} \label{sec:v2}
+
+Definition~\ref{def:safety} might be too restrictive.
+An attacker can include a conflicting transaction in its first block after $\tau$.
+Then defenders cannot include the target transaction when they extend the attackers' chain.
+I try to address this with a new definition of safety.
+
+\begin{definition}[Safety attack] \label{def:safety2}
+  At time $\tau$ the defenders learn about the target transaction~\texttt{tx}.
+  At the same time, the attackers create a conflicting transaction~\texttt{tx'}.
+  Any future blockchain will include \texttt{tx} or \texttt{tx'} but not both.
+
+  Let $b$ be the first block mined at or after $\tau$.
+  The defenders commit to one of the two transactions when their chain reaches height $h_b + k - 1$.
+  The commitment may change when they learn a longer chain that includes the other transaction.
+
+  The safety is violated if a defender commits to one of the transactions \texttt{tx} and \texttt{tx'} after another or the same defender committed to the other transaction.
+\end{definition}
+
+\begin{observation}
+  Three necessary conditions for violating safety at time $t$:
+  \begin{enumerate}
+    \item A commit took place, i.\,e., $d_t \geq h_b + k - 1$.
+    \item The attackers can overwrite a defender chain, i.\,e., $a_t > d'_t$.
+    \item The attackers chain includes \texttt{tx'} while the defender's chain includes \texttt{tx}.
+  \end{enumerate}
+\end{observation}
+
+\begin{observation}[Stealing]
+  Let $b$ and $b'$ be two defender blocks mined at $\tau < t_b < t_{b'} < t_b + \Delta$.
+  We say $b'$ is a tailgater because it arrives within $\Delta$ after the previous block $b$.
+  It is possible that $b$ and $b'$ have the same height and one includes \texttt{tx}, the other \texttt{tx'}.
+  We call this stealing because the attacker uses a defender block to extend the attacker chain.
+\end{observation}
+
+\begin{observation}[Feasibility of Stealing]
+  \citet{guo2022BitcoinLatency} consider a worst-case scenario where stealing is always possible.
+  In practice is not. Stealing is only possible if the defenders disagree about including \texttt{tx}.
+\end{observation}
+
+\citet{keller2022ParallelProofofwork} deal with a similar problem.
+They propose to track the feasibility of stealing in a separate variable.
+
+\begin{definition} \label{def:ts2}
+  We reuse $a_t$, $d_t$ and $d'_t$ from Definition~\ref{def:ts}.
+  We introduce $s_t$ for $t > \tau$.
+  It is true iif at time $t$ either all defenders prefer to include \texttt{tx} or all defenders prefer to include \texttt{tx'}.
+  We refer to $a'_t$ as the height of the longest attacker chain that conflicts with any preferred defender chain.
+\end{definition}
+
+\begin{observation}
+  While $s_t$ is true, stealing is not possible.
+\end{observation}
+
+\begin{observation}
+  Let $b$ be a defender block.
+  Assume $\tau < t_b$.
+  Assume $a'_\justbefore{t_b} \leq d_\justbefore{t_b} = d'_\justbefore{t_b}$.
+
+  \begin{proof}
+    Block $b$ has height $d_{t_b} = d_\justbefore{t_b} + 1$.
+    At time $t_b$, block $b$ is the only block of this height.
+    This remains true until $t_b + \Delta$ because no other block is mined.
+    At $t_b + \Delta$ all defenders know $b$ and prefer the same block.
+  \end{proof}
+\end{observation}
+
+\begin{observation}
+  Let $t_1 < t_2$.
+  If $s_{t_1}$ is true and $a'_{x} < d'_{x}$ for all $x$ between $t_1$ and $t_2$, then $s_{t_2}$ is still true.
+  In simple terms, the attacker has to present a chain of length $d'_t$ to desynchronize the defenders at time $t$.
+\end{observation}
+
+\begin{simulation}
+  In Algorithm~\ref{alg:feasibility2} we try to encode the updated definitions and observations.
+\end{simulation}
+
+\begin{algorithm}
+  \caption{Simulation for the feasibility of safety violations (Version 2)}
+  \label{alg:feasibility2}
+
+\end{algorithm}
 
 \bibliography{zotero}
 \end{document}

@@ -4,7 +4,6 @@ module Bk = Bk
 module Bkll = Bkll
 module Tailstorm = Tailstorm
 module Tailstormll = Tailstormll
-module Options = Options
 open Cpr_lib
 
 (** Original proof-of-work consensus as described by Nakamoto. 2008. *)
@@ -703,3 +702,6 @@ include struct
 
   include M
 end
+
+module Combinatorics = Combinatorics
+module Options = Options

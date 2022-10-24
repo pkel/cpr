@@ -1,51 +1,135 @@
 module Distributions = Cpr_lib.Distributions
 module OrderedQueue = Cpr_lib.OrderedQueue
 
-type event =
-  | Mining of [ `Attacker | `Defender ]
-  | Sync of { height : int }
+module GuoRen22 = struct
+  (* D. Guo and L. Ren. Bitcoin’s latency–security analysis made simple. AFT ’22. (Arxiv
+     v1) *)
 
-type state =
-  { mutable attacker : int (* height longest attacker chain *)
-  ; mutable defender_max : int (* height longest defender chain *)
-  ; mutable defender_min : int
-        (* height longest defender chain available to all defenders *)
-  ; mutable tx : [ `NotIncluded | `IncludedAt of int | `Committed ]
-  }
+  open Float
 
-type attack_outcome =
-  | Aborted
-  | Success
+  let int = float_of_int
+
+  let factorial n =
+    let acc = ref 1. in
+    for i = 2 to n do
+      acc := int i *. !acc
+    done;
+    !acc
+  ;;
+
+  let choose n k = factorial n /. (factorial k *. factorial (n - k))
+
+  type params =
+    { k : int (* confimation depth *)
+    ; delta : float (* message delay bound *)
+    ; lambda : float (* total mining rate *)
+    ; roh : float (* fraction of honest mining power *)
+    }
+
+  let p x = x.roh *. exp (-1. *. x.lambda *. x.delta)
+
+  let check x =
+    assert (x.k > 0);
+    assert (x.delta >= 0.);
+    assert (x.lambda >= 0.);
+    assert (x.roh >= 0.);
+    assert (x.roh <= 1.);
+    assert (p x > 0.5)
+  ;;
+
+  let t1upper x =
+    check x;
+    let p = p x in
+    let a = 2. +. (2. *. sqrt (p /. (1. -. p)))
+    and b = 4. *. p *. (1. -. p) in
+    a *. (b ** int x.k)
+  ;;
+
+  let t1lower x =
+    check x;
+    let a = 1. /. sqrt (int x.k)
+    and b = 4. *. x.roh *. (1. -. x.roh) in
+    a *. (b ** int x.k)
+  ;;
+
+  let t2P1 i p =
+    let q = 1. -. p in
+    ((q /. p) ** int (i - 1)) *. (1. -. (q /. p))
+  ;;
+
+  let t2F1 i p =
+    let q = 1. -. p in
+    (q /. p) ** int i
+  ;;
+
+  let t2P2 j n q = choose n j *. (q ** int j) *. ((1. -. q) ** int (n - j))
+
+  let sum low high f =
+    let sum = ref 0. in
+    for i = low to high do
+      sum := !sum +. f i
+    done;
+    !sum
+  ;;
+
+  let t2F2 j n q = sum (j + 1) n (fun l -> t2P2 l n q)
+
+  let t2upper x =
+    check x;
+    let p = p x
+    and k = x.k in
+    t2F1 k p
+    +. sum 1 k (fun i ->
+           t2P1 i p
+           *. (t2F2 (k - i) ((2 * k) + 1 - i) (1. -. p)
+              +. sum 0 (k - i) (fun j ->
+                     t2P2 j ((2 * k) + 1 - i) (1. -. p)
+                     *. t2F1 ((2 * k) + 1 - (2 * i) - (2 * j)) p)))
+  ;;
+
+  let t2lower x =
+    check x;
+    let p = x.roh
+    and k = x.k in
+    t2F1 k p
+    +. sum 1 k (fun i ->
+           t2P1 i p
+           *. (t2F2 (k - i) ((2 * k) + 1 - i) (1. -. p)
+              +. sum 0 (k - i) (fun j ->
+                     t2P2 j ((2 * k) + 1 - i) (1. -. p)
+                     *. t2F1 ((2 * k) + 2 - (2 * i) - (2 * j)) p)))
+  ;;
+end
 
 module Simulation : sig
   type time = T of float
   type timedelta = D of float
 
-  type step_outcome =
-    | Stop of attack_outcome
+  type 'outcome step_outcome =
+    | Stop of 'outcome
     | Continue
 
-  type model =
-    { handler : (timedelta -> event -> unit) -> time -> event -> step_outcome
-    ; init : (time * event) list
+  type ('event, 'outcome) model =
+    { handler : (timedelta -> 'event -> unit) -> time -> 'event -> 'outcome step_outcome
+    ; init : (time * 'event) list
     }
 
-  val run : model -> (attack_outcome, [ `EmptyQueue ]) result
+  val run : ('event, 'outcome) model -> ('outcome, [ `EmptyQueue ]) result
 end = struct
   type time = T of float
   type timedelta = D of float
 
-  type step_outcome =
-    | Stop of attack_outcome
+  type 'outcome step_outcome =
+    | Stop of 'outcome
     | Continue
 
-  type model =
-    { handler : (timedelta -> event -> unit) -> time -> event -> step_outcome
-    ; init : (time * event) list
+  type ('event, 'outcome) model =
+    { handler : (timedelta -> 'event -> unit) -> time -> 'event -> 'outcome step_outcome
+    ; init : (time * 'event) list
     }
 
-  type sim_state =
-    { mutable queue : (float, event) OrderedQueue.t
+  type 'event sim_state =
+    { mutable queue : (float, 'event) OrderedQueue.t
     ; mutable time : float
     }
 
@@ -79,13 +163,80 @@ end
 
 open Simulation
 
-type network =
-  { defender_mining_delay : float Distributions.iid
-  ; attacker_mining_delay : float Distributions.iid
-  ; propagation_delay : float
+type v0_state =
+  { mutable attacker : int (* height longest attacker chain *)
+  ; mutable defender : int (* height longest defender chain *)
+  ; mutable last_defender_block : float
+  ; mutable tx : [ `NotIncluded | `IncludedAt of int | `Committed ]
   }
 
-let nakamoto ~k ~cutoff ~tau network : model =
+(* all tailgater can be stolen by the attacker *)
+let version0 ~k ~cutoff:_ ~tau ~lambda ~alpha ~delta : _ model =
+  let mining_delay = Distributions.exponential ~ev:(1. /. lambda)
+  and unif1 = Distributions.uniform ~lower:0. ~upper:1.
+  and sample = Distributions.sample in
+  let state =
+    { attacker = 0
+    ; defender = 0
+    ; last_defender_block = Float.neg_infinity
+    ; tx = `NotIncluded
+    }
+  in
+  let handler delay (T now) event =
+    (* attacker can always adopt latest defender chain until tx is included *)
+    if state.tx = `NotIncluded then state.attacker <- max state.attacker state.defender;
+    (* mining & communication *)
+    (match event with
+    | `ProofOfWork when sample unif1 <= alpha ->
+      (* attacker mines a block *)
+      state.attacker <- state.attacker + 1;
+      (* mining continues unconditionally *)
+      delay (D (sample mining_delay)) `ProofOfWork
+    | `ProofOfWork (* when unif1 > alpha *) ->
+      (* defender mines *)
+      if state.last_defender_block +. delta < now
+      then (
+        (* new block is not a tailgater *)
+        state.defender <- state.defender + 1;
+        state.last_defender_block <- now;
+        (* include tx if available; commit if enough confirmations *)
+        match state.tx with
+        | `NotIncluded when now >= tau -> state.tx <- `IncludedAt state.defender
+        | `IncludedAt h when state.defender >= h + k -> state.tx <- `Committed
+        | _default -> ())
+      else
+        (* new block is tailgater; attacker steals *)
+        state.attacker <- state.attacker + 1;
+      (* mining continues unconditionally *)
+      delay (D (sample mining_delay)) `ProofOfWork);
+    if state.tx = `Committed
+    then
+      if state.attacker >= state.defender
+      then Stop `Success
+      else (
+        (* probability of ever catching up is geometrically distributed *)
+        (* TODO. which parameter? *)
+        let p = GuoRen22.t2F1 (state.defender - state.attacker) (1. -. alpha) in
+        if sample unif1 <= p then Stop `Success else Stop `Fail)
+    else Continue
+  and init = [ T (sample mining_delay), `ProofOfWork ] in
+  { init; handler }
+;;
+
+type v1_state =
+  { mutable attacker : int (* height longest attacker chain *)
+  ; mutable defender_max : int (* height longest defender chain *)
+  ; mutable defender_min : int
+        (* height of longest defender chain available to all defenders *)
+  ; mutable tx : [ `NotIncluded | `IncludedAt of int | `Committed ]
+  }
+
+(* stealing is not possible; series of tailgaters are handles accurately *)
+let version1 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ model =
+  let defender_mining_delay = Distributions.exponential ~ev:(1. /. lambda /. (1. -. alpha))
+  and attacker_mining_delay = Distributions.exponential ~ev:(1. /. lambda /. alpha)
+  and unif1 = Distributions.uniform ~lower:0. ~upper:1.
+  and sample = Distributions.sample in
   let state = { attacker = 0; defender_max = 0; defender_min = 0; tx = `NotIncluded } in
   let handler delay (T now) event =
     (* attacker can always adopt latest defender chain *)
@@ -93,12 +244,12 @@ let nakamoto ~k ~cutoff ~tau network : model =
     then state.attacker <- max state.attacker state.defender_max;
     (* mining & communication *)
     (match event with
-    | Mining `Attacker ->
+    | `Mining `Attacker ->
       (* attacker grows private chain *)
       state.attacker <- state.attacker + 1;
       (* mining continues unconditionally *)
-      delay (D (Distributions.sample network.attacker_mining_delay)) (Mining `Attacker)
-    | Mining `Defender ->
+      delay (D (sample attacker_mining_delay)) (`Mining `Attacker)
+    | `Mining `Defender ->
       (* worst case: defender mines on shortest chain *)
       let height = state.defender_min + 1 in
       state.defender_max <- max state.defender_max height;
@@ -108,52 +259,205 @@ let nakamoto ~k ~cutoff ~tau network : model =
       | `IncludedAt h when height >= h + k -> state.tx <- `Committed
       | _default -> ());
       (* others learn about new block in the future *)
-      delay (D network.propagation_delay) (Sync { height });
+      delay (D delta) (`Sync height);
       (* mining continues unconditionally *)
-      delay (D (Distributions.sample network.defender_mining_delay)) (Mining `Defender)
-    | Sync { height } -> state.defender_min <- max state.defender_min height);
+      delay (D (sample defender_mining_delay)) (`Mining `Defender)
+    | `Sync height -> state.defender_min <- max state.defender_min height);
     if state.tx = `Committed
     then
       if state.attacker > state.defender_min
-      then Stop Success
+      then Stop `Success
       else if state.attacker < state.defender_min + cutoff
-      then Stop Aborted
+      then (
+        (* probability of ever catching up is geometrically distributed *)
+        (* TODO. which parameter? *)
+        let p = GuoRen22.t2F1 cutoff (1. -. alpha) in
+        if sample unif1 <= p then Stop `Success else Stop `Fail)
       else Continue
     else Continue
   and init =
-    [ T (Distributions.sample network.defender_mining_delay), Mining `Defender
-    ; T (Distributions.sample network.attacker_mining_delay), Mining `Attacker
+    [ T (sample defender_mining_delay), `Mining `Defender
+    ; T (sample attacker_mining_delay), `Mining `Attacker
     ]
   in
   { init; handler }
 ;;
 
-let model () : model =
-  let block_interval = 6.
-  and alpha = 0.33 in
-  let network =
-    { defender_mining_delay =
-        Distributions.exponential ~ev:(block_interval /. (1. -. alpha))
-    ; attacker_mining_delay = Distributions.exponential ~ev:(block_interval /. alpha)
-    ; propagation_delay = 1.
+type v2_state =
+  { mutable attacker : int (* height longest attacker/alternative chain *)
+  ; mutable defender_max : int (* height longest defender chain *)
+  ; mutable defender_min : int
+        (* height of longest defender chain available to all defenders *)
+  ; mutable tx : [ `NotIncluded | `IncludedAt of int | `Committed ]
+  ; mutable defenders : [ `Agree | `Disagree ]
+  }
+
+(* attempt to allow stealing only when stealing is possible *)
+let version2 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ model =
+  let mining_delay = Distributions.exponential ~ev:(1. /. lambda)
+  and unif1 = Distributions.uniform ~lower:0. ~upper:1.
+  and sample = Distributions.sample in
+  let state =
+    { attacker = 0
+    ; defender_max = 0
+    ; defender_min = 0
+    ; tx = `NotIncluded
+    ; defenders = `Disagree
     }
   in
-  nakamoto network ~k:6 ~cutoff:12 ~tau:(200. *. block_interval)
+  let handler delay (T now) event =
+    (* adoption of defender chain *)
+    if state.tx = `NotIncluded
+    then
+      (* no need to fork yet; attacker can adopt latest defender chain *)
+      state.attacker <- max state.attacker state.defender_max;
+    (* attacker might disturb synchrony of defenders *)
+    if state.attacker > state.defender_min then state.defenders <- `Disagree;
+    (* mining & communication *)
+    (match event with
+    | `ProofOfWork when sample unif1 <= alpha ->
+      (* attacker grows private chain *)
+      state.attacker <- state.attacker + 1;
+      (* mining continues unconditionally *)
+      delay (D (sample mining_delay)) `ProofOfWork
+    | `ProofOfWork (* sample unif1 > alpha *) ->
+      (* mining continues unconditionally *)
+      let next_block = Distributions.sample mining_delay in
+      delay (D next_block) `ProofOfWork;
+      (* will defenders synchronize on unique preference? *)
+      let unique =
+        state.defender_min = state.defender_max
+        && state.attacker <= state.defender_max
+        && delta < next_block
+      in
+      (* worst case: defender mines on shortest chain *)
+      let height = state.defender_min + 1 in
+      (* include Tx if available; commit if enough confirmations *)
+      (match state.tx with
+      | `NotIncluded when now >= tau -> state.tx <- `IncludedAt height
+      | `IncludedAt h when height >= h + k -> state.tx <- `Committed
+      | _default -> ());
+      (* longest chain is updated immediately *)
+      state.defender_max <- max state.defender_max height;
+      (* others learn about new block in the future *)
+      delay (D delta) (`Sync (height, unique))
+    | `Sync (height, unique) ->
+      state.defender_min <- max state.defender_min height;
+      if unique
+      then state.defenders <- `Agree
+      else if state.defenders = `Disagree
+      then (* stealing *) state.attacker <- max state.attacker height);
+    if state.tx = `Committed
+    then
+      if state.attacker > state.defender_min
+      then Stop `Success
+      else if state.attacker < state.defender_min + cutoff
+      then (
+        (* probability of ever catching up is geometrically distributed *)
+        (* TODO. which parameter? *)
+        let p = GuoRen22.t2F1 cutoff (1. -. alpha) in
+        if sample unif1 <= p then Stop `Success else Stop `Fail)
+      else Continue
+    else Continue
+  and init = [ T (sample mining_delay), `ProofOfWork ] in
+  { init; handler }
 ;;
 
-let () =
-  Random.self_init ();
-  let n = 100000 in
+let model version : _ model =
+  let block_interval = 13. in
+  version
+    ~k:30
+    ~cutoff:60
+    ~tau:(200. *. block_interval)
+    ~lambda:(1. /. block_interval)
+    ~alpha:0.33
+    ~delta:2.
+;;
+
+let test_run name version =
+  Printf.printf "%s: " name;
+  let n = 5000 in
   let i = ref n
-  and abort, success, error = ref 0, ref 0, ref 0 in
+  and fail, success, error = ref 0, ref 0, ref 0 in
   while !i > 0 do
     decr i;
-    match run (model ()) with
-    | Ok Success -> incr success
-    | Ok Aborted -> incr abort
+    match run (model version) with
+    | Ok `Success -> incr success
+    | Ok `Fail -> incr fail
     | Error `EmptyQueue -> incr error
   done;
   if !error > 0 then Printf.eprintf "WARNING: observed %d errors\n" !error;
   let p = float_of_int !success /. float_of_int n *. 100. in
   Printf.printf "%d trials, %d successes, success_rate: %g%%\n" n !success p
+;;
+
+let test () =
+  Random.init 1;
+  test_run "v0" version0;
+  test_run "v0" version0;
+  test_run "v0" version0;
+  test_run "v1" version1;
+  test_run "v1" version1;
+  test_run "v1" version1;
+  test_run "v2" version2;
+  test_run "v2" version2;
+  test_run "v2" version2
+;;
+
+let main () =
+  Random.init 42;
+  let delta = 1. in
+  print_endline "block_interval,alpha,k,model,i,p";
+  let row ~block_interval ~alpha ~k ~model ~i p =
+    Printf.printf "%g,%g,%i,%s,%i,%g\n%!" block_interval alpha k model i p
+  in
+  List.iter
+    (fun block_interval ->
+      List.iter
+        (fun alpha ->
+          let lambda = 1. /. block_interval
+          and tau = 200. *. block_interval in
+          let versions ~k =
+            let cutoff = 1 * k in
+            [ ("v0", fun () -> run (version0 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
+            ; ("v1", fun () -> run (version1 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
+            ; ("v2", fun () -> run (version2 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
+            ]
+          in
+          for k = 1 to 20 do
+            let () =
+              let open GuoRen22 in
+              let p = { k; delta; lambda; roh = 1. -. alpha } in
+              row ~block_interval ~alpha ~k ~model:"gr22t1lower" ~i:0 (t1lower p);
+              row ~block_interval ~alpha ~k ~model:"gr22t1upper" ~i:0 (t1upper p);
+              row ~block_interval ~alpha ~k ~model:"gr22t2lower" ~i:0 (t2lower p);
+              row ~block_interval ~alpha ~k ~model:"gr22t2upper" ~i:0 (t2upper p)
+            in
+            List.iter
+              (fun (model, job) ->
+                for i = 1 to 10 (* observations per config *) do
+                  (* do a few simulations, estimate success rate *)
+                  let fail, success = ref 0, ref 0 in
+                  let n = 1000 (* simulations per observation *) in
+                  for _j = 1 to n do
+                    match job () with
+                    | Ok `Success -> incr success
+                    | Ok `Fail -> incr fail
+                    | Error `EmptyQueue -> failwith "empty queue"
+                  done;
+                  if !success > 0
+                  then (
+                    let p = float_of_int !success /. float_of_int n in
+                    row ~block_interval ~alpha ~k ~model ~i p)
+                done)
+              (versions ~k)
+          done)
+        (* alphas *) [ 0.1; 0.25; 0.33 ])
+    (* block intervals *) [ 4.; 8.; 16. ]
+;;
+
+let () =
+  match Bos.OS.Env.req_var "TEST" with
+  | Ok _ -> test ()
+  | Error _ -> main ()
 ;;
