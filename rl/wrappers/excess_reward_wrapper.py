@@ -4,6 +4,39 @@ import numpy as np
 from gym.spaces import Tuple, MultiDiscrete
 
 
+class BlocksPerProgressRewardWrapper(gym.Wrapper):
+    def __init__(self, env, relative=True):
+        super().__init__(env)
+        self.rolling_reward = dict()
+        self.relative = relative
+        self.n_pow = 0
+        self.sum_attacker = 0
+        self.sum_defender = 0
+        self.difficulties = dict((a, 1) for a in self.env.config.ALPHA_SCHEDULE)
+
+    def step(self, action):
+        obs, _reward, done, info = self.env.step(action)
+        if done:
+            progress = info["episode_progress"]
+            attacker = info["episode_reward_attacker"]
+            self.difficulties[self.env.alpha] = progress
+            if progress != 0:
+                reward = attacker / progress
+            else:
+                reward = 0
+
+            if self.relative:
+                reward -= self.env.alpha
+
+            if self.env.alpha not in self.rolling_reward:
+                # take last 5000 rewards
+                self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
+            self.rolling_reward[self.env.alpha].append(reward)
+        else:
+            reward = 0
+        return obs, reward, done, info
+
+
 class SparseDaaRewardWrapper(gym.Wrapper):
     def __init__(self, env, relative=True):
         super().__init__(env)
@@ -29,12 +62,8 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         # self.sum_attacker += info["reward_attacker"]
         # self.sum_defender += info["reward_defender"]
         if done:
-            observed_time_per_pow = (
-                self.env.config.STEPS_PER_ROLLOUT / info["episode_n_pow"]
-            )
-
-            self.difficulties[self.env.alpha] = observed_time_per_pow
-            reward = info["episode_reward_attacker"] * observed_time_per_pow
+            self.difficulties[self.env.alpha] = info["episode_pow_interval"]
+            reward = info["episode_reward_attacker"] * info["episode_pow_interval"]
             if self.relative:
                 reward -= (
                     self.env.config.STEPS_PER_ROLLOUT

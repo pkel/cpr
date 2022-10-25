@@ -3,15 +3,17 @@ from typing import List, Literal
 
 
 class Config(BaseSettings):
-    PROTOCOL: Literal["tailstorm", "nakamoto", "bk", "bk_ll"] = "tailstorm"
+    PROTOCOL: Literal[
+        "tailstorm", "nakamoto", "bk", "bk_ll", "tailstormll"
+    ] = "tailstorm"
     REWARD_SCHEME: Literal["discount", "constant"] = "constant"
     K: int = 8
     ALGO: Literal["PPO", "DQN"] = "PPO"
-    TOTAL_TIMESTEPS: int = 10e9
-    STEPS_PER_ROLLOUT: int = 200
-    STARTING_LR: float = 10e-3
-    ENDING_LR: float = 10e-5
-    BATCH_SIZE: int = 200_000
+    TOTAL_TIMESTEPS: int = 10e7
+    STEPS_PER_ROLLOUT: int = 128
+    STARTING_LR: float = 1e-3
+    ENDING_LR: float = 1e-5
+    BATCH_SIZE: int = 2048
     ALPHA_SCHEDULE_CUTOFF: float = 0
     LAYER_SIZE: int = 256
     N_LAYERS: int = 2
@@ -29,12 +31,16 @@ class Config(BaseSettings):
         0.45,
         0.475,
     ]
-    USE_DAA: bool = True
-    DAA_METHOD: Literal["sparse", "dense"] = "sparse"
+    REWARD_WRAPPER: Literal[
+        "SparseDaaRewardWrapper",
+        "WastedBlocksRewardWrapper",
+        "BlocksPerProgressRewardWrapper",
+    ] = "BlocksPerProgressRewardWrapper"
     GAMMA: float = 0.5
     DEFENDERS: int = 2
     ACTIVATION_DELAY: int = 1
     N_ENVS: int = 16
+    SUBBLOCK_SELECTION: Literal["heuristic", "optimal"] = "heuristic"
 
 
 config = Config()

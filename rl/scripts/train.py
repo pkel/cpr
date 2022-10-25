@@ -23,6 +23,7 @@ from rl.wrappers.excess_reward_wrapper import (
     SparseRelativeRewardWrapper,
     WastedBlocksRewardWrapper,
     AbsoluteRewardWrapper,
+    BlocksPerProgressRewardWrapper,
 )
 from rl.wrappers import ReleaseOnDoneWrapper
 from rl.utils import config, env_fn
@@ -140,13 +141,12 @@ if __name__ == "__main__":
         env = env_fn(0, 1, config)
         env = AlphaScheduleWrapper(env, env_fn, config)
         # env = ReleaseOnDoneWrapper(env)
-        if config.USE_DAA:
-            if config.DAA_METHOD == "sparse":
-                env = SparseDaaRewardWrapper(env)
-            else:
-                env = AbsoluteRewardWrapper(env)
-        else:
+        if config.REWARD_WRAPPER == "SparseDaaRewardWrapper":
+            env = SparseDaaRewardWrapper(env)
+        elif config.REWARD_WRAPPER == "WastedBlocksRewardWrapper":
             env = WastedBlocksRewardWrapper(env)
+        elif config.REWARD_WRAPPER == "BlocksPerProgressRewardWrapper":
+            env = BlocksPerProgressRewardWrapper(env)
         return env
 
     if config.N_ENVS > 1:
