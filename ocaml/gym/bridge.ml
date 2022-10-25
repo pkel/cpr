@@ -206,27 +206,41 @@ let () =
     "tailstorm"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
-     and k = keyword "k" int ~docstring:"puzzles per block" in
+     and k = keyword "k" int ~docstring:"puzzles per block"
+     and subblock_selection =
+       keyword
+         "subblock_selection"
+         string
+         ~default:"optimal"
+         ~docstring:"sub-block selection mechanism"
+     in
      let incentive_scheme =
        Options.of_string_exn [ `Constant; `Discount; `Punish; `Hybrid ] reward
+     and subblock_selection =
+       Options.of_string_exn [ `Altruistic; `Heuristic; `Optimal ] subblock_selection
      in
      fun () ->
-       Proto
-         (Engine.of_module
-            (tailstorm_ssz ~subblock_selection:`Optimal ~incentive_scheme ~k))
+       Proto (Engine.of_module (tailstorm_ssz ~subblock_selection ~incentive_scheme ~k))
        |> python_of_protocol);
   Py_module.set
     m
     "tailstormll"
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
-     and k = keyword "k" int ~docstring:"puzzles per block" in
+     and k = keyword "k" int ~docstring:"puzzles per block"
+     and subblock_selection =
+       keyword
+         "subblock_selection"
+         string
+         ~default:"optimal"
+         ~docstring:"sub-block selection mechanism"
+     in
      let incentive_scheme =
        Options.of_string_exn [ `Constant; `Discount; `Punish; `Hybrid ] reward
+     and subblock_selection =
+       Options.of_string_exn [ `Altruistic; `Heuristic; `Optimal ] subblock_selection
      in
      fun () ->
-       Proto
-         (Engine.of_module
-            (tailstormll_ssz ~subblock_selection:`Optimal ~incentive_scheme ~k))
+       Proto (Engine.of_module (tailstormll_ssz ~subblock_selection ~incentive_scheme ~k))
        |> python_of_protocol)
 ;;
