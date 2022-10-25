@@ -1,6 +1,6 @@
-(executable
- (name bounds)
- (libraries cpr_lib))
+(executables
+ (names bounds)
+ (libraries bos.setup cpr))
 
 (rule
  (with-stdout-to

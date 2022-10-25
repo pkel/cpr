@@ -7,9 +7,7 @@ in
 pkgs.mkShell {
   buildInputs = [
     pkgs.evince
-    pkgs.rmapi
     pkgs.texlive.combined.scheme-full
-    pkgs.R
 
     (pkgs.callPackage ../../../tools/textidote.nix {})
 
