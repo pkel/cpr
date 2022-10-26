@@ -1,67 +1,5 @@
 module Distributions = Cpr_lib.Distributions
-module OrderedQueue = Cpr_lib.OrderedQueue
-
-module Simulation : sig
-  type time = T of float
-  type timedelta = D of float
-
-  type 'outcome step_outcome =
-    | Stop of 'outcome
-    | Continue
-
-  type ('event, 'outcome) model =
-    { handler : (timedelta -> 'event -> unit) -> time -> 'event -> 'outcome step_outcome
-    ; init : (time * 'event) list
-    }
-
-  val run : ('event, 'outcome) model -> ('outcome, [ `EmptyQueue ]) result
-end = struct
-  type time = T of float
-  type timedelta = D of float
-
-  type 'outcome step_outcome =
-    | Stop of 'outcome
-    | Continue
-
-  type ('event, 'outcome) model =
-    { handler : (timedelta -> 'event -> unit) -> time -> 'event -> 'outcome step_outcome
-    ; init : (time * 'event) list
-    }
-
-  type 'event sim_state =
-    { mutable queue : (float, 'event) OrderedQueue.t
-    ; mutable time : float
-    }
-
-  let init events =
-    let open OrderedQueue in
-    let queue =
-      let empty = init Float.compare in
-      List.fold_left (fun acc (T time, event) -> queue time event acc) empty events
-    in
-    { queue; time = 0. }
-  ;;
-
-  let run model =
-    let state = init model.init in
-    let delay (D d) ev =
-      state.queue <- OrderedQueue.queue (state.time +. d) ev state.queue
-    in
-    let rec step () =
-      match OrderedQueue.dequeue state.queue with
-      | None -> Error `EmptyQueue
-      | Some (t, e, q) ->
-        state.time <- t;
-        state.queue <- q;
-        (match model.handler delay (T t) e with
-        | Continue -> step ()
-        | Stop outcome -> Ok outcome)
-    in
-    step ()
-  ;;
-end
-
-open Simulation
+open QueueSim
 
 type v0_state =
   { mutable attacker : int (* height longest attacker chain *)
@@ -70,8 +8,9 @@ type v0_state =
   ; mutable tx : [ `NotIncluded | `IncludedAt of int | `Committed ]
   }
 
-(* all tailgater can be stolen by the attacker *)
-let version0 ~k ~cutoff:_ ~tau ~lambda ~alpha ~delta : _ model =
+(* All tailgaters can be stolen by the attacker. This reflects the "rigged model" in the
+   GR22AFT paper. *)
+let version0 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ QueueSim.model =
   let mining_delay = Distributions.exponential ~ev:(1. /. lambda)
   and unif1 = Distributions.uniform ~lower:0. ~upper:1.
   and sample = Distributions.sample in
@@ -82,19 +21,19 @@ let version0 ~k ~cutoff:_ ~tau ~lambda ~alpha ~delta : _ model =
     ; tx = `NotIncluded
     }
   in
-  let handler delay (T now) event =
-    (* attacker can always adopt latest defender chain until tx is included *)
+  let handler schedule (T now) event =
+    (* attacker can adopt latest defender chain until target tx is included *)
     if state.tx = `NotIncluded then state.attacker <- max state.attacker state.defender;
     (* mining & communication *)
     (match event with
     | `ProofOfWork when sample unif1 <= alpha ->
       (* attacker mines a block *)
       state.attacker <- state.attacker + 1;
-      (* mining continues unconditionally *)
-      delay (D (sample mining_delay)) `ProofOfWork
+      (* mining continues *)
+      schedule (D (sample mining_delay)) `ProofOfWork
     | `ProofOfWork (* when unif1 > alpha *) ->
-      (* defender mines *)
-      if state.last_defender_block +. delta < now
+      (* defender mines a block *)
+      if now -. state.last_defender_block > delta
       then (
         (* new block is not a tailgater *)
         state.defender <- state.defender + 1;
@@ -107,17 +46,24 @@ let version0 ~k ~cutoff:_ ~tau ~lambda ~alpha ~delta : _ model =
       else
         (* new block is tailgater; attacker steals *)
         state.attacker <- state.attacker + 1;
-      (* mining continues unconditionally *)
-      delay (D (sample mining_delay)) `ProofOfWork);
+      (* mining continues *)
+      schedule (D (sample mining_delay)) `ProofOfWork);
+    (* termination *)
     if state.tx = `Committed
     then
       if state.attacker >= state.defender
       then Stop `Success
-      else (
-        (* probability of ever catching up is geometrically distributed *)
-        (* TODO. which parameter? *)
-        let p = GR22AFT.t2F1 (state.defender - state.attacker) (1. -. alpha) in
-        if sample unif1 <= p then Stop `Success else Stop `Fail)
+      else if state.defender - state.attacker > cutoff
+      then (
+        (* Probability of ever catching up is geometrically distributed. With rigged
+           mining rate as in GR22AFT paper. Attacker can steal all tailgaters. *)
+        let p_succ =
+          let open GR22AFT in
+          let p = p { lambda; delta; roh = 1. -. alpha; k } in
+          t2F1 (state.defender - state.attacker) p
+        in
+        if sample unif1 <= p_succ then Stop `Success else Stop `Fail)
+      else Continue
     else Continue
   and init = [ T (sample mining_delay), `ProofOfWork ] in
   { init; handler }
@@ -131,7 +77,9 @@ type v1_state =
   ; mutable tx : [ `NotIncluded | `IncludedAt of int | `Committed ]
   }
 
-(* stealing is not possible; series of tailgaters are handles accurately *)
+(* No stealing is possible. This is clearly off, it is likely that some tailgaters can be
+   stolen. Cool thing about this model is how it handles series of overlapping tailgaters
+   accurately. *)
 let version1 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ model =
   let defender_mining_delay = Distributions.exponential ~ev:(1. /. lambda /. (1. -. alpha))
   and attacker_mining_delay = Distributions.exponential ~ev:(1. /. lambda /. alpha)
@@ -153,7 +101,7 @@ let version1 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ model =
       (* worst case: defender mines on shortest chain *)
       let height = state.defender_min + 1 in
       state.defender_max <- max state.defender_max height;
-      (* include Tx if available; commit if enough confirmations *)
+      (* include target tx if available; commit if enough confirmations *)
       (match state.tx with
       | `NotIncluded when now >= tau -> state.tx <- `IncludedAt height
       | `IncludedAt h when height >= h + k -> state.tx <- `Committed
@@ -167,12 +115,18 @@ let version1 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ model =
     then
       if state.attacker > state.defender_min
       then Stop `Success
-      else if state.attacker < state.defender_min + cutoff
+      else if state.defender_min - state.attacker > cutoff
       then (
-        (* probability of ever catching up is geometrically distributed *)
-        (* TODO. which parameter? *)
-        let p = GR22AFT.t2F1 cutoff (1. -. alpha) in
-        if sample unif1 <= p then Stop `Success else Stop `Fail)
+        (* Probability of ever catching up is geometrically distributed. With rigged
+           mining rate as in GR22AFT paper. Attacker can steal all tailgaters.
+
+           TODO: drop tailgaiters, not steal them *)
+        let p_succ =
+          let open GR22AFT in
+          let p = p { lambda; delta; roh = 1. -. alpha; k } in
+          t2F1 (state.defender_min - state.attacker) p
+        in
+        if sample unif1 <= p_succ then Stop `Success else Stop `Fail)
       else Continue
     else Continue
   and init =
@@ -192,7 +146,7 @@ type v2_state =
   ; mutable defenders : [ `Agree | `Disagree ]
   }
 
-(* attempt to allow stealing only when stealing is possible *)
+(* First attempt to allow stealing only when stealing is possible. *)
 let version2 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ model =
   let mining_delay = Distributions.exponential ~ev:(1. /. lambda)
   and unif1 = Distributions.uniform ~lower:0. ~upper:1.
@@ -251,37 +205,42 @@ let version2 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ model =
     then
       if state.attacker > state.defender_min
       then Stop `Success
-      else if state.attacker < state.defender_min + cutoff
+      else if state.defender_min - state.attacker > cutoff
       then (
-        (* probability of ever catching up is geometrically distributed *)
-        (* TODO. which parameter? *)
-        let p = GR22AFT.t2F1 cutoff (1. -. alpha) in
-        if sample unif1 <= p then Stop `Success else Stop `Fail)
+        (* Probability of ever catching up is geometrically distributed. With rigged
+           mining rate as in GR22AFT paper. Attacker can steal all tailgaters.
+
+           TODO: drop tailgaiters, not steal them *)
+        let p_succ =
+          let open GR22AFT in
+          let p = p { lambda; delta; roh = 1. -. alpha; k } in
+          t2F1 (state.defender_min - state.attacker) p
+        in
+        if sample unif1 <= p_succ then Stop `Success else Stop `Fail)
       else Continue
     else Continue
   and init = [ T (sample mining_delay), `ProofOfWork ] in
   { init; handler }
 ;;
 
-let model version : _ model =
+let test_run name model =
   let block_interval = 13. in
-  version
-    ~k:30
-    ~cutoff:60
-    ~tau:(200. *. block_interval)
-    ~lambda:(1. /. block_interval)
-    ~alpha:0.33
-    ~delta:2.
-;;
-
-let test_run name version =
+  let model () =
+    model
+      ~k:30
+      ~cutoff:30
+      ~tau:(200. *. block_interval)
+      ~lambda:(1. /. block_interval)
+      ~alpha:0.33
+      ~delta:2.
+  in
   Printf.printf "%s: " name;
   let n = 5000 in
   let i = ref n
   and fail, success, error = ref 0, ref 0, ref 0 in
   while !i > 0 do
     decr i;
-    match run (model version) with
+    match run (model ()) with
     | Ok `Success -> incr success
     | Ok `Fail -> incr fail
     | Error `EmptyQueue -> incr error
