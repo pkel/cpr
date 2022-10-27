@@ -10,7 +10,7 @@ class Config(BaseSettings):
     K: int = 8
     ALGO: Literal["PPO", "DQN"] = "PPO"
     TOTAL_TIMESTEPS: int = 10e7
-    STEPS_PER_ROLLOUT: int = 128
+    STEPS_PER_ROLLOUT: int = 800
     STARTING_LR: float = 1e-3
     ENDING_LR: float = 1e-5
     BATCH_SIZE: int = 2048
