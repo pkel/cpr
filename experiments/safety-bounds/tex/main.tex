@@ -6,16 +6,29 @@
 \usepackage{microtype}
 \usepackage{mathtools}
 \usepackage{amsthm}
+\usepackage{xcolor}
 
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}
 \newtheorem{observation}{Observation}
-\newtheorem{simulation}{Observation}
+\newtheorem{simulation}{Simulation}
 
 \usepackage{natbib}
 \bibliographystyle{unsrtnat}
 
-\usepackage[ruled,lined,linesnumbered]{algorithm2e}
+
+\usepackage[ruled,linesnumbered,vlined]{algorithm2e}
+% \usepackage[ruled,linesnumbered,lined]{algorithm2e}
+% bugfix (pkel reported in Oct 2022)
+\renewcommand{\SetProgSty}[1]{\renewcommand{\ProgSty}[1]{\textnormal{\csname#1\endcsname{##1}}\unskip}}%
+%
+\SetKwProg{Fn}{function}{ is}{end}
+\def\myargstyle{}
+\SetProgSty{myargstyle}
+\SetArgSty{myargstyle}
+\SetKwComment{tcc}{// }{}
+\def\mycommentstyle{\it\color{gray}}
+\SetCommentSty{mycommentstyle}
 
 \usepackage[hidelinks]{hyperref}
 
@@ -26,7 +39,7 @@
 \date{Draft, \today}
 \maketitle
 
-\section{Version 1} \label{sec:v1}
+\section{Model}
 
 We follow \citet{guo2022BitcoinLatency} who model the mining process as follows.
 Blocks are numbered in the order they are mined.
@@ -54,6 +67,186 @@ Attackers might mine on any chain.
 They see all blocks immediately.
 They can make visible attacker blocks to other participants at their willing with immediate effect.
 
+\section{Version 0} \label{sec:v0}
+
+Blocks which are mined within $\Delta$ after the last block are called \emph{tailgaters}.
+For their \emph{rigged model}, \citet{guo2022BitcoinLatency} assume that defender tailgaters can be stolen by the attacker.
+They convert all defender tailgaters to attacker blocks.
+It is easy to show that the remaining defender blocks are all mined at a different height.
+This property makes their remaining analysis tractable.
+
+\begin{definition}[Tailgaters and Laggers]
+  Block $b$ is called \emph{tailgater} if $t_b \leq t_{b-1} + \Delta$.
+  Otherwise, if  $t_{b-1} + \Delta < t_b$, block $b$ is called a loner.
+\end{definition}
+
+\begin{definition}[Safety attack] \label{def:safety}
+  At time $\tau$ the defenders learn about the target transaction~\texttt{tx}.
+  At the same time, the attackers create a conflicting transaction~\texttt{tx'}.
+  Any future blockchain will include \texttt{tx} or \texttt{tx'} but not both.
+
+  Let $b$ be the first defender lagger mined at or after $\tau$.
+  The defenders commit to one of the two transactions when their chain reaches height $h_b + k - 1$.
+  The commitment may change when they learn a longer chain that includes the other transaction.
+
+  The safety is violated if a defender commits to one of the transactions \texttt{tx} or \texttt{tx'} after another or the same defender committed to the other transaction.
+\end{definition}
+
+\begin{observation}[Stealing]
+  Let $b$ and $b'$ be two defender blocks mined after $\tau$.
+  Let $b'$ be a tailgater.
+  It is possible that $b$ and $b'$ have the same height and one includes \texttt{tx}, the other \texttt{tx'}.
+  We call this stealing because the attacker uses a defender block to extend the attacker chain.
+\end{observation}
+
+\begin{simulation}[Model \texttt{v0}] \label{sim:v0}
+  Safety violations are feasible or infeasible depending on the realization of the mining process.
+  Algorithm~\ref{alg:sim0} simulates one such realization under the assumption that the attacker can steal all defender tailgaters.
+  It returns \texttt{Success} if a safety violation seems feasible and \texttt{Failure} otherwise.
+  Counting the outcomes while repeatedly running the algorithm provides an increasingly accurate estimate for safety.
+  We expect the results to match the bounds presented by \citet{guo2022BitcoinLatency}.
+\end{simulation}
+
+\begin{algorithm}
+  \caption{Feasibility of safety violations; Version 0}
+  \label{alg:sim0}
+
+  \KwIn{$\tau, \alpha, \lambda, \Delta$; cutt-off $c$}
+  \KwData{%
+    Variable $t$ tracks the current time.
+    Variable $a$ tracks the (maximal) height of the attacker chain.
+    Variable $d$ tracks the height of the defender chain.
+    Variable $s$ tracks the state of the target transaction.
+  }
+
+  $t \gets 0$; $a \gets 0$; $d \gets 0$; $s \gets \texttt{Pending}$\;
+  \While{true}{
+    \tcc{simulate proof-of-work}
+    Sample $\delta$ from exponential distribution with rate $\lambda$\;
+    $t \gets t + \delta$\;
+    \tcc{handle mining event}
+    \If{$ s = \texttt{Pending} $} {
+      $a \gets \max(a, d)$\tcc*{attacker can adopt defender chain}
+    }
+    Sample $x$ from Bernoulli distribution with parameter $\alpha$\;
+    \uIf(\tcc*[f]{attacker block or stolen tailgater}){$x$ \textbf{or} $\delta < \Delta$}{
+      $a \gets a + 1$\;
+    }
+    \Else(\tcc*[f]{defender lagger}){
+      $d \gets d + 1$\;
+      \Switch(\tcc*[f]{include or commit target transaction}){$s$}{
+        \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}()$ }
+        \Case{$\texttt{Included}(h)$ {\normalfont \textbf{with}} $d \geq h + k - 1$}{ $s \gets \texttt{Committed}$ }
+      }
+    }
+    \tcc{check termination}
+    \uIf(\tcc*[f]{safety violation feasible}){$s = \texttt{Committed}$ \textbf{and} $a \geq d$}{
+      \Return \texttt{Success}\;
+    }
+    \ElseIf{$s = \texttt{Committed}$ \textbf{and} $a < d - c$}{
+      \tcc{
+        Attacker has infinite time to catch up, but we cannot run these simulations forever.
+        \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
+      }
+      Sample $x$ from geometric distribution with parameter $p = (1 - \alpha) e^{-\lambda\Delta}$\;
+      \uIf(\tcc*[f]{safety violation feasible}){$x > d - a$}{
+        \Return \texttt{Success}\;
+      }
+      \Else(\tcc*[f]{safety violation infeasible}){
+        \Return \texttt{Failure}\;
+      }
+    }
+  }
+\end{algorithm}
+
+\section{Version 1} \label{sec:v1}
+
+Ling Ren mentioned a potential route for improving these bounds at AFT\,'22.
+Assigning all defender tailgaters to the attacker is overly pessimistic.
+It might be sufficient to drop them.
+I will simulate such a scenario in this section.
+
+\begin{observation}[Probabilities]\label{obs:ptick}
+  Pre-rigging, a block is an attacker block with probability $\alpha$ and a defender block with probability $\rho = 1 - \alpha$. A block is a lagger with probability $e^{-\lambda\Delta}$ and a tailgater otherwise.
+
+  In the rigged model of \citet{guo2022BitcoinLatency}, defender tailgaters become attacker blocks.
+  Post-rigging, a block is a defender block with probability $p = \rho e^{-\lambda\Delta}$ and an attacker block otherwise.
+
+  We now drop defender tailgaters instead of assigning them to the attacker.
+  The probability that a block is an attacker block is $\alpha$.
+  The probability that a block is a defender block is $\rho e^{-\lambda\Delta}$.
+  The probability that a block is dropped is $\rho (1 - e^{-\lambda\Delta})$.
+  The probability that a non-dropped block is a defender block is
+  \begin{align}
+    p' := \frac{\rho e^{-\lambda\Delta}}{\alpha + \rho e^{-\lambda\Delta}}
+  \end{align}
+\end{observation}
+
+\begin{simulation}[Model \texttt{v1}] \label{sim:v1}
+  Algorithm~\ref{alg:sim1} closely resembles Algorithm~\ref{alg:sim0}.
+  There are two differences. We ignore defender tailgaters instead of assigning them to the attacker and we change the parameter of the geometric distribution to reflect this change.
+\end{simulation}
+
+\begin{algorithm}
+  \caption{Feasibility of safety violations; Version 1}
+  \label{alg:sim1}
+
+  \KwIn{$\tau, \alpha, \lambda, \Delta$; cutt-off $c$}
+  \KwData{%
+    Variable $t$ tracks the current time.
+    Variable $a$ tracks the (maximal) height of the attacker chain.
+    Variable $d$ tracks the height of the defender chain.
+    Variable $s$ tracks the state of the target transaction.
+  }
+
+  $t \gets 0$; $a \gets 0$; $d \gets 0$; $s \gets \texttt{Pending}$\;
+  \While{true}{
+    \tcc{simulate proof-of-work}
+    Sample $\delta$ from exponential distribution with rate $\lambda$\;
+    $t \gets t + \delta$\;
+    \tcc{handle mining event}
+    \If{$ s = \texttt{Pending} $} {
+      $a \gets \max(a, d)$\tcc*{attacker can adopt defender chain}
+    }
+    Sample $x$ from Bernoulli distribution with parameter $\alpha$\;
+    \uIf(\tcc*[f]{attacker block}){$x$}{
+      $a \gets a + 1$\;
+    }
+    \ElseIf(\tcc*[f]{defender lagger}){$\delta \geq \Delta$}{
+      $d \gets d + 1$\;
+      \Switch(\tcc*[f]{include or commit target transaction}){$s$}{
+        \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}()$ }
+        \Case{$\texttt{Included}(h)$ {\normalfont \textbf{with}} $d \geq h + k - 1$}{ $s \gets \texttt{Committed}$ }
+      }
+    }
+    \tcc{check termination}
+    \uIf(\tcc*[f]{safety violation feasible}){$s = \texttt{Committed}$ \textbf{and} $a \geq d$}{
+      \Return \texttt{Success}\;
+    }
+    \ElseIf{$s = \texttt{Committed}$ \textbf{and} $a < d - c$}{
+      \tcc{
+        Attacker has infinite time to catch up, but we cannot run these simulations forever.
+        \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
+      }
+      Sample $x$ from geometric distribution with parameter $p'$ from Obs.\,\ref{obs:ptick}\;
+      \uIf(\tcc*[f]{safety violation feasible}){$x > d - a$}{
+        \Return \texttt{Success}\;
+      }
+      \Else(\tcc*[f]{safety violation infeasible}){
+        \Return \texttt{Failure}\;
+      }
+    }
+  }
+\end{algorithm}
+
+
+\appendix
+
+\section{Version 2} \label{sec:v2}
+
+Simulate communication with event queue. Circumvent distinction of tailgaters and laggers.
+Resembles the setting from Sect.~\ref{sec:v1} where all tailgaters are dropped.
+
 \begin{definition} \label{def:ts}
   Let $D$ be the set of defenders,
   let $A$ be the set of attackers, and
@@ -66,20 +259,20 @@ They can make visible attacker blocks to other participants at their willing wit
   \end{align}
 \end{definition}
 
+\newcommand{\justbefore}[1]{{#1^{\circ}}}
+
+\begin{definition}[Time step]
+  Let $e_1, e_2, \dots$ enumerate in ascending order all the points in time when $d_\cdot, d'_\cdot$, or $a_\cdot$ change.
+  Let $t = e_i$. We define $\justbefore{t}$ as a point in time satisfying $e_{i-1} < \justbefore{t} < t =  e_i$.
+  Less formally, $\justbefore{t}$ happens just before $t$.
+\end{definition}
+
 \begin{observation}[Communication] \label{obs:communication}
   Defenders share all blocks, their communication is delayed by at most $\Delta$, hence for all $t$,
   \begin{align}
     d'_{t + \Delta} \geq d_t \,.
   \end{align}
 \end{observation}
-
-\newcommand{\justbefore}[1]{{#1^{\circ}}}
-
-\begin{definition}[Time step]
-  Let $e_1, e_2, \dots$ enumerate all the points in times when $d_\cdot, d'_\cdot$, or $a_\cdot$ change in ascending order.
-  Let $t = e_i$. We define $\justbefore{t}$ as a point in time satisfying $e_{i-1} < \justbefore{t} < t =  e_i$.
-  Less formally, $\justbefore{t}$ happens just before $t$.
-\end{definition}
 
 \begin{observation}[Defender mining] \label{obs:defendermining}
   Defenders always extend a chain of maximum height, hence for each defender block $b$,
@@ -95,59 +288,29 @@ They can make visible attacker blocks to other participants at their willing wit
   \end{align}
 \end{observation}
 
-\begin{definition}[Safety attack] \label{def:safety}
-  At time $\tau$ the defenders learn about the target transaction~\texttt{tx}.
-  They include this transaction in the next defender block $b^*$.
-  In other words, $b^*$ is the first defender block mined after $\tau$.
-  The defenders commit the target transaction when they mine or learn about a blockchain of height at least $h_{b^*} + k - 1$ that includes $b^*$.
-  The safety is violated if one defender mines a blockchain of height $h_{b^*} + k - 1$ or greater that does not include the target transaction.
-\end{definition}
-
-\begin{observation} \label{obs:feasibility}
-  In order to violate safety at time $t$, three conditions must hold.
-  \begin{enumerate}
-    \item The commit took place, i.e., $d_t \geq h + k - 1$.
-    \item The attackers can overwrite a defender chain, i.e., $a_t > d'_t$.
-    \item All blocks in the overwriting chain are mined before $b^*$ or by an attacker.
-  \end{enumerate}
-  If (3) is false, the attacker chain contains the target transaction.
-  (3) can be restated as a refinement of the attacker mining rule in Observation~\ref{obs:attackermining}:
-  For all attacker blocks $b$ with $t_b > t_{b^*}$
-  \begin{align}
-    a_{t_b} \leq a_{t_{b}^-} + 1 \,.
-  \end{align}
-
-  \emph{
-    (3) applies to Def.~\ref{def:safety} but this definition is probably too strict.
-    It results in a setting where the attacker can never steal defender blocks.
-    Let's assume this is true for a moment because it's easier to handle.
-    See Sect.~\ref{sec:v2} for an improved definition of safety.
-  }
-\end{observation}
-
-\begin{simulation}[Algorithmic safety]
-  Whether safety can be violated or not depends on the realisation of the mining process.
-  Algorithm~\ref{alg:feasibility} simulates one such realization and determines whether safety violation is feasible.
-  It applies Observations~\ref{obs:communication}--\ref{obs:feasibility} as mining realizes over time.
-  Counting outcomes while repeatedly running the algorithm provides an (increasingly accurate) estimate for an upper bound on the probability that a safety violation is possible in any given realization of the mining process.
+\begin{simulation}[Model \texttt{v2}] \label{sim:v2}
+  Algorithm~\ref{alg:sim2} is an attempt to rephrase Algorithm~\ref{alg:sim1} with explicit communication.
+  We do not categorize blocks in tailgaters and defenders.
 \end{simulation}
 
 \begin{algorithm}
-  \caption{Simulation for the feasibility of safety violations}
-  \label{alg:feasibility}
+  \caption{Feasibility of safety violations; Version 2}
+  \label{alg:sim2}
+
+  \small
 
   \KwIn{$\tau, \alpha, \lambda, \Delta$; cutt-off $c$}
-  \KwData{Variable $t$ tracks the current time.
+  \KwData{%
     $Q$ is a time-ordered queue of future events.
     Variable $a$ tracks the (maximal) height of the attacker chain; $d$ and $d'$ track their time-indexed counterparts.
     Variable $s$ tracks the state of the target transaction.
   }
 
-  $t \gets 0$; $a \gets 0$; $d \gets 0$; $d' \gets 0$; $s \gets \texttt{Pending}$\;
-  Sample $x$ from exponential distribution with rate $\lambda$\;
-  Insert \texttt{Proof-of-Work} into $Q$ at time $t + x$\;
+  $Q \gets \texttt{Empty}$; $a \gets 0$; $d \gets 0$; $d' \gets 0$; $s \gets \texttt{Pending}$\;
+  Sample $\delta$ from exponential distribution with rate $\lambda$\;
+  Insert \texttt{Proof-of-Work} into $Q$ at time $t + \delta$\;
   \While{true}{
-    Pop $(t, e)$ from $Q$\;
+    Pop $(t, e)$ from $Q$\tcc*{get current time and event from queue}
     \If{$ s = \texttt{Pending} $} {
       $a \gets \max(a, d)$\tcc*{attacker can adopt defender chain}
     }
@@ -163,107 +326,148 @@ They can make visible attacker blocks to other participants at their willing wit
             \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}(d)$ }
             \Case{$\texttt{Included}(h)$ {\normalfont \textbf{with}} $d \geq h + k - 1$}{ $s \gets \texttt{Committed}$ }
           }
-          Schedule \texttt{Sync}($d$) at time $t + \Delta$\;
+          Insert \texttt{Rx}($d$) into $Q$ at time $t + \Delta$\tcc*{delayed communication}
         }
-        Sample $x$ from exponential distribution with rate $\lambda$\;
-        Insert \texttt{Proof-of-Work} into $Q$ at time $t + x$\;
+        Sample $\delta$ from exponential distribution with rate $\lambda$\;
+        Insert \texttt{Proof-of-Work} into $Q$ at time $t + \delta$\;
       }
-      \Case{\texttt{Sync}($h$)}{
+      \Case{\texttt{Rx}($h$)}{
         $d' \gets \max(d', h)$\;
       }
     }
-    \uIf{$s = \texttt{Committed} ~\land~ a > d'$}{
-      \tcc{safety violation is feasible}
-      return;
+    \tcc{check termination}
+    \uIf(\tcc*[f]{safety violation feasible}){$s = \texttt{Committed}$ \textbf{and} $a > d'$}{
+      \Return \texttt{Success}\;
     }
-    \ElseIf{$a < d' + c$} {
-      \tcc{at some point we have to abort}
-      \tcc{how likely is it that the attacker catches up?}
-      return\;
+    \ElseIf{$s = \texttt{Committed}$ \textbf{and} $a < d' - c$}{
+      \tcc{
+        Attacker has infinite time to catch up, but we cannot run these simulations forever.
+        \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
+      }
+      Sample $x$ from geometric distribution with parameter $p'$ from Obs.\,\ref{obs:ptick}\;
+      \uIf(\tcc*[f]{safety violation feasible}){$x > d' - a$}{
+        \Return \texttt{Success}\;
+      }
+      \Else(\tcc*[f]{safety violation infeasible}){
+        \Return \texttt{Failure}\;
+      }
     }
   }
 \end{algorithm}
 
-\section{Version 2} \label{sec:v2}
+\section{Version 3} \label{sec:v3}
 
-Definition~\ref{def:safety} might be too restrictive.
-An attacker can include a conflicting transaction in its first block after $\tau$.
-Then defenders cannot include the target transaction when they extend the attackers' chain.
-I try to address this with a new definition of safety.
-
-\begin{definition}[Safety attack] \label{def:safety2}
-  At time $\tau$ the defenders learn about the target transaction~\texttt{tx}.
-  At the same time, the attackers create a conflicting transaction~\texttt{tx'}.
-  Any future blockchain will include \texttt{tx} or \texttt{tx'} but not both.
-
-  Let $b$ be the first block mined at or after $\tau$.
-  The defenders commit to one of the two transactions when their chain reaches height $h_b + k - 1$.
-  The commitment may change when they learn a longer chain that includes the other transaction.
-
-  The safety is violated if a defender commits to one of the transactions \texttt{tx} and \texttt{tx'} after another or the same defender committed to the other transaction.
-\end{definition}
-
-\begin{observation}
-  Three necessary conditions for violating safety at time $t$:
-  \begin{enumerate}
-    \item A commit took place, i.\,e., $d_t \geq h_b + k - 1$.
-    \item The attackers can overwrite a defender chain, i.\,e., $a_t > d'_t$.
-    \item The attackers chain includes \texttt{tx'} while the defender's chain includes \texttt{tx}.
-  \end{enumerate}
-\end{observation}
-
-\begin{observation}[Stealing]
-  Let $b$ and $b'$ be two defender blocks mined at $\tau < t_b < t_{b'} < t_b + \Delta$.
-  We say $b'$ is a tailgater because it arrives within $\Delta$ after the previous block $b$.
-  It is possible that $b$ and $b'$ have the same height and one includes \texttt{tx}, the other \texttt{tx'}.
-  We call this stealing because the attacker uses a defender block to extend the attacker chain.
-\end{observation}
+Dropping all defender tailgaters is not realistic. Stealing is possible in some cases.
 
 \begin{observation}[Feasibility of Stealing]
-  \citet{guo2022BitcoinLatency} consider a worst-case scenario where stealing is always possible.
-  In practice is not. Stealing is only possible if the defenders disagree about including \texttt{tx}.
+  Stealing is feasible if the defenders disagree about the state of the target transaction.
+  There might be two blockchains of equal height, one including the target transaction, the other including a conflicting transaction.
+  In these cases, dropping tailgaters gives unrealistic advantage to the defender.
 \end{observation}
 
-\citet{keller2022ParallelProofofwork} deal with a similar problem.
-They propose to track the feasibility of stealing in a separate variable.
+We introduce another time-indexed variable.
+It tracks the feasibility of stealing.
+We take inspiration from the safety analysis of parallel proof-of-work by \citet{keller2022ParallelProofofwork}.
 
 \begin{definition} \label{def:ts2}
-  We reuse $a_t$, $d_t$ and $d'_t$ from Definition~\ref{def:ts}.
-  We introduce $s_t$ for $t > \tau$.
-  It is true iif at time $t$ either all defenders prefer to include \texttt{tx} or all defenders prefer to include \texttt{tx'}.
-  We refer to $a'_t$ as the height of the longest attacker chain that conflicts with any preferred defender chain.
+  We define $f_t = \texttt{False}$ if at time $t$ either all defenders prefer to include \texttt{tx} or all defenders prefer to include \texttt{tx'}. Otherwise, $f_t = \texttt{True}$.
 \end{definition}
 
 \begin{observation}
-  While $s_t$ is true, stealing is not possible.
+  While $f_t = \texttt{False}$, stealing is not possible.
 \end{observation}
 
-\begin{observation}
+\begin{observation}\label{obs:sync}
   Let $b$ be a defender block.
   Assume $\tau < t_b$.
-  Assume $a'_\justbefore{t_b} \leq d_\justbefore{t_b} = d'_\justbefore{t_b}$.
+  Assume $a_\justbefore{t_b} \leq d_\justbefore{t_b} = d'_\justbefore{t_b}$.
+  Assume $t_b + \Delta < t_{b+1}$.
+  Then $f_{t_b + \Delta} = \texttt{False}$.
 
   \begin{proof}
     Block $b$ has height $d_{t_b} = d_\justbefore{t_b} + 1$.
     At time $t_b$, block $b$ is the only block of this height.
     This remains true until $t_b + \Delta$ because no other block is mined.
-    At $t_b + \Delta$ all defenders know $b$ and prefer the same block.
+    At $t_b + \Delta$ all defenders know and prefer $b$.
   \end{proof}
 \end{observation}
 
 \begin{observation}
-  Let $t_1 < t_2$.
-  If $s_{t_1}$ is true and $a'_{x} < d'_{x}$ for all $x$ between $t_1$ and $t_2$, then $s_{t_2}$ is still true.
-  In simple terms, the attacker has to present a chain of length $d'_t$ to desynchronize the defenders at time $t$.
+  Let $f_t = \texttt{False}$. All defenders prefer \texttt{tx} (resp. \texttt{tx'}).
+  Then $f_t$ stays false until the attacker presents a chain of height $d'_t + 1$ or greater which includes \texttt{tx'} (resp. \texttt{tx}).
 \end{observation}
 
-\begin{simulation}
-  In Algorithm~\ref{alg:feasibility2} we try to encode the updated definitions and observations.
+\begin{simulation}[Model \texttt{v3}] \label{sim:v3}
+  Algorithm~\ref{alg:sim3} closely resembles Algorithm~\ref{alg:sim2}.
+  It adds tracking of $f_t$ and allows stealing while $f_t = \texttt{True}$.
 \end{simulation}
 
 \begin{algorithm}
-  \caption{Simulation for the feasibility of safety violations (Version 2)}
-  \label{alg:feasibility2}
+  \caption{Feasibility of safety violations; Version 3}
+  \label{alg:sim3}
+
+  \small
+
+  \KwIn{$\tau, \alpha, \lambda, \Delta$; cutt-off $c$}
+  \KwData{%
+    $Q$ is a time-ordered queue of future events.
+    Variable $a$ tracks the (maximal) height of the attacker chain; $d$, $d'$, and $f$ track their time-indexed counterparts.
+    Variable $s$ tracks the state of the target transaction.
+  }
+
+  $Q \gets \texttt{Empty}$; $a \gets 0$; $d \gets 0$; $d' \gets 0$; $f \gets \texttt{True}$, $s \gets \texttt{Pending}$\;
+  Sample $\delta$ from exponential distribution with rate $\lambda$\;
+  Insert \texttt{Proof-of-Work} into $Q$ at time $t + \delta$\;
+  \While{true}{
+    Pop $(t, e)$ from $Q$\tcc*{get current time and event from queue}
+    \lIf(\tcc*[f]{attacker can adopt defender chain}){$ s = \texttt{Pending} $} {$a \gets \max(a, d)$}
+    \lIf(\tcc*[f]{stealing becomes feasible}){$a > d'$} {$f \gets \texttt{True}$}
+    \Switch{e}{
+      \uCase{\texttt{Proof-of-Work}}{
+        Sample $\delta$ from exponential distribution with rate $\lambda$\;
+        Insert \texttt{Proof-of-Work} into $Q$ at time $t + \delta$\;
+        Sample $x$ from Bernoulli distribution with parameter $\alpha$\;
+        \uIf(\tcc*[f]{attacker block}){$x$}{
+          $a \gets a + 1$\;
+        }
+        \Else(\tcc*[f]{defender block}){
+          \If(\tcc*[f]{Observation~\ref{obs:sync}}){$t > \tau$ \textbf{and} $a \leq d = d'$ \textbf{and} $\delta > \Delta$}{
+            Insert \texttt{Sync} into $Q$ at time $t + \Delta$\;
+          }
+          $d \gets \max(d, d' + 1)$\tcc*{extends shortest chain}
+          \lIf(\tcc*[f]{stealing}){$f$} {$a \gets \max(a, d' + 1)$}
+          \Switch{$s$}{
+            \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}(d)$ }
+            \Case{$\texttt{Included}(h)$ {\normalfont \textbf{with}} $d \geq h + k - 1$}{ $s \gets \texttt{Committed}$ }
+          }
+          Insert \texttt{Rx}($d$) into $Q$ at time $t + \Delta$\tcc*{delayed communication}
+        }
+      }
+      \uCase{\texttt{Rx}($h$)}{
+        $d' \gets \max(d', h)$\;
+      }
+      \Case(\tcc*[f]{Observation~\ref{obs:sync}}){\texttt{Sync}}{
+        $f \gets \texttt{False}$\;
+      }
+    }
+    \tcc{check termination}
+    \uIf(\tcc*[f]{safety violation feasible}){$s = \texttt{Committed}$ \textbf{and} $a > d'$}{
+      \Return \texttt{Success}\;
+    }
+    \ElseIf{$s = \texttt{Committed}$ \textbf{and} $a < d' - c$}{
+      \tcc{
+        Attacker has infinite time to catch up, but we cannot run these simulations forever.
+        \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
+      }
+      Sample $x$ from geometric distribution with parameter $p'$ from Obs.\,\ref{obs:ptick}\;
+      \uIf(\tcc*[f]{safety violation feasible}){$x > d' - a$}{
+        \Return \texttt{Success}\;
+      }
+      \Else(\tcc*[f]{safety violation infeasible}){
+        \Return \texttt{Failure}\;
+      }
+    }
+  }
 
 \end{algorithm}
 
