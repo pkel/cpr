@@ -20,17 +20,17 @@ type params =
   { k : int (* confimation depth *)
   ; delta : float (* message delay bound *)
   ; lambda : float (* total mining rate *)
-  ; roh : float (* fraction of honest mining power *)
+  ; rho : float (* fraction of honest mining power *)
   }
 
-let p x = x.roh *. exp (-1. *. x.lambda *. x.delta)
+let p x = x.rho *. exp (-1. *. x.lambda *. x.delta)
 
 let check x =
   assert (x.k > 0);
   assert (x.delta >= 0.);
   assert (x.lambda >= 0.);
-  assert (x.roh >= 0.);
-  assert (x.roh <= 1.);
+  assert (x.rho >= 0.);
+  assert (x.rho <= 1.);
   assert (p x > 0.5)
 ;;
 
@@ -45,7 +45,7 @@ let t1upper x =
 let t1lower x =
   check x;
   let a = 1. /. sqrt (int x.k)
-  and b = 4. *. x.roh *. (1. -. x.roh) in
+  and b = 4. *. x.rho *. (1. -. x.rho) in
   a *. (b ** int x.k)
 ;;
 
@@ -86,7 +86,7 @@ let t2upper x =
 
 let t2lower x =
   check x;
-  let p = x.roh
+  let p = x.rho
   and k = x.k in
   t2F1 k p
   +. sum 1 k (fun i ->

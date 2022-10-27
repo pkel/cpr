@@ -432,7 +432,7 @@ We take inspiration from the safety analysis of parallel proof-of-work by \citet
         }
         \Else(\tcc*[f]{defender block}){
           \If(\tcc*[f]{Observation~\ref{obs:sync}}){$t > \tau$ \textbf{and} $a \leq d = d'$ \textbf{and} $\delta > \Delta$}{
-            Insert \texttt{Sync} into $Q$ at time $t + \Delta$\;
+            $f \gets \texttt{False}$\;
           }
           $d \gets \max(d, d' + 1)$\tcc*{extends shortest chain}
           \lIf(\tcc*[f]{stealing}){$f$} {$a \gets \max(a, d' + 1)$}
@@ -443,11 +443,8 @@ We take inspiration from the safety analysis of parallel proof-of-work by \citet
           Insert \texttt{Rx}($d$) into $Q$ at time $t + \Delta$\tcc*{delayed communication}
         }
       }
-      \uCase{\texttt{Rx}($h$)}{
+      \Case{\texttt{Rx}($h$)}{
         $d' \gets \max(d', h)$\;
-      }
-      \Case(\tcc*[f]{Observation~\ref{obs:sync}}){\texttt{Sync}}{
-        $f \gets \texttt{False}$\;
       }
     }
     \tcc{check termination}
