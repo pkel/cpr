@@ -23,10 +23,10 @@ class Config(BaseSettings):
     ALPHA_SCHEDULE: List[float] = [
         #  0.15,
         #  0.25,
-        1 / 3.0,
+        #  1 / 3.0,
         #  0.35,
         #  0.375,
-        #  0.4,
+        0.4,
         #  0.425,
         #  0.45,
         #  0.475,
