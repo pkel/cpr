@@ -144,7 +144,7 @@ This property makes their remaining analysis tractable.
     \Else(\tcc*[f]{defender lagger}){
       $d \gets d + 1$\;
       \Switch(\tcc*[f]{include or commit target transaction}){$s$}{
-        \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}()$ }
+        \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}(d)$ }
         \Case{$\texttt{Included}(h)$ {\normalfont \textbf{with}} $d \geq h + k - 1$}{ $s \gets \texttt{Committed}$ }
       }
     }
@@ -224,7 +224,7 @@ I will simulate such a scenario in this section.
     \ElseIf(\tcc*[f]{defender lagger}){$\delta \geq \Delta$}{
       $d \gets d + 1$\;
       \Switch(\tcc*[f]{include or commit target transaction}){$s$}{
-        \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}()$ }
+        \uCase{\texttt{Pending} {\normalfont \textbf{with}} $t \geq \tau$}{ $s \gets \texttt{Included}(d)$ }
         \Case{$\texttt{Included}(h)$ {\normalfont \textbf{with}} $d \geq h + k - 1$}{ $s \gets \texttt{Committed}$ }
       }
     }
