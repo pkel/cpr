@@ -49,6 +49,7 @@ let t1lower x =
   a *. (b ** int x.k)
 ;;
 
+(* geometric distribution with i trials and success rate 1 - (1-p) / p = (2p-1) / p *)
 let t2P1 i p =
   let q = 1. -. p in
   ((q /. p) ** int (i - 1)) *. (1. -. (q /. p))

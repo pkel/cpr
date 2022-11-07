@@ -7,6 +7,7 @@
 \usepackage{mathtools}
 \usepackage{amsthm}
 \usepackage{xcolor}
+\usepackage{nicefrac}
 
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}
@@ -99,6 +100,14 @@ This property makes their remaining analysis tractable.
   We call this stealing because the attacker uses a defender block to extend the attacker chain.
 \end{observation}
 
+\begin{definition}[Geometric distribution]
+  Success rate parameter $x$. Discrete support, number of trials $l$. Probability mass function $(1-x)^{l-1} \cdot x$.
+\end{definition}
+
+\begin{definition}[Modified geometric distribution] \label{def:modgeom}
+  Honest mining rate parameter $p$, set success rate parameter $x = 1 - \nicefrac{1-p}p = \nicefrac{2p-1}p$.
+\end{definition}
+
 \begin{simulation}[Model \texttt{v0}] \label{sim:v0}
   Safety violations are feasible or infeasible depending on the realization of the mining process.
   Algorithm~\ref{alg:sim0} simulates one such realization under the assumption that the attacker can steal all defender tailgaters.
@@ -148,7 +157,7 @@ This property makes their remaining analysis tractable.
         Attacker has infinite time to catch up, but we cannot run these simulations forever.
         \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
       }
-      Sample $x$ from geometric distribution with parameter $p = (1 - \alpha) e^{-\lambda\Delta}$\;
+      Sample maximum reach $x$ from modified geometric distribution (Def.\,\ref{def:modgeom}) with honest mining rate parameter $p = (1 - \alpha) e^{-\lambda\Delta}$\;
       \uIf(\tcc*[f]{safety violation feasible}){$x > d - a$}{
         \Return \texttt{Success}\;
       }
@@ -167,7 +176,7 @@ It might be sufficient to drop them.
 I will simulate such a scenario in this section.
 
 \begin{observation}[Probabilities]\label{obs:ptick}
-  Pre-rigging, a block is an attacker block with probability $\alpha$ and a defender block with probability $\rho = 1 - \alpha$. A block is a lagger with probability $e^{-\lambda\Delta}$ and a tailgater otherwise.
+  Pre-rigging, a block is an attacker block with probability~$\alpha$ and a defender block with probability $\rho = 1 - \alpha$. A block is a lagger with probability $e^{-\lambda\Delta}$ and a tailgater otherwise.
 
   In the rigged model of \citet{guo2022BitcoinLatency}, defender tailgaters become attacker blocks.
   Post-rigging, a block is a defender block with probability $p = \rho e^{-\lambda\Delta}$ and an attacker block otherwise.
@@ -228,7 +237,7 @@ I will simulate such a scenario in this section.
         Attacker has infinite time to catch up, but we cannot run these simulations forever.
         \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
       }
-      Sample $x$ from geometric distribution with parameter $p'$ from Obs.\,\ref{obs:ptick}\;
+      Sample maximum reach $x$ from modified geometric distribution (Def.\,\ref{def:modgeom}) with honest mining rate parameter $p'$ from Obs.\,\ref{obs:ptick}\;
       \uIf(\tcc*[f]{safety violation feasible}){$x > d - a$}{
         \Return \texttt{Success}\;
       }
@@ -344,7 +353,7 @@ Resembles the setting from Sect.~\ref{sec:v1} where all tailgaters are dropped.
         Attacker has infinite time to catch up, but we cannot run these simulations forever.
         \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
       }
-      Sample $x$ from geometric distribution with parameter $p'$ from Obs.\,\ref{obs:ptick}\;
+      Sample maximum reach $x$ from modified geometric distribution (Def.\,\ref{def:modgeom}) with honest mining rate parameter $p'$ from Obs.\,\ref{obs:ptick}\;
       \uIf(\tcc*[f]{safety violation feasible}){$x > d' - a$}{
         \Return \texttt{Success}\;
       }
@@ -456,7 +465,7 @@ We take inspiration from the safety analysis of parallel proof-of-work by \citet
         Attacker has infinite time to catch up, but we cannot run these simulations forever.
         \citet{guo2022BitcoinLatency} argue that maximum reach of a random walk is geometrically distributed.
       }
-      Sample $x$ from geometric distribution with parameter $p'$ from Obs.\,\ref{obs:ptick}\;
+      Sample maximum reach $x$ from modified geometric distribution (Def.\,\ref{def:modgeom}) with honest mining rate parameter $p'$ from Obs.\,\ref{obs:ptick}\;
       \uIf(\tcc*[f]{safety violation feasible}){$x > d' - a$}{
         \Return \texttt{Success}\;
       }
