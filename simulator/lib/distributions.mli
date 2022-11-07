@@ -6,6 +6,7 @@ val sample : 'a iid -> 'a
 val constant : float -> float iid
 val uniform : lower:float -> upper:float -> float iid
 val exponential : ev:float -> float iid
+val geometric : success_probability:float -> int iid
 
 (** Optimized for repeated sampling with alias method *)
 val discrete : weights:float list -> int iid

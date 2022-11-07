@@ -70,6 +70,65 @@ let version0 ~atk_plus ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ QueueSim.model 
 let version0_compliant = version0 ~atk_plus:1
 let version0 = version0 ~atk_plus:0
 
+(* like version0 but instead of doing the pre-mining explicitly we sample the initial
+   state from the pre-mining distribution. TODO *)
+let version0_pre ~atk_plus ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ QueueSim.model =
+  let mining_delay = Distributions.exponential ~ev:(1. /. lambda)
+  and unif1 = Distributions.uniform ~lower:0. ~upper:1.
+  and mod_geom =
+    let success_probability =
+      let p = (1. -. alpha) *. exp (-1. *. lambda *. delta) in
+      ((2. *. p) -. 1.) /. p
+    in
+    Distributions.geometric ~success_probability
+  and sample = Distributions.sample in
+  let sample_mining () =
+    let delay = sample mining_delay in
+    let a = if delay <= delta then `Tailgater else `Lagger
+    and b = if sample unif1 <= alpha then `Attacker else `Defender in
+    delay, (a, b)
+  in
+  let state = { attacker = 0; defender = 0; tx = `Pending } in
+  let handler schedule (T now) event =
+    let continue_mining () =
+      let delay, event = sample_mining () in
+      schedule (D delay) event
+    in
+    (* attacker can adopt latest defender chain until target tx is included *)
+    if state.tx = `Pending then state.attacker <- max state.attacker state.defender;
+    (* mining & communication *)
+    (match event with
+    | _, `Attacker | `Tailgater, `Defender ->
+      state.attacker <- state.attacker + 1;
+      continue_mining ()
+    | `Lagger, `Defender ->
+      state.defender <- state.defender + 1;
+      (* include tx if available; commit if enough confirmations *)
+      (match state.tx with
+      | `Pending when now >= tau -> state.tx <- `IncludedAt state.defender
+      | `IncludedAt h when state.defender >= h + k -> state.tx <- `Committed
+      | _default -> ());
+      continue_mining ());
+    if state.tx = `Committed
+    then
+      if state.attacker >= state.defender
+      then Stop `Success
+      else if state.defender - state.attacker > cutoff
+      then
+        if (* Probability of ever catching up is geometrically distributed with rigged
+              mining rate as in GR22AFT paper. Attacker can steal all tailgaters. *)
+           sample mod_geom >= state.defender - state.attacker - atk_plus
+        then Stop `Success
+        else Stop `Fail
+      else Continue
+    else Continue
+  and init =
+    let delay, event = sample_mining () in
+    [ T delay, event ]
+  in
+  { init; handler }
+;;
+
 let prob_defender_given_not_dropped ~alpha ~lambda ~delta =
   let rho = 1. -. alpha in
   let p = rho *. Float.exp (-1. *. lambda *. delta) in
@@ -306,6 +365,9 @@ let test () =
   test_run "v0c" version0_compliant;
   test_run "v0c" version0_compliant;
   test_run "v0c" version0_compliant;
+  test_run "v0_pre" (version0_pre ~atk_plus:0);
+  test_run "v0_pre" (version0_pre ~atk_plus:0);
+  test_run "v0_pre" (version0_pre ~atk_plus:0);
   test_run "v1" version1;
   test_run "v1" version1;
   test_run "v1" version1;
@@ -330,6 +392,9 @@ let main () =
     let versions ~k =
       [ ("v0", fun () -> run (version0 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
       ; ("v0c", fun () -> run (version0_compliant ~k ~cutoff ~lambda ~alpha ~delta ~tau))
+      ; ( "v0p"
+        , fun () -> run (version0_pre ~atk_plus:0 ~k ~cutoff ~lambda ~alpha ~delta ~tau)
+        )
         (* ; ("v1", fun () -> run (version1 ~k ~cutoff  ~lambda ~alpha ~delta ~tau)) *)
         (* ; ("v2", fun () -> run (version2 ~k  ~cutoff ~lambda ~alpha ~delta ~tau)) *)
         (* ; ("v3", fun () -> run (version3 ~k  ~cutoff ~lambda ~alpha ~delta ~tau)) *)

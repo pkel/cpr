@@ -27,6 +27,15 @@ let exponential ~ev =
   { sample; string = lazy (Printf.sprintf "exponential %g" ev) }
 ;;
 
+let geometric ~success_probability =
+  let sample () =
+    let x = log (Random.float 1.) /. log (1. -. success_probability) in
+    let x = floor x |> int_of_float in
+    x
+  in
+  { sample; string = lazy (Printf.sprintf "geometric %g" success_probability) }
+;;
+
 (* Voses Alias Method for efficient sampling of discrete random variables
    http://keithschwarz.com/darts-dice-coins/
    https://alaska-kamtchatka.blogspot.com/2011/12/voses-alias-method.html
