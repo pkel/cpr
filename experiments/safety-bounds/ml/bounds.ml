@@ -8,8 +8,12 @@ type v0_state =
   }
 
 (* All tailgaters can be stolen by the attacker. This reflects the "rigged model" in the
-   GR22AFT paper. *)
-let version0 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ QueueSim.model =
+   GR22AFT paper.
+
+   GR give one additional block to the attacker due to analytical reasons. That's not
+   necessary with this approach. For full complicate call this function with
+   [~atk_plus:1]. *)
+let version0 ~atk_plus ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ QueueSim.model =
   let mining_delay = Distributions.exponential ~ev:(1. /. lambda)
   and unif1 = Distributions.uniform ~lower:0. ~upper:1.
   and sample = Distributions.sample in
@@ -51,7 +55,7 @@ let version0 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ QueueSim.model =
         let p_succ =
           let open GR22AFT in
           let p = p { lambda; delta; rho = 1. -. alpha; k } in
-          t2F1 (state.defender - state.attacker) p
+          t2F1 (state.defender - state.attacker - atk_plus) p
         in
         if sample unif1 <= p_succ then Stop `Success else Stop `Fail)
       else Continue
@@ -62,6 +66,9 @@ let version0 ~k ~cutoff ~tau ~lambda ~alpha ~delta : _ QueueSim.model =
   in
   { init; handler }
 ;;
+
+let version0_compliant = version0 ~atk_plus:1
+let version0 = version0 ~atk_plus:0
 
 let prob_defender_given_not_dropped ~alpha ~lambda ~delta =
   let rho = 1. -. alpha in
@@ -296,6 +303,9 @@ let test () =
   test_run "v0" version0;
   test_run "v0" version0;
   test_run "v0" version0;
+  test_run "v0c" version0_compliant;
+  test_run "v0c" version0_compliant;
+  test_run "v0c" version0_compliant;
   test_run "v1" version1;
   test_run "v1" version1;
   test_run "v1" version1;
@@ -310,52 +320,57 @@ let test () =
 let main () =
   Random.init 42;
   let delta = 1. in
-  print_endline "block_interval,alpha,k,model,i,p";
-  let row ~block_interval ~alpha ~k ~model ~i p =
-    Printf.printf "%g,%g,%i,%s,%i,%g\n%!" block_interval alpha k model i p
+  print_endline "block_interval,alpha,k,cutoff,model,i,p";
+  let row ~block_interval ~alpha ~k ~cutoff ~model ~i p =
+    Printf.printf "%g,%g,%i,%i,%s,%i,%g\n%!" block_interval alpha k cutoff model i p
+  in
+  let job ~block_interval ~alpha ~cutoff =
+    let lambda = 1. /. block_interval
+    and tau = 200. *. block_interval in
+    let versions ~k =
+      [ ("v0", fun () -> run (version0 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
+      ; ("v0c", fun () -> run (version0_compliant ~k ~cutoff ~lambda ~alpha ~delta ~tau))
+        (* ; ("v1", fun () -> run (version1 ~k ~cutoff  ~lambda ~alpha ~delta ~tau)) *)
+        (* ; ("v2", fun () -> run (version2 ~k  ~cutoff ~lambda ~alpha ~delta ~tau)) *)
+        (* ; ("v3", fun () -> run (version3 ~k  ~cutoff ~lambda ~alpha ~delta ~tau)) *)
+      ]
+    in
+    for k = 1 to 10 do
+      let () =
+        let open GR22AFT in
+        let p = { k; delta; lambda; rho = 1. -. alpha } in
+        row ~block_interval ~alpha ~k ~cutoff:0 ~model:"GR22AFT.T1.lower" ~i:0 (t1lower p);
+        row ~block_interval ~alpha ~k ~cutoff:0 ~model:"GR22AFT.T1.upper" ~i:0 (t1upper p);
+        row ~block_interval ~alpha ~k ~cutoff:0 ~model:"GR22AFT.T2.lower" ~i:0 (t2lower p);
+        row ~block_interval ~alpha ~k ~cutoff:0 ~model:"GR22AFT.T2.upper" ~i:0 (t2upper p)
+      in
+      List.iter
+        (fun (model, job) ->
+          for i = 1 to 10 (* observations per config *) do
+            (* do a few simulations, estimate success rate *)
+            let fail, success = ref 0, ref 0 in
+            let n = 1000 (* simulations per observation *) in
+            for _j = 1 to n do
+              match job () with
+              | Ok `Success -> incr success
+              | Ok `Fail -> incr fail
+              | Error `EmptyQueue -> failwith "empty queue"
+            done;
+            if !success > 0
+            then (
+              let p = float_of_int !success /. float_of_int n in
+              row ~block_interval ~cutoff ~alpha ~k ~model ~i p)
+          done)
+        (versions ~k)
+    done
   in
   List.iter
     (fun block_interval ->
       List.iter
         (fun alpha ->
-          let lambda = 1. /. block_interval
-          and tau = 200. *. block_interval in
-          let versions ~k =
-            let cutoff = 1 * k in
-            [ ("v0", fun () -> run (version0 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
-            ; ("v1", fun () -> run (version1 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
-            ; ("v2", fun () -> run (version2 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
-            ; ("v3", fun () -> run (version3 ~k ~cutoff ~lambda ~alpha ~delta ~tau))
-            ]
-          in
-          for k = 1 to 10 do
-            let () =
-              let open GR22AFT in
-              let p = { k; delta; lambda; rho = 1. -. alpha } in
-              row ~block_interval ~alpha ~k ~model:"GR22AFT.T1.lower" ~i:0 (t1lower p);
-              row ~block_interval ~alpha ~k ~model:"GR22AFT.T1.upper" ~i:0 (t1upper p);
-              row ~block_interval ~alpha ~k ~model:"GR22AFT.T2.lower" ~i:0 (t2lower p);
-              row ~block_interval ~alpha ~k ~model:"GR22AFT.T2.upper" ~i:0 (t2upper p)
-            in
-            List.iter
-              (fun (model, job) ->
-                for i = 1 to 10 (* observations per config *) do
-                  (* do a few simulations, estimate success rate *)
-                  let fail, success = ref 0, ref 0 in
-                  let n = 1000 (* simulations per observation *) in
-                  for _j = 1 to n do
-                    match job () with
-                    | Ok `Success -> incr success
-                    | Ok `Fail -> incr fail
-                    | Error `EmptyQueue -> failwith "empty queue"
-                  done;
-                  if !success > 0
-                  then (
-                    let p = float_of_int !success /. float_of_int n in
-                    row ~block_interval ~alpha ~k ~model ~i p)
-                done)
-              (versions ~k)
-          done)
+          List.iter
+            (fun cutoff -> job ~block_interval ~alpha ~cutoff)
+            (* cutoff *) [ 0; 42 ])
         (* alphas *) [ 0.1; 0.25; 0.33 ])
     (* block intervals *) [ 4.; 8.; 16. ]
 ;;
