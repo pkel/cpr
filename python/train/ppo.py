@@ -9,6 +9,7 @@ import os
 import pandas
 import psutil
 import random
+import socket
 import stable_baselines3
 import torch
 import utils
@@ -117,6 +118,7 @@ def alpha_schedule(eval=False):
 
 
 info = dict()
+info["host"] = socket.gethostname()
 info["engine_version"] = cpr_gym.engine.cpr_lib_version
 info["episode_n_steps"] = config["main"]["episode_len"]
 info["rollout_n_steps"] = (
