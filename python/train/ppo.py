@@ -60,6 +60,7 @@ cast("eval", "episodes_per_alpha_per_env", int)
 cast("eval", "recorder_multiple", int)
 cast("eval", "report_alpha", int)
 cast("eval", "start_at_iteration", int)
+cast("eval", "freq", int)
 
 ###
 # Analyse config
@@ -134,7 +135,9 @@ info["eval_n_episodes"] = (
     * config["main"]["n_envs"]
 )
 info["eval_n_steps"] = info["eval_n_episodes"] * config["main"]["episode_len"]
-info["eval_overhead"] = info["eval_n_steps"] / info["rollout_n_steps"]
+info["eval_overhead"] = (
+    info["eval_n_steps"] / info["rollout_n_steps"] / config["eval"]["freq"]
+)
 
 if __name__ == "__main__":
     print("## Configuration ##")
@@ -195,11 +198,12 @@ def env_fn(eval=False, n_recordings=42):
             info_keys=["alpha", "episode_chain_time", "episode_progress"],
         )
 
-    fields = []
-    fields.append(((lambda self, info: info["episode_progress"]), 0, float("inf"), 0))
-    fields.append(((lambda self, info: info["episode_chain_time"]), 0, float("inf"), 0))
-    fields.append(((lambda self, info: info["episode_n_steps"]), 0, float("inf"), 0))
-    env = cpr_gym.wrappers.ExtendObservationWrapper(env, fields)
+    # Uncomment to let agent observe the progress within the episode
+    # fields = []
+    # fields.append(((lambda self, info: info["episode_progress"]), 0, float("inf"), 0))
+    # fields.append(((lambda self, info: info["episode_chain_time"]), 0, float("inf"), 0))
+    # fields.append(((lambda self, info: info["episode_n_steps"]), 0, float("inf"), 0))
+    # env = cpr_gym.wrappers.ExtendObservationWrapper(env, fields)
 
     env = cpr_gym.wrappers.ClearInfoWrapper(env)
 
@@ -232,45 +236,74 @@ def venv_fn(**kwargs):
 
 
 class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
-    def __init__(self, eval_env, start_at_iteration=0, **kwargs):
-        super().__init__(eval_env, **kwargs)
+    def __init__(self, eval_env, start_at_iteration=0, eval_freq=1, **kwargs):
+        super().__init__(eval_env, eval_freq=1, **kwargs)
+        self.iteration = -1
         self.first_iteration = start_at_iteration
+        self.iteration_eval_freq = eval_freq
 
+    # Parent counts steps and acts every eval_freq steps.
+    # We overwrite this to act on the beginning of each iteration.
     def _on_step(self):
-        # skip first evaluation; deterministic policy might cause massive slowdown
-        if self.n_calls / self.eval_freq < self.first_iteration:
-            return True
-        # do evaluation as usual
-        r = super()._on_step()
-        # add own stuff of top
-        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
-            # create data frame from buffers in vectorized envs
-            buffers = self.eval_env.get_attr("erw_history")
-            df = pandas.DataFrame(itertools.chain(*buffers))
-            # acc per alpha
-            df = df.groupby("alpha").mean()
-            # plot metric over alpha
-            df2 = df.reset_index()
-            table = wandb.Table(
-                data=df2,
-                columns=list(df2),
+        return True
+
+    def _on_rollout_start(self):
+        self.iteration += 1
+
+        # dump logger, it has buffered content from the last training phase
+        if self.iteration > 0:
+            self.logger.record("time/iterations", self.iteration, exclude="tensorboard")
+            self.logger.record(
+                "time/total_timesteps", self.num_timesteps, exclude="tensorboard"
             )
-            plots = {
-                f"plot_over_alpha/{key}": wandb.plot.line(table, "alpha", key)
-                for key in list(df)
-            }
-            # timeline for subset of alpha
-            if alpha_schedule(eval=True)[1]["range"]:
-                df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
-            per_alpha = {
-                f"eval_per_alpha/{key}/{alpha:.2g}": df.loc[alpha, key]
-                for key in list(df)
-                for alpha in df.index
-            }
-            timestep = {"timestep": self.num_timesteps}
-            # log
-            wandb.log(plots | per_alpha | timestep, commit=True)
+            self.logger.dump(self.num_timesteps)
+
+        # skip first evaluations; deterministic policy might cause massive slowdown
+        if self.iteration < self.first_iteration:
             return True
+
+        # do only one evaluation every eval_freq iterations
+        if self.iteration % self.iteration_eval_freq != 0:
+            return True
+
+        # pre-load logger with iteration
+        self.logger.record("time/iterations", self.iteration, exclude="tensorboard")
+
+        # do parent evaluation as usual
+        r = super()._on_step()
+
+        # add own stuff of top
+
+        # create data frame from buffers in vectorized envs
+        buffers = self.eval_env.get_attr("erw_history")
+        df = pandas.DataFrame(itertools.chain(*buffers))
+        # acc per alpha
+        df = df.groupby("alpha").mean()
+        # plot metric over alpha
+        df2 = df.reset_index()
+        table = wandb.Table(
+            data=df2,
+            columns=list(df2),
+        )
+        plots = {
+            f"plot_over_alpha/{key}": wandb.plot.line(table, "alpha", key)
+            for key in list(df)
+        }
+
+        # timeline for subset of alpha
+        if alpha_schedule(eval=True)[1]["range"]:
+            df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
+        per_alpha = {
+            f"eval_per_alpha/{key}/{alpha:.2g}": df.loc[alpha, key]
+            for key in list(df)
+            for alpha in df.index
+        }
+
+        time = {"time/total_timesteps": self.num_timesteps}
+
+        # log
+        wandb.log(plots | per_alpha | time, commit=True)
+
         return r
 
 
@@ -339,7 +372,7 @@ if __name__ == "__main__":
                 start_at_iteration=config["eval"]["start_at_iteration"],
                 best_model_save_path=log_dir,
                 log_path=log_dir,
-                eval_freq=vec_steps_per_rollout + 1,
+                eval_freq=config["eval"]["freq"],
                 n_eval_episodes=info["eval_n_alphas"]
                 * config["main"]["n_envs"]
                 * config["eval"]["episodes_per_alpha_per_env"],
