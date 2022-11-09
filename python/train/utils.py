@@ -4,7 +4,6 @@ import wandb
 
 class WandbKVWriter(stable_baselines3.common.logger.KVWriter):
     def write(self, key_values, key_excluded, step=0):
-        key_values["timestep"] = step
         wandb.log(key_values, commit=True)
         return
 
