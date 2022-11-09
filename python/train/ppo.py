@@ -299,7 +299,10 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
             for alpha in df.index
         }
 
-        time = {"time/total_timesteps": self.num_timesteps}
+        time = {
+            "time/total_timesteps": self.num_timesteps,
+            "time/iterations": self.iteration,
+        }
 
         # log
         wandb.log(plots | per_alpha | time, commit=True)
