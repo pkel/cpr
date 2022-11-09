@@ -79,6 +79,9 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 
 # RL
 
+reset-config:
+	rm -f python/train/config.ini
+
 train-online: bridge _venv
 	if [ ! -e python/train/config.ini ] ; then\
 		cp python/train/defaults.ini python/train/config.ini ; fi
