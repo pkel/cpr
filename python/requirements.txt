@@ -5,9 +5,12 @@ pytest-forked
 
 pandas
 pandarallel
+pydantic
 numpy
 jupyter
 matplotlib
+tqdm
+scikit-optimize
 seaborn
 
 -e ./gym
