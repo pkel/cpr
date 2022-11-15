@@ -1,9 +1,12 @@
 name: main
 
 on:
+  release:
+    types:
+      - published
   push:
     branches:
-    - master
+      - master
   pull_request:
 
 jobs:
@@ -97,7 +100,7 @@ jobs:
 
     needs: ocaml
 
-    if: ${{ github.ref == 'refs/heads/master' }}
+    if: github.event_name == 'release'
 
     steps:
       - name: Download gym shared object (linux)
