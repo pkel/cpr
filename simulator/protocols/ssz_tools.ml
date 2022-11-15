@@ -1,22 +1,128 @@
 open Cpr_lib
 
-module Event = struct
-  let events = [ `Append; `Network; `ProofOfWork ]
+module NormalizeObs = struct
+  type 'a field =
+    | Bool : bool field
+    | Discrete : 'a list -> 'a field
+    | UnboundedInt :
+        { scale : int
+        ; non_negative : bool
+        }
+        -> int field
 
-  let to_int = function
-    | `Append -> 0
-    | `Network -> 1
-    | `ProofOfWork -> 2
+  let to_float (type a) (t : a field) : a -> float =
+    match t with
+    | Bool -> fun b -> if b then 1. else 0.
+    | Discrete l ->
+      let max = List.length l - 1 |> float_of_int in
+      let l = List.mapi (fun i x -> x, float_of_int i /. max) l in
+      fun x -> List.assoc x l
+    | UnboundedInt { non_negative = true; scale } ->
+      fun x -> 2. /. Float.pi *. Float.atan (float_of_int x /. float_of_int scale)
+    | UnboundedInt { non_negative = false; scale } ->
+      fun x -> 0.5 +. (1. /. Float.pi *. Float.atan (float_of_int x /. float_of_int scale))
   ;;
 
-  let of_int =
-    let a = Array.of_list events in
-    fun i -> a.(i)
+  let of_float (type a) (t : a field) : float -> a =
+    match t with
+    | Bool -> fun x -> x >= 0.5
+    | Discrete l ->
+      let max = List.length l - 1 |> float_of_int
+      and arr = Array.of_list l in
+      fun x -> arr.(Float.floor (x *. max) |> int_of_float)
+    | UnboundedInt { non_negative = true; scale } ->
+      fun x ->
+        Float.tan (Float.pi /. 2. *. x) *. float_of_int scale
+        |> Float.round
+        |> Float.to_int
+    | UnboundedInt { non_negative = false; scale } ->
+      fun x ->
+        Float.tan (Float.pi *. (x -. 0.5)) *. float_of_int scale
+        |> Float.round
+        |> Float.to_int
   ;;
 
-  let low = List.map to_int events |> List.fold_left min max_int
-  let high = List.map to_int events |> List.fold_left max min_int
+  let low len = Array.make len 0.
+  let high len = Array.make len 1.
 end
+
+let event_to_string = function
+  | `Append -> "`Append"
+  | `ProofOfWork -> "`ProofOfWork"
+  | `Network -> "`Network"
+;;
+
+let%test_module _ =
+  (module struct
+    open NormalizeObs
+
+    let t = Bool
+
+    let%test "bool" = to_float t true |> of_float t = true
+    let%test "bool" = to_float t false |> of_float t = false
+
+    let t = Discrete [ `A; `B; `C ]
+
+    let%test "discrete" = to_float t `A |> of_float t = `A
+    let%test "discrete" = to_float t `B |> of_float t = `B
+    let%test "discrete" = to_float t `C |> of_float t = `C
+    let%test "discrete" = to_float t `A = 0.
+    let%test "discrete" = to_float t `C = 1.
+
+    let t = UnboundedInt { non_negative = true; scale = 1 }
+
+    let%test "unbounded int non_neg" = to_float t 0 |> of_float t = 0
+    let%test "unbounded int non_neg" = to_float t 1 |> of_float t = 1
+    let%test "unbounded int non_neg" = to_float t 2 |> of_float t = 2
+    let%test "unbounded int non_neg" = to_float t 256 |> of_float t = 256
+    let%test "unbounded int non_neg" = to_float t 0 = 0.
+    let%test "unbounded int non_neg" = to_float t 1 = 0.5
+    let%test "unbounded int non_neg" = to_float t max_int = 1.
+
+    let t = UnboundedInt { non_negative = false; scale = 1 }
+
+    let%test "unbounded int" = to_float t 0 |> of_float t = 0
+    let%test "unbounded int" = to_float t 1 |> of_float t = 1
+    let%test "unbounded int" = to_float t 2 |> of_float t = 2
+    let%test "unbounded int" = to_float t 256 |> of_float t = 256
+    let%test "unbounded int" = to_float t (-1) |> of_float t = -1
+    let%test "unbounded int" = to_float t (-2) |> of_float t = -2
+    let%test "unbounded int" = to_float t (-256) |> of_float t = -256
+    let%test "unbounded int" = to_float t min_int = 0.
+    let%test "unbounded int" = to_float t (-1) = 0.25
+    let%test "unbounded int" = to_float t 0 = 0.5
+    let%test "unbounded int" = to_float t 1 = 0.75
+    let%test "unbounded int" = to_float t max_int = 1.
+
+    let t = UnboundedInt { non_negative = true; scale = 4 }
+
+    let%test "unbounded int non_neg scale 4" = to_float t 0 |> of_float t = 0
+    let%test "unbounded int non_neg scale 4" = to_float t 1 |> of_float t = 1
+    let%test "unbounded int non_neg scale 4" = to_float t 2 |> of_float t = 2
+    let%test "unbounded int non_neg scale 4" = to_float t 256 |> of_float t = 256
+    let%test "unbounded int non_neg scale 4" = to_float t (-1) |> of_float t = -1
+    let%test "unbounded int non_neg scale 4" = to_float t (-2) |> of_float t = -2
+    let%test "unbounded int non_neg scale 4" = to_float t (-256) |> of_float t = -256
+    let%test "unbounded int non_neg scale 4" = to_float t 0 = 0.
+    let%test "unbounded int non_neg scale 4" = to_float t 4 = 0.5
+    let%test "unbounded int non_neg scale 4" = to_float t max_int = 1.
+
+    let t = UnboundedInt { non_negative = false; scale = 4 }
+
+    let%test "unbounded int scale 4" = to_float t 0 |> of_float t = 0
+    let%test "unbounded int scale 4" = to_float t 1 |> of_float t = 1
+    let%test "unbounded int scale 4" = to_float t 2 |> of_float t = 2
+    let%test "unbounded int scale 4" = to_float t 256 |> of_float t = 256
+    let%test "unbounded int scale 4" = to_float t (-1) |> of_float t = -1
+    let%test "unbounded int scale 4" = to_float t (-2) |> of_float t = -2
+    let%test "unbounded int scale 4" = to_float t (-256) |> of_float t = -256
+    let%test "unbounded int scale 4" = to_float t min_int = 0.
+    let%test "unbounded int scale 4" = to_float t (-4) = 0.25
+    let%test "unbounded int scale 4" = to_float t 0 = 0.5
+    let%test "unbounded int scale 4" = to_float t 4 = 0.75
+    let%test "unbounded int scale 4" = to_float t max_int = 1.
+  end)
+;;
 
 module Action8 = struct
   type t =

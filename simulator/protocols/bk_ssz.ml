@@ -20,79 +20,66 @@ module Make (Parameters : Bk.Parameters) = struct
       ; private_votes_exclusive : int
             (** number of private votes confirming the private leading block *)
       ; lead : bool (** attacker is truthful leader on leading public block *)
-      ; event : int
+      ; event : [ `Append | `ProofOfWork | `Network ] (* What is currently going on? *)
       }
     [@@deriving fields]
 
+    module Normalizers = struct
+      open Ssz_tools.NormalizeObs
+
+      let public_blocks = UnboundedInt { non_negative = true; scale = 1 }
+      let private_blocks = UnboundedInt { non_negative = true; scale = 1 }
+      let diff_blocks = UnboundedInt { non_negative = false; scale = 1 }
+      let public_votes = UnboundedInt { non_negative = true; scale = k }
+      let private_votes_inclusive = UnboundedInt { non_negative = true; scale = k }
+      let private_votes_exclusive = UnboundedInt { non_negative = true; scale = k }
+      let lead = Bool
+      let event = Discrete [ `Append; `ProofOfWork; `Network ]
+    end
+
     let length = List.length Fields.names
-
-    let low =
-      { public_blocks = 0
-      ; private_blocks = 0
-      ; diff_blocks = min_int
-      ; public_votes = 0
-      ; private_votes_inclusive = 0
-      ; private_votes_exclusive = 0
-      ; lead = false
-      ; event = Ssz_tools.Event.low
-      }
-    ;;
-
-    let high =
-      { public_blocks = max_int
-      ; private_blocks = max_int
-      ; diff_blocks = max_int
-      ; public_votes = max_int
-      ; private_votes_inclusive = max_int
-      ; private_votes_exclusive = max_int
-      ; lead = true
-      ; event = Ssz_tools.Event.high
-      }
-    ;;
 
     let to_floatarray t =
       let a = Float.Array.make length Float.nan in
-      let set conv i field =
-        Float.Array.set a i (Fieldslib.Field.get field t |> conv);
+      let set spec i field =
+        Float.Array.set
+          a
+          i
+          (Fieldslib.Field.get field t |> Ssz_tools.NormalizeObs.to_float spec);
         i + 1
       in
-      let int = set float_of_int
-      and bool = set (fun x -> if x then 1. else 0.) in
       let _ =
+        let open Normalizers in
         Fields.fold
           ~init:0
-          ~public_blocks:int
-          ~private_blocks:int
-          ~diff_blocks:int
-          ~public_votes:int
-          ~private_votes_inclusive:int
-          ~private_votes_exclusive:int
-          ~lead:bool
-          ~event:int
+          ~public_blocks:(set public_blocks)
+          ~private_blocks:(set private_blocks)
+          ~diff_blocks:(set diff_blocks)
+          ~public_votes:(set public_votes)
+          ~private_votes_inclusive:(set private_votes_inclusive)
+          ~private_votes_exclusive:(set private_votes_exclusive)
+          ~lead:(set lead)
+          ~event:(set event)
       in
       a
     ;;
 
     let of_floatarray =
-      let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
-      let int = get int_of_float
-      and bool =
-        get (fun f ->
-            match int_of_float f with
-            | 0 -> false
-            | _ -> true)
+      let get spec _ i =
+        (fun a -> Float.Array.get a i |> Ssz_tools.NormalizeObs.of_float spec), i + 1
       in
+      let open Normalizers in
       fst
         (Fields.make_creator
            0
-           ~public_blocks:int
-           ~private_blocks:int
-           ~diff_blocks:int
-           ~public_votes:int
-           ~private_votes_inclusive:int
-           ~private_votes_exclusive:int
-           ~lead:bool
-           ~event:int)
+           ~public_blocks:(get public_blocks)
+           ~private_blocks:(get private_blocks)
+           ~diff_blocks:(get diff_blocks)
+           ~public_votes:(get public_votes)
+           ~private_votes_inclusive:(get private_votes_inclusive)
+           ~private_votes_exclusive:(get private_votes_exclusive)
+           ~lead:(get lead)
+           ~event:(get event))
     ;;
 
     let to_string t =
@@ -104,6 +91,7 @@ module Make (Parameters : Bk.Parameters) = struct
       in
       let int = conv string_of_int
       and bool = conv string_of_bool in
+      let event = conv Ssz_tools.event_to_string in
       Fields.to_list
         ~public_blocks:int
         ~private_blocks:int
@@ -112,26 +100,8 @@ module Make (Parameters : Bk.Parameters) = struct
         ~private_votes_inclusive:int
         ~private_votes_exclusive:int
         ~lead:bool
-        ~event:int
+        ~event
       |> String.concat "\n"
-    ;;
-
-    let%test _ =
-      let run _i =
-        let t =
-          { public_blocks = Random.bits ()
-          ; private_blocks = Random.bits ()
-          ; diff_blocks = Random.bits ()
-          ; public_votes = Random.bits ()
-          ; private_votes_inclusive = Random.bits ()
-          ; private_votes_exclusive = Random.bits ()
-          ; lead = Random.bool ()
-          ; event = Random.bits ()
-          }
-        in
-        t = (to_floatarray t |> of_floatarray)
-      in
-      List.init 50 run |> List.for_all (fun x -> x)
     ;;
   end
 
@@ -251,7 +221,7 @@ module Make (Parameters : Bk.Parameters) = struct
       ; private_votes_exclusive
       ; public_votes
       ; lead
-      ; event = Ssz_tools.Event.to_int state.event
+      ; event = state.event
       }
     ;;
 

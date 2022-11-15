@@ -173,9 +173,11 @@ module type AttackSpace = sig
     type t
 
     val length : int
-    val low : t
-    val high : t
+
+    (* must return floats ranging from 0. to 1. *)
     val to_floatarray : t -> floatarray
+
+    (* may assume floats ranging from 0. to 1. *)
     val of_floatarray : floatarray -> t
     val to_string : t -> string
   end
