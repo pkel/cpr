@@ -7,6 +7,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
   let key = "ssz"
   let info = "SSZ'16-like attack space"
 
+  module Tailstorm_ssz = Tailstorm_ssz.Make (Parameters)
   module Observation = Tailstorm_ssz.Observation
   module Action = Ssz_tools.Action8
 
@@ -119,7 +120,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
       ; public_depth
       ; private_depth_inclusive
       ; private_depth_exclusive
-      ; event = Ssz_tools.Event.to_int state.event
+      ; event = (state.event :> [ `Append | `Network | `ProofOfWork ])
       }
     ;;
 
