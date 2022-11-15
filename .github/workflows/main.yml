@@ -6,6 +6,8 @@ on:
       - master
   pull_request:
   release:
+    types:
+      - prereleased
 
 jobs:
   ocaml:
@@ -124,5 +126,4 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           file: 'macos/bridge.so'
-          asset_name: 'cpr-$tag-macos.so'
-          prerelease: false
+          asset_name: 'cpr-$tag-darwin.so'
