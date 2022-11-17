@@ -156,7 +156,7 @@ class ExtendObservationWrapper(gym.Wrapper):
 class MapRewardWrapper(gym.Wrapper):
     """
     Applies the given function to all rewards.
-    The given function takes to inputs, reward and info dictionary.
+    The given function takes two inputs: reward and info dictionary.
     """
 
     def __init__(self, env, fn):
