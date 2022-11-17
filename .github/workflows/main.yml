@@ -71,7 +71,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: ubuntu-20.04-ocaml-4.12.1
-          path: python/gym/cpr_gym
+          path: gym/cpr_gym
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
