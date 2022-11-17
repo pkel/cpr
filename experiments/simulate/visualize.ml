@@ -184,7 +184,7 @@ let run (Csv_runner.Task t) =
   in
   let path =
     let open Fpath in
-    v "." / "fig" / "chains" // fpath (Task t)
+    v "." / "data" / "viz" // fpath (Task t)
   in
   let open Bos.OS in
   let d = Dir.create ~path:true (Fpath.parent path) in

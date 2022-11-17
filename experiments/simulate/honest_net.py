@@ -1,7 +1,10 @@
+import git
 import numpy as np
 import pandas as pd
 
-df = pd.read_csv("data/honest_net.tsv", sep="\t")
+repo = git.Repo(".", search_parent_directories=True).working_tree_dir
+
+df = pd.read_csv(repo + "/data/honest_net.tsv", sep="\t")
 df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
 
@@ -71,4 +74,4 @@ print(
     )
 )
 
-df.to_csv("data/honest_net_expanded.tsv", sep="\t")
+df.to_csv(repo + "/data/honest_net_expanded.tsv", sep="\t")

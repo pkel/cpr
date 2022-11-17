@@ -1,7 +1,10 @@
+import git
 import numpy as np
 import pandas as pd
 
-df = pd.read_csv("data/withholding.tsv", sep="\t")
+repo = git.Repo(".", search_parent_directories=True).working_tree_dir
+
+df = pd.read_csv(repo + "/data/withholding.tsv", sep="\t")
 df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
 
@@ -45,4 +48,4 @@ def expand(row):
 
 df = df.join(df.apply(expand, axis=1, result_type="expand"))
 
-df.to_csv("data/withholding_expanded.tsv", sep="\t")
+df.to_csv(repo + "/data/withholding_expanded.tsv", sep="\t")
