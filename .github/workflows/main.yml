@@ -32,13 +32,11 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ocaml-variants.${{ matrix.ocaml-compiler }}+options,ocaml-option-flambda
-          dune-cache: true
 
       - name: Install dependencies
         run: opam install . --deps-only --with-test
 
       - name: Run tests
-        working-directory: ocaml
         run: |
           export CPR_VERSION=github_ci-${{ matrix.os }}-$(git describe --tags --dirty || git describe --all --long --dirty)
           opam exec -- dune build @fmt
