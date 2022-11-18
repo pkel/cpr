@@ -1,5 +1,7 @@
 open Cpr_lib
 
+let incentive_schemes = [ `Constant; `Discount ]
+
 module type Parameters = sig
   val preference : [ `LongestChain | `HeaviestChain ]
   val progress : [ `Height | `Work ]

@@ -157,7 +157,7 @@ let of_graphml graph =
   let* dissemination = dissemination_of_string dissemination in
   let* activation_delay, graph_data = pop float "activation_delay" graph_data in
   let n = List.length graph.nodes in
-  let map_id = Array.make n (-1)
+  let map_id = Array.make n None
   and node_data = Array.make n []
   and edge_data = Array.make n (Array.make n [])
   and rev_map_id = Hashtbl.create n
@@ -169,17 +169,17 @@ let of_graphml graph =
         let* i = i
         and* c, data = pop float "compute" n.data in
         if Hashtbl.mem rev_map_id n.id
-        then R.error_msgf "node %i defined multiple times" n.id
+        then R.error_msgf "node %s defined multiple times" n.id
         else (
           Hashtbl.add rev_map_id n.id i;
-          map_id.(i) <- n.id;
+          map_id.(i) <- Some n.id;
           node_data.(i) <- data;
           compute.(i) <- c;
           Ok (i + 1)))
       (Ok 0)
       graph.nodes
   in
-  let+ () =
+  let* () =
     let delay_of_string = Distributions.float_of_string_memoize () in
     let edge (e : edge) =
       match Hashtbl.find_opt rev_map_id e.src, Hashtbl.find_opt rev_map_id e.dst with
@@ -188,7 +188,7 @@ let of_graphml graph =
         let+ delay = delay_of_string delay in
         edge_data.(src).(dest) <- data;
         links.(src) <- { dest; delay } :: links.(src)
-      | _ -> R.error_msgf "edge (%i,%i) references undefined node" e.src e.dst
+      | _ -> R.error_msgf "edge (%s,%s) references undefined node" e.src e.dst
     in
     List.fold_left
       (fun ok (e : edge) ->
@@ -204,6 +204,12 @@ let of_graphml graph =
   let network =
     let nodes = Array.map2 (fun compute links -> { compute; links }) compute links in
     { dissemination; nodes; activation_delay }
+  in
+  let+ map_id =
+    if Array.mem None map_id
+    then
+      R.error_msg "Something's off with the node IDs. Maybe some node was defined twice?"
+    else Ok (Array.map Option.get map_id)
   in
   let to_graphml ?node_data:n ?edge_data:e ?graph_data:g =
     let node_data i =
@@ -224,7 +230,7 @@ let of_graphml graph =
   network, to_graphml
 ;;
 
-let to_graphml = to_graphml ~map_id:Fun.id
+let to_graphml = to_graphml ~map_id:(fun i -> "n" ^ string_of_int (i + 1))
 
 let%expect_test _ =
   let t =
@@ -240,16 +246,16 @@ let%expect_test _ =
       data =
       [("activation_delay", Float (1.)); ("dissemination", String ("simple"))];
       nodes =
-      [{ id = 0; data = [("compute", Float (0.333333333333))] };
-       { id = 1; data = [("compute", Float (0.333333333333))] };
-       { id = 2; data = [("compute", Float (0.333333333333))] }];
+      [{ id = "n1"; data = [("compute", Float (0.333333333333))] };
+       { id = "n2"; data = [("compute", Float (0.333333333333))] };
+       { id = "n3"; data = [("compute", Float (0.333333333333))] }];
       edges =
-      [{ src = 0; dst = 1; data = [("delay", String ("uniform 0.6 1.4"))] };
-       { src = 0; dst = 2; data = [("delay", String ("uniform 0.6 1.4"))] };
-       { src = 1; dst = 0; data = [("delay", String ("uniform 0.6 1.4"))] };
-       { src = 1; dst = 2; data = [("delay", String ("uniform 0.6 1.4"))] };
-       { src = 2; dst = 0; data = [("delay", String ("uniform 0.6 1.4"))] };
-       { src = 2; dst = 1; data = [("delay", String ("uniform 0.6 1.4"))] }]
+      [{ src = "n1"; dst = "n2"; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = "n1"; dst = "n3"; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = "n2"; dst = "n1"; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = "n2"; dst = "n3"; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = "n3"; dst = "n1"; data = [("delay", String ("uniform 0.6 1.4"))] };
+       { src = "n3"; dst = "n2"; data = [("delay", String ("uniform 0.6 1.4"))] }]
       } |}]
 ;;
 

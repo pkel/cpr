@@ -28,6 +28,14 @@ module Data = struct
       | String x -> R.error_msgf "expected bool, got string '%s'" x
     ;;
 
+    let int str =
+      let open ResultSyntax in
+      let* x = float str in
+      match Float.to_int x with
+      | i -> Ok i
+      | exception _ -> R.error_msgf "expected integer, got float %f" x
+    ;;
+
     let get f str data =
       match List.assoc_opt str data with
       | None -> R.error_msgf "missing attribute '%s'" str
@@ -63,14 +71,14 @@ type kind =
 [@@deriving show { with_path = false }]
 
 type edge =
-  { src : int
-  ; dst : int
+  { src : string
+  ; dst : string
   ; data : Data.t
   }
 [@@deriving show { with_path = false }]
 
 type node =
-  { id : int
+  { id : string
   ; data : Data.t
   }
 [@@deriving show { with_path = false }]
@@ -85,8 +93,7 @@ type graph =
 
 let graph_to_xml =
   let open Xmlm in
-  let node_id i = Printf.sprintf "n%i" i
-  and el ?(a = []) tag l : _ frag =
+  let el ?(a = []) tag l : _ frag =
     `El ((("", tag), List.map (fun (k, v) -> ("", k), v) a), l)
   in
   let data ht eon (key, d) =
@@ -117,7 +124,7 @@ let graph_to_xml =
         (fun edges e ->
           el
             "edge"
-            ~a:[ "source", node_id e.src; "target", node_id e.dst ]
+            ~a:[ "source", e.src; "target", e.dst ]
             (List.fold_left (fun acc d -> data keys `Edge d :: acc) [] e.data)
           :: edges)
         []
@@ -127,7 +134,7 @@ let graph_to_xml =
         (fun nodes n ->
           el
             "node"
-            ~a:[ "id", node_id n.id ]
+            ~a:[ "id", n.id ]
             (List.fold_left (fun acc d -> data keys `Node d :: acc) [] n.data)
           :: nodes)
         []
@@ -202,6 +209,8 @@ let graph_of_xml =
           match get_attr "attr.type" attrs with
           | "string" -> `String
           | "double" -> `Double
+          | "float" -> `Float
+          | "long" -> `Long
           | "boolean" -> `Boolean
           | _ -> failwith "unexpected value of \"attr.type\" attribute on key"
           | exception Not_found -> failwith "missing \"attr.type\" attribute on key"
@@ -240,7 +249,7 @@ let graph_of_xml =
       (match bool_of_string_opt s with
       | Some b -> Data.Bool b
       | None -> failwith "invalid boolean")
-    | `Double ->
+    | `Double | `Float | `Long ->
       (match float_of_string_opt s with
       | Some f -> Float f
       | None -> failwith "invalid double")
@@ -266,31 +275,19 @@ let graph_of_xml =
       []
       (members_with_attr "data" frags)
     |> List.rev
-  and get_id key attrs =
-    match get_attr key attrs with
-    | s ->
-      let parse_int s =
-        try int_of_string s with
-        | Failure _ -> failwith "invalid id"
-      in
-      (* igraph exports integer ids extended with leading n *)
-      let id = String.sub s 1 (String.length s - 1) |> parse_int in
-      if id < 0 then failwith "negative node id";
-      id
-    | exception Not_found -> failwith ("missing " ^ key)
   in
   let nodes keys graph =
     List.fold_left
       (fun nodes (attrs, childs) ->
-        { id = get_id "id" attrs; data = data keys `Node childs } :: nodes)
+        { id = get_attr "id" attrs; data = data keys `Node childs } :: nodes)
       []
       (members_with_attr "node" graph)
     |> List.rev
   and edges keys graph =
     List.fold_left
       (fun nodes (attrs, childs) ->
-        { src = get_id "source" attrs
-        ; dst = get_id "target" attrs
+        { src = get_attr "source" attrs
+        ; dst = get_attr "target" attrs
         ; data = data keys `Edge childs
         }
         :: nodes)
@@ -321,4 +318,13 @@ let write_graph g p =
   let open ResultSyntax in
   let* xml = graph_to_xml g in
   File.with_oc p (fun oc () -> Ok (Ezxmlm.to_channel oc None [ xml ])) () |> Result.join
+;;
+
+let pipe_graph (f : graph -> (graph, R.msg) result) : (unit, R.msg) result =
+  let open ResultSyntax in
+  let* _, xml = R.trap_exn Ezxmlm.from_channel stdin |> R.error_exn_trap_to_msg in
+  let* graph = graph_of_xml xml in
+  let* graph = f graph in
+  let* xml = graph_to_xml graph in
+  Ok (Ezxmlm.to_channel stdout None [ xml ])
 ;;

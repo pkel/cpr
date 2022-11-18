@@ -14,6 +14,8 @@ tqdm
 scikit-optimize
 seaborn
 
+networkx
+
 -e ./gym
 
 stable-baselines3

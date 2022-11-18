@@ -41,13 +41,12 @@ end = struct
   let to_graphml { network; entries } =
     let open GraphML in
     let open Data.Write in
-    (* TODO. cherry-pick graphml edits from igraph branch. ids are strings there *)
-    let network_node_id int = Int.max_int - int
-    and vertex_id id = id
+    let network_node_id int = Printf.sprintf "node%i" int
+    and vertex_id id = Printf.sprintf "vertex%i" id
     and event_id =
-      let i = ref (Int.max_int - Array.length network.nodes) in
-      fun _ ->
-        let r = !i in
+      let i = ref 0 in
+      fun () ->
+        let r = Printf.sprintf "event%i" !i in
         decr i;
         r
     and conv =

@@ -63,6 +63,10 @@ expand: _venv
 	_venv/bin/python experiments/simuluate/honest_net.py
 	_venv/bin/python experiments/simuluate/withholding.py
 
+simulate-topology:
+	nix-shell -p R -p rPackages.igraph --command "Rscript experiments/simulate-topology/create-networks.R"
+	dune exec experiments/simulate-topology/igraph.exe
+
 # visualizations from short simulations
 
 visualize:

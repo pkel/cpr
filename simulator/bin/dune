@@ -1,0 +1,5 @@
+(executables
+ (names graphml_runner)
+ (public_names graphml_runner)
+ (package cpr)
+ (libraries cpr_lib cpr_protocols mtime.clock.os))

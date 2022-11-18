@@ -180,7 +180,7 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"discount" ~docstring:"reward function"
      in
-     let incentive_scheme = Options.of_string_exn [ `Discount; `Constant ] reward in
+     let incentive_scheme = Options.of_string_exn Ethereum.incentive_schemes reward in
      fun () ->
        Proto (Engine.of_module (ethereum_ssz ~incentive_scheme)) |> python_of_protocol);
   Py_module.set
@@ -189,7 +189,7 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     let incentive_scheme = Options.of_string_exn [ `Block; `Constant ] reward in
+     let incentive_scheme = Options.of_string_exn Bk.incentive_schemes reward in
      fun () ->
        Proto (Engine.of_module (bk_ssz ~k ~incentive_scheme)) |> python_of_protocol);
   Py_module.set
@@ -198,7 +198,7 @@ let () =
     (let%map reward =
        keyword "reward" string ~default:"constant" ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
-     let incentive_scheme = Options.of_string_exn [ `Block; `Constant ] reward in
+     let incentive_scheme = Options.of_string_exn Bkll.incentive_schemes reward in
      fun () ->
        Proto (Engine.of_module (bkll_ssz ~k ~incentive_scheme)) |> python_of_protocol);
   Py_module.set
@@ -214,10 +214,9 @@ let () =
          ~default:"optimal"
          ~docstring:"sub-block selection mechanism"
      in
-     let incentive_scheme =
-       Options.of_string_exn [ `Constant; `Discount; `Punish; `Hybrid ] reward
+     let incentive_scheme = Options.of_string_exn Tailstorm.incentive_schemes reward
      and subblock_selection =
-       Options.of_string_exn [ `Altruistic; `Heuristic; `Optimal ] subblock_selection
+       Options.of_string_exn Tailstorm.subblock_selections subblock_selection
      in
      fun () ->
        Proto (Engine.of_module (tailstorm_ssz ~subblock_selection ~incentive_scheme ~k))
@@ -235,10 +234,9 @@ let () =
          ~default:"optimal"
          ~docstring:"sub-block selection mechanism"
      in
-     let incentive_scheme =
-       Options.of_string_exn [ `Constant; `Discount; `Punish; `Hybrid ] reward
+     let incentive_scheme = Options.of_string_exn Tailstormll.incentive_schemes reward
      and subblock_selection =
-       Options.of_string_exn [ `Altruistic; `Heuristic; `Optimal ] subblock_selection
+       Options.of_string_exn Tailstormll.subblock_selections subblock_selection
      in
      fun () ->
        Proto (Engine.of_module (tailstormll_ssz ~subblock_selection ~incentive_scheme ~k))

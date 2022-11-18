@@ -1,5 +1,7 @@
 open Cpr_lib
 
+let incentive_schemes = Bk.incentive_schemes
+
 module type Parameters = Bk.Parameters
 
 module Make (Parameters : Parameters) = struct

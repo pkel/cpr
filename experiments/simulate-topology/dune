@@ -1,0 +1,3 @@
+(executable
+ (name igraph)
+ (libraries bos.setup cmdliner cpr_lib cpr_protocols parany progress))

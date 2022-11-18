@@ -1,5 +1,8 @@
 open Cpr_lib
 
+let incentive_schemes = Tailstorm.incentive_schemes
+let subblock_selections = Tailstorm.subblock_selections
+
 module type Parameters = Tailstorm.Parameters
 
 module Make (Parameters : Parameters) = struct
