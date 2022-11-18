@@ -20,6 +20,7 @@ try:
 
     # Register gym environments
     gym.envs.register(id="core-v0", entry_point="cpr_gym.envs:Core")
+    gym.envs.register(id="cpr-v0", entry_point="cpr_gym.envs:env_fn")
 
     # Make dll-dependent modules available
     import engine, protocols  # noqa
