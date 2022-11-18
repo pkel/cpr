@@ -6,8 +6,9 @@ python=python3.9
 build:
 	opam exec dune build
 
-test: build bridge _venv
+test:
 	opam exec dune runtest
+	make bridge _venv
 	_venv/bin/pytest --forked
 
 watch-malformed-dag:

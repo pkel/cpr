@@ -1,0 +1,16 @@
+(executables
+ (names bounds)
+ (libraries bos.setup cpr))
+
+(rule
+ (with-stdout-to
+  bounds.out
+  (setenv
+   TEST
+   true
+   (run ./bounds.exe))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff bounds.expected bounds.out)))
