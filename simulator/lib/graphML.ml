@@ -28,6 +28,14 @@ module Data = struct
       | String x -> R.error_msgf "expected bool, got string '%s'" x
     ;;
 
+    let int str =
+      let open ResultSyntax in
+      let* x = float str in
+      match Float.to_int x with
+      | i -> Ok i
+      | exception _ -> R.error_msgf "expected integer, got float %f" x
+    ;;
+
     let get f str data =
       match List.assoc_opt str data with
       | None -> R.error_msgf "missing attribute '%s'" str
@@ -321,4 +329,13 @@ let write_graph g p =
   let open ResultSyntax in
   let* xml = graph_to_xml g in
   File.with_oc p (fun oc () -> Ok (Ezxmlm.to_channel oc None [ xml ])) () |> Result.join
+;;
+
+let pipe_graph (f : graph -> (graph, R.msg) result) : (unit, R.msg) result =
+  let open ResultSyntax in
+  let* _, xml = R.trap_exn Ezxmlm.from_channel stdin |> R.error_exn_trap_to_msg in
+  let* graph = graph_of_xml xml in
+  let* graph = f graph in
+  let* xml = graph_to_xml graph in
+  Ok (Ezxmlm.to_channel stdout None [ xml ])
 ;;

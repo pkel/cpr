@@ -587,3 +587,116 @@ let%test_module "random" =
     ;;
   end)
 ;;
+
+include struct
+  module M : sig
+    val of_key : string -> (protocol, Rresult.R.msg) result
+  end = struct
+    open Angstrom
+
+    let whitespace = function
+      | ' ' -> true
+      | _ -> false
+    ;;
+
+    let a_to_z c = 'a' <= c && c <= 'z'
+    let digit c = '0' <= c && c <= '9'
+    let trim = skip_many (skip whitespace)
+    let sep = char '-'
+
+    let int =
+      let* str = (sep <|> fail "missing integer option") *> take_while digit in
+      match int_of_string_opt str with
+      | Some x -> return x
+      | None -> fail "could not parse int"
+    ;;
+
+    let option choice =
+      let* str = (sep <|> fail "missing option") *> take_while a_to_z in
+      Options.of_string choice str |> Result.fold ~ok:return ~error:fail
+    ;;
+
+    let nakamoto = return nakamoto
+
+    let ethereum =
+      let f incentive_scheme = ethereum ~incentive_scheme in
+      lift f (option Ethereum.incentive_schemes)
+    ;;
+
+    let bk =
+      let f k incentive_scheme = bk ~k ~incentive_scheme in
+      lift2 f int (option Bk.incentive_schemes)
+    ;;
+
+    let bkll =
+      let f k incentive_scheme = bkll ~k ~incentive_scheme in
+      lift2 f int (option Bkll.incentive_schemes)
+    ;;
+
+    let tailstorm =
+      let f k incentive_scheme subblock_selection =
+        tailstorm ~k ~incentive_scheme ~subblock_selection
+      in
+      let open Tailstorm in
+      lift3 f int (option incentive_schemes) (option subblock_selections)
+    ;;
+
+    let tailstormll =
+      let f k incentive_scheme subblock_selection =
+        tailstormll ~k ~incentive_scheme ~subblock_selection
+      in
+      let open Tailstormll in
+      lift3 f int (option incentive_schemes) (option subblock_selections)
+    ;;
+
+    let protocol =
+      let* str = take_while a_to_z in
+      match str with
+      | "nakamoto" -> nakamoto
+      | "ethereum" -> ethereum
+      | "bk" -> bk
+      | "bkll" -> bkll
+      | "tailstorm" -> tailstorm
+      | "tailstormll" -> tailstormll
+      | _ -> fail "unknown protocol"
+    ;;
+
+    let protocol = trim *> protocol <* trim
+
+    let of_key s =
+      parse_string ~consume:Consume.All protocol s |> Rresult.R.reword_error Rresult.R.msg
+    ;;
+
+    let%expect_test "of_key/to_key" =
+      List.iter
+        (fun s ->
+          let s' =
+            match of_key s with
+            | Ok (Protocol (module P)) -> P.key
+            | Error (`Msg m) -> "ERROR in key '" ^ s ^ "'" ^ m
+          in
+          print_endline s')
+        [ "nakamoto"
+        ; "ethereum-discount"
+        ; "bk-2-constant"
+        ; "bkll-5-block"
+        ; "  tailstorm-42-discount-heuristic  "
+        ; " X"
+        ; "bk"
+        ; "nakamoto 2"
+        ];
+      [%expect
+        {|
+      nakamoto
+      eth-heaviest_chain-work-2-discount
+      bk-2-constant
+      bkll-5-block
+      tailstorm-42-discount-heuristic
+      ERROR in key ' X': unknown protocol
+      ERROR in key 'bk': missing integer option
+      ERROR in key 'nakamoto 2': end_of_input |}]
+    ;;
+  end
+
+  include M
+end

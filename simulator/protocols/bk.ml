@@ -1,5 +1,7 @@
 open Cpr_lib
 
+let incentive_schemes = [ `Block; `Constant ]
+
 module type Parameters = sig
   (** number of votes (= puzzle solutions) per block *)
   val k : int

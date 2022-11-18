@@ -14,6 +14,7 @@ module Data : sig
     val string : value -> (string, R.msg) result
     val float : value -> (float, R.msg) result
     val bool : value -> (bool, R.msg) result
+    val int : value -> (int, R.msg) result
     val get : (value -> ('a, R.msg) result) -> string -> t -> ('a, R.msg) result
     val pop : (value -> ('a, R.msg) result) -> string -> t -> ('a * t, R.msg) result
   end
@@ -55,3 +56,4 @@ val graph_to_xml : graph -> (Ezxmlm.node, R.msg) result
 val graph_of_xml : Ezxmlm.nodes -> (graph, R.msg) result
 val load_graph : Fpath.t -> (graph, R.msg) result
 val write_graph : graph -> Fpath.t -> (unit, R.msg) result
+val pipe_graph : (graph -> (graph, R.msg) result) -> (unit, R.msg) result
