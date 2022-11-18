@@ -1,0 +1,3 @@
+*.egg-info
+cpr_gym/bridge.so
+cpr_gym/bridge.so_old

@@ -4,48 +4,49 @@ export CPR_VERSION=local-$(shell git describe --tags --dirty || git describe --a
 python=python3.9
 
 build:
-	cd ocaml && opam exec dune build
+	opam exec dune build
 
 test: build bridge _venv
-	cd ocaml && opam exec dune runtest
-	cd python && ../_venv/bin/pytest --forked
+	opam exec dune runtest
+	_venv/bin/pytest --forked
 
 watch-malformed-dag:
 	echo "$$CPR_MALFORMED_DAG_TO_FILE" \
 		| entr -r bash -c "clear; cat \"$$CPR_MALFORMED_DAG_TO_FILE\" ; dot \"$$CPR_MALFORMED_DAG_TO_FILE\" -Tpng | feh - -."
 
 check-format: _venv
-	cd ocaml && opam exec dune build @fmt
-	cd python && ../_venv/bin/black --check .
-	cd python && ../_venv/bin/flake8
+	opam exec dune build @fmt
+	_venv/bin/black --check .
+	_venv/bin/flake8
 
 format: _venv
-	cd ocaml && opam exec dune -- build @fmt --auto-promote || true
-	cd python && ../_venv/bin/black . || true
+	opam exec dune -- build @fmt --auto-promote || true
+	_venv/bin/black . || true
 
 pre-commit: check-format test
 
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
 	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda
-	opam install ./ocaml --deps-only --working-dir
+	opam install . --deps-only --working-dir
 
 dependencies:
-	opam exec dune build ocaml/{cpr,cpr-dev}.opam
-	opam install ./ocaml --deps-only --working-dir
+	opam exec dune build {cpr,cpr-dev}.opam
+	opam install . --deps-only --working-dir
 
-_venv: python/requirements.txt
-	rm -rf _venv
+_venv: requirements.txt
 	${python} -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
-	cd python && ../_venv/bin/pip install -r requirements.txt
+	_venv/bin/python -m pip install wheel
+	_venv/bin/pip install -r requirements.txt
+	touch _venv
 
 # bridge OCaml and Python
 
-bridge python/gym/cpr_gym/bridge.so:
-	opam exec dune -- build --release ocaml/gym/bridge.so
-	rm -f python/gym/cpr_gym/bridge.so
-	cp _build/default/ocaml/gym/bridge.so python/gym/cpr_gym/bridge.so
+bridge gym/cpr_gym/bridge.so:
+	opam exec dune -- build --release simulator/gym/bridge.so
+	rm -f gym/cpr_gym/bridge.so
+	cp _build/default/simulator/gym/bridge.so gym/cpr_gym/bridge.so
 
 update-bridge-from-ci:
 	_venv/bin/python -m cpr_gym --update
@@ -55,24 +56,24 @@ update-bridge-from-ci:
 
 simulate:
 	mkdir -p data
-	dune exec ocaml/experiments/honest_net.exe -- data/honest_net.tsv
-	dune exec ocaml/experiments/withholding.exe -- data/withholding.tsv
+	dune exec experiments/simulate/honest_net.exe -- data/honest_net.tsv
+	dune exec experiments/simulate/withholding.exe -- data/withholding.tsv
 
 expand: _venv
-	_venv/bin/python python/eval/honest_net.py
-	_venv/bin/python python/eval/withholding.py
+	_venv/bin/python experiments/simuluate/honest_net.py
+	_venv/bin/python experiments/simuluate/withholding.py
 
 # visualizations from short simulations
 
 visualize:
-	mkdir -p fig/chains/
-	rm -rf fig/chains/*
-	echo '*' > fig/chains/.gitignore
-	dune exec ocaml/experiments/visualize.exe
+	mkdir -p data/viz/
+	rm -rf data/viz/*
+	echo '*' > data/viz/.gitignore
+	dune exec experiments/simulate/visualize.exe
 	make -j $(shell nproc) visualize.render
 
 .SECONDEXPANSION:
-visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
+visualize.render: $$(patsubst %.dot, %.png, $$(wildcard data/viz/*.dot))
 
 %.png: %.dot
 	dot -Tpng < $^ > $@
@@ -80,13 +81,13 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard fig/chains/*.dot))
 # RL
 
 reset-config:
-	rm -f python/train/config.ini
+	rm -f experiments/train/config.ini
 
 train-online: bridge _venv
-	if [ ! -e python/train/config.ini ] ; then\
-		cp python/train/defaults.ini python/train/config.ini ; fi
-	${EDITOR} python/train/config.ini
-	. _venv/bin/activate && python python/train/ppo.py
+	if [ ! -e experiments/train/config.ini ] ; then\
+		cp experiments/train/defaults.ini experiments/train/config.ini ; fi
+	${EDITOR} experiments/train/config.ini
+	. _venv/bin/activate && python experiments/train/ppo.py
 
 train-offline: export WANDB_MODE=offline
 train-offline: _venv train-online
