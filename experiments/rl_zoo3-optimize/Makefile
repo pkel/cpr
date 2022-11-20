@@ -18,7 +18,7 @@ nakamoto: $(venv)
 		--optimize \
 		--storage $(storage) \
 		--study-name $@ \
-		--eval-episodes 32 \
+		--eval-episodes 64 \
 		--n-timesteps 100000 \
 		|| true
 	$(venv)/bin/optuna best-trials -f yaml \
@@ -32,7 +32,7 @@ tailstorm: $(venv)
 		--optimize \
 		--storage $(storage) \
 		--study-name $@ \
-		--eval-episodes 32 \
+		--eval-episodes 64 \
 		--n-timesteps 300000 \
 		|| true
 	$(venv)/bin/optuna best-trials -f yaml \
@@ -47,7 +47,7 @@ tailstorm-constant: $(venv)
 		--optimize \
 		--storage $(storage) \
 		--study-name $@ \
-		--eval-episodes 32 \
+		--eval-episodes 64 \
 		--n-timesteps 300000 \
 		|| true
 	$(venv)/bin/optuna best-trials -f yaml \
