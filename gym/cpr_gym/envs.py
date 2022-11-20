@@ -64,7 +64,7 @@ def env_fn(**config):
     if "defenders" in config:
         defenders = config["defenders"]
     else:
-        defenders = np.ceil((1 - alpha) / (1 - gamma))
+        defenders = int(np.ceil((1 - alpha) / (1 - gamma)))
 
     rewards = dict(
         sparse_relative=(
