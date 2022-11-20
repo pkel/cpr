@@ -5,10 +5,14 @@ requires = [
   "wheel",
 ]
 
+[tool.black]
+extend-exclude = 'vendor'
+
 [tool.flake8]
 extend-exclude = [
   '_*',
   'rl',
+  'vendor',
   'wandb',
   'website/node_modules',
 ]
@@ -20,6 +24,7 @@ norecursedirs = [
   '.git',
   '_*',
   'rl',
+  'vendor',
 ]
 
 [tool.cibuildwheel]

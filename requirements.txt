@@ -19,6 +19,6 @@ networkx
 
 -e .
 
-rl_zoo3
+-e ./vendor/rl_zoo3
 stable-baselines3
 wandb
