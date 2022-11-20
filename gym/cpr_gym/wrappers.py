@@ -153,6 +153,19 @@ class ExtendObservationWrapper(gym.Wrapper):
         return self.env.policy(obs, name)
 
 
+class MapRewardWrapper(gym.RewardWrapper):
+    """
+    Applies the given function to all rewards.
+    """
+
+    def __init__(self, env, fn):
+        super().__init__(env)
+        self.mrw_fn = fn
+
+    def reward(self, reward):
+        return self.mrw_fn(reward)
+
+
 class AlphaScheduleWrapper(gym.Wrapper):
     """
     Reconfigures alpha on each reset.

@@ -53,17 +53,28 @@ class Core(gym.Env):
         print(engine.to_string(self.ocaml_env))
 
 
-def env_fn(**config):
-    protocol_fn = getattr(protocols, config.get("protocol", "nakamoto"))
-    protocol_args = config.get("protocol_args", {})
+gym.envs.register(id="core-v0", entry_point=Core)
 
-    episode_len = config.get("episode_len", 128)
 
-    alpha = config.get("alpha", 0.33)
-    gamma = config.get("gamma", 0.5)
-    if "defenders" in config:
-        defenders = config["defenders"]
+def env_fn(
+    protocol="nakamoto",
+    protocol_args=None,
+    _protocol_args=dict(),
+    episode_len=128,
+    alpha=0.45,
+    gamma=0.5,
+    defenders=None,
+    reward="sparse_relative",
+    normalize_reward=True,
+):
+    protocol_fn = getattr(protocols, protocol)
+
+    if protocol_args is None:
+        protocol_args = _protocol_args
     else:
+        protocol_args = _protocol_args | protocol_args
+
+    if defenders is None:
         defenders = int(np.ceil((1 - alpha) / (1 - gamma)))
 
     rewards = dict(
@@ -83,7 +94,7 @@ def env_fn(**config):
         ),
     )
 
-    reward_wrapper, env_args = rewards[config.get("reward", "sparse_relative")]
+    reward_wrapper, env_args = rewards[reward]
 
     env = Core(
         proto=protocol_fn(**protocol_args),
@@ -95,7 +106,30 @@ def env_fn(**config):
 
     env = reward_wrapper(env)
 
-    if config.get("normalize_reward", True):
+    if normalize_reward:
         env = wrappers.MapRewardWrapper(env, lambda r: r / alpha)
 
     return env
+
+
+gym.envs.register(id="cpr-v0", entry_point=env_fn)
+
+gym.envs.register(
+    id="cpr-nakamoto-v0",
+    entry_point=env_fn,
+    kwargs=dict(
+        protocol="nakamoto",
+        _protocol_args=dict(),
+        reward="sparse_relative",
+    ),
+)
+
+gym.envs.register(
+    id="cpr-tailstorm-v0",
+    entry_point=env_fn,
+    kwargs=dict(
+        protocol="tailstorm",
+        _protocol_args=dict(k=8, reward="discount", subblock_selection="heuristic"),
+        reward="sparse_per_progress",
+    ),
+)
