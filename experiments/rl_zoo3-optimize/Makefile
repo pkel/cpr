@@ -9,6 +9,12 @@ storage := sqlite:///cpr-ppo.db
 $(venv):
 	make -C $(base) _venv
 
+# Show best trial
+%.best: $(venv)
+	$(venv)/bin/optuna best-trials -f yaml \
+		--storage $(storage) \
+		--study-name $*
+
 # Trials
 
 nakamoto: $(venv)
@@ -19,11 +25,7 @@ nakamoto: $(venv)
 		--storage $(storage) \
 		--study-name $@ \
 		--eval-episodes 64 \
-		--n-timesteps 100000 \
-		|| true
-	$(venv)/bin/optuna best-trials -f yaml \
-		--storage $(storage) \
-		--study-name $@
+		--n-timesteps 100000
 
 tailstorm: $(venv)
 	$(venv)/bin/python -m rl_zoo3.train --algo ppo --yaml-file ppo.yaml \
@@ -33,11 +35,7 @@ tailstorm: $(venv)
 		--storage $(storage) \
 		--study-name $@ \
 		--eval-episodes 64 \
-		--n-timesteps 300000 \
-		|| true
-	$(venv)/bin/optuna best-trials -f yaml \
-		--storage $(storage) \
-		--study-name $@
+		--n-timesteps 300000
 
 tailstorm-constant: $(venv)
 	$(venv)/bin/python -m rl_zoo3.train --algo ppo --yaml-file ppo.yaml \
@@ -48,8 +46,4 @@ tailstorm-constant: $(venv)
 		--storage $(storage) \
 		--study-name $@ \
 		--eval-episodes 64 \
-		--n-timesteps 300000 \
-		|| true
-	$(venv)/bin/optuna best-trials -f yaml \
-		--storage $(storage) \
-		--study-name $@
+		--n-timesteps 300000
