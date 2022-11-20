@@ -35,7 +35,7 @@ tailstorm: $(venv)
 		--storage $(storage) \
 		--study-name $@ \
 		--eval-episodes 64 \
-		--n-timesteps 300000
+		--n-timesteps 1000000
 
 tailstorm-constant: $(venv)
 	$(venv)/bin/python -m rl_zoo3.train --algo ppo --yaml-file ppo.yaml \
@@ -46,4 +46,4 @@ tailstorm-constant: $(venv)
 		--storage $(storage) \
 		--study-name $@ \
 		--eval-episodes 64 \
-		--n-timesteps 300000
+		--n-timesteps 1000000
