@@ -7,7 +7,7 @@
     <div class="col-lg-9 col-xl-8 text-center">
       <p class="lead">{{ .Params.lead | safeHTML }}</p>
       <a class="btn btn-primary btn-lg px-4 mb-2" href="/docs/{{ if .Site.Params.options.docsVersioning }}{{ .Site.Params.docsVersion }}/{{ end }}prologue/introduction/" role="button">Get Started</a>
-      <p class="meta">Open-source MIT Licensed. <a href="https://github.com/h-enk/doks">GitHub v{{ $data := getJSON "/package.json" }}{{ $data.version }}</a></p>
+      <p class="meta">Reproducible. Open-source. <a href="https://github.com/pkel/cpr">GitHub.</a></p>
     </div>
   </div>
 </section>
@@ -18,30 +18,42 @@
   <div class="container">
     <div class="row justify-content-center text-center">
       <div class="col-lg-5">
-        <h2 class="h4">Security aware</h2>
-        <p>Get A+ scores on <a href="https://observatory.mozilla.org/analyze/doks-child-theme.netlify.app">Mozilla Observatory</a> out of the box. Easily change the default Security Headers to suit your needs.</p>
+        <h2 class="h4">Specification</h2>
+        <p>
+        CPR abstracts communication, cryptography and proof-of-work.
+        You can specify new consensus protocols in a few lines of code.
       </div>
       <div class="col-lg-5">
-        <h2 class="h4">Fast by default ⚡️</h2>
-        <p>Get 100 scores on <a href="https://googlechrome.github.io/lighthouse/viewer/?gist=59aafe464a68f8bc30b8e9a636d5b053">Google Lighthouse</a> by default. Doks removes unused css, prefetches links, and lazy loads images.</p>
+        <h2 class="h4">Simulation</h2>
+        <p>
+        CPR provides a virtual environment for protocol execution.
+        You can obtain valuable insights without costly deployments.
       </div>
       <div class="col-lg-5">
-        <h2 class="h4">SEO-ready</h2>
-        <p>Use sensible defaults for structured data, open graph, and Twitter cards. Or easily change the SEO settings to your liking.</p>
+        <h2 class="h4">Efficient</h2>
+        <p>
+        CPR avoids doing real proof-of-work.
+        Your laptop can handle hundreds of participants mining thousands of blocks each second.
       </div>
     </div>
     <div class="row justify-content-center text-center">
       <div class="col-lg-5">
-        <h2 class="h4">Full text search</h2>
-        <p>Search your Doks site with FlexSearch. Easily customize index settings and search options to your liking.</p>
+        <h2 class="h4">BTC/ETHW/more</h2>
+        <p>
+        CPR ships specifications for popular proof-of-work protocols as they are deployed in
+        Bitcoin and Ethereum PoW.
       </div>
       <div class="col-lg-5">
-        <h2 class="h4">Page layouts</h2>
-        <p>Build pages with a landing page, blog, or documentation layout. Add custom sections and components to suit your needs.</p>
+        <h2 class="h4">Attacks</h2>
+        <p>
+        CPR implements known attacks like block withholding and selfish mining.
+        You can modify and evaluate them without doing real harm.
       </div>
       <div class="col-lg-5">
-        <h2 class="h4">Dark mode</h2>
-        <p>Switch to a low-light UI with the click of a button. Change colors with variables to match your branding.</p>
+        <h2 class="h4">Reinforcement learning</h2>
+        <p>
+        CPR provides an <a href="https://www.gymlibrary.dev/">OpenAI Gym</a> environment for searching attacks.
+        You will find an edge against both your own and established protocols!
       </div>
     </div>
   </div>

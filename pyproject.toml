@@ -6,11 +6,11 @@ requires = [
 ]
 
 [tool.flake8]
-exclude = [
-  '.git',
+extend-exclude = [
   '_*',
   'rl',
   'wandb',
+  'website/node_modules',
 ]
 extend-ignore = ['E203']
 max-line-length = 99
