@@ -30,9 +30,9 @@ class Config(BaseSettings):
         0.35,
         0.375,
         0.4,
-        0.425,
-        0.45,
-        0.475,
+        #  0.425,
+        #  0.45,
+        #  0.475,
     ]
     REWARD_WRAPPER: Literal[
         "SparseDaaRewardWrapper",
