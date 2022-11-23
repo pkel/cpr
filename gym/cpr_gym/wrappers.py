@@ -153,69 +153,92 @@ class ExtendObservationWrapper(gym.Wrapper):
         return self.env.policy(obs, name)
 
 
-class MapRewardWrapper(gym.RewardWrapper):
+class MapRewardWrapper(gym.Wrapper):
     """
     Applies the given function to all rewards.
+    The given function takes to inputs, reward and info dictionary.
     """
 
     def __init__(self, env, fn):
         super().__init__(env)
         self.mrw_fn = fn
 
-    def reward(self, reward):
-        return self.mrw_fn(reward)
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        reward = self.mrw_fn(reward, info)
+        return obs, reward, done, info
 
 
-class AlphaScheduleWrapper(gym.Wrapper):
+class AssumptionScheduleWrapper(gym.Wrapper):
     """
-    Reconfigures alpha on each reset.
-    Extends observation space with current alpha.
-    Reports alpha in the info field.
+    Reconfigures the assumptions about the attacker (alpha and gamma) on each reset.
+    Extends observation space with current assumptions.
+    Reports alpha and gamma in the info dictionary.
+    Use this for learning generic policies that can handle different assumptions.
+    Supports showing other assumptions to the agent than assumed.
     """
 
-    # TODO. Do we need something similar for gamma? Maybe we can generalize
-    # this Wrapper to support arbitrary parameters?
-
-    def __init__(self, env, alpha_schedule=None, normalize_reward=True):
+    def __init__(
+        self, env, alpha=None, gamma=None, pretend_alpha=None, pretend_gamma=None
+    ):
         super().__init__(env)
-        self.asw_normalize_reward = normalize_reward
-        self.alpha_schedule = alpha_schedule
-        if callable(alpha_schedule):
-            self.asw_fn = alpha_schedule
+
+        if callable(alpha):
+            self.asw_alpha_fn = alpha
         else:
-            iterator = itertools.cycle(alpha_schedule)
-            self.asw_fn = lambda: next(iterator)
+            try:
+                alpha_iterator = itertools.cycle(alpha)
+                self.asw_alpha_fn = lambda: next(alpha_iterator)
+            except TypeError:
+                self.asw_alpha_fn = lambda: alpha
+
+        if callable(gamma):
+            self.asw_gamma_fn = gamma
+        else:
+            try:
+                gamma_iterator = itertools.cycle(gamma)
+                self.asw_gamma_fn = lambda: next(gamma_iterator)
+            except TypeError:
+                self.asw_gamma_fn = lambda: gamma
+
+        self.asw_pretend_alpha = pretend_alpha
+        self.asw_pretend_gamma = pretend_gamma
 
         # extend observation space
         low = self.observation_space.low
         high = self.observation_space.high
-        low = numpy.append(low, [0])
-        high = numpy.append(high, [1])
+        low = numpy.append(low, [0.0, 0.0])
+        high = numpy.append(high, [1.0, 1.0])
         self.observation_space = gym.spaces.Box(low, high, dtype=numpy.float64)
 
     def observation(self, obs):
-        return numpy.append(obs, [self.asw_alpha])
+        assumptions = [self.asw_alpha, self.asw_gamma]
+        if self.asw_pretend_alpha is not None:
+            assumptions[0] = float(self.asw_pretend_alpha)
+        if self.asw_pretend_gamma is not None:
+            assumptions[1] = float(self.asw_pretend_gamma)
+        return numpy.append(obs, assumptions)
 
     # overwrite core env's policy
     def policy(self, obs, name="honest"):
-        obs = obs[:-1]
+        obs = obs[:-2]
         return self.env.policy(obs, name)
 
     def reset(self):
-        self.asw_alpha = self.asw_fn()
+        self.asw_alpha = self.asw_alpha_fn()
+        self.asw_gamma = self.asw_gamma_fn()
         self.env.core_kwargs["alpha"] = self.asw_alpha
+        self.env.core_kwargs["gamma"] = self.asw_gamma
+
         obs = self.env.reset()
-        obs = AlphaScheduleWrapper.observation(self, obs)
+        obs = AssumptionScheduleWrapper.observation(self, obs)
         return obs
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         info["alpha"] = self.asw_alpha
-        obs = AlphaScheduleWrapper.observation(self, obs)
-
-        if self.asw_normalize_reward:
-            reward = reward / self.asw_alpha
-
+        info["gamma"] = self.asw_gamma
+        obs = AssumptionScheduleWrapper.observation(self, obs)
         return obs, reward, done, info
 
 

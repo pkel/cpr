@@ -55,34 +55,65 @@ def test_denseRewardPerProgressWrapper():
         fuzz_episode(env)
 
 
-def test_alphaScheduleWrapper():
+def test_assumptionScheduleWrapper():
     env = gym.make("cpr_gym:core-v0", max_steps=32)
-    env = wrappers.AlphaScheduleWrapper(env, alpha_schedule=[0.33])
+    env = wrappers.AssumptionScheduleWrapper(env, alpha=0.33, gamma=0.1)
     check_env(env)
     for i in range(2):
         obs, _, _, i = fuzz_episode(env)
         assert i["alpha"] == 0.33
-        assert obs[-1] == 0.33
+        assert i["gamma"] == 0.1
+        assert obs[-2] == 0.33
+        assert obs[-1] == 0.1
 
-    env = wrappers.AlphaScheduleWrapper(env, alpha_schedule=[0.1, 0.2, 0.3])
-    check_env(env)
-    alphas = dict()
-    for i in range(10):
-        obs, _, _, i = run_episode(env, "honest")
-        assert i["alpha"] == obs[-1]
-        alphas[i["alpha"]] = True
-    assert len(alphas.keys()) <= 3
-
-    env = wrappers.AlphaScheduleWrapper(
-        env, alpha_schedule=lambda: random.uniform(0.1, 0.5)
+    env = wrappers.AssumptionScheduleWrapper(
+        env, alpha=[0.1, 0.2, 0.3], gamma=[0.1, 0.5, 0.9]
     )
     check_env(env)
     alphas = dict()
+    gammas = dict()
+    for i in range(10):
+        obs, _, _, i = run_episode(env, "honest")
+        assert i["alpha"] == obs[-2]
+        assert i["gamma"] == obs[-1]
+        alphas[i["alpha"]] = True
+        gammas[i["gamma"]] = True
+    assert len(alphas.keys()) <= 3
+    assert len(gammas.keys()) <= 3
+
+    env = wrappers.AssumptionScheduleWrapper(
+        env,
+        alpha=lambda: random.uniform(0.1, 0.5),
+        gamma=lambda: random.uniform(0.0, 1.0),
+    )
+    check_env(env)
+    alphas = dict()
+    gammas = dict()
     for i in range(42):
         obs, _, _, i = run_episode(env, "honest")
-        assert i["alpha"] == obs[-1]
+        assert i["alpha"] == obs[-2]
+        assert i["gamma"] == obs[-1]
         alphas[i["alpha"]] = True
+        gammas[i["gamma"]] = True
     assert len(alphas.keys()) > 30
+    assert len(gammas.keys()) > 30
+
+    env = wrappers.AssumptionScheduleWrapper(
+        env,
+        alpha=lambda: random.uniform(0.1, 0.5),
+        gamma=lambda: random.uniform(0.0, 1.0),
+        pretend_alpha=0.33,
+        pretend_gamma=0.33,
+    )
+    check_env(env)
+    for i in range(42):
+        obs, _, _, i = run_episode(env, "honest")
+        assert obs[-2] == 0.33
+        assert obs[-1] == 0.33
+        alphas[i["alpha"]] = True
+        gammas[i["gamma"]] = True
+    assert len(alphas.keys()) > 30
+    assert len(gammas.keys()) > 30
 
 
 def test_ExtendObservationWrapper():
@@ -130,3 +161,12 @@ def test_registered_envs(capsys):
         "heuristic sub-block selection; "
         "SSZ'16-like attack space; α=0.45 attacker"
     )
+
+    env = gym.make(
+        "cpr_gym:cpr-tailstorm-v0",
+        alpha=lambda: random.uniform(0, 0.5),
+        gamma=lambda: random.uniform(0, 0.9),
+        pretend_alpha=0.45,
+        pretend_gamma=0.5,
+    )
+    check_env(env)
