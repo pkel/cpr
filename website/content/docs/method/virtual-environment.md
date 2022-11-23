@@ -77,8 +77,8 @@ system does not really exist.
 
 Needless to say, choosing the right assumptions is the hard part. Make
 them to weak and no useful property can be achieved. Make them to strong
-and they become unrealistic. Always remember that your assumptions are
-yours. Smart attackers will violate them whenever possible.
+and they become unrealistic. Smart attackers will violate our
+assumptions whenever possible.
 
 We postpone making concrete assumptions to the analysis phase of
 individual protocols. Here, we make only minimal assumptions about the
@@ -94,15 +94,21 @@ enumerated nodes.
 
 ## Data, Hashes and Storage
 
+To be revised. I'm torn between exposing hash-functions and just saying
+there is a "global DAG".
+
 Nodes can manipulate arbitrary data locally. We assume an injective
 mapping $\mathcal{H}$ from data to the set of integers. For any datum
 $x$, we say that $\mathcal{H}(x)$ is the hash of $x$. A datum may refer
 to other data by including the hashes. Nodes can store data
 locally. Nodes can retrieve stored data addressed by its hash.
 
-{{< alert icon="👉" text="We assume that $\mathcal{H}$ is a collision-free hash function.">}}
+{{< alert icon="👉" text="We assume that $\mathcal{H}$ is a collision-free hash function." />}}
 
 ## Communication
 
+To be written...
 
 ## Proof-of-Work
+
+To be written...
