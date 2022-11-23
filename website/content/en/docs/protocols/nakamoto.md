@@ -13,17 +13,30 @@ menu:
     parent: "protocols"
 weight: 301
 toc: true
+mermaid: true
 ---
 
 <!--
 
 Intro/background/literature.
 
+-->
+
 ## Example blockchain
 
-Figure.
+```mermaid
+graph RL
+  A([height h])
+  B([height h+1])
+  CA([height h+2])
+  CB([height h+2])
+  D([height h+3])
+  E([height h+4])
+  CA --> B --> A
+  E --> D --> CB --> B
 
--->
+  style CA opacity:0.5
+```
 
 ## Specification
 
