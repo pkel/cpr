@@ -47,7 +47,7 @@ def test_sparseRewardPerProgressWrapper():
 
 
 def test_denseRewardPerProgressWrapper():
-    env = gym.make("cpr_gym:core-v0")
+    env = gym.make("cpr_gym:core-v0", max_progress=float("inf"))
     env = wrappers.DenseRewardPerProgressWrapper(env, episode_len=32)
     check_env(env)
     for i in range(42):
@@ -117,7 +117,7 @@ def test_assumptionScheduleWrapper():
 
 
 def test_ExtendObservationWrapper():
-    env = gym.make("cpr_gym:core-v0")
+    env = gym.make("cpr_gym:core-v0", max_progress=100)
     was_n = len(env.observation_space.low)
 
     fields = []
@@ -131,7 +131,7 @@ def test_ExtendObservationWrapper():
 
 
 def test_EpisodeRecorderWrapper():
-    env = gym.make("cpr_gym:core-v0")
+    env = gym.make("cpr_gym:core-v0", max_progress=100)
     env = wrappers.EpisodeRecorderWrapper(env, n=10, info_keys=["head_height"])
     check_env(env)
     for i in range(42):
@@ -143,11 +143,6 @@ def test_EpisodeRecorderWrapper():
 
 
 def test_registered_envs(capsys):
-    env = gym.make("cpr_gym:cpr-v0")
-    env.render()
-    captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.45 attacker"
-
     env = gym.make("cpr_gym:cpr-nakamoto-v0")
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]

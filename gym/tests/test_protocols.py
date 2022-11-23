@@ -3,13 +3,13 @@ from cpr_gym import protocols
 
 
 def test_version():
-    env = gym.make("cpr_gym:core-v0")
+    env = gym.make("cpr_gym:core-v0", max_progress=42)
     assert isinstance(env.version, str)
     assert len(env.version) > 0
 
 
 def test_default(capsys):
-    env = gym.make("cpr_gym:core-v0")
+    env = gym.make("cpr_gym:core-v0", max_steps=1000)
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.25 attacker"
@@ -17,7 +17,12 @@ def test_default(capsys):
 
 def test_policies_honest():
     env = gym.make(
-        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.2, defenders=2
+        "cpr_gym:core-v0",
+        proto=protocols.bk(k=8, reward="constant"),
+        alpha=0.33,
+        gamma=0.2,
+        defenders=2,
+        max_steps=10000,
     )
     obs = env.reset()
     for x in range(600):
@@ -26,7 +31,12 @@ def test_policies_honest():
 
 def test_policies_selfish():
     env = gym.make(
-        "cpr_gym:core-v0", proto=protocols.bk(k=8), alpha=0.33, gamma=0.5, defenders=3
+        "cpr_gym:core-v0",
+        proto=protocols.bk(k=8, reward="constant"),
+        alpha=0.33,
+        gamma=0.5,
+        defenders=3,
+        max_steps=10000,
     )
     obs = env.reset()
     for x in range(600):
@@ -40,6 +50,7 @@ def test_nakamoto(capsys):
         alpha=0.33,
         gamma=0.7,
         defenders=5,
+        max_steps=10000,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
@@ -57,10 +68,11 @@ def test_nakamoto(capsys):
 def test_ethereum(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.ethereum(),
+        proto=protocols.ethereum(reward="discount"),
         alpha=0.13,
         gamma=0.9,
         defenders=10,
+        max_steps=10000,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
@@ -82,10 +94,11 @@ def test_ethereum(capsys):
 def test_bk(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bk(k=42),
+        proto=protocols.bk(k=42, reward="constant"),
         alpha=0.33,
         gamma=0.3,
         defenders=4,
+        max_steps=10000,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
@@ -108,10 +121,11 @@ def test_bk(capsys):
 def test_bkll(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bkll(k=17),
+        proto=protocols.bkll(k=17, reward="constant"),
         alpha=0.33,
         gamma=0.3,
         defenders=4,
+        max_steps=10000,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
@@ -140,6 +154,7 @@ def test_tailstorm(capsys):
         alpha=0.33,
         gamma=0.8,
         defenders=5,
+        max_steps=10000,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
@@ -162,10 +177,13 @@ def test_tailstorm(capsys):
 def test_tailstormll(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.tailstormll(k=13, reward="discount"),
+        proto=protocols.tailstormll(
+            k=13, reward="discount", subblock_selection="optimal"
+        ),
         alpha=0.33,
         gamma=0.8,
         defenders=5,
+        max_steps=10000,
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]

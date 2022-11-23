@@ -9,11 +9,28 @@ from . import wrappers
 class Core(gym.Env):
     metadata = {"render.modes": ["ascii"]}
 
-    def __init__(self, proto=protocols.nakamoto(), alpha=0.25, gamma=0.5, **kwargs):
+    def __init__(
+        self,
+        proto=protocols.nakamoto(),
+        alpha=0.25,
+        gamma=0.5,
+        activation_delay=1.0,
+        **kwargs,
+    ):
         self.core_kwargs = kwargs
         self.core_kwargs["proto"] = proto
         self.core_kwargs["alpha"] = alpha
         self.core_kwargs["gamma"] = gamma
+        self.core_kwargs["activation_delay"] = activation_delay
+
+        if (
+            "max_time" not in kwargs
+            and "max_progress" not in kwargs
+            and "max_steps" not in kwargs
+        ):
+            raise ValueError(
+                "cpr_gym: set at least one of kwargs max_progress, max_steps, and max_time."
+            )
 
         self.ocaml_env = None
         Core.reset(self)  # sets self.ocaml_env from self.core_kwargs

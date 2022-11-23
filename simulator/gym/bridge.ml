@@ -43,39 +43,36 @@ let () =
     m
     "create"
     (let%map proto = keyword "proto" penv ~docstring:"OCaml gym protocol spec"
-     and alpha =
-       keyword "alpha" float ~docstring:"attacker's relative compute" ~default:0.25
+     and alpha = keyword "alpha" float ~docstring:"attacker's relative compute"
      and gamma =
        keyword
          "gamma"
          float
          ~docstring:"similar to gamma parameter in selfish mining literature"
-         ~default:0.5
-     and defenders = keyword "defenders" int ~docstring:"number of defenders" ~default:2
+     and defenders = keyword "defenders" int ~docstring:"number of defenders"
      and activation_delay =
        keyword
          "activation_delay"
          float
          ~docstring:"expected delay between two consecutive puzzle solutions"
-         ~default:1.
      and max_steps =
        keyword
          "max_steps"
          int
          ~docstring:"maximum number of attacker steps before terminating the simulation"
-         ~default:1000
+         ~default:max_int
      and max_progress =
        keyword
          "max_progress"
          float
          ~docstring:"maximum blockchain progress before terminating the simulation"
-         ~default:Float.infinity
+         ~default:infinity
      and max_time =
        keyword
          "max_time"
          float
          ~docstring:"maximum simulated time before terminating the simulation"
-         ~default:Float.infinity
+         ~default:infinity
      in
      let (Proto p) = proto in
      let config =
@@ -166,8 +163,6 @@ let () =
 ;;
 
 let () =
-  (* TODO read reward functions from module; choose default and document possible
-     values *)
   let open Cpr_protocols in
   let m = Py_module.create "protocols" in
   Py_module.set
@@ -177,17 +172,14 @@ let () =
   Py_module.set
     m
     "ethereum"
-    (let%map reward =
-       keyword "reward" string ~default:"discount" ~docstring:"reward function"
-     in
+    (let%map reward = keyword "reward" string ~docstring:"reward function" in
      let incentive_scheme = Options.of_string_exn Ethereum.incentive_schemes reward in
      fun () ->
        Proto (Engine.of_module (ethereum_ssz ~incentive_scheme)) |> python_of_protocol);
   Py_module.set
     m
     "bk"
-    (let%map reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
      let incentive_scheme = Options.of_string_exn Bk.incentive_schemes reward in
      fun () ->
@@ -195,8 +187,7 @@ let () =
   Py_module.set
     m
     "bkll"
-    (let%map reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block" in
      let incentive_scheme = Options.of_string_exn Bkll.incentive_schemes reward in
      fun () ->
@@ -204,15 +195,10 @@ let () =
   Py_module.set
     m
     "tailstorm"
-    (let%map reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block"
      and subblock_selection =
-       keyword
-         "subblock_selection"
-         string
-         ~default:"optimal"
-         ~docstring:"sub-block selection mechanism"
+       keyword "subblock_selection" string ~docstring:"sub-block selection mechanism"
      in
      let incentive_scheme = Options.of_string_exn Tailstorm.incentive_schemes reward
      and subblock_selection =
@@ -224,15 +210,10 @@ let () =
   Py_module.set
     m
     "tailstormll"
-    (let%map reward =
-       keyword "reward" string ~default:"constant" ~docstring:"reward function"
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block"
      and subblock_selection =
-       keyword
-         "subblock_selection"
-         string
-         ~default:"optimal"
-         ~docstring:"sub-block selection mechanism"
+       keyword "subblock_selection" string ~docstring:"sub-block selection mechanism"
      in
      let incentive_scheme = Options.of_string_exn Tailstormll.incentive_schemes reward
      and subblock_selection =
