@@ -244,8 +244,8 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
     t.last_progress <- progress;
     (* return *)
     observe (Instance t), reward, done_, info
-  and low = M.Observation.(low |> to_floatarray)
-  and high = M.Observation.(high |> to_floatarray)
+  and low = Float.Array.make M.Observation.length 0.
+  and high = Float.Array.make M.Observation.length 1.
   and to_string t =
     Printf.sprintf
       "%s; %s; α=%.2f attacker\n%s\nActions: %s"

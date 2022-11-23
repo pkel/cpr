@@ -25,80 +25,72 @@ module Make (Parameters : Ethereum.Parameters) = struct
             (** number of orphans that could be included as uncles in the attacker chain; including defender orphans *)
       ; private_orphans_exclusive : int
             (** number of orphans that could be included as uncles in the attacker chain; excluding defender orphans *)
-      ; event : int (* What is currently going on? *)
+      ; event : [ `ProofOfWork | `Network ] (* What is currently going on? *)
       }
     [@@deriving fields]
 
+    module Normalizers = struct
+      open Ssz_tools.NormalizeObs
+
+      let public_height = UnboundedInt { non_negative = true; scale = 1 }
+      let public_work = UnboundedInt { non_negative = true; scale = 1 }
+      let private_height = UnboundedInt { non_negative = true; scale = 1 }
+      let private_work = UnboundedInt { non_negative = true; scale = 1 }
+      let diff_height = UnboundedInt { non_negative = false; scale = 1 }
+      let diff_work = UnboundedInt { non_negative = false; scale = 1 }
+      let public_orphans = UnboundedInt { non_negative = true; scale = 1 }
+      let private_orphans_inclusive = UnboundedInt { non_negative = true; scale = 1 }
+      let private_orphans_exclusive = UnboundedInt { non_negative = true; scale = 1 }
+      let event = Discrete [ `ProofOfWork; `Network ]
+    end
+
     let length = List.length Fields.names
-
-    let low =
-      { public_height = 0
-      ; public_work = 0
-      ; private_height = 0
-      ; private_work = 0
-      ; diff_height = min_int
-      ; diff_work = min_int
-      ; public_orphans = 0
-      ; private_orphans_inclusive = 0
-      ; private_orphans_exclusive = 0
-      ; event = Ssz_tools.Event.low
-      }
-    ;;
-
-    let high =
-      { public_height = max_int
-      ; public_work = max_int
-      ; private_height = max_int
-      ; private_work = max_int
-      ; diff_height = max_int
-      ; diff_work = max_int
-      ; public_orphans = max_int
-      ; private_orphans_inclusive = max_int
-      ; private_orphans_exclusive = max_int
-      ; event = Ssz_tools.Event.high
-      }
-    ;;
 
     let to_floatarray t =
       let a = Float.Array.make length Float.nan in
-      let set conv i field =
-        Float.Array.set a i (Fieldslib.Field.get field t |> conv);
+      let set spec i field =
+        Float.Array.set
+          a
+          i
+          (Fieldslib.Field.get field t |> Ssz_tools.NormalizeObs.to_float spec);
         i + 1
       in
-      let int = set float_of_int in
       let _ =
+        let open Normalizers in
         Fields.fold
           ~init:0
-          ~public_height:int
-          ~public_work:int
-          ~private_height:int
-          ~private_work:int
-          ~diff_height:int
-          ~diff_work:int
-          ~public_orphans:int
-          ~private_orphans_inclusive:int
-          ~private_orphans_exclusive:int
-          ~event:int
+          ~public_height:(set public_height)
+          ~public_work:(set public_work)
+          ~private_height:(set private_height)
+          ~private_work:(set private_work)
+          ~diff_height:(set diff_height)
+          ~diff_work:(set diff_work)
+          ~public_orphans:(set public_orphans)
+          ~private_orphans_inclusive:(set private_orphans_inclusive)
+          ~private_orphans_exclusive:(set private_orphans_exclusive)
+          ~event:(set event)
       in
       a
     ;;
 
     let of_floatarray =
-      let get conv _ i = (fun a -> Float.Array.get a i |> conv), i + 1 in
-      let int = get int_of_float in
+      let get spec _ i =
+        (fun a -> Float.Array.get a i |> Ssz_tools.NormalizeObs.of_float spec), i + 1
+      in
+      let open Normalizers in
       fst
         (Fields.make_creator
            0
-           ~public_height:int
-           ~public_work:int
-           ~private_height:int
-           ~private_work:int
-           ~diff_height:int
-           ~diff_work:int
-           ~public_orphans:int
-           ~private_orphans_inclusive:int
-           ~private_orphans_exclusive:int
-           ~event:int)
+           ~public_height:(get public_height)
+           ~public_work:(get public_work)
+           ~private_height:(get private_height)
+           ~private_work:(get private_work)
+           ~diff_height:(get diff_height)
+           ~diff_work:(get diff_work)
+           ~public_orphans:(get public_orphans)
+           ~private_orphans_inclusive:(get private_orphans_inclusive)
+           ~private_orphans_exclusive:(get private_orphans_exclusive)
+           ~event:(get event))
     ;;
 
     let to_string t =
@@ -109,6 +101,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
           (to_s (Fieldslib.Field.get field t))
       in
       let int = conv string_of_int in
+      let event = conv Ssz_tools.event_to_string in
       Fields.to_list
         ~public_height:int
         ~public_work:int
@@ -119,28 +112,8 @@ module Make (Parameters : Ethereum.Parameters) = struct
         ~public_orphans:int
         ~private_orphans_inclusive:int
         ~private_orphans_exclusive:int
-        ~event:int
+        ~event
       |> String.concat "\n"
-    ;;
-
-    let%test _ =
-      let run _i =
-        let t =
-          { public_height = Random.bits ()
-          ; public_work = Random.bits ()
-          ; private_height = Random.bits ()
-          ; private_work = Random.bits ()
-          ; diff_height = Random.bits ()
-          ; diff_work = Random.bits ()
-          ; public_orphans = Random.bits ()
-          ; private_orphans_inclusive = Random.bits ()
-          ; private_orphans_exclusive = Random.bits ()
-          ; event = Random.bits ()
-          }
-        in
-        t = (to_floatarray t |> of_floatarray)
-      in
-      List.init 50 run |> List.for_all (fun x -> x)
     ;;
   end
 
@@ -375,7 +348,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
       ; private_orphans_exclusive
       ; diff_height = private_height - public_height
       ; diff_work = private_work - public_work
-      ; event = Ssz_tools.Event.to_int state.event
+      ; event = state.event
       }
     ;;
 
@@ -472,8 +445,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
         else Release1
       in
       let a =
-        match Ssz_tools.Event.of_int o.event with
-        | `Append -> failwith "not implemented"
+        match o.event with
         | `ProofOfWork -> selfish_pool_mines_new_block ()
         | `Network -> honest_miner_adds_new_block ()
       in
@@ -497,8 +469,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
         else Release1
       in
       let a =
-        match Ssz_tools.Event.of_int o.event with
-        | `Append -> failwith "not implemented"
+        match o.event with
         | `ProofOfWork -> selfish_pool_mines_new_block ()
         | `Network -> honest_miner_adds_new_block ()
       in
