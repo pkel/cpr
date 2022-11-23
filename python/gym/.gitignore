@@ -1,5 +1,0 @@
-*.egg-info
-*.so
-.tox
-.eggs
-pyproject.toml

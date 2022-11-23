@@ -1,0 +1,10 @@
+(executables
+ (names honest_net visualize withholding)
+ (libraries bos.setup cmdliner cpr_lib cpr_protocols mtime parany progress)
+ (preprocess
+  (pps ppx_fields_conv)))
+
+(rule
+ (alias runtest)
+ (action
+  (run ./visualize.exe)))

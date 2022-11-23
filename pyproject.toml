@@ -1,0 +1,16 @@
+[tool.flake8]
+exclude = [
+  '.git',
+  '_*',
+  'rl',
+  'wandb',
+]
+extend-ignore = ['E203']
+max-line-length = 99
+
+[tool.pytest.ini_options]
+norecursedirs = [
+  '.git',
+  '_*',
+  'rl',
+]

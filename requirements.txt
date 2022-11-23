@@ -1,0 +1,22 @@
+black[jupyter]
+flake8
+flake8-pyproject
+pytest
+pytest-forked
+
+pandas
+pandarallel
+pydantic
+numpy
+jupyter
+matplotlib
+tqdm
+scikit-optimize
+seaborn
+
+networkx
+
+-e ./gym
+
+stable-baselines3
+wandb
