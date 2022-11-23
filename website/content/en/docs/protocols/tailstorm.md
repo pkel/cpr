@@ -13,23 +13,41 @@ menu:
     parent: "protocols"
 weight: 312
 toc: true
+mermaid: true
 ---
 
-<!--
+## Intuition
+
+To be written. I'll do the easier protocols first.
 
 ## Example blockchain
 
-Figure.
+```mermaid
+graph RL
+  classDef orphan opacity:0.5,fill:#eee
+  v0([1]) --> s0[h]
+  v2([2]) --> v1([1]) --> s0
+  s1[h+1] --> v0 & v2
+  s2[h+2] --> v5([3]) --> v4([2]) --> v3([1]) --> s1
+  s3[h+3] --> v8([1]) &  v7([1]) & v6([1]) --> s2
 
--->
+  v5a([2]):::orphan --> v3
+  s2a[h+2]:::orphan --> v4 & v5a
+  v6a([1]):::orphan --> s2a
+```
+
+Tailstorm with three sub-blocks per summary. Square boxes represent
+summary blocks and round boxes represent sub-blocks. Only sub-blocks
+require a proof-of-work. Summary blocks are labelled with their height,
+sub-blocks with their depth. The gray blocks are orphaned.
 
 ## Specification
 
-__Parameters__
+### Parameters
 
 `k`: number of sub-blocks per summary-block
 
-__DAG Specification__
+### DAG specification
 
 ```python
 def roots():
@@ -68,7 +86,7 @@ def validity(b: Block):
 ```
 
 
-__Node Specification__
+### Node specification
 
 ```python
 def init(roots: [Block]):
@@ -132,19 +150,59 @@ def mining(b: Block):
     return Block(depth=best.depth + 1, parents=[best], miner=my_id)
 ```
 
-__Reward Specification__
+### Reward specification
+
+#### Constant reward
 
 ```python
 def constant_reward(b: Block):
     if b.kind == "summary":
         return [Reward(x.miner, 1) for x in sub_blocks(b)]
+```
+
+```mermaid
+graph RL
+  classDef orphan opacity:0.5,fill:#eee
+  v0([1]) --> s0[n/a]
+  v2([1]) --> v1([1]) --> s0
+  s1[n/a] --> v0 & v2
+  s2[n/a] --> v5([1]) --> v4([1]) --> v3([1]) --> s1
+  s3[n/a] --> v8([1]) &  v7([1]) & v6([1]) --> s2
+
+  v5a([n/a]):::orphan --> v3
+  s2a[n/a]:::orphan --> v4 & v5a
+  v6a([n/a]):::orphan --> s2a
+```
+
+Constant reward applied to the example blockchain shown above. Only the
+miners of sub-blocks get assigned rewards.
 
 
+#### Discount reward
+
+```python
 def discount_reward(b: Block):
     if b.kind == "summary":
         d = max([x.depth for x in sub_blocks(b)])
         return [Reward(x.miner, d / k) for x in sub_blocks(b)]
 ```
+
+```mermaid
+graph RL
+  classDef orphan opacity:0.5,fill:#eee
+  v0([2/3]) --> s0[n/a]
+  v2([2/3]) --> v1([2/3]) --> s0
+  s1[n/a] --> v0 & v2
+  s2[n/a] --> v5([3/3]) --> v4([3/3]) --> v3([3/3]) --> s1
+  s3[n/a] --> v8([1/3]) &  v7([1/3]) & v6([1/3]) --> s2
+
+  v5a([n/a]):::orphan --> v3
+  s2a[n/a]:::orphan --> v4 & v5a
+  v6a([n/a]):::orphan --> s2a
+```
+
+Discounted reward applied to the example blockchain shown above. Observe
+how the reward scheme punishes non-linearity.
 
 <!--
 
