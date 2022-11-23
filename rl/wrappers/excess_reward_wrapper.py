@@ -62,8 +62,9 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         # self.sum_attacker += info["reward_attacker"]
         # self.sum_defender += info["reward_defender"]
         if done:
-            self.difficulties[self.env.alpha] = info["episode_pow_interval"]
-            reward = info["episode_reward_attacker"] * info["episode_pow_interval"]
+            episode_pow_interval = info["episode_chain_time"] / info["episode_progress"]
+            self.difficulties[self.env.alpha] = episode_pow_interval
+            reward = info["episode_reward_attacker"] * episode_pow_interval
             if self.relative:
                 reward -= (
                     self.env.config.STEPS_PER_ROLLOUT

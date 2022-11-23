@@ -9,7 +9,12 @@ from cpr_gym import protocols
 import stable_baselines3
 from stable_baselines3 import A2C, PPO, DQN
 from stable_baselines3.ppo.policies import MlpPolicy
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import (
+    DummyVecEnv,
+    SubprocVecEnv,
+    VecMonitor,
+    VecNormalize,
+)
 from stable_baselines3.common.vec_env.base_vec_env import (
     VecEnv,
     VecEnvWrapper,
@@ -155,6 +160,7 @@ if __name__ == "__main__":
         env = DummyVecEnv([vec_env_fn])
     env = VecMonitor(env)
     env = VecWandbLogger(env)
+    # env = VecNormalize(env, norm_obs=True, norm_reward=True)
     print(env.action_space)
     print(env.observation_space)
     if config.ALGO == "PPO":
