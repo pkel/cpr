@@ -6,7 +6,6 @@ from . import wrappers  # noqa
 
 # Link Python/OCaml bridge
 
-
 try:
     curdir = dir_path = os.path.dirname(os.path.realpath(__file__))
     dll_basename = "bridge.so"
@@ -18,11 +17,11 @@ try:
     argv = argv_t(dll_basename.encode("utf-8"), None)
     dll.caml_startup(argv)
 
-    # Register gym environments
-    gym.envs.register(id="core-v0", entry_point="cpr_gym.envs:Core")
-
     # Make dll-dependent modules available
     import engine, protocols  # noqa
+
+    # Register gym envs
+    from . import envs
 except OSError:
     if os.path.exists(dll_name):
         raise
