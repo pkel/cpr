@@ -25,7 +25,7 @@ proof-of-work. Miners always try to extend the longest chain. The number
 of predecessors of a block is called *height*.
 
 
-## Example blockchain
+## Example
 
 ```mermaid
 graph RL
@@ -43,6 +43,8 @@ graph RL
   CA --> B --> A
   EB --> D --> CB --> B
   G --> F --> EA --> D
+
+  linkStyle 0,2 opacity:0.5
 ```
 
 Boxes represent blocks, arrows represent hash-references. Each block has
@@ -51,7 +53,7 @@ gray blocks are orphaned.
 
 ## Specification
 
-### DAG specification
+### Blockchain
 
 ```python
 def roots():
@@ -65,7 +67,7 @@ def validity(b: Block):
     return True
 ```
 
-### Node specification
+### Node
 
 ```python
 def init(roots: [Block]):
@@ -85,7 +87,7 @@ def mining(b: Block):
     return Block(height=b.height + 1, parents=[b], miner=Env.my_id)
 ```
 
-### Reward specification
+### Rewards
 
 ```python
 def reward(b: Block):
@@ -95,7 +97,6 @@ def reward(b: Block):
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
-
   A([1])
   B([1])
   CA([n/a]):::orphan
@@ -108,6 +109,8 @@ graph RL
   CA --> B --> A
   EB --> D --> CB --> B
   G --> F --> EA --> D
+
+  linkStyle 0,2 opacity:0.5
 ```
 
 Reward scheme applied to the example blockchain shown above. Each block
@@ -130,7 +133,6 @@ Description.
 How to simulate, attack, learn.
 
 -->
-
 
 ## Literature
 

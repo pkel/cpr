@@ -20,7 +20,7 @@ mermaid: true
 
 To be written. I'll do the easier protocols first.
 
-## Example blockchain
+## Example
 
 ```mermaid
 graph RL
@@ -34,6 +34,8 @@ graph RL
   v5a([2]):::orphan --> v3
   s2a[h+2]:::orphan --> v4 & v5a
   v6a([1]):::orphan --> s2a
+
+  linkStyle 15,16,17,18 opacity:0.5
 ```
 
 Tailstorm with three sub-blocks per summary. Square boxes represent
@@ -47,7 +49,7 @@ sub-blocks with their depth. The gray blocks are orphaned.
 
 `k`: number of sub-blocks per summary-block
 
-### DAG specification
+### Blockchain
 
 ```python
 def roots():
@@ -77,16 +79,18 @@ def validity(b: Block):
         assert len(sub_blocks(b)) == k
         assert b.height == s.height + 1
         assert b.depth == 0
-    else:  # b.kind == "sub-block"
+        for x in sub_blocks(b):
+            assert last_summary(x) == s
+    elif b.kind == "sub-block":
         parents = b.parents()
         assert len(parents) == 1
         assert b.has_pow()
         assert b.depth == parents[0].depth + 1
-    return True
+    return False
 ```
 
 
-### Node specification
+### Node
 
 ```python
 def init(roots: [Block]):
@@ -122,35 +126,46 @@ def preference(old: Block, new: Block):
 
 
 def summarize(b: Block):
-    """
-    Assembles and returns summary block confirming b.
-    Returns None if this is not possible.
-    """
-    ...
+    assert b.kind == "block"
+    if len(confirming_sub_blocks(b)) < k:
+        return []  # summary infeasible
+    else:
+        # Select leaves in sub-block tree such that the tree includes
+        # k sub-blocks and own-reward is maximized.
+        leaves = ...
+        return [
+            Block(kind="summary", height=b.height + 1, parents=leaves)
+        ]
 
 
 def update(old: Block, new: Block, event: string):
     if new.kind == "summary":
         return Update(state=preference(old, new))
     else:  # new.kind == "sub-block"
-        s = last_summary(new)
-        pref = preference(old, s)
-        new_summary = summarize(s)
-        if new_summary:
-            return Update(state=pref, share=[new], append=[new_summary])
-        else:
-            return Update(state=pref, share=[new])
+        b = last_summary(new)
+        return Update(
+            state=preference(old, b),
+            share=[new],
+            append=attempt_summary(b),
+        )
 
 
 def mining(b: Block):
     best = b
     for sb in confirming_sub_blocks(b):
-        if sb.depth > p.depth or (sb.depth == p.depth and p.miner == my_id):
+        if sb.depth > p.depth or (
+            sb.depth == p.depth and p.miner == my_id
+        ):
             best = sb
-    return Block(depth=best.depth + 1, parents=[best], miner=my_id)
+    return Block(
+        kind="sub-block",
+        depth=best.depth + 1,
+        parents=[best],
+        miner=my_id,
+    )
 ```
 
-### Reward specification
+### Rewards
 
 #### Constant reward
 
@@ -172,6 +187,8 @@ graph RL
   v5a([n/a]):::orphan --> v3
   s2a[n/a]:::orphan --> v4 & v5a
   v6a([n/a]):::orphan --> s2a
+
+  linkStyle 15,16,17,18 opacity:0.5
 ```
 
 Constant reward applied to the example blockchain shown above. Only the
@@ -199,9 +216,11 @@ graph RL
   v5a([n/a]):::orphan --> v3
   s2a[n/a]:::orphan --> v4 & v5a
   v6a([n/a]):::orphan --> s2a
+
+  linkStyle 15,16,17,18 opacity:0.5
 ```
 
-Discounted reward applied to the example blockchain shown above. Observe
+Discount reward applied to the example blockchain shown above. Observe
 how the reward scheme punishes non-linearity.
 
 <!--

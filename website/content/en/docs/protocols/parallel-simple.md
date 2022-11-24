@@ -6,24 +6,156 @@ lead: |
   Simplified implementation of parallel proof-of-work.
 date: 2020-10-06T08:49:31+00:00
 lastmod: 2020-10-06T08:49:31+00:00
-draft: true
+draft: false
 images: []
 menu:
   docs:
     parent: "protocols"
 weight: 310
 toc: true
+mermaid: true
 ---
 
-Intro/background/literature.
+## Intuition
 
-## Example blockchain
+To be written.
 
-Figure.
+## Example
+
+```mermaid
+graph RL
+  b0([h  ])
+  b1([h+1]) --> v0([ ]) & v01([ ]) & v02([ ]) --> b0
+  b2([h+2]) --> v3([ ]) & v04([ ]) & v05([ ]) --> b1
+  b3([h+3]) --> v6([ ]) & v07([ ]) & v08([ ]) --> b2
+  b4([h+3]) --> v9([ ]) & v10([ ]) & v11([ ]) --> b3
+```
+Parallel proof-of-work with three votes per block. Idealized case w/o
+orphans. Blocks are labelled with their height. Votes have no label.
+Both blocks and votes require a proof-of-work.
+
+```mermaid
+graph RL
+  b0([h  ])
+  b1([h+1]) --> v00([ ]) & v01([ ]) & v02([ ]) --> b0
+  b2([h+2]) --> v03([ ]) & v04([ ]) & v05([ ]) --> b1
+  b3([h+3]) --> v06([ ]) & v07([ ]) & v08([ ]) --> b2
+  b4([h+3]) --> v09([ ]) & v10([ ]) & v11([ ]) --> b3
+
+  classDef orphan opacity:0.5,fill:#eee
+  o1([ ]):::orphan --> b0
+  o2([ ]):::orphan --> b1
+  o3([h+2]):::orphan --> o2 & v05 & v04
+  o4([h+3]):::orphan --> v06 & v07 & v08
+  o5([ ]):::orphan --> o4
+  linkStyle 24,25,26,27,28,29,30,31,32 opacity:0.5
+```
+The same parallel proof-of-work blockchain with potential orphans in gray.
+
 
 ## Specification
 
-Pseudo-code.
+### Parameters
+
+`k`: number of proofs-of-work per block (or number of votes per
+block plus one)
+
+### Blockchain
+
+```python
+def roots():
+    return [Block(height=0, miner=None, kind="block")]
+
+
+def last_block(b: Block):
+    assert b.kind == "block"
+    return b.parents()[0].parents()[0]
+
+
+def validity(b: Block):
+    assert b.has_pow()
+    if b.kind == "block":
+        p = last_block(b)
+        assert len(b.parents()) == k - 1
+        assert b.height == p.height + 1
+        for x in b.parents():
+            assert x.parents()[0] == p
+    elif b.kind == "vote":
+        assert len(b.parents()) == 1
+    return False
+```
+
+### Node
+
+```python
+def init(roots: [Block]):
+    return roots[0]
+
+
+def preference(old: Block, new: Block):
+    assert new.kind == "block"
+    if new.height > old.height:
+        return new
+    if new.height < old.height:
+        return old
+    n_old = len(old.children())
+    n_new = len(new.children())
+    if n_new > n_old:
+        return new
+    return old
+
+
+def update(old: Block, new: Block, _event: string):
+    if new.kind == "block":
+        return Update(state=preference(old, new))
+    else:  # new.kind == "vote"
+        b = new.children()[0]
+        return Update(state=preference(old, b))
+
+
+def mining(b: Block):
+    assert b.kind == "block"
+    if len(b.children()) < k - 1:
+        return Block(kind="vote", parents=[b], miner=my_id)
+    else:
+        # select k - 1 votes; own votes first, then old before new
+        votes = ...
+        return Block(
+            kind="block",
+            height=b.height + 1,
+            parents=votes,
+            miner=my_id,
+        )
+```
+
+### Rewards
+
+```python
+def reward(b: Block):
+    return [Reward(b.miner, 1)]
+```
+
+```mermaid
+graph RL
+  b0([1])
+  b1([1]) --> v00([1]) & v01([1]) & v02([1]) --> b0
+  b2([1]) --> v03([1]) & v04([1]) & v05([1]) --> b1
+  b3([1]) --> v06([1]) & v07([1]) & v08([1]) --> b2
+  b4([1]) --> v09([1]) & v10([1]) & v11([1]) --> b3
+
+  classDef orphan opacity:0.5,fill:#eee
+  o1([n/a]):::orphan --> b0
+  o2([n/a]):::orphan --> b1
+  o3([n/a]):::orphan --> o2 & v05 & v04
+  o4([n/a]):::orphan --> v06 & v07 & v08
+  o5([n/a]):::orphan --> o4
+  linkStyle 24,25,26,27,28,29,30,31,32 opacity:0.5
+```
+Blockchain depicted above with reward scheme applied to the longest chain.
+Each proof-of-work rewards its miner with one unit of reward. Naturally,
+orphans are not rewarded.
+
+<!--
 
 ## Attacks
 
@@ -38,3 +170,12 @@ Description.
 ## CPR API
 
 How to simulate, attack, learn.
+-->
+
+## Literature
+
+This protocol is a simplified version of the protocol $\mathcal B_k$
+presented by Keller and Böhme.
+
+- Keller and Böhme. Parallel Proof-of-Work with Concrete Bounds. AFT
+'22. [[preprint]](https://arxiv.org/abs/2204.00034)
