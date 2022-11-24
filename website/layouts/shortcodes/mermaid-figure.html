@@ -1,0 +1,14 @@
+{{ if .Page.Params.mermaid -}}
+<figure style="width:100%">
+  <div class="mermaid{{ with .Get "class" }} {{ . }}{{ end }}">
+%% Rendering this graph requires Javascript.
+    {{- $graph := index (findRE "(?s)(```mermaid.*```)" .Inner 1) 0 -}}
+    {{ replaceRE "(```.*)" "" $graph }}
+  </div>
+  <figcaption>
+    {{ replaceRE "(?s)(\\s*```mermaid.*```\\s*)" "\n" .Inner }}
+  </figcaption>
+</figure>
+{{ else -}}
+  {{ errorf "Failed to process mermaid shortcode: %s. Set mermaid to true in page front matter." .Position }}
+{{ end -}}

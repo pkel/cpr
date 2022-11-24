@@ -22,6 +22,7 @@ To be written. I'll do the easier protocols first.
 
 ## Example
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -37,11 +38,11 @@ graph RL
 
   linkStyle 15,16,17,18 opacity:0.5
 ```
-
 Tailstorm with three sub-blocks per summary. Square boxes represent
 summary blocks and round boxes represent sub-blocks. Only sub-blocks
 require a proof-of-work. Summary blocks are labelled with their height,
 sub-blocks with their depth. The gray blocks are orphaned.
+{{< /mermaid-figure >}}
 
 ## Specification
 
@@ -175,6 +176,7 @@ def constant_reward(b: Block):
         return [Reward(x.miner, 1) for x in sub_blocks(b)]
 ```
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -190,9 +192,9 @@ graph RL
 
   linkStyle 15,16,17,18 opacity:0.5
 ```
-
 Constant reward applied to the example blockchain shown above. Only the
 miners of sub-blocks get assigned rewards.
+{{< /mermaid-figure >}}
 
 
 #### Discount reward
@@ -204,6 +206,7 @@ def discount_reward(b: Block):
         return [Reward(x.miner, d / k) for x in sub_blocks(b)]
 ```
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -219,9 +222,9 @@ graph RL
 
   linkStyle 15,16,17,18 opacity:0.5
 ```
-
 Discount reward applied to the example blockchain shown above. Observe
 how the reward scheme punishes non-linearity.
+{{< /mermaid-figure >}}
 
 <!--
 

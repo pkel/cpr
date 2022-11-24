@@ -72,7 +72,7 @@ copyRight = "Copyright (c) 2022 Patrik Keller"
 
 # Alert
 alert = true
-alertDismissable = true
+alertDismissable = false
 alertText = "Preview deployment. Do not share links!"
 
 # Edit Page

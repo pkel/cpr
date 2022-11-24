@@ -45,6 +45,7 @@ AFT '22 version.
 
 ## Example
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   b0([h  ])
@@ -56,7 +57,9 @@ graph RL
 Parallel proof-of-work with three votes per block. Idealized case w/o
 orphans. Blocks are labelled with their height. Votes have no label.
 Both blocks and votes require a proof-of-work.
+{{< /mermaid-figure >}}
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   b0([h  ])
@@ -74,6 +77,7 @@ graph RL
   linkStyle 24,25,26,27,28,29,30,31,32 opacity:0.5
 ```
 The same parallel proof-of-work blockchain with potential orphans in gray.
+{{< /mermaid-figure >}}
 
 
 ## Specification
@@ -158,6 +162,7 @@ def reward(b: Block):
     return [Reward(b.miner, 1)]
 ```
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   b0([1])
@@ -177,6 +182,7 @@ graph RL
 Blockchain depicted above with reward scheme applied to the longest chain.
 Each proof-of-work rewards its miner with one unit of reward. Naturally,
 orphans are not rewarded.
+{{< /mermaid-figure >}}
 
 <!--
 

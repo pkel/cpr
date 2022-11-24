@@ -38,6 +38,7 @@ include a unique public key.
 
 ## Example
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   b0[h  ]
@@ -52,12 +53,12 @@ graph RL
   v09 --> b4
   linkStyle 24,25,26,27 stroke:green
 ```
-
 Parallel proof-of-work with three votes per block. Blocks have square
 boxes and are labelled with their height. Votes have round boxes and are
 labelled with their hash. Only votes require a proof-of-work. Blocks are
 signed by the voter with the smallest hash, which we indicate using
 green arrows.
+{{< /mermaid-figure >}}
 
 ## Specification
 
@@ -166,6 +167,7 @@ def reward(b: Block):
         return [Reward(b.miner, 1)]
 ```
 
+{{< mermaid-figure >}}
 ```mermaid
 graph RL
   b0[n/a]
@@ -183,6 +185,7 @@ graph RL
 Blockchain depicted above with reward scheme applied.
 Each proof-of-work rewards its miner with one unit of reward, hence only
 votes assign a reward.
+{{< /mermaid-figure >}}
 
 <!--
 
