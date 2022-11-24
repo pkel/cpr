@@ -75,7 +75,7 @@ def init(roots: [Block]):
 
 
 def update(old: Block, new: Block, event: string):
-    if event == "proof-of-work":
+    if event == "mining":
         return Update(state=new, share=[new])
     elif new.height > old.height:
         return Update(state=new)

@@ -145,7 +145,7 @@ def update(old: Block, new: Block, event: string):
         b = last_summary(new)
         return Update(
             state=preference(old, b),
-            share=[new],
+            share=[new] if event == "mining" else [],
             append=attempt_summary(b),
         )
 

@@ -1,5 +1,5 @@
 ---
-title: "Parallel PoW (simple version)"
+title: "Parallel PoW (simplified)"
 description: |
   Simplified implementation of parallel proof-of-work.
 lead: |
@@ -38,10 +38,10 @@ require a proof-of-work. Appending a new block requires $k - 1$ votes
 for the previous block. Together with the proof-of-work required for the
 block itself, this makes $k$ proofs-of-work per block.
 
-The [original version of parallel proof-of-work](../parallel-aft)---as
-presented by Keller and Böhme at AFT '22---is a bit more complicated.
-Make sure you understand this simple version before you explore the AFT
-'22 version.
+The [original version of parallel proof-of-work](../parallel-aft22)---as
+presented by Keller and Böhme at AFT '22---is a bit more complicated.
+Make sure you understand this simple version before you explore the
+AFT '22 version.
 
 ## Example
 
@@ -128,12 +128,12 @@ def preference(old: Block, new: Block):
     return old
 
 
-def update(old: Block, new: Block, _event: string):
-    if new.kind == "block":
-        return Update(state=preference(old, new))
-    else:  # new.kind == "vote"
-        b = new.children()[0]
-        return Update(state=preference(old, b))
+def update(old: Block, new: Block, event: string):
+    b = last_block(new) if new.kind != "block" else new
+    return Update(
+        state=preference(old, b),
+        share=[new] if event == "mining" else [],
+    )
 
 
 def mining(b: Block):
@@ -200,5 +200,5 @@ How to simulate, attack, learn.
 This protocol is a simplified version of the protocol $\mathcal B_k$
 presented by Keller and Böhme.
 
-- Keller and Böhme. Parallel Proof-of-Work with Concrete Bounds. AFT
-'22. [[preprint]](https://arxiv.org/abs/2204.00034)
+- Keller and Böhme. Parallel Proof-of-Work with Concrete Bounds.
+AFT '22. [[preprint]](https://arxiv.org/abs/2204.00034)
