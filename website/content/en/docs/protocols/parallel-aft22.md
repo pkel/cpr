@@ -1,9 +1,9 @@
 ---
 title: "Parallel PoW (AFT '22)"
 description: |
-  Paralell proof-of-work protocol as presented at AFT '22.
+  Parallel proof-of-work protocol as presented at AFT '22.
 lead: |
-  Paralell proof-of-work protocol as presented at AFT '22.
+  Parallel proof-of-work protocol as presented at AFT '22.
 date: 2020-10-06T08:49:31+00:00
 lastmod: 2020-10-06T08:49:31+00:00
 draft: false
@@ -18,11 +18,46 @@ mermaid: true
 
 ## Intuition
 
-To be written...
+Relative to the [simplified version](../parallel-simple), this protocol
+saves one proof-of-work per block. Unlike in the simplified version,
+blocks do not require a proof-of-work. Only the votes are mined. The
+protocol restricts appending new blocks to temporally elected leaders.
+The leader is the miner who contributes the smallest vote, where size
+refers to the hash of the vote.
+
+Leadership is verified using cryptographic signatures. Miners include
+their public key in each vote. When they become leader, they sign the
+proposed block with the private key belonging to the public key in the
+smallest vote. The other nodes check the signature and thereby verify
+leadership.
+
+It is worth noting, that this use of cryptographic signatures does not
+rely on a public key infrastructure (PKI). Key-pairs are associated not
+with protocol participants but with votes. In fact, each vote could
+include a unique public key.
 
 ## Example
 
-Figure.
+```mermaid
+graph RL
+  b0[h  ]
+  b1[h+1] --> v00([43]) & v01([92]) & v02([29]) --> b0
+  b2[h+2] --> v03([40]) & v04([19]) & v05([75]) --> b1
+  b3[h+3] --> v06([59]) & v07([22]) & v08([52]) --> b2
+  b4[h+3] --> v09([46]) & v10([64]) & v11([47]) --> b3
+
+  v02 --> b1
+  v04 --> b2
+  v07 --> b3
+  v09 --> b4
+  linkStyle 24,25,26,27 stroke:green
+```
+
+Parallel proof-of-work with three votes per block. Blocks have square
+boxes and are labelled with their height. Votes have round boxes and are
+labelled with their hash. Only votes require a proof-of-work. Blocks are
+signed by the voter with the smallest hash, which we indicate using
+green arrows.
 
 ## Specification
 
@@ -131,7 +166,23 @@ def reward(b: Block):
         return [Reward(b.miner, 1)]
 ```
 
-Figure.
+```mermaid
+graph RL
+  b0[n/a]
+  b1[n/a] --> v00([1]) & v01([1]) & v02([1]) --> b0
+  b2[n/a] --> v03([1]) & v04([1]) & v05([1]) --> b1
+  b3[n/a] --> v06([1]) & v07([1]) & v08([1]) --> b2
+  b4[n/a] --> v09([1]) & v10([1]) & v11([1]) --> b3
+
+  v02 --> b1
+  v04 --> b2
+  v07 --> b3
+  v09 --> b4
+  linkStyle 24,25,26,27 stroke:green
+```
+Blockchain depicted above with reward scheme applied.
+Each proof-of-work rewards its miner with one unit of reward, hence only
+votes assign a reward.
 
 <!--
 
