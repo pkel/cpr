@@ -18,7 +18,30 @@ mermaid: true
 
 ## Intuition
 
-To be written.
+[Nakamoto consensus](../nakamoto) enforces a linear chain of blocks. Of
+any two blocks with equal height, only one will be retained. The others
+get orphaned. Network-level attackers can strategically time message
+delivery such that the defenders produce more orphans. When the attacker
+engages with the defenders in a race for the longest chain, orphans
+effectively slow down the defender and the attacker becomes stronger.
+Parallel proof-of-work minitages this problem by introducing parallelism
+where Nakamoto's blockchain is strictly linear.
+
+Parallel proof-of-work distinguishes between blocks and votes. The
+blocks still form a linear chain, but the votes can be mined in
+parallel. Votes for the same parent block are compatible, even if their
+miners cannot communicate. Orphans can only happen at the transition
+between blocks.
+
+In this simple version of parallel proof-of-work, both blocks and votes
+require a proof-of-work. Appending a new block requires $k - 1$ votes
+for the previous block. Together with the proof-of-work required for the
+block itself, this makes $k$ proofs-of-work per block.
+
+The [original version of parallel proof-of-work](../parallel-aft)---as
+presented by Keller and Böhme at AFT '22---is a bit more complicated.
+Make sure you understand this simple version before you explore the AFT
+'22 version.
 
 ## Example
 
