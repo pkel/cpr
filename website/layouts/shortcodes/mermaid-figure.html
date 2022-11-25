@@ -6,7 +6,7 @@
     {{ replaceRE "(```.*)" "" $graph }}
   </div>
   <figcaption>
-    {{ replaceRE "(?s)(\\s*```mermaid.*```\\s*)" "\n" .Inner }}
+    {{- replaceRE "(?s)(\\s*```mermaid.*```\\s*)" "\n" .Inner | markdownify -}}
   </figcaption>
 </figure>
 {{ else -}}

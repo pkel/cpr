@@ -11,7 +11,7 @@ images: []
 menu:
   docs:
     parent: "protocols"
-weight: 312
+weight: 313
 toc: true
 mermaid: true
 ---
@@ -202,7 +202,7 @@ miners of sub-blocks get assigned rewards.
 ```python
 def discount_reward(b: Block):
     if b.kind == "summary":
-        d = max([x.depth for x in sub_blocks(b)])
+        d = max([x.depth for x in b.parents()])
         return [Reward(x.miner, d / k) for x in sub_blocks(b)]
 ```
 
