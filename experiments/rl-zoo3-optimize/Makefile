@@ -17,33 +17,48 @@ $(venv):
 
 # Trials
 
-nakamoto: $(venv)
+nakamoto-1e5: $(venv)
 	$(venv)/bin/python -m rl_zoo3.train --algo ppo --yaml-file ppo.yaml \
 		--gym-packages cpr_gym \
 		--env 'cpr-nakamoto-v0' \
+		--eval-episodes 256 \
+		--n-eval-envs 4 \
 		--optimize \
 		--storage $(storage) \
 		--study-name $@ \
-		--eval-episodes 64 \
 		--n-timesteps 100000
 
-tailstorm: $(venv)
+tailstorm-1e7: $(venv)
 	$(venv)/bin/python -m rl_zoo3.train --algo ppo --yaml-file ppo.yaml \
 		--gym-packages cpr_gym \
 		--env 'cpr-tailstorm-v0' \
+		--n-eval-envs 4 \
+		--eval-episodes 256 \
 		--optimize \
 		--storage $(storage) \
 		--study-name $@ \
-		--eval-episodes 64 \
-		--n-timesteps 1000000
+		--n-timesteps 10000000
 
-tailstorm-constant: $(venv)
+tailstorm-1e7-dense: $(venv)
+	$(venv)/bin/python -m rl_zoo3.train --algo ppo --yaml-file ppo.yaml \
+		--gym-packages cpr_gym \
+		--env 'cpr-tailstorm-v0' \
+		--env-kwargs reward:\"dense_per_progress\" \
+		--eval-episodes 256 \
+		--n-eval-envs 4 \
+		--optimize \
+		--storage $(storage) \
+		--study-name $@ \
+		--n-timesteps 10000000
+
+tailstorm-1e6-constant: $(venv)
 	$(venv)/bin/python -m rl_zoo3.train --algo ppo --yaml-file ppo.yaml \
 		--gym-packages cpr_gym \
 		--env 'cpr-tailstorm-v0' \
 		--env-kwargs "protocol_args:dict(reward='constant')" \
+		--eval-episodes 256 \
+		--n-eval-envs 4 \
 		--optimize \
 		--storage $(storage) \
 		--study-name $@ \
-		--eval-episodes 64 \
 		--n-timesteps 1000000
