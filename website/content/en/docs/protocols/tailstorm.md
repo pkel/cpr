@@ -57,30 +57,38 @@ def roots():
     return [Block(height=0, miner=None, kind="summary")]
 
 
-def last_summary(b: Block, include=True):
-    if not include:
-        b = b.parents()[0]
+def last_summary(b: Block):
+    b = b.parents()[0]
     while b.kind != "summary":
         b = b.parents()[0]
     return b
 
 
-def sub_blocks(b: Block):
+def confirmed_sub_blocks(b: Block):
     set = {}
     for p in b.parents():
         if p.kind == "sub-block":
             set |= {p}
-            set |= sub_blocks(p)
+            set |= confirmed_sub_blocks(p)
+    return set
+
+
+def confirming_sub_blocks(b: Block):
+    set = {}
+    for c in b.children():
+        if c.kind == "sub-block":
+            set |= {c}
+            set |= confirming_sub_blocks(c)
     return set
 
 
 def validity(b: Block):
     if b.kind == "summary":
         s = last_summary(b)
-        assert len(sub_blocks(b)) == k
+        assert len(confirmed_sub_blocks(b)) == k
         assert b.height == s.height + 1
         assert b.depth == 0
-        for x in sub_blocks(b):
+        for x in confirmed_sub_blocks(b):
             assert last_summary(x) == s
     elif b.kind == "sub-block":
         parents = b.parents()
@@ -98,23 +106,14 @@ def init(roots: [Block]):
     return roots[0]
 
 
-def confirming_sub_blocks(b: Block):
-    set = {}
-    for c in b.children():
-        if c.kind == "sub-block":
-            set |= {c}
-            set |= confirming_sub_blocks(c)
-    return set
-
-
 def preference(old: Block, new: Block):
     assert new.kind == "summary"
     if new.height > old.height:
         return new
     if new.height < old.height:
         return old
-    n_old = confirming_sub_blocks(old)
-    n_new = confirming_sub_blocks(new)
+    n_old = len(confirming_sub_blocks(old))
+    n_new = len(confirming_sub_blocks(new))
     if n_new > n_old:
         return new
     if n_new < n_old:
@@ -173,7 +172,7 @@ def mining(b: Block):
 ```python
 def constant_reward(b: Block):
     if b.kind == "summary":
-        return [Reward(x.miner, 1) for x in sub_blocks(b)]
+        return [Reward(x.miner, 1) for x in confirming_sub_blocks(b)]
 ```
 
 {{< mermaid-figure >}}
@@ -203,7 +202,7 @@ miners of sub-blocks get assigned rewards.
 def discount_reward(b: Block):
     if b.kind == "summary":
         d = max([x.depth for x in b.parents()])
-        return [Reward(x.miner, d / k) for x in sub_blocks(b)]
+        return [Reward(x.miner, d / k) for x in confirmed_sub_blocks(b)]
 ```
 
 {{< mermaid-figure >}}

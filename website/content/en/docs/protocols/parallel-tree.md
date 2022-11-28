@@ -129,6 +129,7 @@ def roots():
 
 
 def last_block(b: Block):
+    b = b.parents()[0]
     while b.kind != "block":
         b = b.parents()[0]
     return b
@@ -145,10 +146,10 @@ def confirmed_votes(b: Block):
 
 def confirming_votes(b: Block):
     set = {}
-    for p in b.children():
-        if p.kind == "vote":
-            set |= {p}
-            set |= confirming_votes(p)
+    for c in b.children():
+        if c.kind == "vote":
+            set |= {c}
+            set |= confirming_votes(c)
     return set
 
 
