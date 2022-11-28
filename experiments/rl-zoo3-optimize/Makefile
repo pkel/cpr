@@ -3,7 +3,7 @@ base := $(shell realpath --relative-to . $(repo))
 
 venv := $(base)/_venv
 
-storage := sqlite:///cpr-ppo.db
+storage := sqlite:///cpr-rl-zoo3.db
 
 .PHONY: $(venv)
 $(venv):
