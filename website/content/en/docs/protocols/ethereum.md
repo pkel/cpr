@@ -4,8 +4,6 @@ description: |
   Ethereums variant of GHOST.
 lead: |
   Ethereums variant of GHOST.
-date: 2020-10-06T08:49:31+00:00
-lastmod: 2020-10-06T08:49:31+00:00
 draft: true
 images: []
 menu:

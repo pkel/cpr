@@ -4,8 +4,6 @@ description: |
   Parallel proof-of-work protocol as presented at AFT '22.
 lead: |
   Parallel proof-of-work protocol as presented at AFT '22.
-date: 2020-10-06T08:49:31+00:00
-lastmod: 2020-10-06T08:49:31+00:00
 draft: false
 images: []
 menu:
