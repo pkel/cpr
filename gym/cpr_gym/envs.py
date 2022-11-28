@@ -32,6 +32,14 @@ class Core(gym.Env):
                 "cpr_gym: set at least one of kwargs max_progress, max_steps, and max_time."
             )
 
+        for k in ["max_time", "max_progress", "max_steps"]:
+            if k in kwargs and kwargs[k] is None:
+                # some use cases set max_* later from a wrapper
+                # to pass the check above they can set max_something=None
+                # without this loop here, max_something=None would yield a
+                # type error
+                kwargs.pop(k)
+
         self.ocaml_env = None
         Core.reset(self)  # sets self.ocaml_env from self.core_kwargs
 
@@ -121,7 +129,7 @@ def env_fn(
             lambda env: wrappers.DenseRewardPerProgressWrapper(
                 env, episode_len=episode_len
             ),
-            dict(),
+            dict(max_steps=None),
         ),
     )
 
