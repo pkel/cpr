@@ -2,6 +2,7 @@
 
 pkgs.mkShell {
   buildInputs = [
+    pkgs.linkchecker
     pkgs.nodejs
     pkgs.nodePackages.npm
 
