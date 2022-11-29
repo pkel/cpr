@@ -33,11 +33,12 @@ useful to think of each node as one process or machine.
 On the conceptual layer we have to deal with the nodes' operators. In
 some settings---let's say for a distributed database deployed within a
 corporation---it's sufficient to model a single operator who deploys all
-nodes. In such a setting, we may assume that all nodes follow the
+nodes. In such a setting, one may assume that all nodes follow the
 protocol specification. Sure, a node may stop being responsive due to
 network congestion, hardware problems, or power outages, but it will not
-arbitrarily deviate from the protocol. This is often called the
-fail-stop model or model of benign failures.
+arbitrarily deviate from the protocol. In distributed systems
+literature, this is often called the fail-stop model or model of benign
+failures.
 
 For proof-of-work protocols the fail-stop model is not sufficient.
 Anybody can add and remove nodes as they want. Consequently, we have to
@@ -47,7 +48,7 @@ down what deviations are possible or make sense. In order to be on the
 safe side, we have to consider arbitrary deviations. Highlighting the
 difference to benign failures, arbitrary deviations are often called
 Byzantine faults. The discipline around building protocols that work in
-in the presence Byzantine faults is called Byzantine Fault Tolerance
+in the presence of Byzantine faults is called Byzantine Fault Tolerance
 (BFT).
 
 When we say a node is honest or benign, we mean that it follows the
@@ -74,8 +75,8 @@ system does not really exist.
 {{< alert icon="👉" text="No security without assumptions!" />}}
 
 Needless to say, choosing the right assumptions is the hard part. Make
-them to weak and no useful property can be achieved. Make them to strong
-and they become unrealistic. Smart attackers will violate our
+them too weak and no useful property can be achieved. Make them too
+strong and they become unrealistic. Smart attackers will violate our
 assumptions whenever possible.
 
 We postpone making concrete assumptions to the analysis phase of
@@ -85,28 +86,94 @@ that proof-of-work slows down all nodes, but we do not yet limit the
 attacker's hash-rate. We assume that all nodes can send and receive
 messages, but we do not yet limit the propagation delays.
 
-## Nodes
 
-There are $n$ nodes. We use $N = \{1,\dots,n\}$ to denote the set of
-enumerated nodes.
+## Blobs, Hashes, Blockchain
 
-## Data, Hashes and Storage
+In practice, nodes are computers. They manipulate binary data locally
+and send binary data over a network for communication. The central data
+structure of proof-of-work protocols is the hash-linked list. Blobs of
+data can refer to other blobs by including a hash of the referenced
+blob. The hash-function is practically collision-free, which makes the
+list effectively append-only. It's always possible to append a blob to
+another, thereby extending (or forking) the list. But it is never
+possible to edit referenced blobs. Any change to a blob changes its
+hash. Any blob referring to the old version of the changed blob
+still includes the old hash and thus refers to the unmodified blob.
 
-To be revised. I'm torn between exposing hash-functions and just saying
-there is a "global DAG".
+In theory, we do not want to deal with binary data and thus introduce an
+abstraction for blobs and hash-linking. We reuse the prevalent
+terminology. Blobs are now blocks. Each block can have an arbitrary
+number of parent blocks (including none), modelling what we called
+hash-links above. If block $a$ is a parent of block $b$, then block $b$
+is a child of block $a$. Blocks that can be reached with the parent
+relationship from block $a$ are called ancestors of $a$. Blocks that can
+be reached with the child relationship from block $a$ are called
+descendants of $a$. Blocks can store arbitrary data in named fields.
+Blocks, their parents, and their fields are persistent. That is,
+changing a block creates a copy of the block. Freshly copied blocks do
+not have any descendants.
 
-Nodes can manipulate arbitrary data locally. We assume an injective
-mapping $\mathcal{H}$ from data to the set of integers. For any datum
-$x$, we say that $\mathcal{H}(x)$ is the hash of $x$. A datum may refer
-to other data by including the hashes. Nodes can store data
-locally. Nodes can retrieve stored data addressed by its hash.
+Blocks and the parent relationship form a directed acyclic graph, which
+we call block DAG. Within the block DAG, blocks without parents are
+called roots. Blocks without children are called leaves.
 
-{{< alert icon="👉" text="We assume that $\mathcal{H}$ is a collision-free hash function." />}}
+Each block also defines a blockchain, namely the block itself and all
+its ancestors. Blockchains are partially ordered by the parent
+relationship. Blockchains have exactly one leave, which we sometimes
+refer to as tip of the chain.
 
-## Communication
+## Visibility and Communication
 
-To be written...
+In practice, verifying hash-links requires full knowledge of the
+referenced blob. Without knowing the blob its hash cannot be computed.
+Without knowing the hash the blob cannot be referred to. It is
+impossible to distinguish between a link that was intentionally broken,
+let's say by replacing the hash with a random number, and a link to an
+existing but locally unavailable blob.
+
+For the virtual environment, we introduce the concept of local block visibility. Each
+block can be either visible to a node or not. Blocks that are locally
+visible to a node will stay locally visible to this node forever. If a
+block is locally visible, then all its ancestors are also locally
+visible. This restriction does not apply to block children where we
+generally assume partial local visibility. To summarize, nodes learn
+about blocks in the partial order imposed by the block DAG.
+
+Nodes can only create blocks where all parents are locally visible. At
+first, blocks are invisible to all nodes but their creator. Nodes can
+decide to share blocks. The virtual environment makes visible shared
+blocks, including all ancestors, to the other nodes according to the
+communication assumptions made elsewhere. Typically, blocks that have
+never been shared, and whose descendants have not been shared, will not
+be visible to any nodes but its creator. We say these blocks are
+withheld by their creator. Usually, honest nodes do not withhold blocks
+but malicious ones do.
+
+We model the determinism of hash-linked lists by allowing nodes to
+re-create blocks. If two nodes create two identical blocks---that is,
+blocks with the same parents, the same fields, and the same field
+contents---then only one block is created and both nodes obtain
+visibility of the same block.
 
 ## Proof-of-Work
 
-To be written...
+In practice, proof-of-work is about finding blobs that have a small
+hash. Typically, the protocol sets a difficulty target or number of
+leading zeros the hash must have. Good hash-functions ensure that
+finding such blobs is computationally expensive. The only viable solving
+algorithm is repeated trial and error: modify the blob, calculate the
+hash, count leading zeroes, repeat while difficulty target is not met.
+
+We avoid these expensive computations in our virtual environment. Each
+block gets an additional property, whether it has a proof-of-work or
+not, which can be set only by the environment, not by the nodes
+themselves. Blocks with a proof-of-work are unique, that means they
+cannot be re-created by creating a block with the same parents and
+fields.
+
+The virtual environment chooses which nodes succeed when according the
+proof-of-work assumptions made elsewhere. Whenever a node succeeds, the
+environment obtains from the node a block proposal---parent, fields, and
+field contents---creates the corresponding block, sets the proof-of-work
+property to true, and then makes visible the new block to the selected
+node. We now refer to the selected node as the miner of the new block.

@@ -162,13 +162,12 @@ specification's `update` function.
 
 The analyst avoids doing the actual proof-of-work and just assumes that
 random nodes succeed with mining at random times. Only when a node
-succeed, the analyst obtains a block proposal from the `mining`
-function, sets its `has_pow()` property to true, and updates the node
-with the newly appended block.
+succeeds, the analyst obtains a block from the `mining` function, sets
+its `has_pow()` property to true, and updates the node with the newly
+appended block.
 
-The protocol designer is indifferent to this distinction. The designer
-assumes that
-- proof-of-work is computationally expensive,
+The protocol designer is indifferent to this distinction. She assumes
+that
 - `b.has_pow()` is true if and only if `b` was appended through
 proof-of-work, and
 - when a node learns about a successful proof-of-work with
