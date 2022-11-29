@@ -185,17 +185,47 @@ of the chain. Miners include their id to facilitate disbursement of
 mining rewards.
 {{< /code-figure >}}
 
+## Difficulty Adjustment
+
+Proof-of-work intentionally slows down the creation of new blocks and
+hence the growth of the blockchain. Typical proof-of-work protocols try
+to maintain a constant growth rate. For example, Bitcoin tries to
+achieve 6 blocks per hour, by updating the proof-of-work puzzle
+difficulty every 2016 blocks. We use the term difficulty adjustment (DA)
+to refer to the general problem of controlling chain growth.
+Concrete DA mechanisms are called difficulty adjustment algorithms
+(DAA).
+
+Designing DAAs is quite challenging. A good DAA reacts quickly and
+correctly to changes in the networks *true* hash-rate. Unfortunately,
+the true hash-rate cannot be observed. In practice, nodes add a
+timestamp to each block. The DAA then estimates the current hash-rate
+from past timestamps. From there it deterministically adjusts the
+difficulty for future blocks. In this scheme, there are many sources of
+error. First, mining is a stochastic process. Puzzle solving times are
+exponentially distributed, implying high variance. Observations of
+puzzle solving time are noisy. Second, nodes might not agree on the
+current time. Third, nodes might lie about the current time. Forth,
+timestamps in orphaned blocks cannot be used. To summarize, difficulty
+adjustment is a complex control problem.
+
+WIP: Luckily, difficulty adjustment is orthogonal to consensus. CPR's focus
+is the latter. We do attempt solving the former. But we know that
+difficulty adjustment is necessary. We keep specification minimal.
+Protocol spec only defines progress. Controlling for constant growths,
+that is progress per time, is left to DAA designers.
+
 ## Rewards
 
 Deployed blockchain protocols usually implement some sort of virtual
 currency. Funds are associated with cryptographic key-pairs. Moving
 funds from one key-pair to another requires access to the source
 key-pair's private part. This introduces a new kind of system
-participants, namely the holders of the private keys and hence holders
-of the associated funds. We call them crypto-currency users. In
-principle, crypto-currency users and node operators decoupled concepts.
-Users may operate a node but they do not have to. But in practice,
-blockchain protocols motivate participation as operator by handing out
+participant, namely the holders of the private keys and hence holders of
+the associated funds. We call them crypto-currency users. In principle,
+crypto-currency users and node operators are decoupled concepts. Users
+may operate a node but they do not have to. But in practice, blockchain
+protocols motivate participation as operator by handing out
 crypto-currency denoted rewards. Hence node operators usually are
 crypto-currency users.
 
