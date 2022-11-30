@@ -204,16 +204,34 @@ from past timestamps. From there it deterministically adjusts the
 difficulty for future blocks. In this scheme, there are many sources of
 error. First, mining is a stochastic process. Puzzle solving times are
 exponentially distributed, implying high variance. Observations of
-puzzle solving time are noisy. Second, nodes might not agree on the
-current time. Third, nodes might lie about the current time. Forth,
+puzzle solving time are noisy. Second, nodes are distributed around the
+planet and might disagree about the current time. Third, nodes might try
+to intentionally confuse the DAA by lying about the current time. Forth,
 timestamps in orphaned blocks cannot be used. To summarize, difficulty
-adjustment is a complex control problem.
+adjustment is a complex control problem with its own line of research.
 
-WIP: Luckily, difficulty adjustment is orthogonal to consensus. CPR's focus
-is the latter. We do attempt solving the former. But we know that
-difficulty adjustment is necessary. We keep specification minimal.
-Protocol spec only defines progress. Controlling for constant growths,
-that is progress per time, is left to DAA designers.
+We observe that DA is quite orthogonal to consensus. In practice,
+proof-of-work protocols require a DAA but in theory we can get away
+without. Depending on the analysis, we either assume knowledge about the
+true hash-rate or we assume that the DAA does a perfect job. To support
+the latter, protocols designers have to specify what kind of growth the
+DAA should control for. In Bitcoin, the growth rate is measured in
+increase in block height per time. Other protocols might choose a
+different metric. We specify that metric with a single function
+`progress` that maps a given block (tip of blockchain) to a scalar
+value. The engineer implementing the protocol will contribute a DAA that
+controls for constant progress per time. The analyst might in some
+situations just assume constant progress per time.
+
+{{< code-figure >}}
+```python
+def progress(b: Block):
+    return b.height
+```
+[Nakamoto consensus](../nakamoto) uses block height as progress. The DAA
+tries to achieve constant growth of the progress (=height). Bitcoin targets 6
+blocks per hour.
+{{< /code-figure >}}
 
 ## Rewards
 
