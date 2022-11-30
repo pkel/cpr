@@ -83,8 +83,8 @@ module Make (Parameters : Parameters) = struct
 
   let roots = [ Summary { height = 0 } ]
 
-  module Referee (V : GlobalView with type data = data) = struct
-    include V
+  module Referee (D : BlockDAG with type data = data) = struct
+    include D
 
     let info x =
       let open Info in
@@ -100,8 +100,8 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let dag_fail (type a) vertices msg : a =
-      let meta x = [ label x, "" ] in
-      Dag.Exn.raise view meta vertices msg
+      let meta x = [ Info.string "label" (label x) ] in
+      raise_invalid_dag meta vertices msg
     ;;
 
     let is_vote x = is_vote (data x)
@@ -114,7 +114,7 @@ module Make (Parameters : Parameters) = struct
       if is_summary x
       then x
       else (
-        match Dag.parents view x with
+        match parents x with
         | [ x ] -> last_summary x
         | parents ->
           dag_fail (x :: parents) "last_summary: votes have one parent by dag_validity")
@@ -123,29 +123,41 @@ module Make (Parameters : Parameters) = struct
     (* smaller is better *)
     let compare_votes_in_block =
       let get x =
-        let hash = pow x |> Option.value ~default:(0, 0) in
+        let hash = pow x |> Option.value ~default:min_hash in
         depth x, hash
-      and ty = Compare.(tuple (neg int) (tuple int int)) in
+      and ty = Compare.(tuple (neg int) compare_hash) in
       Compare.(by ty get)
     ;;
 
-    let votes_only = Dag.filter is_vote view
-    let summaries_only = Dag.filter is_summary view
+    let acc_votes unfold x =
+      let mem x l = List.exists (block_eq x) l in
+      let add x l = if not (mem x l) then x :: l else l in
+      let rec f acc stack l =
+        match l, stack with
+        | [], [] -> acc
+        | [], hd :: tl -> f acc tl hd
+        | hd :: tl, stack when is_vote hd -> f (add hd acc) (unfold hd :: stack) tl
+        | _ :: tl, stack -> f acc stack tl
+      in
+      f [] [] (unfold x)
+    ;;
+
+    let confirmed_votes = acc_votes parents
+    let confirming_votes = acc_votes children
 
     let validity vertex =
-      match data vertex, Dag.parents view vertex with
+      match data vertex, parents vertex with
       | Vote child, [ parent ] ->
         child.depth > 0
         && pow vertex |> Option.is_some
         && child.height = height parent
         && child.depth = depth parent + 1
       | Summary child, (vote0 :: votetl as votes) ->
-        let unique_votes () =
-          Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
+        let unique_votes () = confirmed_votes vertex |> List.length
         and same_summary () =
           (* TODO. I think this check is missing in the other protocols *)
           let parent = last_summary vote0 in
-          List.for_all (fun x -> last_summary x $== parent) votetl
+          List.for_all (fun x -> block_eq (last_summary x) parent) votetl
         and sorted_votes () =
           Compare.is_sorted ~unique:true compare_votes_in_block votes
         in
@@ -162,10 +174,8 @@ module Make (Parameters : Parameters) = struct
     (** better is bigger *)
     let compare_summaries =
       let open Compare in
-      let cmp =
-        by int height $ by int (fun x -> List.length (Dag.children votes_only x))
-      in
-      skip_eq Dag.vertex_eq cmp
+      let cmp = by int height $ by int (fun x -> List.length (confirming_votes x)) in
+      skip_eq block_eq cmp
     ;;
 
     let winner l =
@@ -173,7 +183,7 @@ module Make (Parameters : Parameters) = struct
       Compare.first (Compare.neg compare_summaries) 1 l |> Option.get |> List.hd
     ;;
 
-    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+    let precursor this = List.nth_opt (parents this) 0
 
     let assign c x =
       match data x with

@@ -16,8 +16,8 @@ type data =
 let roots = [ { height = 0; miner = None } ]
 let height x = x.height
 
-module Referee (V : GlobalView with type data = data) = struct
-  include V
+module Referee (D : BlockDAG with type data = data) = struct
+  include D
 
   let info x =
     let x = data x in
@@ -30,7 +30,7 @@ module Referee (V : GlobalView with type data = data) = struct
   let label x = Printf.sprintf "block %i" (data x).height
 
   let validity vertex =
-    match pow vertex, Dag.parents view vertex with
+    match pow vertex, parents vertex with
     | Some _, [ p ] ->
       let child = data vertex
       and p = data p in
@@ -45,7 +45,7 @@ module Referee (V : GlobalView with type data = data) = struct
     List.fold_left (fun acc x -> if height x > height acc then x else acc) (List.hd l) l
   ;;
 
-  let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+  let precursor this = List.nth_opt (parents this) 0
 
   let reward v =
     match (data v).miner with
@@ -54,16 +54,16 @@ module Referee (V : GlobalView with type data = data) = struct
   ;;
 end
 
-let referee (type a) (module V : GlobalView with type env = a and type data = data)
+let referee (type a) (module D : BlockDAG with type block = a and type data = data)
     : (a, data) referee
   =
-  (module Referee (V))
+  (module Referee (D))
 ;;
 
-module Honest (V : LocalView with type data = data) = struct
+module Honest (V : View with type data = data) = struct
   include V
 
-  type state = env Dag.vertex
+  type state = block
 
   let preferred state = state
 
@@ -93,6 +93,6 @@ module Honest (V : LocalView with type data = data) = struct
   ;;
 end
 
-let honest (type a) ((module V) : (a, data) local_view) : (a, data) node =
+let honest (type a) ((module V) : (a, data) view) : (a, data) node =
   Node (module Honest (V))
 ;;

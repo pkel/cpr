@@ -1,4 +1,4 @@
-(* data attached to each DAG vertex *)
+(* data attached to each block in the DAG *)
 type 'a env =
   { value : 'a (* protocol data *)
   ; pow : (int * int) option
@@ -8,6 +8,8 @@ type 'a env =
   ; received_at : floatarray (* received but potentially not yet visible *)
   ; rewards : floatarray (* accumulated rewards up to this vertex *)
   }
+
+type 'a block = 'a env Dag.vertex
 
 let timestamp x =
   Array.map
@@ -21,18 +23,18 @@ let timestamp x =
 (* TODO. These feel a bit superfluous. But yesterday's attempt to remove did not succeed.
    Take a look at the RL engine before the next try. *)
 type 'a from_node_event =
-  | Share of 'a env Dag.vertex
-  | Append of ('a env, 'a) Intf.draft_vertex
-  | PowProposal of ('a env, 'a) Intf.draft_vertex
+  | Share of 'a block
+  | Append of ('a block, 'a) Intf.block_draft
+  | PowProposal of ('a block, 'a) Intf.block_draft
 
 type 'prot_data event =
   | StochasticClock
   | Dag of
-      int * [ `Append | `ProofOfWork ] * ('prot_data env, 'prot_data) Intf.draft_vertex
-  | Network of int * [ `Rx | `Tx ] * 'prot_data env Dag.vertex
-  | OnNode of int * 'prot_data env Intf.event
-  | MakeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'prot_data env Dag.vertex
-  | MadeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'prot_data env Dag.vertex
+      int * [ `Append | `ProofOfWork ] * ('prot_data block, 'prot_data) Intf.block_draft
+  | Network of int * [ `Rx | `Tx ] * 'prot_data block
+  | OnNode of int * 'prot_data block Intf.event
+  | MakeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'prot_data block
+  | MadeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'prot_data block
 
 let string_of_vertex view x =
   let open Printf in
@@ -93,13 +95,13 @@ type 'prot_data clock =
 
 type ('prot_data, 'node_state) node' =
   { mutable state : 'node_state
-  ; view : ('prot_data env, 'prot_data) Intf.local_view
+  ; view : ('prot_data block, 'prot_data) Intf.view
   ; handler :
       'node_state
-      -> 'prot_data env Intf.event
-      -> ('prot_data env, 'prot_data, 'node_state) Intf.action
-  ; puzzle_payload : 'node_state -> ('prot_data env, 'prot_data) Intf.draft_vertex
-  ; preferred : 'node_state -> 'prot_data env Dag.vertex
+      -> 'prot_data block Intf.event
+      -> ('prot_data block, 'prot_data, 'node_state) Intf.action
+  ; puzzle_payload : 'node_state -> ('prot_data block, 'prot_data) Intf.block_draft
+  ; preferred : 'node_state -> 'prot_data block
   }
 
 type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
@@ -107,9 +109,9 @@ type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
 type 'prot_data state =
   { clock : 'prot_data clock
   ; dag : 'prot_data env Dag.t
-  ; roots : 'prot_data env Dag.vertex list
+  ; roots : 'prot_data block list
   ; global_view : 'prot_data env Dag.view
-  ; referee : ('prot_data env, 'prot_data) Intf.referee
+  ; referee : ('prot_data block, 'prot_data) Intf.referee
   ; nodes : 'prot_data node array
   ; activations : int array
   ; assign_pow_distr : int Distributions.iid
@@ -121,7 +123,7 @@ type 'prot_data state =
 let float_of_pow_hash (nonce, _serial) = float_of_int nonce /. (2. ** 29.)
 let string_of_pow_hash x = Printf.sprintf "%.3f" (float_of_pow_hash x)
 
-let raw_append ~pow ~n_nodes dag node_id (x : _ Intf.draft_vertex) =
+let raw_append ~pow ~n_nodes dag node_id (x : _ Intf.block_draft) =
   let pow = if pow then Some (Random.bits (), Dag.size dag) else None
   and signature = if x.sign then Some node_id else None
   and visibility = Array.make n_nodes `Invisible in
@@ -138,7 +140,7 @@ let raw_append ~pow ~n_nodes dag node_id (x : _ Intf.draft_vertex) =
 ;;
 
 (** deterministic appends; required for Tailstorm. *)
-let append ~pow ~n_nodes dag node_id (x : _ Intf.draft_vertex) =
+let append ~pow ~n_nodes dag node_id (x : _ Intf.block_draft) =
   let default () = `Fresh, raw_append ~pow ~n_nodes dag node_id x in
   if pow || x.sign (* assuming non-deterministic signatures here *)
   then default ()
@@ -192,30 +194,45 @@ let log_vertex log clock view info v =
        })
 ;;
 
+let blockdag (type a) (view : a env Dag.view) : (a block, a) Intf.blockdag =
+  (module struct
+    type data = a
+    type block = a env Dag.vertex
+
+    let children = Dag.children view
+    let parents = Dag.parents view
+    let data n = (Dag.data n).value
+    let signature n = (Dag.data n).signature
+
+    type hash = int * int
+
+    let compare_hash = compare
+    let pow n = (Dag.data n).pow
+    let max_hash = max_int, max_int
+    let min_hash = min_int, 0
+    let block_eq = Dag.vertex_eq
+
+    let raise_invalid_dag info blocks message =
+      let info x = List.map (fun (k, v) -> k, Info.string_of_value v) (info x) in
+      Dag.Exn.raise view info blocks ("invalid_dag: " ^ message)
+    ;;
+  end : Intf.BlockDAG
+    with type data = a
+     and type block = a block)
+;;
+
 let init
     (type a)
     ?(logger = Log.dummy_logger)
     (module Protocol : Intf.Protocol with type data = a)
-    ?(patch : (int -> ((a env, a) Intf.local_view -> (a env, a) Intf.node) option) option)
+    ?(patch : (int -> ((a block, a) Intf.view -> (a block, a) Intf.node) option) option)
     (network : Network.t)
     : a state
   =
   let dag = Dag.create ()
   and n_nodes = Array.length network.nodes in
-  let (module Ref) =
-    Protocol.referee
-      (module struct
-        type data = Protocol.data
-        type nonrec env = data env
-
-        let view = Dag.view dag
-        let data n = (Dag.data n).value
-        let signature n = (Dag.data n).signature
-        let pow n = (Dag.data n).pow
-        let max_pow = max_int, max_int
-        let min_pow = min_int, 0
-      end)
-  in
+  let global_view = Dag.view dag in
+  let (module Ref) = Protocol.referee (blockdag global_view) in
   let roots =
     List.map
       (fun value ->
@@ -234,7 +251,7 @@ let init
   let clock =
     { queue = OrderedQueue.init Compare.(float); now = 0.; c_activations = 0 }
   in
-  let () = List.iter (log_vertex logger clock Ref.view Ref.info) roots in
+  let () = List.iter (log_vertex logger clock global_view Ref.info) roots in
   let patch = Option.value patch ~default:(fun _ -> None) in
   let impl node_id =
     match patch node_id with
@@ -243,18 +260,18 @@ let init
   in
   let nodes =
     Array.init n_nodes (fun node_id ->
-        let module LocalView = struct
+        let visible x =
+          match (Dag.data x).visibility.(node_id) with
+          | `Visible _ -> true
+          | `Invisible -> false
+        in
+        let view = Dag.filter visible global_view in
+        let (module BlockDag) = blockdag view in
+        let module View = struct
           include Ref
+          include BlockDag
 
           let my_id = node_id
-
-          let visible x =
-            match (Dag.data x).visibility.(node_id) with
-            | `Visible _ -> true
-            | `Invisible -> false
-          ;;
-
-          let view = Dag.filter visible Ref.view
 
           let visibility x =
             match (Dag.data x).visibility.(node_id) with
@@ -273,10 +290,10 @@ let init
           ;;
         end
         in
-        let (Node (module Node)) = impl node_id (module LocalView) in
+        let (Node (module Node)) = impl node_id (module View) in
         Node
           { state = Node.init ~roots
-          ; view = (module LocalView)
+          ; view = (module View)
           ; puzzle_payload = Node.puzzle_payload
           ; handler = Node.handler
           ; preferred = Node.preferred
@@ -291,7 +308,7 @@ let init
     { clock
     ; roots
     ; dag
-    ; global_view = Ref.view
+    ; global_view
     ; referee = (module Ref)
     ; nodes
     ; activations = Array.make n_nodes 0
@@ -325,19 +342,19 @@ let debug_info ?(info = fun _ -> []) x =
 
 (* We guarantee that invalid extensions are never delivered elsewhere *)
 let check_vertex (type a) state vertex =
-  let ((module Ref) : (a env, a) Intf.referee) = state.referee in
+  let ((module Ref) : (a block, a) Intf.referee) = state.referee in
   if not (Ref.validity vertex)
   then
     Dag.Exn.raise
-      Ref.view
+      state.global_view
       (debug_info ~info:Ref.info)
-      (vertex :: Dag.parents Ref.view vertex)
+      (vertex :: Dag.parents state.global_view vertex)
       "invalid append"
 ;;
 
 let log_vertex (type a) state vertex =
-  let ((module Ref) : (a env, a) Intf.referee) = state.referee in
-  log_vertex state.logger state.clock Ref.view Ref.info vertex
+  let ((module Ref) : (a block, a) Intf.referee) = state.referee in
+  log_vertex state.logger state.clock state.global_view Ref.info vertex
 ;;
 
 let log_for_node state node_id =
@@ -349,7 +366,7 @@ let log_for_node state node_id =
 ;;
 
 let set_rewards (type a) state vertex =
-  let ((module Ref) : (a env, a) Intf.referee) = state.referee in
+  let ((module Ref) : (a block, a) Intf.referee) = state.referee in
   match Ref.precursor vertex with
   | None -> failwith "Referee.precursor should go back to DAG root."
   | Some p ->
@@ -362,7 +379,7 @@ let set_rewards (type a) state vertex =
 ;;
 
 let append (type a) state ~pow node_id draft =
-  let ((module Ref) : (a env, a) Intf.referee) = state.referee in
+  let ((module Ref) : (a block, a) Intf.referee) = state.referee in
   match append ~n_nodes:(Array.length state.nodes) state.dag ~pow node_id draft with
   | `Redundant, x -> x
   | `Fresh, x ->
