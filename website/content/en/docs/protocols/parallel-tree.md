@@ -392,7 +392,8 @@ How to simulate, attack, learn.
 
 Some sort of tree-structured voting in present in Bobtail, altough it
 does not discount rewards depending on the tree structure. Alzayat et
-al. model analyse the fairness of inequality problem in Bitcoin.
+al. analyse the inequality of [Nakamoto consensus](../nakamoto) which is
+the main motivation for the discount reward scheme presented here.
 
 - George Bissias and Brian N. Levine. Bobtail: Improved Blockchain
 Security with Low-Variance Mining. NDSS '22.

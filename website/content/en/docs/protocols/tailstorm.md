@@ -16,7 +16,27 @@ mermaid: true
 
 ## Intuition
 
-To be written. I'll do the easier protocols first.
+Tailstorm is an improved version of [tree-structured voting](../parallel-tree)
+where the blocks that summarize finished rounds of voting do not require
+a separate proof-of-work. Summaries can be computed deterministically
+from the summarized votes. Nodes can re-produce summaries locally, hence
+they do not have to be communicated over the (latent) network.
+
+Tailstorm uses two kinds of blocks <<sub-blocks>> and <<summmaries>>.
+Sub-blocks are what was called <<vote>> in [tree-structured
+voting](../parallel-tree). Sub-blocks have exactly one parent and they
+require a proof-of-work. Summaries conclude a round of voting by
+accumulating $k$ sub-blocks that all confirm the same parent summary.
+Summaries do not require a proof-of-work. They are computed
+deterministically from the $k$ summarized sub-blocks.
+
+Recall the different viable discount rewards schemes presented for
+[tree-structured voting](../parallel-tree/#discount-reward). There, it was not
+obvious how to reward the blocks between two rounds of voting. Here, in
+Tailstorm, the solution is apparent. Summaries do not require additional
+work, hence we do not hand out rewards for summaries. Sub-blocks are
+treated like votes were treated before: the reward is scaled
+proportionally to the depth of the sub-block tree.
 
 ## Example
 
