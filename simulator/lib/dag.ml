@@ -11,6 +11,15 @@ let vertex_neq a b = a.serial <> b.serial
 let id a = a.serial
 let partial_order a b = compare a.depth b.depth
 
+type key = Opaque : 'a vertex -> key
+
+let key x = Opaque x
+
+let compare_key =
+  let open Compare in
+  by int (function Opaque x -> x.depth) $ by int (function Opaque x -> x.serial)
+;;
+
 type 'a t =
   { mutable size : int
   ; mutable roots : 'a vertex list

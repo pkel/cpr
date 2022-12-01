@@ -26,6 +26,12 @@ val partial_order : 'a vertex -> 'a vertex -> int
 (** [id n] ranges from [0] to [size t - 1] *)
 val id : 'a vertex -> int
 
+(** [key x] is [depth x, id x], hence adheres to the dag-imposed order. *)
+type key
+
+val key : 'a vertex -> key
+val compare_key : key -> key -> int
+
 (** views can restrict visibility of vertices; views cannot be edited *)
 type 'a view
 

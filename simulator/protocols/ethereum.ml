@@ -133,8 +133,8 @@ module Make (Parameters : Parameters) = struct
           | [] -> false
           | hd :: _ -> List.exists (block_eq hd) ancestors
         and check_unique_in_chain u =
-          let different b = not (block_eq u b) in
-          List.for_all different ancestors && List.for_all different previous_uncles
+          List.for_all (block_neq u) ancestors
+          && List.for_all (block_neq u) previous_uncles
         in
         check_height ()
         && check_work ()
@@ -198,10 +198,10 @@ module Make (Parameters : Parameters) = struct
     ;;
   end
 
-  let referee (type a) (module V : View with type block = a and type data = data)
+  let referee (type a) (module D : BlockDAG with type block = a and type data = data)
       : (a, data) referee
     =
-    (module Referee (V))
+    (module Referee (D))
   ;;
 
   module Honest (V : View with type data = data) = struct
@@ -252,7 +252,7 @@ module Make (Parameters : Parameters) = struct
         List.fold_left
           (fun acc b ->
             let uncles =
-              let not_in_chain b = List.for_all (fun x -> not (block_eq b x)) in_chain
+              let not_in_chain b = List.for_all (block_neq b) in_chain
               and parent_block_in_chain b =
                 match parents b with
                 | [] -> (* we hit the root *) false

@@ -4,6 +4,7 @@ include Intf
 module Collection = Collection
 module Compare = Compare
 module Dag = Dag
+module Dagtools = Dagtools
 module Distributions = Distributions
 module GraphML = GraphML
 module Info = Info

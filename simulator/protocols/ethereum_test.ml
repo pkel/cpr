@@ -1,34 +1,48 @@
 (* Ethereum's uncle rule is complicated. Let's test it! *)
 open Cpr_lib
 
-module TestView (P : Protocol) = struct
+module BlockDAG (P : Protocol) = struct
   type nonrec data = P.data
 
   type env =
     { value : data
-    ; pow_hash : (int * int) option
+    ; pow_hash : int option
     ; signed_by : int option
     }
 
-  let min_pow = 0, 0
-  let max_pow = 100, 100
+  type block = env Dag.vertex
+
+  let min_hash = 0
+  let max_hash = 100
+  let compare_hash = Int.compare
   let dag : env Dag.t = Dag.create ()
   let view = Dag.view dag
+  let key = Dag.id
+  let children = Dag.children view
+  let parents = Dag.parents view
+  let compare_key = Int.compare
   let data x = (Dag.data x).value
   let pow x = (Dag.data x).pow_hash
   let signature x = (Dag.data x).signed_by
+  let block_eq = Dag.vertex_eq
+  let block_neq = Dag.vertex_neq
+
+  type key = int
+  type hash = int
+
+  let raise_invalid_dag _meta _blocks msg = failwith msg
 end
 
 module Ethereum = Ethereum.Make (Ethereum.Byzantium)
-module V = TestView (Ethereum)
-module Ref = Ethereum.Referee (V)
+module D = BlockDAG (Ethereum)
+module Ref = Ethereum.Referee (D)
 
-let env value = V.{ value; pow_hash = Some (1, 1); signed_by = None }
-let root = Dag.append V.dag [] (env { height = 43; work = 47; miner = None })
+let env value = D.{ value; pow_hash = Some 1; signed_by = None }
+let root = Dag.append D.dag [] (env { height = 43; work = 47; miner = None })
 
 let mine parent uncles =
   let value =
-    let parent = V.data parent in
+    let parent = D.data parent in
     env
       Ethereum.
         { height = parent.height + 1
@@ -36,7 +50,7 @@ let mine parent uncles =
         ; miner = Some 42
         }
   in
-  let r = Dag.append V.dag (parent :: uncles) value in
+  let r = Dag.append D.dag (parent :: uncles) value in
   if Ref.validity r then Some r else None
 ;;
 

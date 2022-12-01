@@ -198,7 +198,7 @@ module Make (Parameters : Parameters) = struct
 
     let puzzle_payload' ~vote_filter preferred =
       let pow_hash_exn x = pow x |> Option.get in
-      let votes = confirmed_votes preferred |> List.filter vote_filter in
+      let votes = confirming_votes preferred |> List.filter vote_filter in
       if List.length votes >= k - 1
       then (
         let height = height preferred + 1 in

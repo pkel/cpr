@@ -159,41 +159,41 @@ module Action8 = struct
   let n = Array.length table
 end
 
-module State8 (V : LocalView) : sig
+module State8 (V : View) : sig
   open V
 
   type t = private
-    { public : env Dag.vertex (* defender's preferred block *)
-    ; private_ : env Dag.vertex (* attacker's preferred block *)
-    ; common : env Dag.vertex (* common chain *)
+    { public : block (* defender's preferred block *)
+    ; private_ : block (* attacker's preferred block *)
+    ; common : block (* common chain *)
     ; epoch : [ `Proceed | `Prolong ]
           (* Proceed: the attacker considers the defender's votes that extend on his
              preferred block when building a new block.
 
              Prolong: the attacker prolongs the current epoch until he can form a block
              that does not reference any defender votes. *)
-    ; pending_private_to_public_messages : env Dag.vertex list
+    ; pending_private_to_public_messages : block list
     }
 
-  val init : epoch:[ `Proceed | `Prolong ] -> env Dag.vertex -> t
+  val init : epoch:[ `Proceed | `Prolong ] -> block -> t
 
   (* Set fields in state; updates common chain *)
   val update
-    :  ?public:env Dag.vertex
-    -> ?private_:env Dag.vertex
+    :  ?public:block
+    -> ?private_:block
     -> ?epoch:[ `Proceed | `Prolong ]
-    -> ?pending_private_to_public_messages:env Dag.vertex list
+    -> ?pending_private_to_public_messages:block list
     -> t
     -> t
 end = struct
   open V
 
   type t =
-    { public : env Dag.vertex
-    ; private_ : env Dag.vertex
-    ; common : env Dag.vertex
+    { public : block
+    ; private_ : block
+    ; common : block
     ; epoch : [ `Proceed | `Prolong ]
-    ; pending_private_to_public_messages : env Dag.vertex list
+    ; pending_private_to_public_messages : block list
     }
 
   let init ~epoch x =
@@ -205,9 +205,18 @@ end = struct
     }
   ;;
 
+  module Dagtools = Dagtools.Make (struct
+    include V
+
+    type vertex = block
+
+    let eq = block_eq
+    let neq = block_neq
+  end)
+
   (* call this whenever public or private_ changes *)
   let set_common state =
-    let common = Dag.common_ancestor view state.public state.private_ in
+    let common = Dagtools.common_ancestor state.public state.private_ in
     assert (Option.is_some common) (* all our protocols maintain this invariant *);
     { state with common = Option.get common }
   ;;

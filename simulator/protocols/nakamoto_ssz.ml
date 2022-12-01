@@ -114,29 +114,29 @@ module Action = struct
   let n = Array.length table
 end
 
-module Agent (V : LocalView with type data = data) = struct
+module Agent (V : View with type data = data) = struct
   include V
   module N = Honest (V)
 
   type state =
     | BetweenActions of
-        { public : env Dag.vertex (* defender's preferred block *)
-        ; private_ : env Dag.vertex (* attacker's preferred block *)
+        { public : block (* defender's preferred block *)
+        ; private_ : block (* attacker's preferred block *)
         ; pending_private_to_public_messages :
-            env Dag.vertex list (* messages sent with last action *)
+            block list (* messages sent with last action *)
         }
 
   type state_before_action =
     | BeforeAction of
-        { public : env Dag.vertex
-        ; private_ : env Dag.vertex
+        { public : block
+        ; private_ : block
         }
 
   type observable_state =
     | Observable of
-        { public : env Dag.vertex
-        ; private_ : env Dag.vertex
-        ; common : env Dag.vertex
+        { public : block
+        ; private_ : block
+        ; common : block
         ; event : [ `ProofOfWork | `Network ]
         }
 
@@ -159,6 +159,15 @@ module Agent (V : LocalView with type data = data) = struct
     BeforeAction { public; private_ = state.private_ }
   ;;
 
+  module Dagtools = Dagtools.Make (struct
+    include V
+
+    type vertex = block
+
+    let eq = block_eq
+    let neq = block_neq
+  end)
+
   let prepare (BeforeAction state) event =
     let public, private_, event =
       match event with
@@ -170,7 +179,7 @@ module Agent (V : LocalView with type data = data) = struct
         (* work on private chain *)
         state.public, x, `ProofOfWork
     in
-    let common = Dag.common_ancestor view public private_ |> Option.get in
+    let common = Dagtools.common_ancestor public private_ |> Option.get in
     Observable { public; private_; common; event }
   ;;
 
@@ -190,7 +199,7 @@ module Agent (V : LocalView with type data = data) = struct
 
   let apply (Observable state) action =
     let parent vtx =
-      match Dag.parents view vtx with
+      match parents vtx with
       | [ x ] -> Some x
       | _ -> None
     in
@@ -218,7 +227,7 @@ module Agent (V : LocalView with type data = data) = struct
   ;;
 end
 
-let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =
+let attacker (type a) policy ((module V) : (a, data) view) : (a, data) node =
   Node
     (module struct
       include Agent (V)

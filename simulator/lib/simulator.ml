@@ -204,6 +204,11 @@ let blockdag (type a) (view : a env Dag.view) : (a block, a) Intf.blockdag =
     let data n = (Dag.data n).value
     let signature n = (Dag.data n).signature
 
+    type key = Dag.key
+
+    let key = Dag.key
+    let compare_key = Dag.compare_key
+
     type hash = int * int
 
     let compare_hash = compare
@@ -211,6 +216,7 @@ let blockdag (type a) (view : a env Dag.view) : (a block, a) Intf.blockdag =
     let max_hash = max_int, max_int
     let min_hash = min_int, 0
     let block_eq = Dag.vertex_eq
+    let block_neq = Dag.vertex_neq
 
     let raise_invalid_dag info blocks message =
       let info x = List.map (fun (k, v) -> k, Info.string_of_value v) (info x) in

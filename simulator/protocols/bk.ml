@@ -212,7 +212,7 @@ module Make (Parameters : Parameters) = struct
       let open Compare in
       let cmp =
         by int block_height_exn
-        $ by int (fun x -> List.length (confirmed_votes x |> List.filter vote_filter))
+        $ by int (fun x -> List.length (confirming_votes x |> List.filter vote_filter))
         $ by (neg compare_hash) leader_hash_exn
         $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
       in

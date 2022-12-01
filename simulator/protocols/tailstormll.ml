@@ -51,8 +51,8 @@ module Make (Parameters : Parameters) = struct
 
   let roots = [ { block = 0; vote = 0; miner = None } ]
 
-  module Referee (V : GlobalView with type data = data) = struct
-    include V
+  module Referee (D : BlockDAG with type data = data) = struct
+    include D
 
     let info x =
       let x = data x in
@@ -70,8 +70,8 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let dag_fail (type a) vertices msg : a =
-      let meta x = [ describe (data x), "" ] in
-      Dag.Exn.raise view meta vertices msg
+      let meta x = [ Info.string "label" (label x) ] in
+      raise_invalid_dag meta vertices msg
     ;;
 
     let is_vote x = is_vote (data x)
@@ -84,7 +84,7 @@ module Make (Parameters : Parameters) = struct
       if is_block x
       then x
       else (
-        match Dag.parents view x with
+        match parents x with
         | [ x ] -> last_block x
         | parents ->
           dag_fail
@@ -96,14 +96,34 @@ module Make (Parameters : Parameters) = struct
     let compare_votes_in_block =
       let get x =
         let d = data x
-        and hash = pow x |> Option.value ~default:(0, 0) in
+        and hash = pow x |> Option.value ~default:min_hash in
         d.vote, hash
-      and ty = Compare.(tuple (neg int) (tuple int int)) in
+      and ty = Compare.(tuple (neg int) compare_hash) in
       Compare.(by ty get)
     ;;
 
-    let votes_only = Dag.filter is_vote view
-    let blocks_only = Dag.filter is_block view
+    let acc_votes unfold l =
+      let mem x l = List.exists (block_eq x) l in
+      let add x l = if not (mem x l) then x :: l else l in
+      let rec f acc stack l =
+        match l, stack with
+        | [], [] -> acc
+        | [], hd :: tl -> f acc tl hd
+        | hd :: tl, stack when is_vote hd -> f (add hd acc) (unfold hd :: stack) tl
+        | _ :: tl, stack -> f acc stack tl
+      in
+      f [] [] l
+    ;;
+
+    let confirmed_votes x =
+      assert (is_block x);
+      acc_votes parents (parents x)
+    ;;
+
+    let confirming_votes x =
+      assert (is_block x);
+      acc_votes children (children x)
+    ;;
 
     let validity vertex =
       let child = data vertex in
@@ -113,7 +133,7 @@ module Make (Parameters : Parameters) = struct
       && pow vertex |> Option.is_some
       && child.miner |> Option.is_some
       &&
-      match is_vote vertex, Dag.parents view vertex with
+      match is_vote vertex, parents vertex with
       | true, [ p ] ->
         (* child is vote *)
         let parent = data p in
@@ -121,8 +141,7 @@ module Make (Parameters : Parameters) = struct
       | false, p :: votes ->
         (* child is block *)
         let parent = data p in
-        let unique_votes =
-          Dag.iterate_ancestors votes_only votes |> Seq.fold_left (fun acc _ -> acc + 1) 0
+        let unique_votes = acc_votes parents votes |> List.length
         and sorted_votes = Compare.is_sorted ~unique:true compare_votes_in_block votes in
         is_block p
         && sorted_votes
@@ -136,10 +155,8 @@ module Make (Parameters : Parameters) = struct
     (** better is bigger *)
     let compare_blocks =
       let open Compare in
-      let cmp =
-        by int height $ by int (fun x -> List.length (Dag.children votes_only x))
-      in
-      skip_eq Dag.vertex_eq cmp
+      let cmp = by int height $ by int (fun x -> List.length (confirming_votes x)) in
+      skip_eq block_eq cmp
     ;;
 
     let winner l =
@@ -147,7 +164,7 @@ module Make (Parameters : Parameters) = struct
       Compare.first (Compare.neg compare_blocks) 1 l |> Option.get |> List.hd
     ;;
 
-    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+    let precursor this = List.nth_opt (parents this) 0
 
     let assign c x =
       match (data x).miner with
@@ -160,23 +177,14 @@ module Make (Parameters : Parameters) = struct
       let c = max_reward_per_block /. k in
       if is_block x
       then (
-        match Dag.parents votes_only x with
+        match parents x |> List.filter is_vote with
         | [] -> []
         | hd :: _ ->
           let depth = depth hd in
           let r = if discount then (float_of_int depth +. 1.) /. k *. c else c in
           if punish
-          then
-            assign r x
-            @ (Dag.iterate_ancestors votes_only [ hd ]
-              |> Seq.map (assign r)
-              |> List.of_seq
-              |> List.concat)
-          else
-            Dag.iterate_ancestors votes_only [ x ]
-            |> Seq.map (assign r)
-            |> List.of_seq
-            |> List.concat)
+          then assign r x @ (confirmed_votes x |> List.concat_map (assign r))
+          else confirmed_votes x |> List.concat_map (assign r))
       else []
     ;;
 
@@ -190,17 +198,17 @@ module Make (Parameters : Parameters) = struct
     ;;
   end
 
-  let referee (type a) (module V : GlobalView with type env = a and type data = data)
+  let referee (type a) (module D : BlockDAG with type block = a and type data = data)
       : (a, data) referee
     =
-    (module Referee (V))
+    (module Referee (D))
   ;;
 
-  module Honest (V : LocalView with type data = data) = struct
+  module Honest (V : View with type data = data) = struct
     include V
     open Referee (V)
 
-    type state = env Dag.vertex
+    type state = block
 
     let preferred state = state
 
@@ -226,8 +234,14 @@ module Make (Parameters : Parameters) = struct
         description of Tailstorm.
     *)
     let altruistic_quorum ~vote_filter b =
-      let module IntSet = Set.Make (Int) in
-      let rec f ids n q l =
+      let module BlockSet =
+        Set.Make (struct
+          type t = block
+
+          let compare = Compare.by compare_key key
+        end)
+      in
+      let rec f acc n q l =
         if n = k - 1
         then Some (List.rev q)
         else (
@@ -235,38 +249,36 @@ module Make (Parameters : Parameters) = struct
           | [] -> None
           | hd :: tl ->
             let fresh, n_fresh =
-              Dag.iterate_ancestors votes_only [ hd ]
-              |> Seq.fold_left
-                   (fun (fresh, n_fresh) el ->
-                     let id = Dag.id el in
-                     if IntSet.mem id ids
-                     then fresh, n_fresh
-                     else IntSet.add id fresh, n_fresh + 1)
-                   (IntSet.empty, 0)
+              List.fold_left
+                (fun (fresh, n_fresh) el ->
+                  if BlockSet.mem el acc
+                  then fresh, n_fresh
+                  else BlockSet.add el fresh, n_fresh + 1)
+                (BlockSet.empty, 0)
+                (acc_votes parents [ hd ])
             in
             let n' = n + n_fresh in
             if n' > k - 1 || n_fresh < 1
-            then (* quorum would grow to big *) f ids n q tl
-            else f (IntSet.union fresh ids) n' (hd :: q) tl)
+            then (* quorum would grow to big *) f acc n q tl
+            else f (BlockSet.union fresh acc) n' (hd :: q) tl)
       in
-      Dag.iterate_descendants votes_only (Dag.children votes_only b)
-      |> Seq.filter vote_filter
-      |> List.of_seq
+      confirming_votes b
+      |> List.filter vote_filter
       |> List.sort
            Compare.(
              by
                (tuple (neg int) (tuple int float))
                (fun x ->
                  (data x).vote, ((if appended_by_me x then 0 else 1), visible_since x)))
-      |> f IntSet.empty 0 []
+      |> f BlockSet.empty 0 []
       |> Option.map
            (List.sort
               Compare.(
                 by
-                  (tuple (neg int) (tuple int int))
+                  (tuple (neg int) compare_hash)
                   (fun x ->
                     let d = data x
-                    and hash = pow x |> Option.value ~default:max_pow in
+                    and hash = pow x |> Option.value ~default:max_hash in
                     d.vote, hash)))
     ;;
 
@@ -288,21 +300,21 @@ module Make (Parameters : Parameters) = struct
       let ht = Hashtbl.create (2 * k)
       and acc = ref []
       and n = ref (k - 1) in
-      let included x = Hashtbl.mem ht (Dag.id x) in
+      let included x = Hashtbl.mem ht (key x) in
       let include_ x =
         assert (not (included x));
         acc := x :: !acc;
-        Dag.iterate_ancestors votes_only [ x ]
-        |> Seq.iter (fun x ->
+        acc_votes parents [ x ]
+        |> List.iter (fun x ->
                if not (included x)
                then (
-                 Hashtbl.replace ht (Dag.id x) true;
+                 Hashtbl.replace ht (key x) true;
                  decr n))
       and reward ?(all = false) x =
         let i = ref 0 in
         let () =
-          Dag.iterate_ancestors votes_only [ x ]
-          |> Seq.iter (fun x ->
+          acc_votes parents [ x ]
+          |> List.iter (fun x ->
                  if (not (included x)) && (all || appended_by_me x) then incr i)
         in
         !i
@@ -311,13 +323,12 @@ module Make (Parameters : Parameters) = struct
         assert (!n >= 0);
         if !n > 0
         then (
-          Dag.iterate_descendants votes_only (Dag.children votes_only b)
-          |> Seq.filter vote_filter
-          |> Seq.filter (fun x -> not (included x))
+          confirming_votes b
+          |> List.filter vote_filter
+          |> List.filter (fun x -> not (included x))
           |> (* calculate own and overall reward for branch *)
-          Seq.map (fun x -> x, reward x, reward ~all:true x)
-          |> (* ensure branch fits into quorum *) Seq.filter (fun (_, _, x) -> x <= !n)
-          |> List.of_seq
+          List.map (fun x -> x, reward x, reward ~all:true x)
+          |> (* ensure branch fits into quorum *) List.filter (fun (_, _, x) -> x <= !n)
           |> (* prefer own reward, then overall reward *)
           List.sort
             Compare.(
@@ -376,11 +387,7 @@ module Make (Parameters : Parameters) = struct
       if k = 1
       then Some []
       else (
-        let a =
-          Dag.children votes_only b
-          |> Dag.iterate_descendants (Dag.filter vote_filter votes_only)
-          |> Array.of_seq
-        in
+        let a = confirming_votes b |> List.filter vote_filter |> Array.of_list in
         let n = Array.length a in
         if Combinatorics.n_choose_k n k > max_options
         then heuristic_quorum ~vote_filter b
@@ -388,14 +395,20 @@ module Make (Parameters : Parameters) = struct
         then None
         else (
           let a' =
-            let module Map = Map.Make (Int) in
+            let module BlockMap =
+              Map.Make (struct
+                type t = block
+
+                let compare = Compare.by compare_key key
+              end)
+            in
             let _, m =
               Array.fold_left
-                (fun (i, m) x -> i + 1, Map.add (Dag.id x) i m)
-                (0, Map.empty)
+                (fun (i, m) x -> i + 1, BlockMap.add x i m)
+                (0, BlockMap.empty)
                 a
             in
-            fun x -> Map.find (Dag.id x) m
+            fun x -> BlockMap.find x m
           in
           let leaves =
             let reach_buf = Array.make n false in
@@ -413,7 +426,7 @@ module Make (Parameters : Parameters) = struct
                      (fun p ->
                        leave_buf.(a' p) <- false;
                        reach_buf.(a' p))
-                     (Dag.parents votes_only a.(hd))
+                     (parents a.(hd) |> List.filter is_vote)
                 then (
                   let () = reach_buf.(hd) <- true in
                   f tl)
@@ -434,9 +447,8 @@ module Make (Parameters : Parameters) = struct
                 let reward =
                   let rewarded_votes =
                     match incentive_scheme with
-                    | `Constant | `Discount -> Dag.iterate_ancestors votes_only leaves
-                    | `Punish | `Hybrid ->
-                      Dag.iterate_ancestors votes_only [ List.hd leaves ]
+                    | `Constant | `Discount -> acc_votes parents leaves
+                    | `Punish | `Hybrid -> acc_votes parents [ List.hd leaves ]
                   and per_vote =
                     match incentive_scheme with
                     | `Constant | `Punish -> 1.
@@ -444,7 +456,7 @@ module Make (Parameters : Parameters) = struct
                       let depth = (List.hd leaves |> data).vote in
                       float_of_int (depth + 1) /. float_of_int k
                   in
-                  Seq.fold_left
+                  List.fold_left
                     (fun acc x -> if appended_by_me x then acc +. per_vote else acc)
                     1.
                     rewarded_votes
@@ -493,8 +505,8 @@ module Make (Parameters : Parameters) = struct
         }
       | None ->
         let votes =
-          Dag.iterate_descendants (Dag.filter vote_filter votes_only) [ b ]
-          |> List.of_seq
+          confirming_votes b
+          |> List.filter vote_filter
           |> List.sort compare_votes_in_block
         in
         let parent =
@@ -512,20 +524,17 @@ module Make (Parameters : Parameters) = struct
 
     let compare_blocks ~vote_filter =
       let open Compare in
-      let count x =
-        Dag.iterate_descendants votes_only [ x ]
-        |> Seq.filter vote_filter
-        |> Seq.fold_left (fun n _ -> n + 1) 0
-      in
+      let count x = confirming_votes x |> List.filter vote_filter |> List.length in
       let cmp =
         by int height
         $ by int count (* embed A_k *)
         $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
       in
-      skip_eq Dag.vertex_eq cmp
+      skip_eq block_eq cmp
     ;;
 
     let update_head ?(vote_filter = Fun.const true) ~old consider =
+      assert (is_block consider);
       if compare_blocks ~vote_filter consider old > 0 then consider else old
     ;;
 
@@ -542,7 +551,7 @@ module Make (Parameters : Parameters) = struct
     ;;
   end
 
-  let honest (type a) ((module V) : (a, data) local_view) : (a, data) node =
+  let honest (type a) ((module V) : (a, data) view) : (a, data) node =
     Node (module Honest (V))
   ;;
 end

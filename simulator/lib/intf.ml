@@ -6,11 +6,21 @@ module type BlockDAG = sig
   val parents : block -> block list
   val children : block -> block list
 
-  (** Get id of the signer, if the block was signed. *)
-  val signature : block -> int option
+  (** Partial order. Blocks have unique keys. For blocks on the same
+      path, compare_key is a full order. In practice key is something like
+      [(depth, id)]. *)
+  type key
+
+  val key : block -> key
+  val compare_key : key -> key -> int
 
   (** physical equality. Is it the same block? NOT: does it store the same data? *)
   val block_eq : block -> block -> bool
+
+  val block_neq : block -> block -> bool
+
+  (** Get id of the signer, if the block was signed. *)
+  val signature : block -> int option
 
   type hash
 
