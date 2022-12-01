@@ -480,7 +480,7 @@ module Exn = struct
       in
       [ "label", label ]
     in
-    let pp fmt = dot fmt ~legend:[] v ~node_attr in
+    let pp fmt = dot fmt ~legend:[ "error", msg ] v ~node_attr in
     let nodes = List.concat_map (parents v) nodes in
     let dot = lazy (Format.asprintf "%a" pp nodes) in
     raise (Malformed_DAG { msg; dot })

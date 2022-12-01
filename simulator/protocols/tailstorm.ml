@@ -272,7 +272,7 @@ module Make (Parameters : Parameters) = struct
         block. Thus this implementation does not align with George's
         description of Tailstorm.
     *)
-    let altruistic_quorum ~vote_filter b =
+    let altruistic_quorum ~children b =
       let rec f acc n q l =
         if n = k
         then Some (List.rev q)
@@ -294,9 +294,8 @@ module Make (Parameters : Parameters) = struct
             then (* quorum would grow to big *) f acc n q tl
             else f (BlockSet.union fresh acc) n' (hd :: q) tl)
       in
-      confirming_votes b
+      acc_votes children (children b)
       |> BlockSet.elements
-      |> List.filter vote_filter
       |> List.sort
            Compare.(
              by
@@ -327,7 +326,7 @@ module Make (Parameters : Parameters) = struct
         We sort the branches by the amount of reward they would add. We add the
         most valuable branch an reiterate until enough sub blocks are added.
     *)
-    let heuristic_quorum ~vote_filter b =
+    let heuristic_quorum ~children b =
       let ht = Hashtbl.create (2 * k)
       and acc = ref []
       and n = ref k in
@@ -354,9 +353,8 @@ module Make (Parameters : Parameters) = struct
         assert (!n >= 0);
         if !n > 0
         then (
-          confirmed_votes b
+          acc_votes children (children b)
           |> BlockSet.elements
-          |> List.filter vote_filter
           |> List.filter (fun x -> not (included x))
           |> (* calculate own and overall reward for branch *)
           List.map (fun x -> x, reward x, reward ~all:true x)
@@ -414,22 +412,17 @@ module Make (Parameters : Parameters) = struct
        Calculating rewards will be interesting. We cannot use the reward function of the
        referee, because the block is not yet appended. But maybe we can reuse parts to
        avoid error-prone redundancy. *)
-    let optimal_quorum ~max_options ~vote_filter b =
+    let optimal_quorum ~max_options ~children b =
       assert (is_summary b);
       let reward leaves =
         reward'
           { data = Summary { height = height b + 1 }; parents = leaves; sign = false }
         |> List.fold_left (fun acc (n, x) -> if n = my_id then acc +. x else acc) 0.
       in
-      let a =
-        confirming_votes b
-        |> BlockSet.filter vote_filter
-        |> BlockSet.to_seq
-        |> Array.of_seq
-      in
+      let a = acc_votes children (children b) |> BlockSet.to_seq |> Array.of_seq in
       let n = Array.length a in
       if Combinatorics.n_choose_k n k > max_options
-      then heuristic_quorum ~vote_filter b
+      then heuristic_quorum ~children b
       else if n < k
       then None
       else (
@@ -490,22 +483,21 @@ module Make (Parameters : Parameters) = struct
             f c
         in
         let q =
-          let l = ref [] in
+          let opt_choice, opt_reward = ref None, ref (-1.) in
           let () =
             Combinatorics.iter_n_choose_k (Array.length a) k (fun c ->
-                (* assert (List.length c = k - 1); *)
+                (* assert (List.length c = k); *)
                 match leaves c with
-                | `Ok x -> l := x :: !l
-                | `Not_connected -> ())
+                | `Not_connected -> ()
+                | `Ok (reward, choice) ->
+                  if reward > !opt_reward
+                  then (
+                    opt_reward := reward;
+                    opt_choice := Some choice))
           in
-          match !l with
-          | hd :: tl ->
-            List.fold_left (* find maximum reward *)
-              (fun (ar, ac) (br, bc) -> if br > ar then br, bc else ar, ac)
-              hd
-              tl
-            |> snd
-          | _ -> failwith "reward_optim_quorum: no choice"
+          match !opt_choice with
+          | Some x -> x
+          | None -> failwith "reward_optim_quorum: no choice"
         in
         Some q)
     ;;
@@ -518,10 +510,10 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let puzzle_payload' ~vote_filter b =
+      let children x = children x |> List.filter vote_filter in
       assert (is_summary b);
       let votes =
-        confirming_votes b
-        |> BlockSet.filter vote_filter
+        acc_votes children (children b)
         |> BlockSet.elements
         |> List.sort compare_votes_in_block
       in
@@ -539,7 +531,8 @@ module Make (Parameters : Parameters) = struct
     let puzzle_payload = puzzle_payload' ~vote_filter:(fun _ -> true)
 
     let next_summary' ~vote_filter b =
-      quorum ~vote_filter b
+      let children x = children x |> List.filter vote_filter in
+      quorum ~children b
       |> Option.map (fun q ->
              { parents = q; data = Summary { height = height b + 1 }; sign = false })
     ;;

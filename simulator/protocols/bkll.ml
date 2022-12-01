@@ -85,10 +85,12 @@ module Make (Parameters : Parameters) = struct
     let confirming_votes x =
       assert (is_block x);
       children x |> List.filter is_vote
+    ;;
 
     let confirmed_votes x =
       assert (is_block x);
       parents x |> List.filter is_vote
+    ;;
 
     let validity vertex =
       match pow vertex, data vertex, parents vertex with
