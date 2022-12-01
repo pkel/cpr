@@ -50,13 +50,13 @@ end
 
 type 'data agent =
   | Agent :
-      { preferred : 'state -> 'data Simulator.env Dag.vertex
-      ; puzzle_payload : 'state -> ('data Simulator.env, 'data) draft_vertex
-      ; init : roots:'data Simulator.env Dag.vertex list -> 'state
-      ; prepare : 'state -> 'data Simulator.env event -> 'observable
+      { preferred : 'state -> 'data Simulator.block
+      ; puzzle_payload : 'state -> ('data Simulator.block, 'data) block_draft
+      ; init : roots:'data Simulator.block list -> 'state
+      ; prepare : 'state -> 'data Simulator.block event -> 'observable
       ; observe : 'observable -> floatarray
       ; observe_hum : 'observable -> string
-      ; apply : 'observable -> int -> ('data Simulator.env, 'data, 'state) action
+      ; apply : 'observable -> int -> ('data Simulator.block, 'data, 'state) action
       ; mutable state : 'observable
       }
       -> 'data agent
@@ -79,7 +79,7 @@ type instance =
 let dummy_node
     (type env data)
     (module P : Protocol with type data = data)
-    (view : (env, data) local_view)
+    (view : (env, data) view)
     : (env, data) node
   =
   let (Node (module Honest)) = P.honest view in
@@ -126,10 +126,8 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
     let agent =
       let (Node node) = sim.nodes.(0) in
       let _ = node.view in
-      let (module LocalView : LocalView with type env = _ and type data = _) =
-        node.view
-      in
-      let open M.Agent (LocalView) in
+      let (module View : View with type block = _ and type data = _) = node.view in
+      let open M.Agent (View) in
       let observe s = observe s |> M.Observation.to_floatarray
       and observe_hum s = observe s |> M.Observation.to_string
       and apply s i = apply s (M.Action.of_int i)

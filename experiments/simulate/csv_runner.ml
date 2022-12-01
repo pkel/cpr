@@ -6,8 +6,8 @@ type task =
       ; network : Network.t
       ; protocol : (module Protocol with type data = 'dag_data)
       ; attack :
-          (('dag_data Simulator.env, 'dag_data) local_view
-           -> ('dag_data Simulator.env, 'dag_data) node)
+          (('dag_data Simulator.block, 'dag_data) view
+           -> ('dag_data Simulator.block, 'dag_data) node)
           Collection.entry
           option
       ; sim : (unit -> 'dag_data Simulator.state) Collection.entry
