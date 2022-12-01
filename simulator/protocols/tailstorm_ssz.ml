@@ -229,15 +229,15 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       let open Observation in
       let public_depth, public_votes =
         confirming_votes state.public
-        |> List.filter public_visibility
-        |> List.fold_left (fun (d, n) x -> max d (depth x), n + 1) (0, 0)
+        |> BlockSet.filter public_visibility
+        |> fun x -> BlockSet.fold (fun x (d, n) -> max d (depth x), n + 1) x (0, 0)
       and private_depth_inclusive, private_votes_inclusive =
         confirming_votes state.private_
-        |> List.fold_left (fun (d, n) x -> max d (depth x), n + 1) (0, 0)
+        |> fun x -> BlockSet.fold (fun x (d, n) -> max d (depth x), n + 1) x (0, 0)
       and private_depth_exclusive, private_votes_exclusive =
         confirming_votes state.private_
-        |> List.filter N.appended_by_me
-        |> List.fold_left (fun (d, n) x -> max d (depth x), n + 1) (0, 0)
+        |> BlockSet.filter N.appended_by_me
+        |> fun x -> BlockSet.fold (fun x (d, n) -> max d (depth x), n + 1) x (0, 0)
       in
       let ca_height = height state.common
       and private_height = height state.private_
@@ -257,13 +257,6 @@ module Make (Parameters : Tailstorm.Parameters) = struct
 
     let apply (Observable state) action =
       let release kind =
-        let module BlockSet =
-          Set.Make (struct
-            type t = block
-
-            let compare = Compare.by compare_key key
-          end)
-        in
         let rec h release_now seq =
           match seq () with
           | Seq.Nil -> release_now (* override/match not possible; release all *)

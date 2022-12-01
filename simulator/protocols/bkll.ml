@@ -81,8 +81,14 @@ module Make (Parameters : Parameters) = struct
 
     let height x = data x |> height
     let progress x = data x |> progress
-    let confirming_votes x = children x |> List.filter is_vote
-    let confirmed_votes x = parents x |> List.filter is_vote
+
+    let confirming_votes x =
+      assert (is_block x);
+      children x |> List.filter is_vote
+
+    let confirmed_votes x =
+      assert (is_block x);
+      parents x |> List.filter is_vote
 
     let validity vertex =
       match pow vertex, data vertex, parents vertex with
@@ -193,6 +199,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let update_head ~old consider =
+      assert (is_block consider);
       if compare_blocks consider old > 0 then consider else old
     ;;
 

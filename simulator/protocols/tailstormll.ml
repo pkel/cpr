@@ -102,9 +102,14 @@ module Make (Parameters : Parameters) = struct
       Compare.(by ty get)
     ;;
 
+    module BlockSet = Set.Make (struct
+      type t = block
+
+      let compare = Compare.by compare_key key
+    end)
+
     let acc_votes unfold l =
-      let mem x l = List.exists (block_eq x) l in
-      let add x l = if not (mem x l) then x :: l else l in
+      let open BlockSet in
       let rec f acc stack l =
         match l, stack with
         | [], [] -> acc
@@ -112,7 +117,7 @@ module Make (Parameters : Parameters) = struct
         | hd :: tl, stack when is_vote hd -> f (add hd acc) (unfold hd :: stack) tl
         | _ :: tl, stack -> f acc stack tl
       in
-      f [] [] l
+      f empty [] l
     ;;
 
     let confirmed_votes x =
@@ -141,7 +146,7 @@ module Make (Parameters : Parameters) = struct
       | false, p :: votes ->
         (* child is block *)
         let parent = data p in
-        let unique_votes = acc_votes parents votes |> List.length
+        let unique_votes = acc_votes parents votes |> BlockSet.cardinal
         and sorted_votes = Compare.is_sorted ~unique:true compare_votes_in_block votes in
         is_block p
         && sorted_votes
@@ -155,7 +160,9 @@ module Make (Parameters : Parameters) = struct
     (** better is bigger *)
     let compare_blocks =
       let open Compare in
-      let cmp = by int height $ by int (fun x -> List.length (confirming_votes x)) in
+      let cmp =
+        by int height $ by int (fun x -> BlockSet.cardinal (confirming_votes x))
+      in
       skip_eq block_eq cmp
     ;;
 
@@ -179,12 +186,15 @@ module Make (Parameters : Parameters) = struct
       then (
         match parents x |> List.filter is_vote with
         | [] -> []
-        | hd :: _ ->
-          let depth = depth hd in
+        | first :: _ as all ->
+          let depth = depth first in
           let r = if discount then (float_of_int depth +. 1.) /. k *. c else c in
-          if punish
-          then assign r x @ (confirmed_votes x |> List.concat_map (assign r))
-          else confirmed_votes x |> List.concat_map (assign r))
+          let votes =
+            if punish
+            then BlockSet.add x (acc_votes parents [ first ])
+            else BlockSet.add x (acc_votes parents all)
+          in
+          BlockSet.elements votes |> List.concat_map (assign r))
       else []
     ;;
 
@@ -234,13 +244,6 @@ module Make (Parameters : Parameters) = struct
         description of Tailstorm.
     *)
     let altruistic_quorum ~vote_filter b =
-      let module BlockSet =
-        Set.Make (struct
-          type t = block
-
-          let compare = Compare.by compare_key key
-        end)
-      in
       let rec f acc n q l =
         if n = k - 1
         then Some (List.rev q)
@@ -249,13 +252,13 @@ module Make (Parameters : Parameters) = struct
           | [] -> None
           | hd :: tl ->
             let fresh, n_fresh =
-              List.fold_left
-                (fun (fresh, n_fresh) el ->
+              BlockSet.fold
+                (fun el (fresh, n_fresh) ->
                   if BlockSet.mem el acc
                   then fresh, n_fresh
                   else BlockSet.add el fresh, n_fresh + 1)
-                (BlockSet.empty, 0)
                 (acc_votes parents [ hd ])
+                (BlockSet.empty, 0)
             in
             let n' = n + n_fresh in
             if n' > k - 1 || n_fresh < 1
@@ -263,6 +266,7 @@ module Make (Parameters : Parameters) = struct
             else f (BlockSet.union fresh acc) n' (hd :: q) tl)
       in
       confirming_votes b
+      |> BlockSet.elements
       |> List.filter vote_filter
       |> List.sort
            Compare.(
@@ -305,7 +309,7 @@ module Make (Parameters : Parameters) = struct
         assert (not (included x));
         acc := x :: !acc;
         acc_votes parents [ x ]
-        |> List.iter (fun x ->
+        |> BlockSet.iter (fun x ->
                if not (included x)
                then (
                  Hashtbl.replace ht (key x) true;
@@ -314,7 +318,7 @@ module Make (Parameters : Parameters) = struct
         let i = ref 0 in
         let () =
           acc_votes parents [ x ]
-          |> List.iter (fun x ->
+          |> BlockSet.iter (fun x ->
                  if (not (included x)) && (all || appended_by_me x) then incr i)
         in
         !i
@@ -324,6 +328,7 @@ module Make (Parameters : Parameters) = struct
         if !n > 0
         then (
           confirming_votes b
+          |> BlockSet.elements
           |> List.filter vote_filter
           |> List.filter (fun x -> not (included x))
           |> (* calculate own and overall reward for branch *)
@@ -387,7 +392,12 @@ module Make (Parameters : Parameters) = struct
       if k = 1
       then Some []
       else (
-        let a = confirming_votes b |> List.filter vote_filter |> Array.of_list in
+        let a =
+          confirming_votes b
+          |> BlockSet.filter vote_filter
+          |> BlockSet.to_seq
+          |> Array.of_seq
+        in
         let n = Array.length a in
         if Combinatorics.n_choose_k n k > max_options
         then heuristic_quorum ~vote_filter b
@@ -456,10 +466,10 @@ module Make (Parameters : Parameters) = struct
                       let depth = (List.hd leaves |> data).vote in
                       float_of_int (depth + 1) /. float_of_int k
                   in
-                  List.fold_left
-                    (fun acc x -> if appended_by_me x then acc +. per_vote else acc)
-                    1.
+                  BlockSet.fold
+                    (fun x acc -> if appended_by_me x then acc +. per_vote else acc)
                     rewarded_votes
+                    1.
                 in
                 `Ok (reward, leaves)
             in
@@ -506,6 +516,7 @@ module Make (Parameters : Parameters) = struct
       | None ->
         let votes =
           confirming_votes b
+          |> BlockSet.elements
           |> List.filter vote_filter
           |> List.sort compare_votes_in_block
         in
@@ -524,7 +535,9 @@ module Make (Parameters : Parameters) = struct
 
     let compare_blocks ~vote_filter =
       let open Compare in
-      let count x = confirming_votes x |> List.filter vote_filter |> List.length in
+      let count x =
+        confirming_votes x |> BlockSet.filter vote_filter |> BlockSet.cardinal
+      in
       let cmp =
         by int height
         $ by int count (* embed A_k *)

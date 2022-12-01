@@ -97,8 +97,13 @@ module Make (Parameters : Parameters) = struct
         raise_invalid_dag info [ x ] "block_height_exn: not a block"
     ;;
 
-    let confirming_votes x = children x |> List.filter is_vote
-    let confirmed_votes x = parents x |> List.filter is_vote
+    let confirming_votes x =
+      assert (is_block x);
+      children x |> List.filter is_vote
+
+    let confirmed_votes x =
+      assert (is_block x);
+      parents x |> List.filter is_vote
 
     let validity vertex =
       let has_pow x = pow x |> Option.is_some
@@ -220,6 +225,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let update_head ?(vote_filter = Fun.const true) ~old consider =
+      assert (is_block consider);
       if compare_blocks ~vote_filter consider old > 0 then consider else old
     ;;
 
