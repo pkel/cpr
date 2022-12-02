@@ -196,18 +196,24 @@ let log_vertex log clock view info v =
 
 let blockdag (type a) (view : a env Dag.view) : (a block, a) Intf.blockdag =
   (module struct
-    type data = a
     type block = a env Dag.vertex
+    type data = a
 
     let children = Dag.children view
     let parents = Dag.parents view
+
+    module Block = struct
+      type t = block
+
+      let children = children
+      let parents = parents
+      let compare = Dag.compare_vertex
+      let eq = Dag.vertex_eq
+      let neq = Dag.vertex_neq
+    end
+
     let data n = (Dag.data n).value
     let signature n = (Dag.data n).signature
-
-    type key = Dag.key
-
-    let key = Dag.key
-    let compare_key = Dag.compare_key
 
     type hash = int * int
 
@@ -215,8 +221,6 @@ let blockdag (type a) (view : a env Dag.view) : (a block, a) Intf.blockdag =
     let pow n = (Dag.data n).pow
     let max_hash = max_int, max_int
     let min_hash = min_int, 0
-    let block_eq = Dag.vertex_eq
-    let block_neq = Dag.vertex_neq
 
     let raise_invalid_dag info blocks message =
       let info x = List.map (fun (k, v) -> k, Info.string_of_value v) (info x) in

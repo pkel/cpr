@@ -1,48 +1,48 @@
-module type DAG = sig
-  type vertex
+module type Vertex = sig
+  type t
 
-  val parents : vertex -> vertex list
-  val children : vertex -> vertex list
+  val parents : t -> t list
+  val children : t -> t list
 
-  (** Partial order. Blocks have unique keys. For blocks on the same
-      path, compare_key is a full order. In practice key is something like
-      [(depth, id)]. *)
-  type key
-  (* TODO. remove this type, do comparison on key directly *)
+  (** Complete ordering of blocks. Compatible with partial order imposed by
+      {!parents} and {!children}. Parents are smaller. *)
+  val compare : t -> t -> int
+  (** In practice this might compare something like [(depth, serial)], but this
+      is not ensured. *)
 
-  val key : vertex -> key
-  val compare_key : key -> key -> int
+  (** Physical equality. Is it the same vertex? NOT: does it store the same data? *)
+  val eq : t -> t -> bool
+  (** [eq a b] equals [compare a b = 0] *)
 
-  (** physical equality. Is it the same vertex? NOT: does it store the same data? *)
-  val eq : vertex -> vertex -> bool
-
-  val neq : vertex -> vertex -> bool
+  (** Physical inequality. Is it the same vertex? NOT: does it store the same data? *)
+  val neq : t -> t -> bool
+  (** [neq a b] equals [compare a b = 0] *)
 end
 
-module Make (D : DAG) : sig
-  open D
+module Make (V : Vertex) : sig
+  open V
 
   (** Recursively expand DAG in direction of {!D.children} ordered by {!D.compare_key}.
       The starting vertices may be included in the resulting sequence or not.
       Returned vertices are unique. *)
-  val iterate_descendants : include_start:bool -> vertex list -> vertex Seq.t
+  val iterate_descendants : include_start:bool -> t list -> t Seq.t
 
   (** Recursively expand DAG in direction of {!D.parents} ordered by {!D.compare_key}.
       The starting vertices may be included in the resulting sequence or not.
       Returned vertices are unique. *)
-  val iterate_ancestors : include_start:bool -> vertex list -> vertex Seq.t
+  val iterate_ancestors : include_start:bool -> t list -> t Seq.t
 
-  val common_ancestor : vertex -> vertex -> vertex option
-  val common_ancestor' : vertex Seq.t -> vertex option
-  val have_common_ancestor : vertex -> vertex -> bool
+  val common_ancestor : t -> t -> t option
+  val common_ancestor' : t Seq.t -> t option
+  val have_common_ancestor : t -> t -> bool
 end = struct
-  open D
+  open V
 
   let iterate order ~include_start entry_vertices =
     let expand, compare =
       match order with
-      | `Downward -> children, Compare.by compare_key key
-      | `Upward -> parents, Compare.by (Compare.neg compare_key) key
+      | `Downward -> children, compare
+      | `Upward -> parents, Compare.neg compare
     in
     let queue = List.fold_left (fun q n -> OrderedQueue.queue n () q) in
     let entry_vertices =
@@ -71,7 +71,7 @@ end = struct
     let rec h a b =
       match a, b with
       | Seq.Cons (ah, aseq), Seq.Cons (bh, bseq) ->
-        let cmp = Compare.by compare_key key ah bh in
+        let cmp = compare ah bh in
         if cmp = 0
         then Some ah
         else if cmp > 0
@@ -104,27 +104,23 @@ end
 
 let%test_module _ =
   (module struct
-    module D (V : sig
+    module Vertex (M : sig
       val view : int Dag.view
     end) =
     struct
-      include V
+      include M
 
-      type vertex = int Dag.vertex
+      type t = int Dag.vertex
 
       let eq = Dag.vertex_eq
       let neq = Dag.vertex_neq
-
-      type key = Dag.key
-
-      let key = Dag.key
-      let compare_key = Dag.compare_key
+      let compare = Dag.compare_vertex
       let children = Dag.children view
       let parents = Dag.parents view
     end
 
-    let print (type a) (module D : DAG with type vertex = a) ?(indent = "") to_string b =
-      let open D in
+    let print (type a) (module V : Vertex with type t = a) ?(indent = "") to_string b =
+      let open V in
       let rec h indent bl =
         match bl with
         | [ hd ] ->
@@ -161,17 +157,17 @@ let%test_module _ =
       let local = filter (fun i -> data i mod 2 = 0) global in
       let local2 = filter (fun i -> data i < 5) local in
       let module G =
-        D (struct
+        Vertex (struct
           let view = global
         end)
       in
       let module L =
-        D (struct
+        Vertex (struct
           let view = local
         end)
       in
       let module L2 =
-        D (struct
+        Vertex (struct
           let view = local2
         end)
       in
@@ -217,7 +213,7 @@ let%test_module _ =
       let rbaa = append rba 6 in
       let rbaaa = append rbaa 7 in
       let module D =
-        D (struct
+        Vertex (struct
           let view = view t
         end)
       in

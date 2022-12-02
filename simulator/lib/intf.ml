@@ -1,23 +1,15 @@
 module type BlockDAG = sig
+  (** alias for readability *)
   type block
-  type data
 
-  val data : block -> data
   val parents : block -> block list
   val children : block -> block list
 
-  (** Partial order. Blocks have unique keys. For blocks on the same
-      path, compare_key is a full order. In practice key is something like
-      [(depth, id)]. *)
-  type key
+  (** Protocols may store arbitrary data in the block.
+      Think of it as a block header. *)
+  type data
 
-  val key : block -> key
-  val compare_key : key -> key -> int
-
-  (** physical equality. Is it the same block? NOT: does it store the same data? *)
-  val block_eq : block -> block -> bool
-
-  val block_neq : block -> block -> bool
+  val data : block -> data
 
   (** Get id of the signer, if the block was signed. *)
   val signature : block -> int option
@@ -35,6 +27,9 @@ module type BlockDAG = sig
   (** raise exception to indicate invalid DAG structure, i.e., bug in simulator
       or protocol spec *)
   val raise_invalid_dag : (block -> Info.t) -> block list -> string -> 'a
+
+  (** Use this to with {!Dagtools.Make} or {!Set.Make} *)
+  module Block : Dagtools.Vertex with type t = block
 end
 
 type ('a, 'b) blockdag = (module BlockDAG with type block = 'a and type data = 'b)

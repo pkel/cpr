@@ -2,7 +2,7 @@
 open Cpr_lib
 
 module BlockDAG (P : Protocol) = struct
-  type nonrec data = P.data
+  type data = P.data
 
   type env =
     { value : data
@@ -17,20 +17,25 @@ module BlockDAG (P : Protocol) = struct
   let compare_hash = Int.compare
   let dag : env Dag.t = Dag.create ()
   let view = Dag.view dag
-  let key = Dag.id
   let children = Dag.children view
   let parents = Dag.parents view
-  let compare_key = Int.compare
   let data x = (Dag.data x).value
   let pow x = (Dag.data x).pow_hash
   let signature x = (Dag.data x).signed_by
-  let block_eq = Dag.vertex_eq
-  let block_neq = Dag.vertex_neq
 
-  type key = int
   type hash = int
 
   let raise_invalid_dag _meta _blocks msg = failwith msg
+
+  module Block = struct
+    type t = block
+
+    let children = children
+    let parents = parents
+    let compare = Dag.compare_vertex
+    let eq = Dag.vertex_eq
+    let neq = Dag.vertex_neq
+  end
 end
 
 module Ethereum = Ethereum.Make (Ethereum.Byzantium)

@@ -137,7 +137,7 @@ module Make (Parameters : Parameters) = struct
       let cmp =
         by int block_height_exn $ by int (fun x -> List.length (confirming_votes x))
       in
-      skip_eq block_eq cmp
+      skip_eq Block.eq cmp
     ;;
 
     let winner l =
@@ -223,7 +223,7 @@ module Make (Parameters : Parameters) = struct
         $ by (neg compare_hash) leader_hash_exn
         $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
       in
-      skip_eq block_eq cmp
+      skip_eq Block.eq cmp
     ;;
 
     let update_head ?(vote_filter = Fun.const true) ~old consider =

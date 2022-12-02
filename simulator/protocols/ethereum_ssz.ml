@@ -301,14 +301,7 @@ module Make (Parameters : Ethereum.Parameters) = struct
       BeforeAction { public; private_ = state.private_ }
     ;;
 
-    module Dagtools = Dagtools.Make (struct
-      include V
-
-      type vertex = block
-
-      let eq = block_eq
-      let neq = block_neq
-    end)
+    module Dagtools = Dagtools.Make (Block)
 
     let prepare (BeforeAction state) event =
       let public, private_, event =

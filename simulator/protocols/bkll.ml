@@ -124,7 +124,7 @@ module Make (Parameters : Parameters) = struct
     let compare_blocks =
       let open Compare in
       let cmp = by int height $ by int (fun x -> List.length (confirming_votes x)) in
-      skip_eq block_eq cmp
+      skip_eq Block.eq cmp
     ;;
 
     let winner l =
@@ -197,7 +197,7 @@ module Make (Parameters : Parameters) = struct
         $ by int (fun x -> if appended_by_me x then 1 else 0)
         $ by (neg float) visible_since
       in
-      skip_eq block_eq cmp
+      skip_eq Block.eq cmp
     ;;
 
     let update_head ~old consider =

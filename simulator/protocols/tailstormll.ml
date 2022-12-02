@@ -102,11 +102,7 @@ module Make (Parameters : Parameters) = struct
       Compare.(by ty get)
     ;;
 
-    module BlockSet = Set.Make (struct
-      type t = block
-
-      let compare = Compare.by compare_key key
-    end)
+    module BlockSet = Set.Make (Block)
 
     let acc_votes unfold l =
       let open BlockSet in
@@ -163,7 +159,7 @@ module Make (Parameters : Parameters) = struct
       let cmp =
         by int height $ by int (fun x -> BlockSet.cardinal (confirming_votes x))
       in
-      skip_eq block_eq cmp
+      skip_eq Block.eq cmp
     ;;
 
     let winner l =
@@ -303,7 +299,11 @@ module Make (Parameters : Parameters) = struct
       let ht = Hashtbl.create (2 * k)
       and acc = ref []
       and n = ref (k - 1) in
-      let included x = Hashtbl.mem ht (key x) in
+      let included x =
+        Hashtbl.mem ht x
+        (* TODO hashing the whole block is not the best idea, I guess. Will recurse in
+           both directions of the DAG. *)
+      in
       let include_ x =
         assert (not (included x));
         acc := x :: !acc;
@@ -311,7 +311,7 @@ module Make (Parameters : Parameters) = struct
         |> BlockSet.iter (fun x ->
                if not (included x)
                then (
-                 Hashtbl.replace ht (key x) true;
+                 Hashtbl.replace ht x true;
                  decr n))
       and reward ?(all = false) x =
         let i = ref 0 in
@@ -399,13 +399,7 @@ module Make (Parameters : Parameters) = struct
         then None
         else (
           let a' =
-            let module BlockMap =
-              Map.Make (struct
-                type t = block
-
-                let compare = Compare.by compare_key key
-              end)
-            in
+            let module BlockMap = Map.Make (Block) in
             let _, m =
               Array.fold_left
                 (fun (i, m) x -> i + 1, BlockMap.add x i m)
@@ -536,7 +530,7 @@ module Make (Parameters : Parameters) = struct
         $ by int count (* embed A_k *)
         $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
       in
-      skip_eq block_eq cmp
+      skip_eq Block.eq cmp
     ;;
 
     let update_head ?(vote_filter = Fun.const true) ~old consider =

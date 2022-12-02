@@ -205,14 +205,7 @@ end = struct
     }
   ;;
 
-  module Dagtools = Dagtools.Make (struct
-    include V
-
-    type vertex = block
-
-    let eq = block_eq
-    let neq = block_neq
-  end)
+  module Dagtools = Dagtools.Make (Block)
 
   (* call this whenever public or private_ changes *)
   let set_common state =

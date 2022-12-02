@@ -77,14 +77,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
       BeforeAction { public; private_ = state.private_ }
     ;;
 
-    module Dagtools = Dagtools.Make (struct
-      include V
-
-      type vertex = block
-
-      let eq = block_eq
-      let neq = block_neq
-    end)
+    module Dagtools = Dagtools.Make (Block)
 
     let prepare (BeforeAction state) event =
       let public, private_, event =
@@ -135,20 +128,13 @@ module Make (Parameters : Tailstormll.Parameters) = struct
 
     let apply (Observable state) action =
       let release kind =
-        let module BlockSet =
-          Set.Make (struct
-            type t = block
-
-            let compare = Compare.by compare_key key
-          end)
-        in
         let rec h release_now seq =
           match seq () with
           | Seq.Nil -> release_now (* override/match not possible; release all *)
           | Seq.Cons (x, seq) ->
             let release_now' = BlockSet.add x release_now in
             let vote_filter x = public_visibility x || BlockSet.mem x release_now' in
-            if block_neq
+            if Block.eq
                  state.public
                  (N.update_head ~vote_filter ~old:state.public (last_block x))
             then (

@@ -177,14 +177,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
       BeforeAction { public; private_ = state.private_ }
     ;;
 
-    module Dagtools = Dagtools.Make (struct
-      include V
-
-      type vertex = block
-
-      let eq = block_eq
-      let neq = block_neq
-    end)
+    module Dagtools = Dagtools.Make (Block)
 
     (* A few things happen unconditionally, before the agent observes the state and
        chooses an action: *)
@@ -263,7 +256,7 @@ module Make (Parameters : Tailstorm.Parameters) = struct
           | Seq.Cons (x, seq) ->
             let release_now' = BlockSet.add x release_now in
             let vote_filter x = public_visibility x || BlockSet.mem x release_now' in
-            if block_neq
+            if Block.eq
                  state.public
                  (N.update_head ~vote_filter ~old:state.public (last_summary x))
             then (

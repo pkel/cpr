@@ -126,15 +126,15 @@ module Make (Parameters : Parameters) = struct
           let k = bd.height - ud.height in
           1 <= k && k <= 6
         and check_unique_in_parents u =
-          let n = List.filter (block_eq u) (p :: uncles) |> List.length in
+          let n = List.filter (Block.eq u) (p :: uncles) |> List.length in
           n = 1
         and check_direct_child_of_ancestor u =
           match parents u with
           | [] -> false
-          | hd :: _ -> List.exists (block_eq hd) ancestors
+          | hd :: _ -> List.exists (Block.eq hd) ancestors
         and check_unique_in_chain u =
-          List.for_all (block_neq u) ancestors
-          && List.for_all (block_neq u) previous_uncles
+          List.for_all (Block.neq u) ancestors
+          && List.for_all (Block.neq u) previous_uncles
         in
         check_height ()
         && check_work ()
@@ -252,11 +252,11 @@ module Make (Parameters : Parameters) = struct
         List.fold_left
           (fun acc b ->
             let uncles =
-              let not_in_chain b = List.for_all (block_neq b) in_chain
+              let not_in_chain b = List.for_all (Block.neq b) in_chain
               and parent_block_in_chain b =
                 match parents b with
                 | [] -> (* we hit the root *) false
-                | b :: _ -> List.exists (block_eq b) non_uncle_ancestors
+                | b :: _ -> List.exists (Block.eq b) non_uncle_ancestors
               in
               children b
               |> List.filter (fun candidate ->
