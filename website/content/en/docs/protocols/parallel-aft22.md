@@ -60,6 +60,9 @@ green arrows.
 
 ## Specification
 
+Have a look at [the methodology page for protocol specification]({{< method
+"protocol-specification" >}}) to learn how to read this.
+
 ### Parameters
 
 `k`: number of votes per block
@@ -71,15 +74,17 @@ def roots():
     return [Block(height=0, miner=None, kind="block")]
 
 
-def last_block(b: Block):
-    assert b.kind == "block"
-    return b.parents()[0].parents()[0]
+def parent_block(b: Block):
+    if b.kind == "block":
+        return b.parents()[0].parents()[0]
+    else:
+        return b.parents()[0]
 
 
 def validity(b: Block):
     parents = b.parents()
     if b.kind == "block":
-        p = last_block(b)
+        p = parent_block(b)
         assert len(parents) == k
         assert b.signed_by(parents[0].miner)
         assert b.height == p.height + 1
@@ -155,6 +160,17 @@ def update(old: Block, new: Block, event: string):
 def mining(b: Block):
     assert b.kind == "block"
     return Block(kind="vote", parents=[b], miner=my_id)
+```
+
+### Difficulty Adjustment
+
+```python
+def progress(b: Block):
+    if b.kind == "block":
+        return b.height * k
+    else:
+        p = parent_block(b)
+        return p.height * k + 1
 ```
 
 ### Rewards

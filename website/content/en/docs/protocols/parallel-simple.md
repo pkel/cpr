@@ -80,6 +80,9 @@ The same parallel proof-of-work blockchain with potential orphans in gray.
 
 ## Specification
 
+Have a look at [the methodology page for protocol specification]({{< method
+"protocol-specification" >}}) to learn how to read this.
+
 ### Parameters
 
 `k`: number of proofs-of-work per block (or number of votes per
@@ -92,15 +95,17 @@ def roots():
     return [Block(height=0, miner=None, kind="block")]
 
 
-def last_block(b: Block):
-    assert b.kind == "block"
-    return b.parents()[0].parents()[0]
+def parent_block(b: Block):
+    if b.kind == "block":
+        return b.parents()[0].parents()[0]
+    else:
+        return b.parents()[0]
 
 
 def validity(b: Block):
     assert b.has_pow()
     if b.kind == "block":
-        p = last_block(b)
+        p = parent_block(b)
         assert len(b.parents()) == k - 1
         assert b.height == p.height + 1
         for x in b.parents():
@@ -131,9 +136,12 @@ def preference(old: Block, new: Block):
 
 
 def update(old: Block, new: Block, event: string):
-    b = last_block(new) if new.kind != "block" else new
+    if new.kind == "block":
+        consider = new
+    else:
+        consider = parent_block(new)
     return Update(
-        state=preference(old, b),
+        state=preference(old, consider),
         share=[new] if event == "mining" else [],
     )
 
@@ -151,6 +159,17 @@ def mining(b: Block):
             parents=votes,
             miner=my_id,
         )
+```
+
+### Difficulty Adjustment
+
+```python
+def progress(b: Block):
+    if b.kind == "block":
+        return b.height * k
+    else:
+        p = parent_block(b)
+        return p.height * k + 1
 ```
 
 ### Rewards

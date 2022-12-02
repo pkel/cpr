@@ -64,6 +64,9 @@ sub-blocks with their depth. The gray blocks are orphaned.
 
 ## Specification
 
+Have a look at [the methodology page for protocol specification]({{< method
+"protocol-specification" >}}) to learn how to read this.
+
 ### Parameters
 
 `k`: number of sub-blocks per summary-block
@@ -75,7 +78,7 @@ def roots():
     return [Block(height=0, miner=None, kind="summary")]
 
 
-def last_summary(b: Block):
+def parent_summary(b: Block):
     b = b.parents()[0]
     while b.kind != "summary":
         b = b.parents()[0]
@@ -102,12 +105,12 @@ def confirming_sub_blocks(b: Block):
 
 def validity(b: Block):
     if b.kind == "summary":
-        s = last_summary(b)
+        p = parent_summary(b)
         assert len(confirmed_sub_blocks(b)) == k
-        assert b.height == s.height + 1
+        assert b.height == p.height + 1
         assert b.depth == 0
         for x in confirmed_sub_blocks(b):
-            assert last_summary(x) == s
+            assert parent_summary(x) == p
     elif b.kind == "sub-block":
         parents = b.parents()
         assert len(parents) == 1
@@ -152,7 +155,12 @@ def summarize(b: Block):
         # k sub-blocks and own-reward is maximized.
         leaves = ...
         return [
-            Block(kind="summary", height=b.height + 1, parents=leaves)
+            Block(
+                kind="summary",
+                height=b.height + 1,
+                depth=0,
+                parents=leaves,
+            )
         ]
 
 
@@ -160,11 +168,11 @@ def update(old: Block, new: Block, event: string):
     if new.kind == "summary":
         return Update(state=preference(old, new))
     else:  # new.kind == "sub-block"
-        b = last_summary(new)
+        p = parent_summary(new)
         return Update(
-            state=preference(old, b),
+            state=preference(old, p),
             share=[new] if event == "mining" else [],
-            append=attempt_summary(b),
+            append=attempt_summary(p),
         )
 
 
@@ -181,6 +189,13 @@ def mining(b: Block):
         parents=[best],
         miner=my_id,
     )
+```
+
+### Difficulty Adjustment
+
+```python
+def progress(b: Block):
+    return b.height * k + b.depth
 ```
 
 ### Rewards

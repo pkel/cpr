@@ -114,6 +114,9 @@ block.
 
 ## Specification
 
+Have a look at [the methodology page for protocol specification]({{< method
+"protocol-specification" >}}) to learn how to read this.
+
 ### Parameters
 
 `k`: number of proofs-of-work per blocks (or number of votes per block
@@ -126,7 +129,7 @@ def roots():
     return [Block(height=0, miner=None, kind="block")]
 
 
-def last_block(b: Block):
+def parent_block(b: Block):
     b = b.parents()[0]
     while b.kind != "block":
         b = b.parents()[0]
@@ -154,11 +157,11 @@ def confirming_votes(b: Block):
 def validity(b: Block):
     assert b.has_pow()
     if b.kind == "block":
-        assert b.height == last_block(b).height + 1
+        assert b.height == parent_block(b).height + 1
         assert b.depth == 0
         assert len(confirmed_votes(b)) == k - 1
         for x in confirmed_votes(b):
-            assert last_block(x) == last_block(b)
+            assert parent_block(x) == parent_block(b)
     elif b.kind == "vote":
         parents = b.parents()
         assert len(parents) == 1
@@ -177,7 +180,7 @@ def init(roots: [Block]):
 
 def preference(old: Block, new: Block):
     if new.kind != "block":
-        new = last_block(new)
+        new = parent_block(new)
     if new.height > old.height:
         return new
     if new.height < old.height:
@@ -230,6 +233,13 @@ def mining(b: Block):
             parents=leaves,
             miner=my_id,
         )
+```
+
+### Difficulty Adjustment
+
+```python
+def progress(b: Block):
+    return b.height * k + b.depth
 ```
 
 ### Rewards
@@ -288,7 +298,7 @@ the tree of the leftmost block, thus we cannot calculate its rewards.
 ```python
 def discount1_reward(b: Block):
     if b.kind == "block":
-        pows = confirmed_votes(b) | last_block(b)
+        pows = confirmed_votes(b) | parent_block(b)
         d = max([x.depth for x in b.parents()])
         return [Reward(x.miner, (d + 1) / k) for x in pows]
 ```
@@ -340,7 +350,7 @@ def discount3_reward(b: Block):
     if b.kind == "block":
         d = max([x.depth for x in b.parents()])
         block_rewards = [
-            Reward(b.miner, d / k / 2) for x in [b, last_block(b)]
+            Reward(b.miner, d / k / 2) for x in [b, parent_block(b)]
         ]
         vote_rewards = [
             Reward(x.miner, d / k) for x in confirmed_votes(b)

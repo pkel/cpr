@@ -52,6 +52,9 @@ gray blocks are orphaned.
 
 ## Specification
 
+Have a look at [the methodology page for protocol specification]({{< method
+"protocol-specification" >}}) to learn how to read this.
+
 ### Blockchain
 
 ```python
@@ -84,6 +87,13 @@ def update(old: Block, new: Block, event: string):
 
 def mining(b: Block):
     return Block(height=b.height + 1, parents=[b], miner=Env.my_id)
+```
+
+### Difficulty Adjustment
+
+```python
+def progress(b: Block):
+    return b.height
 ```
 
 ### Rewards
