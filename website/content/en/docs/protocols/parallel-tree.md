@@ -126,7 +126,7 @@ plus one)
 
 ```python
 def roots():
-    return [Block(height=0, miner=None, kind="block")]
+    return [Block(height=0, depth=0, miner=None, kind="block")]
 
 
 def parent_block(b: Block):
@@ -244,11 +244,35 @@ def progress(b: Block):
 
 ### Rewards
 
+```python
+def local_tip(b: Block):
+    return b
+
+
+def global_tip(l: [Block]):
+    b = l[0]
+    for i in range(1, len(l)):
+        b = preference(b, l[i])
+    return b
+
+
+def history(b: Block):
+    h = [b]
+    p = b.parents()
+    while p != []:
+        b = p[0]
+        if b.kind == "block":
+            h.append(b)
+        p = b.parents()
+    return h
+```
+
 #### Constant reward
 
 ```python
 def constant_reward(b: Block):
-    return [Reward(b.miner, 1)]
+    assert b.kind == "block"
+    return [Reward(x.miner, 1) for x in {b} | confirming_votes(b)]
 ```
 
 {{< mermaid-figure >}}
@@ -269,14 +293,16 @@ parallel proof-of-work](../parallel-simple).
 
 #### Discount reward
 
-A couple of variants are possible
+Tree-style voting opens up a new design space for reward functions that
+take into account the depth of the vote-tree. Countless variants are
+possible. We list only a few to provide an intuition.
 
 ```python
 def discount0_reward(b: Block):
-    if b.kind == "block":
-        pows = {b} | confirmed_votes(b)
-        d = max([x.depth for x in b.parents()])
-        return [Reward(x.miner, (d + 1) / k) for x in pows]
+    assert b.kind == "block"
+    d = max([x.depth for x in b.parents()])
+    r = (d + 1) / k
+    return [Reward(x.miner, r) for x in {b} | confirmed_votes(b)]
 ```
 
 {{< mermaid-figure >}}
@@ -297,10 +323,12 @@ the tree of the leftmost block, thus we cannot calculate its rewards.
 
 ```python
 def discount1_reward(b: Block):
-    if b.kind == "block":
-        pows = confirmed_votes(b) | parent_block(b)
-        d = max([x.depth for x in b.parents()])
-        return [Reward(x.miner, (d + 1) / k) for x in pows]
+    assert b.kind == "block"
+    d = max([x.depth for x in b.parents()])
+    r = (d + 1) / k
+    return [
+        Reward(x.miner, r) for x in confirmed_votes(b) | parent_block(b)
+    ]
 ```
 
 {{< mermaid-figure >}}
@@ -322,11 +350,11 @@ Compared to the `discount0` scheme, only the blocks' rewards change.
 
 ```python
 def discount2_reward(b: Block):
-    if b.kind == "block":
-        d = max([x.depth for x in b.parents()])
-        return [Reward(b.miner, 1)] + [
-            Reward(x.miner, d / k) for x in confirmed_votes(b)
-        ]
+    assert b.kind == "block"
+    r = max([x.depth for x in b.parents()]) / k
+    return [Reward(b.miner, 1)] + [
+        Reward(x.miner, r) for x in confirmed_votes(b)
+    ]
 ```
 
 {{< mermaid-figure >}}
@@ -347,15 +375,13 @@ constant rewards.
 
 ```python
 def discount3_reward(b: Block):
-    if b.kind == "block":
-        d = max([x.depth for x in b.parents()])
-        block_rewards = [
-            Reward(b.miner, d / k / 2) for x in [b, parent_block(b)]
-        ]
-        vote_rewards = [
-            Reward(x.miner, d / k) for x in confirmed_votes(b)
-        ]
-        return block_rewards + vote_rewards
+    assert b.kind == "block"
+    r = max([x.depth for x in b.parents()]) / k
+    block_rewards = [
+        Reward(b.miner, r / 2) for x in [b, parent_block(b)]
+    ]
+    vote_rewards = [Reward(x.miner, r) for x in confirmed_votes(b)]
+    return block_rewards + vote_rewards
 ```
 
 {{< mermaid-figure >}}

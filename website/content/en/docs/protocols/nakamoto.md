@@ -99,6 +99,27 @@ def progress(b: Block):
 ### Rewards
 
 ```python
+def local_tip(b: Block):
+    return b
+
+
+def global_tip(l: [Block]):
+    b = l[0]
+    for i in range(1, len(l)):
+        if l[i].height > b.height:
+            b = l[i]
+    return b
+
+
+def history(b: Block):
+    h = [b]
+    p = b.parents()
+    while p != []:
+        h.append(p[0])
+        p = p[0].parents()
+    return h
+
+
 def reward(b: Block):
     return [Reward(b.miner, 1)]
 ```

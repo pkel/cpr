@@ -75,7 +75,7 @@ Have a look at [the methodology page for protocol specification]({{< method
 
 ```python
 def roots():
-    return [Block(height=0, miner=None, kind="summary")]
+    return [Block(height=0, depth=0, miner=None, kind="summary")]
 
 
 def parent_summary(b: Block):
@@ -200,12 +200,35 @@ def progress(b: Block):
 
 ### Rewards
 
+```python
+def local_tip(b: Block):
+    return b
+
+
+def global_tip(l: [Block]):
+    b = l[0]
+    for i in range(1, len(l)):
+        b = preference(b, l[i])
+    return b
+
+
+def history(b: Block):
+    h = [b]
+    p = b.parents()
+    while p != []:
+        b = p[0]
+        if b.kind == "summary":
+            h.append(b)
+        p = b.parents()
+    return h
+```
+
 #### Constant reward
 
 ```python
 def constant_reward(b: Block):
-    if b.kind == "summary":
-        return [Reward(x.miner, 1) for x in confirming_sub_blocks(b)]
+    assert b.kind == "summary"
+    return [Reward(x.miner, 1) for x in confirmed_sub_blocks(b)]
 ```
 
 {{< mermaid-figure >}}
@@ -233,9 +256,9 @@ miners of sub-blocks get assigned rewards.
 
 ```python
 def discount_reward(b: Block):
-    if b.kind == "summary":
-        d = max([x.depth for x in b.parents()])
-        return [Reward(x.miner, d / k) for x in confirmed_sub_blocks(b)]
+    assert b.kind == "summary"
+    r = max([x.depth for x in b.parents()]) / k
+    return [Reward(x.miner, r) for x in confirmed_sub_blocks(b)]
 ```
 
 {{< mermaid-figure >}}
