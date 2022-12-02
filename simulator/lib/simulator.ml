@@ -27,14 +27,13 @@ type 'a from_node_event =
   | Append of ('a block, 'a) Intf.block_draft
   | PowProposal of ('a block, 'a) Intf.block_draft
 
-type 'prot_data event =
+type 'a event =
   | StochasticClock
-  | Dag of
-      int * [ `Append | `ProofOfWork ] * ('prot_data block, 'prot_data) Intf.block_draft
-  | Network of int * [ `Rx | `Tx ] * 'prot_data block
-  | OnNode of int * 'prot_data block Intf.event
-  | MakeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'prot_data block
-  | MadeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'prot_data block
+  | Dag of int * [ `Append | `ProofOfWork ] * ('a block, 'a) Intf.block_draft
+  | Network of int * [ `Rx | `Tx ] * 'a block
+  | OnNode of int * 'a block Intf.event
+  | MakeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'a block
+  | MadeVisible of int * [ `Append | `Network | `ProofOfWork ] * 'a block
 
 let string_of_vertex view x =
   let open Printf in
@@ -87,32 +86,29 @@ let string_of_event view =
     sprintf "OnNode (node %i, %s, vtx %s)" node kind (string_of_vertex view vertex)
 ;;
 
-type 'prot_data clock =
+type 'a clock =
   { mutable now : float
-  ; mutable queue : (float, 'prot_data event) OrderedQueue.t
+  ; mutable queue : (float, 'a event) OrderedQueue.t
   ; mutable c_activations : int
   }
 
-type ('prot_data, 'node_state) node' =
-  { mutable state : 'node_state
-  ; view : ('prot_data block, 'prot_data) Intf.view
-  ; handler :
-      'node_state
-      -> 'prot_data block Intf.event
-      -> ('prot_data block, 'prot_data, 'node_state) Intf.action
-  ; puzzle_payload : 'node_state -> ('prot_data block, 'prot_data) Intf.block_draft
-  ; preferred : 'node_state -> 'prot_data block
+type ('a, 'b) node' =
+  { mutable state : 'b
+  ; view : ('a block, 'a) Intf.view
+  ; handler : 'b -> 'a block Intf.event -> ('a block, 'a, 'b) Intf.action
+  ; puzzle_payload : 'b -> ('a block, 'a) Intf.block_draft
+  ; preferred : 'b -> 'a block
   }
 
-type 'prot_data node = Node : ('prot_data, 'node_state) node' -> 'prot_data node
+type 'a node = Node : ('a, 'b) node' -> 'a node
 
-type 'prot_data state =
-  { clock : 'prot_data clock
-  ; dag : 'prot_data env Dag.t
-  ; roots : 'prot_data block list
-  ; global_view : 'prot_data env Dag.view
-  ; referee : ('prot_data block, 'prot_data) Intf.referee
-  ; nodes : 'prot_data node array
+type 'a state =
+  { clock : 'a clock
+  ; dag : 'a env Dag.t
+  ; roots : 'a block list
+  ; global_view : 'a env Dag.view
+  ; referee : ('a block, 'a) Intf.referee
+  ; nodes : 'a node array
   ; activations : int array
   ; assign_pow_distr : int Distributions.iid
   ; activation_delay_distr : float Distributions.iid
