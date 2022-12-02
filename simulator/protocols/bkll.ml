@@ -111,7 +111,7 @@ module Make (Parameters : Parameters) = struct
             List.fold_left
               (fun (ok, h, i) x ->
                 let h' = pow x |> Option.get in
-                is_vote x && h' > h && ok, h', i + 1)
+                is_vote x && compare_pow h' h > 0 && ok, h', i + 1)
               (true, pow vote0 |> Option.get, 1)
               votes
           in
@@ -219,7 +219,7 @@ module Make (Parameters : Parameters) = struct
                 (k - 1)
                 votes
              |> Option.get
-             |> List.sort Compare.(by compare_hash pow_hash_exn))
+             |> List.sort Compare.(by compare_pow pow_hash_exn))
         in
         { parents; data = Block { height; miner = Some my_id }; sign = false })
       else (

@@ -123,9 +123,9 @@ module Make (Parameters : Parameters) = struct
     (* smaller is better *)
     let compare_votes_in_block =
       let get x =
-        let hash = pow x |> Option.value ~default:min_hash in
+        let hash = pow x |> Option.value ~default:min_pow in
         depth x, hash
-      and ty = Compare.(tuple (neg int) compare_hash) in
+      and ty = Compare.(tuple (neg int) compare_pow) in
       Compare.(by ty get)
     ;;
 
@@ -302,9 +302,9 @@ module Make (Parameters : Parameters) = struct
            (List.sort
               Compare.(
                 by
-                  (tuple (neg int) compare_hash)
+                  (tuple (neg int) compare_pow)
                   (fun x ->
-                    let hash = pow x |> Option.value ~default:max_hash in
+                    let hash = pow x |> Option.value ~default:max_pow in
                     depth x, hash)))
     ;;
 

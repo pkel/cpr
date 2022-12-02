@@ -215,12 +215,12 @@ let blockdag (type a) (view : a env Dag.view) : (a block, a) Intf.blockdag =
     let data n = (Dag.data n).value
     let signature n = (Dag.data n).signature
 
-    type hash = int * int
+    type pow = int * int
 
-    let compare_hash = compare
+    let compare_pow = compare
     let pow n = (Dag.data n).pow
-    let max_hash = max_int, max_int
-    let min_hash = min_int, 0
+    let max_pow = max_int, max_int
+    let min_pow = min_int, 0
 
     let raise_invalid_dag info blocks message =
       let info x = List.map (fun (k, v) -> k, Info.string_of_value v) (info x) in

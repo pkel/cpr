@@ -204,7 +204,7 @@ module Make (Parameters : Bk.Parameters) = struct
         | [] -> false
         | votes ->
           let leader =
-            Compare.first Compare.(by compare_hash (fun n -> pow n |> Option.get)) 1 votes
+            Compare.first Compare.(by compare_pow (fun n -> pow n |> Option.get)) 1 votes
             |> Option.get
             |> List.hd
           in

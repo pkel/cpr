@@ -12,9 +12,9 @@ module BlockDAG (P : Protocol) = struct
 
   type block = env Dag.vertex
 
-  let min_hash = 0
-  let max_hash = 100
-  let compare_hash = Int.compare
+  let min_pow = 0
+  let max_pow = 100
+  let compare_pow = Int.compare
   let dag : env Dag.t = Dag.create ()
   let view = Dag.view dag
   let children = Dag.children view
@@ -23,7 +23,7 @@ module BlockDAG (P : Protocol) = struct
   let pow x = (Dag.data x).pow_hash
   let signature x = (Dag.data x).signed_by
 
-  type hash = int
+  type pow = int
 
   let raise_invalid_dag _meta _blocks msg = failwith msg
 

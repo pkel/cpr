@@ -14,15 +14,16 @@ module type BlockDAG = sig
   (** Get id of the signer, if the block was signed. *)
   val signature : block -> int option
 
-  type hash
+  (** proof-of-work hash, some protocols use is as source of entropy *)
+  type pow
 
   (** Get proof-of-work hash of the block, if the block was attached via
       proof-of-work. *)
-  val pow : block -> hash option
+  val pow : block -> pow option
 
-  val max_hash : hash
-  val min_hash : hash
-  val compare_hash : hash -> hash -> int
+  val max_pow : pow
+  val min_pow : pow
+  val compare_pow : pow -> pow -> int
 
   (** raise exception to indicate invalid DAG structure, i.e., bug in simulator
       or protocol spec *)

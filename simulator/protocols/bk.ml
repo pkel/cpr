@@ -119,7 +119,7 @@ module Make (Parameters : Parameters) = struct
             List.fold_left
               (fun (ok, h, i) n ->
                 let h' = pow_hash n in
-                is_vote n && h' > h && ok, h', i + 1)
+                is_vote n && compare_pow h' h > 0 && ok, h', i + 1)
               (true, pow_hash vote0, 1)
               votes
           in
@@ -212,7 +212,7 @@ module Make (Parameters : Parameters) = struct
         | None -> raise (Invalid_argument "invalid dag / vote"))
       | _ ->
         (* happens for genesis node *)
-        max_hash
+        max_pow
     ;;
 
     let compare_blocks ~vote_filter =
@@ -220,7 +220,7 @@ module Make (Parameters : Parameters) = struct
       let cmp =
         by int block_height_exn
         $ by int (fun x -> List.length (confirming_votes x |> List.filter vote_filter))
-        $ by (neg compare_hash) leader_hash_exn
+        $ by (neg compare_pow) leader_hash_exn
         $ by (neg float) visible_since (* TODO. Maybe this should be received_at? *)
       in
       skip_eq Block.eq cmp
@@ -249,13 +249,13 @@ module Make (Parameters : Parameters) = struct
               else my_hash, replace_hash, mine, nmine, x :: theirs, ntheirs + 1
             | Block _ ->
               my_hash, min replace_hash (leader_hash_exn x), mine, nmine, theirs, ntheirs)
-          (max_hash, max_hash, [], 0, [], 0)
+          (max_pow, max_pow, [], 0, [], 0)
           (confirming_votes b |> List.filter vote_filter)
       in
       if replace_hash <= my_hash || nmine + ntheirs < k
       then (* fast path *) None
       else if nmine >= k
-      then Compare.first Compare.(by compare_hash pow_hash_exn) k mine
+      then Compare.first Compare.(by compare_pow pow_hash_exn) k mine
       else (
         let theirs, ntheirs =
           List.fold_left
@@ -276,7 +276,7 @@ module Make (Parameters : Parameters) = struct
               theirs
             |> Option.get
           in
-          mine @ theirs |> List.sort Compare.(by compare_hash pow_hash_exn) |> Option.some))
+          mine @ theirs |> List.sort Compare.(by compare_pow pow_hash_exn) |> Option.some))
     ;;
 
     let puzzle_payload preferred =
