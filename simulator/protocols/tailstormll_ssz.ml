@@ -11,31 +11,31 @@ module Make (Parameters : Tailstormll.Parameters) = struct
   module Observation = Tailstorm_ssz.Observation
   module Action = Ssz_tools.Action8
 
-  module Agent (V : LocalView with type data = data) = struct
+  module Agent (V : View with type data = data) = struct
     open Protocol.Referee (V)
     include V
     module N = Honest (V)
 
     type state =
       | BetweenActions of
-          { public : env Dag.vertex (* defender's preferred block *)
-          ; private_ : env Dag.vertex (* attacker's preferred block *)
+          { public : block (* defender's preferred block *)
+          ; private_ : block (* attacker's preferred block *)
           ; mining : [ `Inclusive | `Exclusive ]
           ; pending_private_to_public_messages :
-              env Dag.vertex list (* messages sent with last action *)
+              block list (* messages sent with last action *)
           }
 
     type state_before_action =
       | BeforeAction of
-          { public : env Dag.vertex
-          ; private_ : env Dag.vertex
+          { public : block
+          ; private_ : block
           }
 
     type observable_state =
       | Observable of
-          { public : env Dag.vertex
-          ; private_ : env Dag.vertex
-          ; common : env Dag.vertex
+          { public : block
+          ; private_ : block
+          ; common : block
           ; event : [ `ProofOfWork | `Network ]
           }
 
@@ -77,6 +77,8 @@ module Make (Parameters : Tailstormll.Parameters) = struct
       BeforeAction { public; private_ = state.private_ }
     ;;
 
+    module Dagtools = Dagtools.Make (Block)
+
     let prepare (BeforeAction state) event =
       let public, private_, event =
         match event with
@@ -88,7 +90,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
           (* simulate defender *)
           N.update_head ~old:state.public (last_block x), state.private_, `Network
       in
-      let common = Dag.common_ancestor view public private_ |> Option.get in
+      let common = Dagtools.common_ancestor public private_ |> Option.get in
       Observable { public; private_; common; event }
     ;;
 
@@ -97,16 +99,16 @@ module Make (Parameters : Tailstormll.Parameters) = struct
     let observe (Observable state) =
       let open Observation in
       let public_depth, public_votes =
-        Dag.iterate_descendants votes_only [ state.public ]
-        |> Seq.filter public_visibility
-        |> Seq.fold_left (fun (d, n) x -> max d (depth x), n + 1) (0, 0)
+        confirming_votes state.public
+        |> BlockSet.filter public_visibility
+        |> fun x -> BlockSet.fold (fun x (d, n) -> max d (depth x), n + 1) x (0, 0)
       and private_depth_inclusive, private_votes_inclusive =
-        Dag.iterate_descendants votes_only [ state.private_ ]
-        |> Seq.fold_left (fun (d, n) x -> max d (depth x), n + 1) (0, 0)
+        confirming_votes state.private_
+        |> fun x -> BlockSet.fold (fun x (d, n) -> max d (depth x), n + 1) x (0, 0)
       and private_depth_exclusive, private_votes_exclusive =
-        Dag.iterate_descendants votes_only [ state.private_ ]
-        |> Seq.filter N.appended_by_me
-        |> Seq.fold_left (fun (d, n) x -> max d (depth x), n + 1) (0, 0)
+        confirming_votes state.private_
+        |> BlockSet.filter N.appended_by_me
+        |> fun x -> BlockSet.fold (fun x (d, n) -> max d (depth x), n + 1) x (0, 0)
       in
       let ca_height = height state.common
       and private_height = height state.private_
@@ -126,14 +128,15 @@ module Make (Parameters : Tailstormll.Parameters) = struct
 
     let apply (Observable state) action =
       let release kind =
-        let module Map = Map.Make (Int) in
         let rec h release_now seq =
           match seq () with
           | Seq.Nil -> release_now (* override/match not possible; release all *)
           | Seq.Cons (x, seq) ->
-            let release_now' = Map.add (Dag.id x) x release_now in
-            let vote_filter x = public_visibility x || Map.mem (Dag.id x) release_now' in
-            if state.public $!= N.update_head ~vote_filter ~old:state.public x
+            let release_now' = BlockSet.add x release_now in
+            let vote_filter x = public_visibility x || BlockSet.mem x release_now' in
+            if Block.eq
+                 state.public
+                 (N.update_head ~vote_filter ~old:state.public (last_block x))
             then (
               (* release_now' is just enough to override; release_now was not enough; *)
               match kind with
@@ -141,11 +144,10 @@ module Make (Parameters : Tailstormll.Parameters) = struct
               | `Match -> release_now)
             else h release_now' seq
         in
-        Dag.iterate_descendants view [ state.common ]
+        Dagtools.iterate_descendants ~include_start:true [ state.common ]
         |> Seq.filter (fun x -> not (public_visibility x))
-        |> h Map.empty
-        |> Map.bindings
-        |> List.map snd
+        |> h BlockSet.empty
+        |> BlockSet.elements
       in
       let share, private_ =
         match (action : Action.t) with
@@ -168,7 +170,7 @@ module Make (Parameters : Tailstormll.Parameters) = struct
     ;;
   end
 
-  let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =
+  let attacker (type a) policy ((module V) : (a, data) view) : (a, data) node =
     Node
       (module struct
         include Agent (V)

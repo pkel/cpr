@@ -4,13 +4,12 @@ type task =
   | Task :
       { activations : int
       ; network : Network.t
-      ; protocol : (module Protocol with type data = 'dag_data)
+      ; protocol : (module Protocol with type data = 'a)
       ; attack :
-          (('dag_data Simulator.env, 'dag_data) local_view
-           -> ('dag_data Simulator.env, 'dag_data) node)
+          (('a Simulator.block, 'a) view -> ('a Simulator.block, 'a) node)
           Collection.entry
           option
-      ; sim : (unit -> 'dag_data Simulator.state) Collection.entry
+      ; sim : (unit -> 'a Simulator.state) Collection.entry
       }
       -> task
 

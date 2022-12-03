@@ -34,11 +34,11 @@ let run ~activations ~srcfile ~protocol =
   let* g = GraphML.load_graph srcfile in
   let* net, to_graphml = Network.of_graphml g in
   let clock = Mtime_clock.counter () in
-  let env = Simulator.(init protocol net) in
-  let (module Ref) = env.referee in
-  let () = Simulator.loop ~activations env in
+  let sim = Simulator.(init protocol net) in
+  let (module Ref) = sim.referee in
+  let () = Simulator.loop ~activations sim in
   let machine_duration = Mtime_clock.count clock |> Mtime.Span.to_s in
-  let head = Simulator.head env in
+  let head = Simulator.head sim in
   let headd = Dag.data head in
   let name, ext = Fpath.(split_ext (base srcfile)) in
   let dstfile = Fpath.(outdir / strf "%a-%s-%s" pp name P.key ext) in
@@ -56,7 +56,7 @@ let run ~activations ~srcfile ~protocol =
   in
   let node_data i =
     [ "reward", float (Float.Array.get headd.rewards i)
-    ; "activations", int env.activations.(i)
+    ; "activations", int sim.activations.(i)
     ]
   in
   let g = to_graphml ~node_data ~graph_data () in

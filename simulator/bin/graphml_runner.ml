@@ -17,12 +17,12 @@ let run g =
   let (Protocol protocol) = protocol in
   let (module P) = protocol in
   let clock = Mtime_clock.counter () in
-  let env = Simulator.(init protocol net) in
-  let (module Ref) = env.referee in
-  let () = Simulator.loop ~activations env in
+  let sim = Simulator.(init protocol net) in
+  let (module Ref) = sim.referee in
+  let () = Simulator.loop ~activations sim in
   let machine_duration = Mtime_clock.count clock |> Mtime.Span.to_s in
   let head =
-    Array.to_list env.nodes
+    Array.to_list sim.nodes
     |> List.map (fun (Simulator.Node x) -> x.preferred x.state)
     |> Ref.winner
   in
@@ -39,7 +39,7 @@ let run g =
   in
   let node_data i =
     [ "reward", float (Float.Array.get headd.rewards i)
-    ; "activations", int env.activations.(i)
+    ; "activations", int sim.activations.(i)
     ]
   in
   Ok (to_graphml ~node_data ~graph_data ())

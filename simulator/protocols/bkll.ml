@@ -42,8 +42,8 @@ module Make (Parameters : Parameters) = struct
 
   let roots = [ Block { height = 0; miner = None } ]
 
-  module Referee (V : GlobalView with type data = data) = struct
-    include V
+  module Referee (D : BlockDAG with type data = data) = struct
+    include D
 
     let info x =
       let open Info in
@@ -74,18 +74,26 @@ module Make (Parameters : Parameters) = struct
       match data x with
       | Block _ -> x
       | Vote _ ->
-        (match Dag.parents view x with
+        (match parents x with
         | [ x ] -> x
         | _ -> failwith "invalid dag")
     ;;
 
     let height x = data x |> height
     let progress x = data x |> progress
-    let votes_only = Dag.filter is_vote view
-    let blocks_only = Dag.filter is_block view
+
+    let confirming_votes x =
+      assert (is_block x);
+      children x |> List.filter is_vote
+    ;;
+
+    let confirmed_votes x =
+      assert (is_block x);
+      parents x |> List.filter is_vote
+    ;;
 
     let validity vertex =
-      match pow vertex, data vertex, Dag.parents view vertex with
+      match pow vertex, data vertex, parents vertex with
       | Some _, Vote x, [ p ] ->
         is_block p && x.height = height p && Option.is_some x.miner
       | Some _, Block b, [ pblock ] when k = 1 ->
@@ -103,7 +111,7 @@ module Make (Parameters : Parameters) = struct
             List.fold_left
               (fun (ok, h, i) x ->
                 let h' = pow x |> Option.get in
-                is_vote x && h' > h && ok, h', i + 1)
+                is_vote x && compare_pow h' h > 0 && ok, h', i + 1)
               (true, pow vote0 |> Option.get, 1)
               votes
           in
@@ -115,10 +123,8 @@ module Make (Parameters : Parameters) = struct
     (** better is bigger *)
     let compare_blocks =
       let open Compare in
-      let cmp =
-        by int height $ by int (fun x -> List.length (Dag.children votes_only x))
-      in
-      skip_eq Dag.vertex_eq cmp
+      let cmp = by int height $ by int (fun x -> List.length (confirming_votes x)) in
+      skip_eq Block.eq cmp
     ;;
 
     let winner l =
@@ -128,7 +134,7 @@ module Make (Parameters : Parameters) = struct
       |> List.hd
     ;;
 
-    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+    let precursor this = List.nth_opt (parents this) 0
 
     let assign c x =
       match data x with
@@ -140,7 +146,7 @@ module Make (Parameters : Parameters) = struct
 
     let constant x =
       match data x with
-      | Block _ -> x :: Dag.parents votes_only x |> List.concat_map (assign 1.)
+      | Block _ -> x :: confirmed_votes x |> List.concat_map (assign 1.)
       | _ -> []
     ;;
 
@@ -157,17 +163,17 @@ module Make (Parameters : Parameters) = struct
     ;;
   end
 
-  let referee (type a) (module V : GlobalView with type env = a and type data = data)
+  let referee (type a) (module D : BlockDAG with type block = a and type data = data)
       : (a, data) referee
     =
-    (module Referee (V))
+    (module Referee (D))
   ;;
 
-  module Honest (V : LocalView with type data = data) = struct
+  module Honest (V : View with type data = data) = struct
     include V
     open Referee (V)
 
-    type state = env Dag.vertex
+    type state = block
 
     let preferred state = state
 
@@ -187,20 +193,21 @@ module Make (Parameters : Parameters) = struct
       let open Compare in
       let cmp =
         by int height
-        $ by int (fun x -> List.length (Dag.children votes_only x))
+        $ by int (fun x -> List.length (confirming_votes x))
         $ by int (fun x -> if appended_by_me x then 1 else 0)
         $ by (neg float) visible_since
       in
-      skip_eq Dag.vertex_eq cmp
+      skip_eq Block.eq cmp
     ;;
 
     let update_head ~old consider =
+      assert (is_block consider);
       if compare_blocks consider old > 0 then consider else old
     ;;
 
     let puzzle_payload' ~vote_filter preferred =
       let pow_hash_exn x = pow x |> Option.get in
-      let votes = Dag.children votes_only preferred |> List.filter vote_filter in
+      let votes = confirming_votes preferred |> List.filter vote_filter in
       if List.length votes >= k - 1
       then (
         let height = height preferred + 1 in
@@ -212,7 +219,7 @@ module Make (Parameters : Parameters) = struct
                 (k - 1)
                 votes
              |> Option.get
-             |> List.sort Compare.(by (tuple int int) pow_hash_exn))
+             |> List.sort Compare.(by compare_pow pow_hash_exn))
         in
         { parents; data = Block { height; miner = Some my_id }; sign = false })
       else (
@@ -237,7 +244,7 @@ module Make (Parameters : Parameters) = struct
     ;;
   end
 
-  let honest (type a) ((module V) : (a, data) local_view) : (a, data) node =
+  let honest (type a) ((module V) : (a, data) view) : (a, data) node =
     Node (module Honest (V))
   ;;
 end

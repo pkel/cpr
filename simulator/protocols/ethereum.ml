@@ -86,8 +86,8 @@ module Make (Parameters : Parameters) = struct
   let describe { height; _ } = Printf.sprintf "block %i" height
   let roots = [ { height = 0; work = 0; miner = None } ]
 
-  module Referee (V : GlobalView with type data = data) = struct
-    include V
+  module Referee (D : BlockDAG with type data = data) = struct
+    include D
 
     let info x =
       let x = data x in
@@ -100,7 +100,7 @@ module Make (Parameters : Parameters) = struct
     let progress x = data x |> progress
 
     let validity b =
-      match pow b, Dag.parents view b with
+      match pow b, parents b with
       | Some _, p :: uncles ->
         let pd = data p
         and bd = data b
@@ -109,7 +109,7 @@ module Make (Parameters : Parameters) = struct
             if generation > 6
             then a, pu
             else (
-              match Dag.parents view b with
+              match parents b with
               | [] -> b :: a, pu (* we hit the root *)
               | x :: tl -> f (generation + 1) (b :: a, tl @ pu) x)
           in
@@ -126,14 +126,15 @@ module Make (Parameters : Parameters) = struct
           let k = bd.height - ud.height in
           1 <= k && k <= 6
         and check_unique_in_parents u =
-          let n = List.filter (( $== ) u) (p :: uncles) |> List.length in
+          let n = List.filter (Block.eq u) (p :: uncles) |> List.length in
           n = 1
         and check_direct_child_of_ancestor u =
-          match Dag.parents view u with
+          match parents u with
           | [] -> false
-          | hd :: _ -> List.exists (( $== ) hd) ancestors
+          | hd :: _ -> List.exists (Block.eq hd) ancestors
         and check_unique_in_chain u =
-          List.for_all (( $!= ) u) ancestors && List.for_all (( $!= ) u) previous_uncles
+          List.for_all (Block.neq u) ancestors
+          && List.for_all (Block.neq u) previous_uncles
         in
         check_height ()
         && check_work ()
@@ -150,7 +151,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let uncles b =
-      match Dag.parents view b with
+      match parents b with
       | [] -> []
       | _hd :: tl -> tl
     ;;
@@ -161,7 +162,7 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     (* uncles are not part of the linear history *)
-    let precursor this = Dag.parents view this |> fun parents -> List.nth_opt parents 0
+    let precursor this = List.nth_opt (parents this) 0
 
     let assign c x =
       match (data x).miner with
@@ -197,16 +198,16 @@ module Make (Parameters : Parameters) = struct
     ;;
   end
 
-  let referee (type a) (module V : GlobalView with type env = a and type data = data)
+  let referee (type a) (module D : BlockDAG with type block = a and type data = data)
       : (a, data) referee
     =
-    (module Referee (V))
+    (module Referee (D))
   ;;
 
-  module Honest (V : LocalView with type data = data) = struct
+  module Honest (V : View with type data = data) = struct
     include V
 
-    type state = env Dag.vertex
+    type state = block
 
     let preferred state = state
 
@@ -235,7 +236,7 @@ module Make (Parameters : Parameters) = struct
       let uncles =
         let non_uncle_ancestors, in_chain =
           let rec f generation (nua, ic) b =
-            match Dag.parents view b with
+            match parents b with
             | [] -> (* we hit the root *) nua, ic
             | b :: _ as p ->
               let generation = generation + 1 in
@@ -251,13 +252,13 @@ module Make (Parameters : Parameters) = struct
         List.fold_left
           (fun acc b ->
             let uncles =
-              let not_in_chain b = List.for_all (( $!= ) b) in_chain
+              let not_in_chain b = List.for_all (Block.neq b) in_chain
               and parent_block_in_chain b =
-                match Dag.parents view b with
+                match parents b with
                 | [] -> (* we hit the root *) false
-                | b :: _ -> List.exists (( $== ) b) non_uncle_ancestors
+                | b :: _ -> List.exists (Block.eq b) non_uncle_ancestors
               in
-              Dag.children view b
+              children b
               |> List.filter (fun candidate ->
                      not_in_chain candidate && parent_block_in_chain candidate)
             in
@@ -296,7 +297,7 @@ module Make (Parameters : Parameters) = struct
     ;;
   end
 
-  let honest (type a) ((module V) : (a, data) local_view) : (a, data) node =
+  let honest (type a) ((module V) : (a, data) view) : (a, data) node =
     Node (module Honest (V))
   ;;
 end

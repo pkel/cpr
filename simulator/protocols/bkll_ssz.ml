@@ -102,31 +102,31 @@ module Make (Parameters : Bkll.Parameters) = struct
 
   module Action = Ssz_tools.Action8
 
-  module Agent (V : LocalView with type data = data) = struct
+  module Agent (V : View with type data = data) = struct
     open Protocol.Referee (V)
     include V
     module N = Honest (V)
 
     type state =
       | BetweenActions of
-          { public : env Dag.vertex (* defender's preferred block *)
-          ; private_ : env Dag.vertex (* attacker's preferred block *)
+          { public : block (* defender's preferred block *)
+          ; private_ : block (* attacker's preferred block *)
           ; mining : [ `Inclusive | `Exclusive ]
           ; pending_private_to_public_messages :
-              env Dag.vertex list (* messages sent with last action *)
+              block list (* messages sent with last action *)
           }
 
     type state_before_action =
       | BeforeAction of
-          { public : env Dag.vertex
-          ; private_ : env Dag.vertex
+          { public : block
+          ; private_ : block
           }
 
     type observable_state =
       | Observable of
-          { public : env Dag.vertex
-          ; private_ : env Dag.vertex
-          ; common : env Dag.vertex
+          { public : block
+          ; private_ : block
+          ; common : block
           ; event : [ `ProofOfWork | `Network ]
           }
 
@@ -168,6 +168,8 @@ module Make (Parameters : Bkll.Parameters) = struct
       BeforeAction { public; private_ = state.private_ }
     ;;
 
+    module Dagtools = Dagtools.Make (Block)
+
     let prepare (BeforeAction state) event =
       let public, private_, event =
         match event with
@@ -179,7 +181,7 @@ module Make (Parameters : Bkll.Parameters) = struct
           (* simulate defender *)
           N.update_head ~old:state.public (last_block x), state.private_, `Network
       in
-      let common = Dag.common_ancestor view public private_ |> Option.get in
+      let common = Dagtools.common_ancestor public private_ |> Option.get in
       Observable { public; private_; common; event }
     ;;
 
@@ -188,14 +190,14 @@ module Make (Parameters : Bkll.Parameters) = struct
     let observe (Observable state) =
       let open Observation in
       let public_votes =
-        Dag.children view state.public
+        children state.public
         |> List.filter public_visibility
         |> List.filter is_vote
         |> List.length
       and private_votes_inclusive =
-        Dag.children view state.private_ |> List.filter is_vote |> List.length
+        children state.private_ |> List.filter is_vote |> List.length
       and private_votes_exclusive =
-        Dag.children view state.private_
+        children state.private_
         |> List.filter is_vote
         |> List.filter N.appended_by_me
         |> List.length
@@ -216,7 +218,7 @@ module Make (Parameters : Bkll.Parameters) = struct
 
     let apply (Observable state) action =
       let parent_block x =
-        match Dag.parents view x with
+        match parents x with
         | hd :: _ when is_block hd -> Some hd
         | _ -> None
       in
@@ -224,7 +226,7 @@ module Make (Parameters : Bkll.Parameters) = struct
         let to_height, nvotes =
           let to_height = height state.public
           and nvotes =
-            Dag.children view state.public
+            children state.public
             |> List.filter public_visibility
             |> List.filter is_vote
             |> List.length
@@ -246,12 +248,12 @@ module Make (Parameters : Bkll.Parameters) = struct
         let block, nvotes =
           if nvotes >= k
           then (
-            match Dag.children view block |> List.filter is_block with
+            match children block |> List.filter is_block with
             | proposal :: _ -> proposal, 0
             | [] -> block, nvotes)
           else block, nvotes
         in
-        let votes = Dag.children view block |> List.filter is_vote in
+        let votes = children block |> List.filter is_vote in
         match Compare.first Compare.(by float visible_since) nvotes votes with
         | Some subset -> block :: subset
         | None ->
@@ -279,7 +281,7 @@ module Make (Parameters : Bkll.Parameters) = struct
     ;;
   end
 
-  let attacker (type a) policy ((module V) : (a, data) local_view) : (a, data) node =
+  let attacker (type a) policy ((module V) : (a, data) view) : (a, data) node =
     Node
       (module struct
         include Agent (V)

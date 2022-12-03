@@ -1,42 +1,62 @@
 (* Ethereum's uncle rule is complicated. Let's test it! *)
 open Cpr_lib
 
-module TestView (P : Protocol) = struct
-  type nonrec data = P.data
+module BlockDAG (P : Protocol) = struct
+  type data = P.data
 
-  type env =
+  type with_meta =
     { value : data
-    ; pow_hash : (int * int) option
+    ; pow_hash : int option
     ; signed_by : int option
     }
 
-  let min_pow = 0, 0
-  let max_pow = 100, 100
-  let dag : env Dag.t = Dag.create ()
+  type block = with_meta Dag.vertex
+
+  let min_pow = 0
+  let max_pow = 100
+  let compare_pow = Int.compare
+  let dag : with_meta Dag.t = Dag.create ()
   let view = Dag.view dag
+  let children = Dag.children view
+  let parents = Dag.parents view
   let data x = (Dag.data x).value
   let pow x = (Dag.data x).pow_hash
   let signature x = (Dag.data x).signed_by
+
+  type pow = int
+
+  let raise_invalid_dag _meta _blocks msg = failwith msg
+
+  module Block = struct
+    type t = block
+
+    let children = children
+    let parents = parents
+    let partial_compare = Dag.partial_order
+    let compare = Dag.compare_vertex
+    let eq = Dag.vertex_eq
+    let neq = Dag.vertex_neq
+  end
 end
 
 module Ethereum = Ethereum.Make (Ethereum.Byzantium)
-module V = TestView (Ethereum)
-module Ref = Ethereum.Referee (V)
+module D = BlockDAG (Ethereum)
+module Ref = Ethereum.Referee (D)
 
-let env value = V.{ value; pow_hash = Some (1, 1); signed_by = None }
-let root = Dag.append V.dag [] (env { height = 43; work = 47; miner = None })
+let with_meta value = D.{ value; pow_hash = Some 1; signed_by = None }
+let root = Dag.append D.dag [] (with_meta { height = 43; work = 47; miner = None })
 
 let mine parent uncles =
   let value =
-    let parent = V.data parent in
-    env
+    let parent = D.data parent in
+    with_meta
       Ethereum.
         { height = parent.height + 1
         ; work = parent.work + List.length uncles + 1
         ; miner = Some 42
         }
   in
-  let r = Dag.append V.dag (parent :: uncles) value in
+  let r = Dag.append D.dag (parent :: uncles) value in
   if Ref.validity r then Some r else None
 ;;
 

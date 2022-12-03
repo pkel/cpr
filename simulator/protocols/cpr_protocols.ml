@@ -144,11 +144,11 @@ let%test_module "protocol" =
         Network.T.symmetric_clique ~activation_delay ~propagation_delay n_nodes
       in
       let log, logger = Log.GraphLogger.create network in
-      let env = Simulator.init ~logger (module P) network in
+      let sim = Simulator.init ~logger (module P) network in
       let target_progress = 1000 in
-      Simulator.loop ~activations:target_progress env;
-      let head = Simulator.head env in
-      let (module Ref) = env.referee in
+      Simulator.loop ~activations:target_progress sim;
+      let head = Simulator.head sim in
+      let (module Ref) = sim.referee in
       let observed_progress = Ref.progress head in
       let observed_orphan_rate =
         let target_progress = float_of_int target_progress in
@@ -362,7 +362,7 @@ let%test_module "policy" =
         Network.T.symmetric_clique ~activation_delay:100. ~propagation_delay n_nodes
       in
       let log, logger = Log.GraphLogger.create network in
-      let env =
+      let sim =
         let honest =
           let policy = Collection.get policy A.policies |> Option.get in
           A.attacker policy.it
@@ -376,9 +376,9 @@ let%test_module "policy" =
           network
       in
       let target_progress = 1000 in
-      Simulator.loop ~activations:target_progress env;
-      let head = Simulator.head env in
-      let (module Ref) = env.referee in
+      Simulator.loop ~activations:target_progress sim;
+      let head = Simulator.head sim in
+      let (module Ref) = sim.referee in
       let observed_progress = Ref.progress head in
       let observed_orphan_rate =
         let target_progress = float_of_int target_progress in
@@ -494,7 +494,7 @@ let%test_module "random" =
         Network.T.symmetric_clique ~activation_delay:100. ~propagation_delay n_nodes
       in
       let log, logger = Log.GraphLogger.create network in
-      let env =
+      let sim =
         let policy _ = Random.int A.Action.n |> A.Action.of_int in
         let random = A.attacker policy in
         Simulator.init
@@ -506,9 +506,9 @@ let%test_module "random" =
           network
       in
       let target_progress = 1000 in
-      Simulator.loop ~activations:target_progress env;
-      let head = Simulator.head env in
-      let (module Ref) = env.referee in
+      Simulator.loop ~activations:target_progress sim;
+      let head = Simulator.head sim in
+      let (module Ref) = sim.referee in
       let observed_progress = Ref.progress head in
       let observed_orphan_rate =
         let target_progress = float_of_int target_progress in
