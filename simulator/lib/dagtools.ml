@@ -4,8 +4,13 @@ module type Vertex = sig
   val parents : t -> t list
   val children : t -> t list
 
-  (** Complete ordering of blocks. Compatible with partial order imposed by
-      {!parents} and {!children}. Parents are smaller. *)
+  (** Partial ordering as imposed by {!parents} and {!children}.
+      Siblings are equal.
+      Parents are smaller than their children. *)
+  val partial_compare : t -> t -> int
+
+  (** Complete ordering. Compatible with {!partial_compare}.
+      Parents are smaller than their children. *)
   val compare : t -> t -> int
   (** In practice this might compare something like [(depth, serial)], but this
       is not ensured. *)
@@ -22,12 +27,12 @@ end
 module Make (V : Vertex) : sig
   open V
 
-  (** Recursively expand DAG in direction of {!D.children} ordered by {!D.compare_key}.
+  (** Recursively expand DAG in direction of {!V.children} ordered by {!V.compare}.
       The starting vertices may be included in the resulting sequence or not.
       Returned vertices are unique. *)
   val iterate_descendants : include_start:bool -> t list -> t Seq.t
 
-  (** Recursively expand DAG in direction of {!D.parents} ordered by {!D.compare_key}.
+  (** Recursively expand DAG in direction of {!V.parents} ordered by {!V.compare}.
       The starting vertices may be included in the resulting sequence or not.
       Returned vertices are unique. *)
   val iterate_ancestors : include_start:bool -> t list -> t Seq.t
@@ -35,6 +40,33 @@ module Make (V : Vertex) : sig
   val common_ancestor : t -> t -> t option
   val common_ancestor' : t Seq.t -> t option
   val have_common_ancestor : t -> t -> bool
+
+  (** Print sequence of vertices in graphviz dot format. *)
+  val dot
+    :  Format.formatter
+    -> ?legend:(string * string) list
+    -> node_attr:(t -> (string * string) list)
+    -> t list
+    -> unit
+
+  (** Export sequence of vertices to iGraph/GraphML representation. *)
+  val graphml : (t -> GraphML.Data.t) -> t list -> GraphML.graph
+
+  module Exn : sig
+    type exn +=
+      | Malformed_DAG of
+          { msg : string
+          ; dot : string lazy_t
+          }
+
+    (** write [e.dot] to file as soon as error is raised *)
+    val set_to_file : string -> unit
+
+    (** convert Graphviz dot to ASCII using graph-easy if available. *)
+    val dot_to_ascii : string -> string
+
+    val raise : (t -> (string * string) list) -> t list -> string -> 'b
+  end
 end = struct
   open V
 
@@ -100,24 +132,202 @@ end = struct
       in
       Seq.fold_left f (Some hd) tl
   ;;
+
+  let dot fmt ?(legend = []) ~node_attr bl =
+    let module Map = Map.Make (V) in
+    let ids, levels, edges =
+      match iterate_descendants ~include_start:true bl () with
+      | Seq.Nil -> Map.empty, [], []
+      | Cons (x, seq) ->
+        let _, _, ids, level, levels, edges =
+          Seq.fold_left
+            (fun (i, last, ids, lvl, lvls, edges) x ->
+              let edges = List.mapi (fun i c -> x, c, i) (parents x) :: edges in
+              if partial_compare last x <> 0 && lvl <> []
+              then i + 1, x, Map.add x i ids, [ x ], List.rev lvl :: lvls, edges
+              else i + 1, x, Map.add x i ids, x :: lvl, lvls, edges)
+            (1, x, Map.singleton x 0, [ x ], [], [])
+            seq
+        in
+        ids, level :: levels |> List.rev, List.rev edges
+    in
+    let attr l =
+      let f (k, v) = Printf.sprintf "%s=\"%s\"" k v in
+      List.map f l |> String.concat " "
+    in
+    let open Format in
+    fprintf fmt "digraph {\n";
+    fprintf fmt "  rankdir = LR;\n";
+    fprintf fmt "  node [shape=box];\n";
+    if legend <> []
+    then
+      fprintf
+        fmt
+        "  %s;\n"
+        (List.map (fun (k, v) -> Printf.sprintf "{%s|%s}" k v) legend
+        |> String.concat "|"
+        |> Printf.sprintf "legend [shape=Mrecord label=\"%s\"]");
+    (* print nodes *)
+    List.iter
+      (fun level ->
+        fprintf fmt "  { rank=same\n";
+        List.iter
+          (fun n ->
+            match Map.find_opt n ids with
+            | Some id -> fprintf fmt "    n%d [%s];\n" id (node_attr n |> attr)
+            | None -> failwith "dot")
+          level;
+        fprintf fmt "  }\n")
+      levels;
+    (* print edges *)
+    List.iter
+      (List.iter (fun (c, n, i) ->
+           match Map.find_opt c ids, Map.find_opt n ids with
+           | Some c, Some n ->
+             fprintf fmt "  n%d -> n%d [label=\"%i\", dir=back];\n" n c i
+           | _ -> ()))
+      edges;
+    fprintf fmt "}\n"
+  ;;
+
+  let graphml data vertices : GraphML.graph =
+    let module Map = Map.Make (V) in
+    let ids =
+      let identify ids v =
+        match Map.find_opt v ids with
+        | Some _id -> ids
+        | None ->
+          let id = Map.cardinal ids in
+          Map.add v id ids
+      in
+      Seq.fold_left identify Map.empty (iterate_descendants ~include_start:true vertices)
+    in
+    let nodes, edges =
+      Map.fold
+        (fun vertex id (nodes, edges) ->
+          let node_id i = "v" ^ string_of_int i in
+          let nodes = { GraphML.id = node_id id; data = data vertex } :: nodes
+          and edges =
+            List.fold_left
+              (fun edges child ->
+                match Map.find_opt child ids with
+                | Some child_id ->
+                  { GraphML.src = node_id child_id; dst = node_id id; data = [] } :: edges
+                | None -> edges)
+              edges
+              (children vertex)
+          in
+          nodes, edges)
+        ids
+        ([], [])
+    in
+    GraphML.{ nodes = List.rev nodes; edges = List.rev edges; kind = Directed; data = [] }
+  ;;
+
+  module Exn = struct
+    type exn +=
+      | Malformed_DAG of
+          { msg : string
+          ; dot : string lazy_t
+          }
+
+    let to_file = ref (Bos.OS.Env.var "CPR_MALFORMED_DAG_TO_FILE")
+    let set_to_file f = to_file := Some f
+
+    let dot_to_ascii dot =
+      let open Bos in
+      let open Rresult in
+      let cmd = Cmd.(v "graph-easy") in
+      OS.Cmd.exists cmd
+      >>= (function
+            | true ->
+              OS.Cmd.(in_string dot |> run_io cmd |> out_string)
+              |> Result.map fst
+              |> Result.map (fun ascii -> dot ^ ascii)
+            | false ->
+              Result.ok
+                (dot
+                ^ "HINT: Install graph-easy to automatically convert this graph to ASCII."
+                ))
+      |> Result.get_ok
+    ;;
+
+    let () =
+      Printexc.register_printer (fun exn ->
+          match exn, !to_file with
+          | Malformed_DAG t, Some f ->
+            let oc = open_out f in
+            let msg =
+              try
+                Printf.fprintf oc "%s" (Lazy.force t.dot);
+                Printf.sprintf "Malformed_DAG: %s (DAG written to %s)" t.msg f
+              with
+              | _ -> Printf.sprintf "Malformed_DAG: %s (writing DAG to %s failed)" t.msg f
+            in
+            close_out oc;
+            Some msg
+          | Malformed_DAG t, None ->
+            let () = Printf.eprintf "%s\n" (Lazy.force t.dot |> dot_to_ascii) in
+            Some (Printf.sprintf "Malformed_DAG: %s" t.msg)
+          | _ -> None)
+    ;;
+
+    let raise info nodes msg (type a) : a =
+      let node_attr x =
+        let label =
+          info x
+          |> List.map (function
+                 | "", s | s, "" -> s
+                 | k, v -> k ^ ": " ^ v)
+          |> String.concat "\\n"
+        in
+        [ "label", label ]
+      in
+      let pp fmt = dot fmt ~legend:[ "error", msg ] ~node_attr in
+      let nodes = List.concat_map parents nodes in
+      let dot = lazy (Format.asprintf "%a" pp nodes) in
+      raise (Malformed_DAG { msg; dot })
+    ;;
+  end
 end
 
 let%test_module _ =
   (module struct
     module Vertex (M : sig
-      val view : int Dag.view
+      type t
+
+      val view : t Dag.view
     end) =
     struct
       include M
 
-      type t = int Dag.vertex
+      type t = M.t Dag.vertex
 
       let eq = Dag.vertex_eq
       let neq = Dag.vertex_neq
+      let partial_compare = Dag.partial_order
       let compare = Dag.compare_vertex
       let children = Dag.children view
       let parents = Dag.parents view
     end
+
+    let int_dag view =
+      (module Vertex (struct
+        type t = int
+
+        let view = view
+      end) : Vertex
+        with type t = _)
+    ;;
+
+    let string_dag view =
+      (module Vertex (struct
+        type t = string
+
+        let view = view
+      end) : Vertex
+        with type t = _)
+    ;;
 
     let print (type a) (module V : Vertex with type t = a) ?(indent = "") to_string b =
       let open V in
@@ -156,26 +366,11 @@ let%test_module _ =
       let global = view t in
       let local = filter (fun i -> data i mod 2 = 0) global in
       let local2 = filter (fun i -> data i < 5) local in
-      let module G =
-        Vertex (struct
-          let view = global
-        end)
-      in
-      let module L =
-        Vertex (struct
-          let view = local
-        end)
-      in
-      let module L2 =
-        Vertex (struct
-          let view = local2
-        end)
-      in
       let to_string x = string_of_int (data x) in
-      print ~indent:"global:   " (module G) to_string r;
-      print ~indent:"subtree:  " (module G) to_string rb;
-      print ~indent:"local:    " (module L) to_string r;
-      print ~indent:"local2:   " (module L2) to_string r;
+      print ~indent:"global:   " (int_dag global) to_string r;
+      print ~indent:"subtree:  " (int_dag global) to_string rb;
+      print ~indent:"local:    " (int_dag local) to_string r;
+      print ~indent:"local2:   " (int_dag local2) to_string r;
       [%expect
         {|
     global:   0
@@ -212,16 +407,12 @@ let%test_module _ =
       and rbb = append rb 5 in
       let rbaa = append rba 6 in
       let rbaaa = append rbaa 7 in
-      let module D =
-        Vertex (struct
-          let view = view t
-        end)
-      in
-      let print = print (module D) (fun x -> string_of_int (data x)) in
+      let (module V) = int_dag (view t) in
+      let print = print (module V) (fun x -> string_of_int (data x)) in
       print r;
       let print n = data n |> string_of_int |> print_string in
       print_endline "Upward";
-      let module Tools = Make (D) in
+      let module Tools = Make (V) in
       let iterate = function
         | `Upward -> Tools.iterate_ancestors ~include_start:true
         | `Downward -> Tools.iterate_descendants ~include_start:true
@@ -269,6 +460,125 @@ let%test_module _ =
     13
     24567
     367 |}]
+    ;;
+
+    let%test "common_ancestor" =
+      let open Dag in
+      let t = create () in
+      let r = append t [] 0 in
+      let append r = append t [ r ] in
+      let ra = append r 1
+      and rb = append r 2 in
+      let raa = append ra 3
+      and rba = append rb 4
+      and rbb = append rb 5 in
+      let rbaa = append rba 6 in
+      let rbaaa = append rbaa 7 in
+      let (module V) = int_dag (view t) in
+      let module Tools = Make (V) in
+      let check a b ca =
+        match Tools.common_ancestor a b with
+        | Some c -> V.eq c ca
+        | None -> false
+      in
+      List.for_all
+        (fun x -> x)
+        [ check ra ra ra
+        ; check ra rb r
+        ; check rbb rba rb
+        ; check raa rba r
+        ; check rbaaa rbaa rbaa
+        ]
+    ;;
+
+    let%expect_test "dot" =
+      let open Dag in
+      let t = create () in
+      let r = append t [] 0 in
+      let append r = append t [ r ] in
+      let ra = append r 1
+      and rb = append r 2 in
+      let _raa = append ra 3
+      and rba = append rb 4
+      and _rbb = append rb 5 in
+      let rbaa = append rba 6 in
+      let _rbaaa = append rbaa 7 in
+      let (module V) = int_dag (view t) in
+      let module Tools = Make (V) in
+      Tools.dot
+        Format.std_formatter
+        ~node_attr:(fun n -> [ "label", data n |> string_of_int ])
+        (Dag.roots t);
+      [%expect
+        {|
+    digraph {
+      rankdir = LR;
+      node [shape=box];
+      { rank=same
+        n0 [label="0"];
+      }
+      { rank=same
+        n1 [label="1"];
+        n2 [label="2"];
+      }
+      { rank=same
+        n3 [label="3"];
+        n4 [label="4"];
+        n5 [label="5"];
+      }
+      { rank=same
+        n6 [label="6"];
+      }
+      { rank=same
+        n7 [label="7"];
+      }
+      n0 -> n1 [label="0", dir=back];
+      n0 -> n2 [label="0", dir=back];
+      n1 -> n3 [label="0", dir=back];
+      n2 -> n4 [label="0", dir=back];
+      n2 -> n5 [label="0", dir=back];
+      n4 -> n6 [label="0", dir=back];
+      n6 -> n7 [label="0", dir=back];
+    } |}]
+    ;;
+
+    let%expect_test "graphml" =
+      let open Dag in
+      let t = create () in
+      let r = append t [] "r" in
+      let append r = append t [ r ] in
+      let ra = append r "ra"
+      and rb = append r "rb" in
+      let _raa = append ra "raa"
+      and rba = append rb "rba"
+      and _rbb = append rb "rbb" in
+      let rbaa = append rba "rbaa" in
+      let _rbaaa = append rbaa "rbaaa" in
+      let (module V) = string_dag (view t) in
+      let module Tools = Make (V) in
+      Tools.graphml (fun v -> [ "label", GraphML.Data.String (data v) ]) [ r ]
+      |> GraphML.pp_graph Format.std_formatter;
+      [%expect
+        {|
+    { kind = Directed; data = [];
+      nodes =
+      [{ id = "v0"; data = [("label", String ("r"))] };
+       { id = "v1"; data = [("label", String ("ra"))] };
+       { id = "v2"; data = [("label", String ("rb"))] };
+       { id = "v3"; data = [("label", String ("raa"))] };
+       { id = "v4"; data = [("label", String ("rba"))] };
+       { id = "v5"; data = [("label", String ("rbb"))] };
+       { id = "v6"; data = [("label", String ("rbaa"))] };
+       { id = "v7"; data = [("label", String ("rbaaa"))] }];
+      edges =
+      [{ src = "v2"; dst = "v0"; data = [] };
+       { src = "v1"; dst = "v0"; data = [] };
+       { src = "v3"; dst = "v1"; data = [] };
+       { src = "v5"; dst = "v2"; data = [] };
+       { src = "v4"; dst = "v2"; data = [] };
+       { src = "v6"; dst = "v4"; data = [] };
+       { src = "v7"; dst = "v6"; data = [] }]
+      } |}]
     ;;
   end)
 ;;

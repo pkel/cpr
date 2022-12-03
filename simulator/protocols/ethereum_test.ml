@@ -32,6 +32,7 @@ module BlockDAG (P : Protocol) = struct
 
     let children = children
     let parents = parents
+    let partial_compare = Dag.partial_order
     let compare = Dag.compare_vertex
     let eq = Dag.vertex_eq
     let neq = Dag.vertex_neq

@@ -144,7 +144,7 @@ let tasks =
     ]
 ;;
 
-let print_dag oc (sim, confirmed, rewards, legend, vtx_info) =
+let print_dag (type a) oc (sim, confirmed, rewards, legend, vtx_info) =
   let open Simulator in
   let reward n = List.fold_left (fun s (_, x) -> s +. x) 0. rewards.(Dag.id n) in
   let node_attr n =
@@ -158,12 +158,9 @@ let print_dag oc (sim, confirmed, rewards, legend, vtx_info) =
     ; ("color", if confirmed.(Dag.id n) then "black" else "red")
     ]
   in
-  Dag.dot
-    (Format.formatter_of_out_channel oc)
-    ~legend
-    sim.global_view
-    ~node_attr
-    (Dag.roots sim.dag)
+  let (module Ref : Referee with type block = _ and type data = a) = sim.referee in
+  let module Tools = Dagtools.Make (Ref.Block) in
+  Tools.dot (Format.formatter_of_out_channel oc) ~legend ~node_attr (Dag.roots sim.dag)
   |> Result.ok
 ;;
 

@@ -203,6 +203,7 @@ let blockdag (type a) (view : a data Dag.view) : (a block, a) Intf.blockdag =
 
       let children = children
       let parents = parents
+      let partial_compare = Dag.partial_order
       let compare = Dag.compare_vertex
       let eq = Dag.vertex_eq
       let neq = Dag.vertex_neq
@@ -219,8 +220,9 @@ let blockdag (type a) (view : a data Dag.view) : (a block, a) Intf.blockdag =
     let min_pow = min_int, 0
 
     let raise_invalid_dag info blocks message =
+      let module Tools = Dagtools.Make (Block) in
       let info x = List.map (fun (k, v) -> k, Info.string_of_value v) (info x) in
-      Dag.Exn.raise view info blocks ("invalid_dag: " ^ message)
+      Tools.Exn.raise info blocks ("invalid_dag: " ^ message)
     ;;
   end : Intf.BlockDAG
     with type data = a
@@ -351,8 +353,8 @@ let check_vertex (type a) state vertex =
   let ((module Ref) : (a block, a) Intf.referee) = state.referee in
   if not (Ref.validity vertex)
   then
-    Dag.Exn.raise
-      state.global_view
+    let module Tools = Dagtools.Make (Ref.Block) in
+    Tools.Exn.raise
       (debug_info ~info:Ref.info)
       (vertex :: Dag.parents state.global_view vertex)
       "invalid append"
