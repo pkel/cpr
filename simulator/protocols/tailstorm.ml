@@ -323,22 +323,18 @@ module Make (Parameters : Parameters) = struct
         most valuable branch an reiterate until enough sub blocks are added.
     *)
     let heuristic_quorum ~children b =
-      let ht = Hashtbl.create (2 * k)
-      and acc = ref []
+      let leaves = ref BlockSet.empty
+      and votes = ref BlockSet.empty
       and n = ref k in
-      let included x =
-        Hashtbl.mem ht x
-        (* TODO hashing the whole block is not the best idea, I guess. Will recurse in
-           both directions of the DAG. *)
-      in
+      let included x = BlockSet.mem x !votes in
       let include_ x =
         assert (not (included x));
-        acc := x :: !acc;
+        leaves := BlockSet.add x !leaves;
         acc_votes parents [ x ]
         |> BlockSet.iter (fun x ->
                if not (included x)
                then (
-                 Hashtbl.replace ht x true;
+                 votes := BlockSet.add x !votes;
                  decr n))
       and reward ?(all = false) x =
         let i = ref 0 in
@@ -371,7 +367,7 @@ module Make (Parameters : Parameters) = struct
             loop ())
         else
           (* quorum complete. Ensure that it satisfies quorum validity *)
-          Some (List.sort compare_votes_in_block !acc)
+          Some (BlockSet.elements !leaves |> List.sort compare_votes_in_block)
       in
       loop ()
     ;;
