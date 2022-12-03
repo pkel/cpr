@@ -165,10 +165,10 @@ module type Protocol = sig
   val roots : data list
 
   (** specification of global truths *)
-  val referee : ('env, data) blockdag -> ('env, data) referee
+  val referee : ('block, data) blockdag -> ('block, data) referee
 
   (** specification for honest participants *)
-  val honest : ('env, data) view -> ('env, data) node
+  val honest : ('block, data) view -> ('block, data) node
 end
 
 type protocol = Protocol : (module Protocol with type data = 'a) -> protocol
@@ -219,8 +219,8 @@ module type AttackSpace = sig
 
   val attacker
     :  (Observation.t -> Action.t)
-    -> ('env, Protocol.data) view
-    -> ('env, Protocol.data) node
+    -> ('block, Protocol.data) view
+    -> ('block, Protocol.data) node
 end
 
 type attack_space =

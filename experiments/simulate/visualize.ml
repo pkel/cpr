@@ -171,13 +171,13 @@ let run (Csv_runner.Task t) =
   (* simulate *)
   let open Simulator in
   let (module Protocol) = t.protocol in
-  let env = t.sim.it () in
-  let (module Ref) = env.referee in
-  loop ~activations:t.activations env;
-  let confirmed = Array.make (Dag.size env.dag) false in
-  let rewards = Array.make (Dag.size env.dag) [] in
+  let sim = t.sim.it () in
+  let (module Ref) = sim.referee in
+  loop ~activations:t.activations sim;
+  let confirmed = Array.make (Dag.size sim.dag) false in
+  let rewards = Array.make (Dag.size sim.dag) [] in
   let () =
-    Simulator.history env
+    Simulator.history sim
     |> Seq.iter (fun vtx ->
            confirmed.(Dag.id vtx) <- true;
            rewards.(Dag.id vtx) <- Ref.reward vtx)
@@ -189,7 +189,7 @@ let run (Csv_runner.Task t) =
   let open Bos.OS in
   let d = Dir.create ~path:true (Fpath.parent path) in
   Result.bind d (fun _ ->
-      File.with_oc path print_dag (env, confirmed, rewards, legend (Task t), Ref.info))
+      File.with_oc path print_dag (sim, confirmed, rewards, legend (Task t), Ref.info))
   |> Result.join
   |> Rresult.R.failwith_error_msg
 ;;

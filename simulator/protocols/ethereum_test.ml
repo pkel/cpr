@@ -4,18 +4,18 @@ open Cpr_lib
 module BlockDAG (P : Protocol) = struct
   type data = P.data
 
-  type env =
+  type with_meta =
     { value : data
     ; pow_hash : int option
     ; signed_by : int option
     }
 
-  type block = env Dag.vertex
+  type block = with_meta Dag.vertex
 
   let min_pow = 0
   let max_pow = 100
   let compare_pow = Int.compare
-  let dag : env Dag.t = Dag.create ()
+  let dag : with_meta Dag.t = Dag.create ()
   let view = Dag.view dag
   let children = Dag.children view
   let parents = Dag.parents view
@@ -42,13 +42,13 @@ module Ethereum = Ethereum.Make (Ethereum.Byzantium)
 module D = BlockDAG (Ethereum)
 module Ref = Ethereum.Referee (D)
 
-let env value = D.{ value; pow_hash = Some 1; signed_by = None }
-let root = Dag.append D.dag [] (env { height = 43; work = 47; miner = None })
+let with_meta value = D.{ value; pow_hash = Some 1; signed_by = None }
+let root = Dag.append D.dag [] (with_meta { height = 43; work = 47; miner = None })
 
 let mine parent uncles =
   let value =
     let parent = D.data parent in
-    env
+    with_meta
       Ethereum.
         { height = parent.height + 1
         ; work = parent.work + List.length uncles + 1

@@ -1,5 +1,5 @@
 (* data attached to each block in the DAG *)
-type 'a env =
+type 'a data =
   { value : 'a (* protocol data *)
   ; pow : (int * int) option
   ; signature : int option
@@ -9,7 +9,7 @@ type 'a env =
   ; rewards : floatarray (* accumulated rewards up to this vertex *)
   }
 
-type 'a block = 'a env Dag.vertex
+type 'a block = 'a data Dag.vertex
 
 let timestamp x =
   Array.map
@@ -104,9 +104,9 @@ type 'a node = Node : ('a, 'b) node' -> 'a node
 
 type 'a state =
   { clock : 'a clock
-  ; dag : 'a env Dag.t
+  ; dag : 'a data Dag.t
   ; roots : 'a block list
-  ; global_view : 'a env Dag.view
+  ; global_view : 'a data Dag.view
   ; referee : ('a block, 'a) Intf.referee
   ; nodes : 'a node array
   ; activations : int array
@@ -190,9 +190,9 @@ let log_vertex log clock view info v =
        })
 ;;
 
-let blockdag (type a) (view : a env Dag.view) : (a block, a) Intf.blockdag =
+let blockdag (type a) (view : a data Dag.view) : (a block, a) Intf.blockdag =
   (module struct
-    type block = a env Dag.vertex
+    type block = a data Dag.vertex
     type data = a
 
     let children = Dag.children view

@@ -77,10 +77,10 @@ type instance =
       -> instance
 
 let dummy_node
-    (type env data)
+    (type block data)
     (module P : Protocol with type data = data)
-    (view : (env, data) view)
-    : (env, data) node
+    (view : (block, data) view)
+    : (block, data) node
   =
   let (Node (module Honest)) = P.honest view in
   Node
