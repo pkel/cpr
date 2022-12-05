@@ -5,7 +5,7 @@ from gym.spaces import Tuple, MultiDiscrete
 
 
 class BlocksPerProgressRewardWrapper(gym.Wrapper):
-    def __init__(self, env, relative=True):
+    def __init__(self, env, relative=True, sparse=True):
         super().__init__(env)
         self.rolling_reward = dict()
         self.relative = relative
@@ -13,27 +13,39 @@ class BlocksPerProgressRewardWrapper(gym.Wrapper):
         self.sum_attacker = 0
         self.sum_defender = 0
         self.difficulties = dict((a, 1) for a in self.env.config.ALPHA_SCHEDULE)
+        self.sparse = sparse
 
     def step(self, action):
         obs, _reward, done, info = self.env.step(action)
+        reward = 0
+        if not self.sparse:
+            progress = info["episode_progress"]
+            attacker = info["episode_reward_attacker"]
+            if progress == 0:
+                reward = 0
+            else:
+                reward = attacker / progress
+            if self.relative:
+                reward -= self.env.alpha / self.env.config.STEPS_PER_ROLLOUT
+
         if done:
             progress = info["episode_progress"]
             attacker = info["episode_reward_attacker"]
             self.difficulties[self.env.alpha] = progress
-            if progress != 0:
-                reward = attacker / progress
-            else:
-                reward = 0
+            if self.sparse:
+                if progress != 0:
+                    reward = attacker / progress
+                else:
+                    reward = 0
 
-            if self.relative:
-                reward -= self.env.alpha
+                if self.relative:
+                    reward -= self.env.alpha
 
             if self.env.alpha not in self.rolling_reward:
                 # take last 5000 rewards
                 self.rolling_reward[self.env.alpha] = collections.deque([], maxlen=5000)
             self.rolling_reward[self.env.alpha].append(reward)
-        else:
-            reward = 0
+
         return obs, reward, done, info
 
 

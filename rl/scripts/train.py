@@ -151,7 +151,7 @@ if __name__ == "__main__":
         elif config.REWARD_WRAPPER == "WastedBlocksRewardWrapper":
             env = WastedBlocksRewardWrapper(env)
         elif config.REWARD_WRAPPER == "BlocksPerProgressRewardWrapper":
-            env = BlocksPerProgressRewardWrapper(env)
+            env = BlocksPerProgressRewardWrapper(env, sparse=config.SPARSE_REWARD)
         return env
 
     if config.N_ENVS > 1:
@@ -183,7 +183,9 @@ if __name__ == "__main__":
             # ent_coef=0.01,
             learning_rate=lr_schedule,
             # clip_range=clip_schedule,
+            use_sde=config.USE_SDE,
             policy_kwargs=policy_kwargs,
+            ent_coef=config.ENTROPY_COEFFICIENT,
             gamma=0.999,
         )
     elif config.ALGO == "DQN":
