@@ -1,5 +1,6 @@
 import gym
 from cpr_gym import protocols
+from stable_baselines3.common.env_checker import check_env
 
 
 def test_version():
@@ -64,6 +65,8 @@ def test_nakamoto(capsys):
     for x in range(600):
         obs, _, _, _ = env.step(env.policy(obs, "eyal-sirer-2014"))
 
+    check_env(env)
+
 
 def test_ethereum(capsys):
     env = gym.make(
@@ -89,6 +92,8 @@ def test_ethereum(capsys):
     obs = env.reset()
     for x in range(600):
         obs, _, _, _ = env.step(env.policy(obs, "selfish_discard"))
+
+    check_env(env)
 
 
 def test_bk(capsys):
@@ -117,6 +122,8 @@ def test_bk(capsys):
 
     assert info["protocol_k"] == 42
 
+    check_env(env)
+
 
 def test_bkll(capsys):
     env = gym.make(
@@ -143,6 +150,8 @@ def test_bkll(capsys):
         obs, _, _, info = env.step(env.policy(obs, "selfish"))
 
     assert info["protocol_k"] == 17
+
+    check_env(env)
 
 
 def test_tailstorm(capsys):
@@ -173,6 +182,8 @@ def test_tailstorm(capsys):
 
     assert info["protocol_k"] == 13
 
+    check_env(env)
+
 
 def test_tailstormll(capsys):
     env = gym.make(
@@ -201,3 +212,34 @@ def test_tailstormll(capsys):
         obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
 
     assert info["protocol_k"] == 13
+
+    check_env(env)
+
+
+def test_tailstormjune(capsys):
+    env = gym.make(
+        "cpr_gym:core-v0",
+        proto=protocols.tailstormjune(k=7, reward="discount"),
+        alpha=0.25,
+        gamma=0.7,
+        defenders=4,
+        max_steps=10000,
+    )
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == (
+        "Tailstorm/ll (June '22 version) with k=7 and discount rewards; "
+        "SSZ'16-like attack space; α=0.25 attacker"
+    )
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
+
+    assert info["protocol_k"] == 7
+
+    check_env(env)
