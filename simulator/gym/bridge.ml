@@ -221,5 +221,14 @@ let () =
      in
      fun () ->
        Proto (Engine.of_module (tailstormll_ssz ~subblock_selection ~incentive_scheme ~k))
+       |> python_of_protocol);
+  Py_module.set
+    m
+    "tailstormjune"
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
+     and k = keyword "k" int ~docstring:"puzzles per block" in
+     let incentive_scheme = Options.of_string_exn Tailstormll.incentive_schemes reward in
+     fun () ->
+       Proto (Engine.of_module (tailstormjune_ssz ~incentive_scheme ~k))
        |> python_of_protocol)
 ;;
