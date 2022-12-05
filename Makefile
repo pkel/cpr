@@ -48,7 +48,7 @@ setup:
 	opam install . --deps-only --working-dir --yes
 
 dependencies:
-	opam exec dune build {cpr,cpr-dev}.opam
+	opam exec dune build cpr.opam cpr-dev.opam
 	opam install . --deps-only --working-dir
 
 _venv: requirements.txt
