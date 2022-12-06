@@ -34,8 +34,8 @@ class Config(BaseSettings):
     ]
     USE_DAA: bool = True
     DAA_METHOD: Literal["sparse", "dense"] = "sparse"
-    GAMMA: float = 0
-    DEFENDERS: int = 1
+    GAMMA: float = 0.5
+    DEFENDERS: int = 2
     ACTIVATION_DELAY: int = 1
     N_ENVS: int = 16
 
