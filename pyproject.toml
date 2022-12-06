@@ -15,6 +15,9 @@ norecursedirs = [
   'rl',
 ]
 
+[tool.cibuildwheel]
+skip = ["*linux_i686*"]
+
 [tool.cibuildwheel.linux]
 environment = { OPAMROOTISOK = 1 }
 before-all = "make manylinux-opam cibuildwheel-setup bridge"
