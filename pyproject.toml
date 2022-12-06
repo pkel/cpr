@@ -20,8 +20,8 @@ skip = ["*linux_i686*"]
 
 [tool.cibuildwheel.linux]
 environment = { OPAMROOTISOK = 1 }
-before-all = "make manylinux-opam cibuildwheel-setup bridge"
+before-all = "make manylinux-opam cibuildwheel-setup"
 
 [[tool.cibuildwheel.overrides]]
 select = "*-musllinux*"
-before-all = "make musllinux-opam cibuildwheel-setup bridge"
+before-all = "make musllinux-opam cibuildwheel-setup"

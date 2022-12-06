@@ -8,7 +8,7 @@ build:
 
 test:
 	opam exec dune runtest
-	make bridge _venv
+	make _venv
 	_venv/bin/pytest --forked
 
 watch-malformed-dag:
@@ -55,17 +55,6 @@ _venv: requirements.txt
 	_venv/bin/pip install -r requirements.txt
 	touch _venv
 
-# bridge OCaml and Python
-
-bridge gym/cpr_gym/bridge.so:
-	opam exec dune -- build --release simulator/gym/bridge.so
-	rm -f gym/cpr_gym/bridge.so
-	cp _build/default/simulator/gym/bridge.so gym/cpr_gym/bridge.so
-
-update-bridge-from-ci:
-	_venv/bin/python -m cpr_gym --update
-	_venv/bin/python -m cpr_gym --version
-
 # long-running simulations
 
 simulate:
@@ -101,7 +90,7 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard data/viz/*.dot))
 reset-config:
 	rm -f experiments/train/config.ini
 
-train-online: bridge _venv
+train-online: _venv
 	if [ ! -e experiments/train/config.ini ] ; then\
 		cp experiments/train/defaults.ini experiments/train/config.ini ; fi
 	${EDITOR} experiments/train/config.ini
