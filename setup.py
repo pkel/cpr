@@ -1,16 +1,4 @@
 from setuptools import setup, Extension
-
-# force platform wheel
-# https://stackoverflow.com/a/45150383
-from wheel.bdist_wheel import bdist_wheel
-
-
-class my_bdist_wheel(bdist_wheel):
-    def finalize_options(self):
-        bdist_wheel.finalize_options(self)
-        self.root_is_pure = False
-
-
 from setuptools.command.build_ext import build_ext
 
 
@@ -30,7 +18,7 @@ class my_build_ext(build_ext):
         import os
         import shutil
 
-        so = ext.source_ml.removesuffix("ml") + "so"
+        so = ext.source_ml.rsplit(sep=".")[0] + ".so"
         cmd = f"opam exec dune -- build --release {so}"
         print(f"my_build_ext: {cmd}")
         os.system(cmd)
@@ -45,6 +33,6 @@ setup(
     packages=["cpr_gym"],
     package_dir={"cpr_gym": "./gym/cpr_gym"},
     ext_modules=[Extension(name="bridge", sources=["simulator/gym/bridge.ml"])],
-    cmdclass=dict(bdist_wheel=my_bdist_wheel, build_ext=my_build_ext),
+    cmdclass=dict(build_ext=my_build_ext),
     install_requires=["gym", "numpy"],
 )
