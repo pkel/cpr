@@ -14,3 +14,11 @@ norecursedirs = [
   '_*',
   'rl',
 ]
+
+[tool.cibuildwheel.linux]
+environment = { OPAMROOTISOK = 1 }
+before-all = "make manylinux-opam cibuildwheel-setup bridge"
+
+[[tool.cibuildwheel.overrides]]
+select = "*-musllinux*"
+before-all = "make musllinux-opam cibuildwheel-setup bridge"

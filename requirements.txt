@@ -16,7 +16,7 @@ seaborn
 
 networkx
 
--e ./gym
+-e .
 
 stable-baselines3
 wandb

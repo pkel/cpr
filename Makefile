@@ -26,10 +26,23 @@ format: _venv
 
 pre-commit: check-format test
 
+manylinux-opam:
+	curl -LO https://github.com/ocaml/opam/releases/download/2.1.3/opam-2.1.3-x86_64-linux
+	install opam-2.1.3-x86_64-linux /usr/local/bin/opam
+	rm opam-2.1.3-x86_64-linux
+
+musllinux-opam:
+	apk add opam
+
+cibuildwheel-setup:
+	opam init --auto-setup --disable-sandboxing --bare
+	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda --no-install --yes
+	opam install ./cpr.opam --deps-only --working-dir --yes
+
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
-	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda
-	opam install . --deps-only --working-dir
+	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda --no-install --yes
+	opam install . --deps-only --working-dir --yes
 
 dependencies:
 	opam exec dune build {cpr,cpr-dev}.opam
