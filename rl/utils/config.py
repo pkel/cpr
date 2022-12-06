@@ -3,11 +3,13 @@ from typing import List, Literal
 
 
 class Config(BaseSettings):
-    PROTOCOL: Literal["tailstorm", "nakamoto", "bk", "bk_ll"] = "tailstorm"
-    REWARD_SCHEME: Literal["discount", "constant"] = "constant"
+    PROTOCOL: Literal[
+        "tailstorm", "nakamoto", "bk", "bk_ll", "tailstormjune"
+    ] = "tailstormjune"
+    REWARD_SCHEME: Literal["discount", "constant"] = "discount"
     K: int = 10
     ALGO: Literal["PPO", "DQN"] = "PPO"
-    TOTAL_TIMESTEPS: int = 1e8
+    TOTAL_TIMESTEPS: int = 10e8
     STEPS_PER_ROLLOUT: int = 200
     STARTING_LR: float = 10e-5
     ENDING_LR: float = 10e-7

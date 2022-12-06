@@ -13,7 +13,8 @@ def env_fn(alpha, target, config: Config):
         pass
     elif config.PROTOCOL == "tailstorm":
         proto = protocols.tailstorm(k=config.K, reward=config.REWARD_SCHEME)
-
+    elif config.PROTOCOL == "tailstormjune":
+        proto = protocols.tailstormjune(k=config.K, reward=config.REWARD_SCHEME)
     if config.USE_DAA:
         max_steps = config.STEPS_PER_ROLLOUT * 1000000
         max_time = config.STEPS_PER_ROLLOUT
@@ -26,7 +27,7 @@ def env_fn(alpha, target, config: Config):
         alpha=alpha,
         max_steps=max_steps,
         max_time=max_time,
-        max_height=max_steps,
+        # max_height=max_steps,
         gamma=config.GAMMA,
         defenders=config.DEFENDERS,
         activation_delay=target,

@@ -30,7 +30,7 @@ class SparseDaaRewardWrapper(gym.Wrapper):
         # self.sum_defender += info["reward_defender"]
         if done:
             observed_time_per_pow = (
-                self.env.config.STEPS_PER_ROLLOUT / info["episode_n_pow"]
+                self.env.config.STEPS_PER_ROLLOUT / info["episode_progress"]
             )
 
             self.difficulties[self.env.alpha] = observed_time_per_pow
