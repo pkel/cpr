@@ -1,18 +1,30 @@
 open Cpr_lib
 
-(* This is an attempt to map Tailstorm(ll) as we had in in June, i.e., successful WandB
+(* This is an attempt to map Tailstorm(ll) as we had it in June, i.e., successful WandB
    run 257 and git commit cc21ff0f3f, to the updated simulator infrastructure.
 
    Diff to tailstormll_ssz.ml is significant. Maybe keep this as reference even if we drop
    (largely redundant) tailstorm_june.ml. Let's first see, whether we can reproduce WandB
    run 257 against this attack space. *)
 
-module Make (Parameters : Tailstorm_june.Parameters) = struct
+module type Parameters = sig
+  include Tailstorm_june.Parameters
+  include Nakamoto_ssz.Parameters
+end
+
+module Make (Parameters : Parameters) = struct
+  open Parameters
   module Protocol = Tailstorm_june.Make (Parameters)
   open Protocol
 
-  let key = "ssz"
-  let info = "SSZ'16-like attack space"
+  let () = if unit_observation then failwith "unit_observation=true not implemented"
+  let key = Format.asprintf "ssz-%s" (if unit_observation then "unitobs" else "rawobs")
+
+  let info =
+    Format.asprintf
+      "SSZ'16-like attack space with %s observations"
+      (if unit_observation then "unit" else "raw")
+  ;;
 
   module Observation = struct
     type t =
@@ -26,26 +38,6 @@ module Make (Parameters : Tailstorm_june.Parameters) = struct
     [@@deriving fields]
 
     let length = List.length Fields.names
-
-    let _low =
-      { public_blocks = 0
-      ; public_depth = 0
-      ; private_blocks = 0
-      ; private_depth = 0
-      ; diff_blocks = min_int
-      ; diff_depth = min_int
-      }
-    ;;
-
-    let _high =
-      { public_blocks = max_int
-      ; public_depth = max_int
-      ; private_blocks = max_int
-      ; private_depth = max_int
-      ; diff_blocks = max_int
-      ; diff_depth = max_int
-      }
-    ;;
 
     let to_floatarray t =
       let a = Float.Array.make length Float.nan in
@@ -65,6 +57,28 @@ module Make (Parameters : Tailstorm_june.Parameters) = struct
           ~diff_depth:int
       in
       a
+    ;;
+
+    let low =
+      to_floatarray
+        { public_blocks = 0
+        ; public_depth = 0
+        ; private_blocks = 0
+        ; private_depth = 0
+        ; diff_blocks = min_int
+        ; diff_depth = min_int
+        }
+    ;;
+
+    let high =
+      to_floatarray
+        { public_blocks = max_int
+        ; public_depth = max_int
+        ; private_blocks = max_int
+        ; private_depth = max_int
+        ; diff_blocks = max_int
+        ; diff_depth = max_int
+        }
     ;;
 
     let of_floatarray =

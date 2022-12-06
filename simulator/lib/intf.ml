@@ -183,12 +183,16 @@ module type AttackSpace = sig
     type t
 
     val length : int
+    val low : floatarray
+    val high : floatarray
 
-    (* must return floats ranging from 0. to 1. *)
+    (** Encode observation in floatarray of size {!length} for machine observation.
+       Result must fall into the range provided by {!low} and {!high}. *)
     val to_floatarray : t -> floatarray
 
-    (* may assume floats ranging from 0. to 1. *)
+    (** Recover observation from floatarray created with {!to_floatarray}. *)
     val of_floatarray : floatarray -> t
+
     val to_string : t -> string
   end
 

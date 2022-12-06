@@ -3,7 +3,7 @@ from cpr_gym import engine, protocols
 
 def test_engine():
     env = engine.create(
-        proto=protocols.nakamoto(),
+        proto=protocols.nakamoto(unit_observation=False),
         alpha=0.33,
         gamma=0.5,
         defenders=2,
@@ -14,9 +14,11 @@ def test_engine():
     assert not done
 
 
-def test_engine_600steps():  # see if the engine works for 600 steps, the policy failed.
+def test_engine_600steps():
+    # see if the engine works for 600 steps.
+    # We had some memory management (gc?) problems in the beginning.
     env = engine.create(
-        proto=protocols.nakamoto(),
+        proto=protocols.nakamoto(unit_observation=True),
         alpha=0.33,
         gamma=0.5,
         defenders=2,

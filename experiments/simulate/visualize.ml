@@ -113,8 +113,19 @@ let tasks_per_attack_space f n_activations incentive_scheme =
 
 let tasks_per_attack_space f i = List.concat_map (tasks_per_attack_space f i)
 
+module Protocols = struct
+  include Cpr_protocols
+
+  let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
+  let ethereum_ssz = ethereum_ssz ~unit_observation:true
+  let bk_ssz = bk_ssz ~unit_observation:true
+  let bkll_ssz = bkll_ssz ~unit_observation:true
+  let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
+  let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
+end
+
 let tasks =
-  let open Cpr_protocols in
+  let open Protocols in
   let tailstorm = tailstorm ~subblock_selection:`Optimal
   and tailstorm_ssz = tailstorm_ssz ~subblock_selection:`Optimal
   and tailstormll = tailstormll ~subblock_selection:`Optimal
