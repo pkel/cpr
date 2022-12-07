@@ -16,7 +16,11 @@ norecursedirs = [
 ]
 
 [tool.cibuildwheel]
-skip = ["*linux_i686*"]
+build = [
+  'cp39-manylinux_x86_64',
+  'cp39-musllinux_x86_64',
+  # 'cp39-macosx_x86_64',
+]
 
 [tool.cibuildwheel.linux]
 environment = { OPAMROOTISOK = 1 }
