@@ -35,7 +35,7 @@ musllinux-opam:
 	apk add opam
 
 macosx-opam:
-	apk add opam
+	brew install opam
 
 cibuildwheel-setup:
 	opam init --auto-setup --disable-sandboxing --bare
