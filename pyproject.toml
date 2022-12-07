@@ -16,16 +16,21 @@ norecursedirs = [
 ]
 
 [tool.cibuildwheel]
+environment = { OPAMROOTISOK = 1 }
 build = [
   'cp39-manylinux_x86_64',
   'cp39-musllinux_x86_64',
-  # 'cp39-macosx_x86_64',
+  'cp39-macosx_x86_64',
 ]
-
-[tool.cibuildwheel.linux]
-environment = { OPAMROOTISOK = 1 }
-before-all = "make manylinux-opam cibuildwheel-setup"
 
 [[tool.cibuildwheel.overrides]]
 select = "*-musllinux*"
 before-all = "make musllinux-opam cibuildwheel-setup"
+
+[[tool.cibuildwheel.overrides]]
+select = "*-manylinux*"
+before-all = "make manylinux-opam cibuildwheel-setup"
+
+[[tool.cibuildwheel.overrides]]
+select = "*-macosx*"
+before-all = "make macosx-opam cibuildwheel-setup"

@@ -34,6 +34,9 @@ manylinux-opam:
 musllinux-opam:
 	apk add opam
 
+macosx-opam:
+	apk add opam
+
 cibuildwheel-setup:
 	opam init --auto-setup --disable-sandboxing --bare
 	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda --no-install --yes
