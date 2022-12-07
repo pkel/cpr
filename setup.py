@@ -1,21 +1,27 @@
 import os
+import re
 import shutil
 import subprocess
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from wheel.bdist_wheel import bdist_wheel
 
-with open("VERSION", "r") as f:
-    version = f.read().strip()
-
 try:
     cmd = "git describe --tags --dirty || git describe --all --long --dirty"
     full_version = subprocess.run(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, text=True
     ).stdout.splitlines()[0]
-    if full_version != version:
-        version = f"{version}+dev"
+
+    semver = re.findall("^v[0-9]+.[0-9]+.[0-9]+", full_version)
+    if len(semver) > 0:
+        version = semver[0]
+        if full_version != version:
+            version = f"{version}+dev"
+    else:
+        version = "v0.0.0+notag"
+
 except subprocess.CalledProcessError:
+    version = "v0.0.0+nogit"
     full_version = version
 
 
