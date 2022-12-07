@@ -4,7 +4,7 @@ from typing import List, Literal
 
 class Config(BaseSettings):
     PROTOCOL: Literal["tailstorm", "nakamoto", "bk", "bk_ll"] = "tailstorm"
-    REWARD_SCHEME: Literal["discount", "constant"] = "constant"
+    REWARD_SCHEME: Literal["discount", "constant"] = "discount"
     K: int = 10
     ALGO: Literal["PPO", "DQN"] = "PPO"
     TOTAL_TIMESTEPS: int = 1e9
