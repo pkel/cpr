@@ -1,5 +1,6 @@
 on:
   release:
+    type:
 
 jobs:
   build_wheels:
@@ -7,7 +8,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, macos-11]
+        # os: [ubuntu-20.04, macos-11]
+        os: [ubuntu-20.04]
 
     steps:
       - uses: actions/checkout@v3
