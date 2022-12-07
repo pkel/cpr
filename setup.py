@@ -1,5 +1,21 @@
+import os
+import shutil
+import subprocess
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
+
+with open("VERSION", "r") as f:
+    version = f.read().strip()
+
+try:
+    cmd = "git describe --tags --dirty || git describe --all --long --dirty"
+    full_version = subprocess.run(
+        cmd, shell=True, check=True, stdout=subprocess.PIPE, text=True
+    ).stdout.splitlines()[0]
+    if full_version != version:
+        version = f"{version}+dev"
+except subprocess.CalledProcessError:
+    full_version = version
 
 
 class my_build_ext(build_ext):
@@ -15,13 +31,13 @@ class my_build_ext(build_ext):
         build_ext.build_extension(self, ext)
 
     def build_ocaml(self, ext):
-        import os
-        import shutil
 
         so = ext.source_ml.rsplit(sep=".")[0] + ".so"
         cmd = f"opam exec dune -- build --release {so}"
         print(f"my_build_ext: {cmd}")
-        os.system(cmd)
+        env = os.environ
+        env["CPR_VERSION"] = full_version
+        subprocess.run(cmd, shell=True, check=True, env=env)
 
         path = self.get_ext_fullpath(ext.name)
         print(f"my_build_ext: copy shared object to {path}")
@@ -30,6 +46,7 @@ class my_build_ext(build_ext):
 
 setup(
     name="cpr_gym",
+    version=version,
     packages=["cpr_gym"],
     package_dir={"cpr_gym": "./gym/cpr_gym"},
     ext_modules=[Extension(name="bridge", sources=["simulator/gym/bridge.ml"])],
