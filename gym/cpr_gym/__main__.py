@@ -1,9 +1,6 @@
 import argparse
 import cpr_gym
 import os
-import requests
-import shutil
-import sys
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

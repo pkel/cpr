@@ -31,7 +31,7 @@ class my_bdist_wheel(bdist_wheel):
         # apparently, pyml DLL's are compatible with Python 2 & 3
         # see https://github.com/thierry-martinez/pyml
         # so I guess it's save to set abi = none here
-        return "py", "none", plat
+        return "py3", "none", plat
 
 
 class my_build_ext(build_ext):
@@ -39,19 +39,26 @@ class my_build_ext(build_ext):
         sources = ext.sources
 
         if len(sources) == 1 and sources[0].endswith(".ml"):
-            print(f"my_build_ext: extension '{ext.name}' looks like an OCaml extension")
             ext.source_ml = sources[0]
             self.build_ocaml(ext)
             return
 
         build_ext.build_extension(self, ext)
 
+    def get_ext_filename(self, name):
+        orig = build_ext.get_ext_filename(self, name)
+        segs = orig.split(".")
+        del segs[-2]
+        patched = ".".join(segs)
+        return patched
+
     def build_ocaml(self, ext):
+        print(f"my_build_ext: build OCaml extension '{ext.name}'")
 
         so = ext.source_ml.rsplit(sep=".")[0] + ".so"
         cmd = f"opam exec dune -- build --release {so}"
         print(f"my_build_ext: {cmd}")
-        env = os.environ
+        env = os.environ.copy()
         env["CPR_VERSION"] = full_version
         subprocess.run(cmd, shell=True, check=True, env=env)
 
@@ -65,7 +72,7 @@ setup(
     version=version,
     packages=["cpr_gym"],
     package_dir={"cpr_gym": "./gym/cpr_gym"},
-    ext_modules=[Extension(name="bridge", sources=["simulator/gym/bridge.ml"])],
+    ext_modules=[Extension(name="cpr_gym_engine", sources=["simulator/gym/bridge.ml"])],
     cmdclass=dict(bdist_wheel=my_bdist_wheel, build_ext=my_build_ext),
     install_requires=["gym", "numpy"],
 )

@@ -9,7 +9,7 @@ import sys
 #################################
 
 package = "cpr_gym"
-ext_name = "bridge"
+ext_name = "cpr_gym_engine"
 ext_source = "simulator/gym/bridge.so"
 
 __version__ = "v" + importlib.metadata.version(package)
