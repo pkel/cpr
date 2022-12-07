@@ -1,6 +1,7 @@
 on:
   release:
-    type:
+    types:
+      - published
 
 jobs:
   build_wheels:
