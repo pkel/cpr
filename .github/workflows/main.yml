@@ -1,4 +1,4 @@
-name: main
+name: test
 
 on:
   push:
@@ -8,6 +8,8 @@ on:
 
 jobs:
   ocaml:
+    name: Test OCaml
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -17,15 +19,12 @@ jobs:
         ocaml-compiler:
           - 4.12.1
 
-    runs-on: ${{ matrix.os }}
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0 # get complete history, including tags for CPR_VERSION env
 
-      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+      - name: Setup OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ocaml-variants.${{ matrix.ocaml-compiler }}+options,ocaml-option-flambda
@@ -33,25 +32,28 @@ jobs:
       - name: Install dependencies
         run: opam install . --deps-only --with-test
 
-      - name: Run tests
+      - name: Build and run tests
         run: |
-          export CPR_VERSION=github_ci-${{ matrix.os }}-$(git describe --tags --dirty || git describe --all --long --dirty)
+          export CPR_VERSION=github-${{ matrix.os }}-$(git describe --tags --dirty || git describe --all --long --dirty)
           opam exec -- dune build @fmt
           opam exec -- dune build
           opam exec -- dune runtest
 
-      - name: Build DLL
+      - name: Build engine DLL
         run: |
           opam exec -- dune build --release simulator/gym/bridge.so &&
             cp _build/default/simulator/gym/bridge.so cpr_gym_engine.so
 
-      - name: Upload the gym shared object
+      - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: cpr_gym_engine-${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
           path: cpr_gym_engine.so
 
   python:
+    name: Test Python
+    needs: ocaml
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os:
@@ -60,21 +62,16 @@ jobs:
         python-version:
           - 3.9
 
-    needs: ocaml
-
-    runs-on: ${{ matrix.os }}
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Download gym engine DLL
+      - name: Download engine DLL
         uses: actions/download-artifact@v3
         with:
           name: cpr_gym_engine-ubuntu-20.04-ocaml-4.12.1
           path: ./
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
@@ -91,36 +88,3 @@ jobs:
           black --check .
           flake8
           pytest --forked
-
-
-  disabled:
-    runs-on: ubuntu-latest
-
-    needs: python
-
-    if: github.event_name == 'release'
-
-    steps:
-      - name: Download gym shared object (linux)
-        uses: actions/download-artifact@v3
-        with:
-          name: ubuntu-20.04-ocaml-4.12.1
-          path: linux
-
-      - name: Download gym shared object (macos)
-        uses: actions/download-artifact@v3
-        with:
-          name: macos-12-ocaml-4.12.1
-          path: macos
-
-      - name: Upload linux binary to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          file: 'linux/bridge.so'
-          asset_name: 'cpr-$tag-linux.so'
-
-      - name: Upload macos binary to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          file: 'macos/bridge.so'
-          asset_name: 'cpr-$tag-darwin.so'
