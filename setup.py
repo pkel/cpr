@@ -22,7 +22,7 @@ except subprocess.CalledProcessError:
     full_version = version
 
 
-class my_bdist_wheel(bdist_wheel):
+class cpr_bdist_wheel(bdist_wheel):
     def get_tag(self):
         python, abi, plat = super().get_tag()
         # apparently, pyml DLL's are compatible with Python 2 & 3
@@ -31,7 +31,7 @@ class my_bdist_wheel(bdist_wheel):
         return "py3", "none", plat
 
 
-class my_build_ext(build_ext):
+class cpr_build_ext(build_ext):
     def build_extension(self, ext):
         sources = ext.sources
 
@@ -49,19 +49,36 @@ class my_build_ext(build_ext):
         patched = ".".join(segs)
         return patched
 
+    def opam_available(self):
+        try:
+            subprocess.run(["opam", "--version"], capture_output=True)
+            return True
+        except FileNotFoundError:
+            return False
+        except subprocess.CalledProcessError:
+            return False
+
     def build_ocaml(self, ext):
-        print(f"my_build_ext: build OCaml extension '{ext.name}'")
+        print(f"cpr_build_ext: build OCaml extension '{ext.name}'")
 
-        so = ext.source_ml.rsplit(sep=".")[0] + ".so"
-        cmd = f"opam exec dune -- build --release {so}"
-        print(f"my_build_ext: {cmd}")
-        env = os.environ.copy()
-        env["CPR_VERSION"] = full_version
-        subprocess.run(cmd, shell=True, check=True, env=env)
-
-        path = self.get_ext_fullpath(ext.name)
-        print(f"my_build_ext: copy shared object to {path}")
-        shutil.copyfile(f"_build/default/{so}", path)
+        dest = self.get_ext_fullpath(ext.name)
+        if self.opam_available():
+            so = ext.source_ml.rsplit(sep=".")[0] + ".so"
+            cmd = f"opam exec dune -- build --release {so}"
+            print(f"cpr_build_ext: {cmd}")
+            env = os.environ.copy()
+            env["CPR_VERSION"] = full_version
+            subprocess.run(cmd, shell=True, check=True, env=env)
+            shutil.copyfile(f"_build/default/{so}", dest)
+        else:
+            print("cpr_build_ext: OCaml toolchain not available")
+            localDLL = "./" + self.get_ext_filename(ext.name)
+            if os.path.isfile(localDLL):
+                print("cpr_build_ext: reuse existing DLL")
+                shutil.copyfile(localDLL, dest)
+            else:
+                print("cpr_build_ext: no prebuilt DLL found")
+                raise SystemExit(f"ERROR: cannot build extension '{ext.name}'")
 
 
 setup(
@@ -70,6 +87,6 @@ setup(
     packages=["cpr_gym"],
     package_dir={"cpr_gym": "./gym/cpr_gym"},
     ext_modules=[Extension(name="cpr_gym_engine", sources=["simulator/gym/bridge.ml"])],
-    cmdclass=dict(bdist_wheel=my_bdist_wheel, build_ext=my_build_ext),
+    cmdclass=dict(bdist_wheel=cpr_bdist_wheel, build_ext=cpr_build_ext),
     install_requires=["gym", "numpy"],
 )

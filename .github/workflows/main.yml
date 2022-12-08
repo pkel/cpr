@@ -5,9 +5,6 @@ on:
     branches:
       - master
   pull_request:
-  release:
-    types:
-      - prereleased
 
 jobs:
   ocaml:
@@ -42,13 +39,17 @@ jobs:
           opam exec -- dune build @fmt
           opam exec -- dune build
           opam exec -- dune runtest
-          opam exec -- dune build --release
+
+      - name: Build DLL
+        run: |
+          opam exec -- dune build --release simulator/gym/bridge.so &&
+            cp _build/default/simulator/gym/bridge.so cpr_gym_engine.so
 
       - name: Upload the gym shared object
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
-          path: _build/default/simulator/gym/bridge.so
+          name: cpr_gym_engine-${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
+          path: cpr_gym_engine.so
 
   python:
     strategy:
@@ -67,11 +68,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Download gym shared object
+      - name: Download gym engine DLL
         uses: actions/download-artifact@v3
         with:
-          name: ubuntu-20.04-ocaml-4.12.1
-          path: gym/cpr_gym
+          name: cpr_gym_engine-ubuntu-20.04-ocaml-4.12.1
+          path: ./
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -92,7 +93,7 @@ jobs:
           pytest --forked
 
 
-  release:
+  disabled:
     runs-on: ubuntu-latest
 
     needs: python
