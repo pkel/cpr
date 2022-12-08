@@ -41,8 +41,8 @@ jobs:
 
       - name: Build engine DLL
         run: |
-          opam exec -- dune build --release simulator/gym/bridge.so &&
-            cp _build/default/simulator/gym/bridge.so cpr_gym_engine.so
+          opam exec -- dune build --release simulator/gym/cpr_gym_engine.so &&
+            cp _build/default/simulator/gym/cpr_gym_engine.so ./
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3

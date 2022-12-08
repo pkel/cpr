@@ -86,7 +86,9 @@ setup(
     version=version,
     packages=["cpr_gym"],
     package_dir={"cpr_gym": "./gym/cpr_gym"},
-    ext_modules=[Extension(name="cpr_gym_engine", sources=["simulator/gym/bridge.ml"])],
+    ext_modules=[
+        Extension(name="cpr_gym_engine", sources=["simulator/gym/cpr_gym_engine.ml"])
+    ],
     cmdclass=dict(bdist_wheel=cpr_bdist_wheel, build_ext=cpr_build_ext),
     install_requires=["gym", "numpy"],
 )

@@ -10,7 +10,7 @@ import sys
 
 package = "cpr_gym"
 ext_name = "cpr_gym_engine"
-ext_source = "simulator/gym/bridge.so"
+ext_build_name = "simulator/gym/cpr_gym_engine.so"
 
 __version__ = "v" + importlib.metadata.version(package)
 __repo_path = pathlib.Path(__file__).parent.parent.parent
@@ -48,7 +48,7 @@ dll_dir = os.path.dirname(dll_path)
 
 if editable_install:
     if os.path.exists(os.path.join(repo_path, "_build")):
-        cmd = f"opam exec dune -- build {ext_source}"
+        cmd = f"opam exec dune -- build {ext_build_name}"
         print(
             f"{package}: OCaml build directory (_build) exists. Rebuild DLL.\n"
             f"{package}: {cmd}"
@@ -57,7 +57,7 @@ if editable_install:
         import subprocess
 
         subprocess.run(cmd, shell=True, check=True, cwd=repo_path)
-        dll_path = os.path.join(dll_dir, "_build/default", ext_source)
+        dll_path = os.path.join(dll_dir, "_build/default", ext_build_name)
 
 # Custom import
 # -------------
