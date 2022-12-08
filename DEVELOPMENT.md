@@ -1,11 +1,12 @@
 # OCaml
 
-**Opam** is the OCaml package manager. We use it to get our dependencies
-from the internet in the correct version. It also manages different
+**Opam** is the OCaml package manager. Like pip or npm. We use it do
+download and install our OCaml dependencies and to manage different
 versions of the OCaml compiler.
 
 You do not have to interact with opam directly. Just make sure that a
-recent version (>= 2.0) is installed on your system. Then use `make
+recent version (>= 2.0) is installed on your system. [Follow these
+instructions](https://opam.ocaml.org/doc/Install.html). Then use `make
 setup` to setup an OCaml toolchain in the current working directory
 under `./_opam`.
 
@@ -14,8 +15,11 @@ the toolchain.
 
 **Dune** is an OCaml build system. We use it to build executables and
 shared objects, and to run tests. You do not have to interact with dune
-directly. Just run `make bridge` to build the latest `bridge.so` and
-copy it to the Python `cpr_gym` library.
+directly. Just run `make build` to test whether the build works.
+
+Now, installing `cpr_gym` as editable Python package should work. Try
+`pip install -e .`. The editable install will automatically invoke
+`dune` to keep the `cpr_gym_engine.so` up to date.
 
 ## Ubuntu
 
@@ -23,7 +27,9 @@ copy it to the Python `cpr_gym` library.
 sudo apt install opam
 opam init
 make setup
-make bridge
+make build
+pip install -e .
+python -m cpr_gym --version
 ```
 
 ## MacOS
@@ -32,5 +38,7 @@ make bridge
 brew install opam
 opam init
 make setup
-make bridge
+make build
+pip install -e .
+python -m cpr_gym --version
 ```

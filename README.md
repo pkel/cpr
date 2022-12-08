@@ -180,9 +180,9 @@ follow [Hou et al.][squirrl] and expose the private attack as an [OpenAI
 gym][openai-gym] environment. This enables easy access from Python-based
 policy learning tools to the protocol logic implemented in OCaml.
 
-The OCaml bits of the gym environment live in `ocaml/gym` and are
-compiled into a shared object `bridge.so` which can be loaded from
-Python. A python package living `python/gym` wraps the exposed OCaml
+The OCaml bits of the gym environment live in `simulator/gym` and are
+compiled into a shared object `cpr_gym_engine.so` which can be loaded from
+Python. A python package living `gym/cpr_gym` wraps the exposed OCaml
 interface into an OpenAI-compatible `gym.Env` class.
 
 [openai-gym]: https://gym.openai.com/
