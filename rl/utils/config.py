@@ -5,7 +5,7 @@ from typing import List, Literal
 class Config(BaseSettings):
     PROTOCOL: Literal["tailstorm", "nakamoto", "bk", "bk_ll"] = "tailstorm"
     REWARD_SCHEME: Literal["discount", "constant"] = "discount"
-    K: int = 10
+    K: int = 8
     ALGO: Literal["PPO", "DQN"] = "PPO"
     TOTAL_TIMESTEPS: int = 1e9
     STEPS_PER_ROLLOUT: int = 200
@@ -33,7 +33,7 @@ class Config(BaseSettings):
     USE_DAA: bool = True
     DAA_METHOD: Literal["sparse", "dense"] = "sparse"
     GAMMA: float = 0.9
-    DEFENDERS: int = 10
+    DEFENDERS: int = 50
     ACTIVATION_DELAY: int = 1
     N_ENVS: int = 16
 
