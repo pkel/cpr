@@ -38,6 +38,6 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           body: "Automatic release from version tag."
-          prerelease: ${{ contains(tag, '+') }}
+          prerelease: ${{ contains(github.ref_name, '+') }}
           file: 'wheels/*.whl'
           file_glob: true
