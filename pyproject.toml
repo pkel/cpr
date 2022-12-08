@@ -1,3 +1,10 @@
+[build-system]
+requires = [
+  "packaging",
+  "setuptools",
+  "wheel",
+]
+
 [tool.flake8]
 exclude = [
   '.git',
@@ -19,7 +26,7 @@ norecursedirs = [
 environment = { OPAMROOTISOK = 1 }
 build = [
   'cp39-manylinux_x86_64',
-  'cp39-musllinux_x86_64',
+  # 'cp39-musllinux_x86_64',
   'cp39-macosx_x86_64',
 ]
 
