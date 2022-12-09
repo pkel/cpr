@@ -25,6 +25,7 @@
   (ppx_show (>= 0.2.1))
   (ppx_variants_conv (>= v0.15))
   (progress (>= 0.2.1))
+  (pvec (> 0))
   (pyml (>= 20220325))
   (pythonlib (>= v0.15))
   ))
