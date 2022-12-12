@@ -25,10 +25,11 @@ except subprocess.CalledProcessError:
 class cpr_bdist_wheel(bdist_wheel):
     def get_tag(self):
         python, abi, plat = super().get_tag()
-        # apparently, pyml DLL's are compatible with Python 2 & 3
-        # see https://github.com/thierry-martinez/pyml
-        # so I guess it's save to set abi = none here
-        return "py3", "none", plat
+        # See discussion in https://github.com/pkel/cpr/pull/31
+        if python.startswith("cp"):
+            return python, "abi3", plat
+        else:
+            raise SystemExit("cpr_bdist_wheel: cpython required")
 
 
 class cpr_build_ext(build_ext):
