@@ -2,6 +2,9 @@ _build/
 _opam/
 _venv/
 
+*.so
+*.egg-info
+
 .DS_Store
 .vscode/
 
