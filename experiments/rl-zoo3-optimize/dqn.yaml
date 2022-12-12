@@ -1,0 +1,14 @@
+cpr-v0:
+  n_envs: 4
+  n_timesteps: !!float 1e7
+  policy: "MlpPolicy"
+
+cpr-nakamoto-v0:
+  n_envs: 4
+  n_timesteps: !!float 1e7
+  policy: "MlpPolicy"
+
+cpr-tailstorm-v0:
+  n_envs: 4
+  n_timesteps: !!float 1e7
+  policy: "MlpPolicy"

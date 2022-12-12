@@ -62,3 +62,14 @@ tailstorm-1e6-constant: $(venv)
 		--storage $(storage) \
 		--study-name $@ \
 		--n-timesteps 1000000
+
+dqn-tailstorm-1e7: $(venv)
+	$(venv)/bin/python -m rl_zoo3.train --algo dqn --yaml-file dqn.yaml \
+		--gym-packages cpr_gym \
+		--env 'cpr-tailstorm-v0' \
+		--n-eval-envs 4 \
+		--eval-episodes 256 \
+		--optimize \
+		--storage $(storage) \
+		--study-name $@ \
+		--n-timesteps 10000000
