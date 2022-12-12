@@ -9,7 +9,7 @@ consensus protocols. In this repository you find
 - tooling for automatic attack-search with reinforcement learning (RL) and
 - evaluation scripts and notebooks for the above.
 
-[A website](https://cpr-preview.netlify.app) with more details is currently work-in-progress.
+I'm working on [a website](https://pkel.github.io/cpr/) with more details.
 
 ## Python/RL Quickstart
 
