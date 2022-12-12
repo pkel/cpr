@@ -45,3 +45,23 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '+') }}
           file: 'wheels/*.whl'
           file_glob: true
+
+  pypi_release:
+    name: Push to PyPI
+    runs-on: ubuntu-latest
+
+    needs: build_wheels
+
+    if: ${{ ! contains(github.ref_name, '+') }}
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels
+          path: dist
+
+      - name: Push to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
