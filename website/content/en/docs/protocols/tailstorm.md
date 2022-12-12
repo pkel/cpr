@@ -41,6 +41,7 @@ proportionally to the depth of the sub-block tree.
 ## Example
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -56,6 +57,7 @@ graph RL
 
   linkStyle 15,16,17,18 opacity:0.5
 ```
+
 Tailstorm with three sub-blocks per summary. Square boxes represent
 summary blocks and round boxes represent sub-blocks. Only sub-blocks
 require a proof-of-work. Summary blocks are labelled with their height,
@@ -118,7 +120,6 @@ def validity(b: Block):
         assert b.depth == parents[0].depth + 1
     return False
 ```
-
 
 ### Node
 
@@ -232,6 +233,7 @@ def constant_reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -247,10 +249,10 @@ graph RL
 
   linkStyle 15,16,17,18 opacity:0.5
 ```
+
 Constant reward applied to the example blockchain shown above. Only the
 miners of sub-blocks get assigned rewards.
 {{< /mermaid-figure >}}
-
 
 #### Discount reward
 
@@ -262,6 +264,7 @@ def discount_reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -277,6 +280,7 @@ graph RL
 
   linkStyle 15,16,17,18 opacity:0.5
 ```
+
 Discount reward applied to the example blockchain shown above. Observe
 how the reward scheme punishes non-linearity.
 {{< /mermaid-figure >}}

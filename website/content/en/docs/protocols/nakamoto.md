@@ -22,10 +22,10 @@ block by including the parents hash. Appending a new block requires a
 proof-of-work. Miners always try to extend the longest chain. The number
 of predecessors of a block is called *height*.
 
-
 ## Example
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -45,6 +45,7 @@ graph RL
 
   linkStyle 0,2 opacity:0.5
 ```
+
 Boxes represent blocks, arrows represent hash-references. Each block has
 exactly one parent. Appending a new block requires proof-of-work. The
 gray blocks are orphaned.
@@ -125,6 +126,7 @@ def reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
   classDef orphan opacity:0.5,fill:#eee
@@ -143,6 +145,7 @@ graph RL
 
   linkStyle 0,2 opacity:0.5
 ```
+
 Reward scheme applied to the example blockchain shown above. Each block
 on the longest chain assign 1 unit of reward to is miner.
 {{< /mermaid-figure >}}

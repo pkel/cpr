@@ -73,6 +73,7 @@ first study this protocol.
 ## Example
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
 b0[h]
@@ -83,6 +84,7 @@ b2[h+2] --> v4 & v6
 b3[h+3] --> v9([1]) & v8([1]) & v7([1]) --> b2
 b4[h+4] --> v12([2]) & v11([2]) --> v10([1]) --> b3
 ```
+
 Tree-structured voting with 3 votes per block. Block have square boxes
 and are labelled with their height, votes have round boxes and are
 labelled with their depth. Both votes and blocks require a
@@ -90,6 +92,7 @@ proof-of-work.
 {{< /mermaid-figure >}}
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
 b0[h]
@@ -107,6 +110,7 @@ ov2([2]):::orphan --> v10
 ob4[h+4]:::orphan --> v11 & v12
 linkStyle 20,21,22,23,24 opacity:0.5, stroke:gray
 ```
+
 Orphans are possible, but only when transitioning from one block to the
 next. These transitions are less frequent if there are more votes per
 block.
@@ -168,7 +172,6 @@ def validity(b: Block):
         assert b.depth == parents[0].depth + 1
     return False
 ```
-
 
 ### Node
 
@@ -276,6 +279,7 @@ def constant_reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
 b0[1]
@@ -286,10 +290,10 @@ b2[1] --> v4 & v6
 b3[1] --> v9([1]) & v8([1]) & v7([1]) --> b2
 b4[1] --> v12([1]) & v11([1]) --> v10([1]) --> b3
 ```
+
 Constant rewards make tree-structured voting equivalent to [simple
 parallel proof-of-work](../parallel-simple).
 {{< /mermaid-figure >}}
-
 
 #### Discount reward
 
@@ -306,6 +310,7 @@ def discount0_reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
 b0[?]
@@ -316,6 +321,7 @@ b2[3/4] --> v4 & v6
 b3[2/4] --> v9([2/4]) & v8([2/4]) & v7([2/4]) --> b2
 b4[3/4] --> v12([3/4]) & v11([3/4]) --> v10([3/4]) --> b3
 ```
+
 Non-linearity is punished proportionally to the depth of the vote-tree.
 A block counts as leave in the tree of confirmed votes. We do not see
 the tree of the leftmost block, thus we cannot calculate its rewards.
@@ -332,6 +338,7 @@ def discount1_reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
 b0[4/4]
@@ -342,6 +349,7 @@ b2[2/4] --> v4 & v6
 b3[3/4] --> v9([2/4]) & v8([2/4]) & v7([2/4]) --> b2
 b4[?] --> v12([3/4]) & v11([3/4]) --> v10([3/4]) --> b3
 ```
+
 Again, non-linearity is punished proportionally to the depth of the vote-tree.
 Now, a block counts as root in the tree of confirming votes. We do not see
 the tree of the rightmost block, thus we cannot calculate its rewards.
@@ -358,6 +366,7 @@ def discount2_reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
 b0[1]
@@ -368,6 +377,7 @@ b2[1] --> v4 & v6
 b3[1] --> v9([1/3]) & v8([1/3]) & v7([1/3]) --> b2
 b4[1] --> v12([2/3]) & v11([2/3]) --> v10([2/3]) --> b3
 ```
+
 Still, non-linearity is punished proportionally to the depth of the vote-tree.
 Now, the depth-based discount applies to votes only while blocks get
 constant rewards.
@@ -385,6 +395,7 @@ def discount3_reward(b: Block):
 ```
 
 {{< mermaid-figure >}}
+
 ```mermaid
 graph RL
 b0[?]
@@ -395,6 +406,7 @@ b2[3/6] --> v4 & v6
 b3[3/6] --> v9([1/3]) & v8([1/3]) & v7([1/3]) --> b2
 b4[?] --> v12([2/3]) & v11([2/3]) --> v10([2/3]) --> b3
 ```
+
 As before, non-linearity is punished proportionally to the depth of the
 vote-tree. The depth-based discount applies to votes like in the
 `discount2` scheme. Here, blocks do not get constant reward but the mean

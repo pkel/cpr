@@ -86,7 +86,6 @@ that proof-of-work slows down all nodes, but we do not yet limit the
 attacker's hash-rate. We assume that all nodes can send and receive
 messages, but we do not yet limit the propagation delays.
 
-
 ## Blobs, Hashes, Blockchain
 
 In practice, nodes are computers. They manipulate binary data locally

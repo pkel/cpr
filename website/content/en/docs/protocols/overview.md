@@ -1,4 +1,3 @@
-
 ---
 title: "Overview"
 description: |
@@ -31,6 +30,7 @@ you've learned about [Nakamoto consensus](../nakamoto) along the lines.
 You are ready for [parallel voting](../parallel-simple).
 
 {{< mermaid-figure class="text-center" >}}
+
 ```mermaid
 graph TD
 nc[Nakamoto Consensus]
@@ -48,6 +48,7 @@ click psaft "../parallel-aft22"
 click tree "../parallel-tree"
 click ts "../tailstorm"
 ```
+
 Suggested order for studying the specified protocols.
 Click on a node to jump to the protocol specification page!
 {{< /mermaid-figure >}}

@@ -56,6 +56,7 @@ or `False`, or it may fail. The specification consumer must ensure that
 all appended blocks are valid, that is, `validity` returns `True`.
 
 {{< code-figure >}}
+
 ```python
 def validity(b: Block):
     assert len(b.parents()) == 1
@@ -63,6 +64,7 @@ def validity(b: Block):
     assert b.height == b.parents()[0].height + 1
     return True
 ```
+
 The `validity` function of [Nakamoto
 consensus]({{< protocol "nakamoto" >}}) specifies that each block has
 exactly one parent, that each block must have a proof-of-work, and that
@@ -77,10 +79,12 @@ consumer must ensure that these blocks are part of the DAG when protocol
 executions begins.
 
 {{< code-figure >}}
+
 ```python
 def roots():
     return [Block(height=0, miner=None)]
 ```
+
 [Nakamoto consensus]({{< protocol "nakamoto" >}}) has single root block,
 often called <<genesis>> block. It does not have any parent blocks. It's
 height is zero.
@@ -103,10 +107,12 @@ given to `init` is the list of blocks defined by the global `roots`
 function.
 
 {{< code-figure >}}
+
 ```python
 def init(roots: [Block]):
     return roots[0]
 ```
+
 [Nakamoto consensus]({{< protocol "nakamoto">}}) nodes use as state
 their preferred tip of the chain. Initially they prefer the <<genesis>>
 block.
@@ -132,6 +138,7 @@ without proof-of-work, and
 network.
 
 {{< code-figure >}}
+
 ```python
 def update(old: Block, new: Block, event: string):
     if event == "mining":
@@ -141,6 +148,7 @@ def update(old: Block, new: Block, event: string):
     else:
         return Update(state=old)
 ```
+
 In [Nakamoto consensus]({{< protocol "nakamoto" >}}) nodes always prefer
 the longest chain of blocks, measured by block-height. Newly mined
 blocks are shared immediately with the other participants.
@@ -168,17 +176,20 @@ appended block.
 
 The protocol designer is indifferent to this distinction. She assumes
 that
-- `b.has_pow()` is true if and only if `b` was appended through
+
+* `b.has_pow()` is true if and only if `b` was appended through
 proof-of-work, and
-- when a node learns about a successful proof-of-work with
+* when a node learns about a successful proof-of-work with
 `update(old_state, new_block, event = "mining")` it holds that
 `new_block == mining(old_state)`.
 
 {{< code-figure >}}
+
 ```python
 def mining(b: Block):
     return Block(height=b.height + 1, parents=[b], miner=Env.my_id)
 ```
+
 In [Nakamoto consensus]({{< protocol "nakamoto" >}}) all blocks require
 a proof-of-work. Nodes mine to append new blocks to their preferred tip
 of the chain. Miners include their id to facilitate disbursement of
@@ -224,10 +235,12 @@ controls for constant progress per time. The analyst might in some
 situations just assume constant progress per time.
 
 {{< code-figure >}}
+
 ```python
 def progress(b: Block):
     return b.height
 ```
+
 [Nakamoto consensus](../nakamoto) uses block height as progress. The DAA
 tries to achieve constant growth of the progress (=height). Bitcoin targets 6
 blocks per hour.
@@ -257,15 +270,17 @@ address or wallet.
 
 We specify reward calculation using four functions `local_tip`, `global_tip`,
 `history` and `reward`.
-- `local_tip` takes a node's state as argument and returns its preferred
+
+* `local_tip` takes a node's state as argument and returns its preferred
 tip of the chain.
-- `global_tip` selects the impartially best tip among all nodes' preferred
+* `global_tip` selects the impartially best tip among all nodes' preferred
 tips.
-- `history` calculates the linear history of the best tip.
-- `reward` maps a block (in the linear history) to reward assignments.
-- A reward assignment assigns a scalar reward to a node id.
+* `history` calculates the linear history of the best tip.
+* `reward` maps a block (in the linear history) to reward assignments.
+* A reward assignment assigns a scalar reward to a node id.
 
 {{< code-figure >}}
+
 ```python
 def local_tip(b: Block):
     return b
@@ -291,6 +306,7 @@ def history(b: Block):
 def reward(b: Block):
     return [Reward(b.miner, 1)]
 ```
+
 [Nakamoto consensus]({{< protocol "nakamoto" >}}) is quite boring when it
 comes to rewards: the node's state is the preferred tip of the chain.
 The best tip is the longest chain. The history is the blockchain itself,
@@ -302,10 +318,10 @@ elaborate schemes.
 Splitting reward calculation into these four functions enables us to
 calculate different useful metrics like
 
-- subjective rewards for each node,
-- objective rewards, even in case of disagreement,
-- individual rewards for each block, and
-- accumulated rewards per node for any block in the DAG.
+* subjective rewards for each node,
+* objective rewards, even in case of disagreement,
+* individual rewards for each block, and
+* accumulated rewards per node for any block in the DAG.
 
 The reward API can be used to model situations where miners get assigned
 rewards for blocks that are not part of the linear history. This happens
