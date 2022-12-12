@@ -7,13 +7,13 @@ from setuptools.command.build_ext import build_ext
 from wheel.bdist_wheel import bdist_wheel
 
 try:
-    cmd = "git describe --tags --dirty || git describe --all --long --dirty"
+    cmd = "git describe --tags --dirty --match='v*'"
     full_version = subprocess.run(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, text=True
     ).stdout.splitlines()[0]
 
     try:
-        version = str(Version(full_version))
+        version = str(Version(full_version.replace("-", "+git-", 1)))
     except InvalidVersion:
         version = "v0.0.0+notag"
 
@@ -84,6 +84,8 @@ class cpr_build_ext(build_ext):
 
 setup(
     name="cpr_gym",
+    long_description=open("README.md", "r", encoding="utf8").read(),
+    long_description_content_type="text/markdown",
     version=version,
     packages=["cpr_gym"],
     package_dir={"cpr_gym": "./gym/cpr_gym"},
