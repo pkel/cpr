@@ -14,15 +14,18 @@ I'm working on [a website](https://pkel.github.io/cpr/) with more details.
 ## Python/RL Quickstart
 
 CPR provides an OpenAI Gym environment for attack search with Python RL
-frameworks. It will soon be published on PyPI. Until then, you can
-download and install the package manually.
-1. Find the [latest release on Github](https://github.com/pkel/cpr/releases/latest).
-2. Open the Assets and download the appropriate wheel for your platform.
-   - Mac OSX: select `*-macosx-*.whl`
-   - Linux: select `*-manylinux-*.whl`
-3. Install the wheel with `pip install cpr_gym-*.whl`.
+frameworks. If you meet the following **requirements**, you can install
+it from PyPI.
 
-You are now ready to use the Gym environment.
+- Unix-like operating system with x86_64 support
+- CPython, version >= 3.9
+
+```shell
+pip install cpr-gym
+```
+
+If this worked, you are ready to go. The following snippet simulates
+2016 steps of honest behaviour in Nakamoto consensus.
 
 ```python
 import gym
@@ -39,10 +42,10 @@ while not done:
 ## Install from Source
 
 The protocol specifications and simulator are OCaml programs. Also most
-parts of the Gym environment are written in OCaml. The Python package
+parts of the Gym environment are written in OCaml. The Python module
 `cpr_gym` loads the OCaml code from a pre-compiled shared object named
-`cpr_gym_engine.so`. In order to build the package from source, you have
-to build this shared object and hence have the OCaml toolchain
+`cpr_gym_engine.so`. In order to install the package from source, you
+have to build this shared object and hence have the OCaml toolchain
 installed.
 
 **Opam** is the OCaml package manager. It's a bit like Python's `pip` or
