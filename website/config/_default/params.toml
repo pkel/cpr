@@ -71,7 +71,7 @@ footer = "Powered by <a class=\"text-muted\" href=\"https://gohugo.io/\">Hugo</a
 copyRight = "Copyright (c) 2022 Patrik Keller"
 
 # Alert
-alert = true
+alert = false
 alertDismissable = false
 alertText = "Preview deployment. Do not share links!"
 
