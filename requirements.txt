@@ -2,6 +2,7 @@ black[jupyter]
 flake8
 flake8-pyproject
 pytest
+pytest-benchmark
 pytest-forked
 
 pandas

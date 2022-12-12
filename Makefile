@@ -9,7 +9,7 @@ build:
 test:
 	opam exec dune runtest
 	make _venv
-	_venv/bin/pytest --forked
+	_venv/bin/pytest --forked --benchmark-disable
 
 watch-malformed-dag:
 	echo "$$CPR_MALFORMED_DAG_TO_FILE" \

@@ -47,7 +47,7 @@ def test_sparseRewardPerProgressWrapper():
 
 
 def test_denseRewardPerProgressWrapper():
-    env = gym.make("cpr_gym:core-v0", max_progress=float("inf"))
+    env = gym.make("cpr_gym:core-v0", max_progress=None)
     env = wrappers.DenseRewardPerProgressWrapper(env, episode_len=32)
     check_env(env)
     for i in range(42):
