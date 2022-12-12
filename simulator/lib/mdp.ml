@@ -82,7 +82,7 @@ struct
     let my_id = 0
   end
 
-  module _ : View = AtkView
+  module _ : LocalView = AtkView
 
   module DefView = struct
     include AtkView
@@ -90,9 +90,11 @@ struct
     let my_id = 1
   end
 
-  module _ : View = DefView
+  module _ : LocalView = DefView
 
-  let (Node (module Def)) = AttackSpace.Protocol.honest (module DefView)
+  module Def = AttackSpace.Protocol.Honest (struct
+    type block = Pdag.vertex_id
+  end)
 
   module Agent = AttackSpace.Agent (AtkView)
 end

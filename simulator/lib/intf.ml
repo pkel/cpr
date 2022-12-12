@@ -1,4 +1,4 @@
-module type BlockDAG = sig
+module type GlobalView = sig
   (** alias for readability *)
   type block
 
@@ -33,34 +33,34 @@ module type BlockDAG = sig
   module Block : Dagtools.Vertex with type t = block
 end
 
-type ('a, 'b) blockdag = (module BlockDAG with type block = 'a and type data = 'b)
+type ('a, 'b) global_view = (module GlobalView with type block = 'a and type data = 'b)
 
 module type Referee = sig
-  include BlockDAG
+  type data
 
   (** Restrict BlockDAG extensions. The simulator checks validity for each
       appended block. Invalid blocks are not delivered to other nodes. *)
-  val validity : block -> bool
+  val validity : ('block, data) global_view -> 'block -> bool
 
   (** Label block in DAG. *)
-  val label : block -> string
+  val label : ('block, data) global_view -> 'block -> string
 
   (** Provide debug information. *)
-  val info : block -> Info.t
+  val info : ('block, data) global_view -> 'block -> Info.t
 
   (** Work spent on the blockchain. Equals block height for
       Nakamoto. Includes uncles for (variants of) Ethereum. Counts votes in
       B_k and Tailstorm.
 
       DAA tries to maintain constant progress per time. *)
-  val progress : block -> float
+  val progress : ('block, data) global_view -> 'block -> float
 
   (* Coinbase transaction. Assign rewards to participants. *)
-  val reward : block -> (int * float) list
+  val reward : ('block, data) global_view -> 'block -> (int * float) list
 
   (** Disambiguation in case of forks. The simulator uses this function
       to determine the globally preferred chain. *)
-  val winner : block list -> block
+  val winner : ('block, data) global_view -> 'block list -> 'block
 
   (** Extract the linear history of the given (tip of) chain. Selects one path
       from the (globally preferred) tip of the chain back to the BlockDAG
@@ -73,13 +73,13 @@ module type Referee = sig
       this function to iterate one path in the DAG. Coinbase transactions on
       blocks off this path (e.g. coinbase on Ethereum uncles) are ignored.
   *)
-  val precursor : block -> block option
+  val precursor : ('block, data) global_view -> 'block -> 'block option
 end
 
-type ('a, 'b) referee = (module Referee with type block = 'a and type data = 'b)
+type 'a referee = (module Referee with type data = 'a)
 
-module type View = sig
-  include BlockDAG
+module type LocalView = sig
+  include GlobalView
 
   val my_id : int
 
@@ -92,7 +92,7 @@ module type View = sig
   val visible_since : block -> float
 end
 
-type ('a, 'b) view = (module View with type block = 'a and type data = 'b)
+type ('a, 'b) local_view = (module LocalView with type block = 'a and type data = 'b)
 
 (** Simulator events as they are applied to single network nodes. Something
     becomes visible on the BlockDAG. Either appended on request, received from
@@ -119,23 +119,27 @@ type ('block, 'data, 'state) action =
 let return ?(share = []) ?(append = []) state = { state; share; append }
 
 module type Node = sig
-  include View
-
+  type block
+  type data
   type state
 
   (** initialization. The [roots] argument holds references to global versions of
       {protocol.roots}. The roots are visible to all nodes from the beginning. *)
-  val init : roots:block list -> state
+  val init : (block, data) local_view -> roots:block list -> state
 
   (** event handlers *)
-  val handler : state -> block event -> (block, data, state) action
+  val handler
+    :  (block, data) local_view
+    -> state
+    -> block event
+    -> (block, data, state) action
 
   (** [puzzle_payload state] defines the content and parents of the currently mined
       block. When the node solves a proof-of-work puzzle, the simulator calls
       [puzzle_payload], constructs a corresponding block, and hands it to the mining
       node. The simulator raises {Invalid_argument} if the proposed extension does not
       satisfy the DAG invariant specified by the simulated protocol. *)
-  val puzzle_payload : state -> (block, data) block_draft
+  val puzzle_payload : (block, data) local_view -> state -> (block, data) block_draft
 
   (** returns a node's preferred block, typically a leave. Rewards are
       calculated backwards from here. *)
@@ -165,10 +169,12 @@ module type Protocol = sig
   val roots : data list
 
   (** specification of global truths *)
-  val referee : ('block, data) blockdag -> ('block, data) referee
+  module Referee : Referee with type data := data
 
   (** specification for honest participants *)
-  val honest : ('block, data) view -> ('block, data) node
+  module Honest (T : sig
+    type block
+  end) : Node with type data := data and type block := T.block
 end
 
 type protocol = Protocol : (module Protocol with type data = 'a) -> protocol
@@ -201,26 +207,35 @@ module type AttackSpace = sig
     val of_int : int -> t
   end
 
-  module Agent (V : View with type data = Protocol.data) : sig
-    open V
+  module Agent (T : sig
+    type block
+  end) : sig
+    open Protocol
+    open T
 
     type state
     type observable_state
 
     val preferred : state -> block
-    val puzzle_payload : state -> (block, data) block_draft
-    val init : roots:block list -> state
-    val prepare : state -> block event -> observable_state
-    val observe : observable_state -> Observation.t
-    val apply : observable_state -> Action.t -> (block, data, state) action
+    val puzzle_payload : (block, data) local_view -> state -> (block, data) block_draft
+    val init : (block, data) local_view -> roots:block list -> state
+    val prepare : (block, data) local_view -> state -> block event -> observable_state
+    val observe : (block, data) local_view -> observable_state -> Observation.t
+
+    val apply
+      :  (block, data) local_view
+      -> observable_state
+      -> Action.t
+      -> (block, data, state) action
   end
 
   val policies : (Observation.t -> Action.t) Collection.t
 
-  val attacker
-    :  (Observation.t -> Action.t)
-    -> ('block, Protocol.data) view
-    -> ('block, Protocol.data) node
+  module Attacker (Arg : sig
+    type block
+
+    val policy : Observation.t -> Action.t
+  end) : Node with type block = Arg.block and type data = Protocol.data
 end
 
 type attack_space =
