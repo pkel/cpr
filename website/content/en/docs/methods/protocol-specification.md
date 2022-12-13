@@ -16,9 +16,9 @@ toc: true
 Protocol designers write protocol specifications for consumption by
 analysts and engineers. The engineer reads the specification and
 implements it. The analysts reads the specification and tries to find
-attack or rule out their possibility. Both analysts and engineers want
-to interpret the specification as intended by the designer. Practically
-minded attackers will attack the implementation, not the specification.
+attacks or rule them out. Both analysts and engineers want to interpret
+the specification as intended by the designer. Practically minded
+attackers will attack an implementation, not the specification.
 
 Depending on the context, we take the role of the designer or the
 analysts. We never take the role of the engineer or the practically
@@ -34,9 +34,9 @@ specifications accessible to a wide audience.
 A protocol specification consists of at least five functions: `roots`,
 `validity`, `init`, `update` and `mining`. The first two, `roots` and
 `validity` specify the structure of the protocol's blockchain. The other
-three, `init`, `update` and `mining`, specify the node. (Read [the
+three, `init`, `update` and `mining`, specify the node. (Go back to [the
 previous section](../virtual-environment) again, if you are confused by
-the term <<node>>).
+the term *<<node>>*).
 
 The protocol specification might list additional functions for internal
 use by other functions or to specify difficulty adjustment and reward
@@ -46,8 +46,9 @@ functions mentioned above.
 ## Blockchain
 
 Protocols specify and use a global, append-only data-structure.
-A-priori, blocks form a directed acyclic graph (DAG). Each block has an
-arbitrary number of parent blocks and can store arbitrary data. The
+[A-priori, blocks form a directed acyclic graph
+(DAG)](../virtual-environment#blobs-hashes-blockchain). Each block has
+an arbitrary number of parent blocks and can store arbitrary data. The
 `validity` function then restricts what blocks can be appended and
 thereby imposes a certain structure on the DAG.
 
@@ -67,9 +68,9 @@ def validity(b: Block):
 
 The `validity` function of [Nakamoto
 consensus]({{< protocol "nakamoto" >}}) specifies that each block has
-exactly one parent, that each block must have a proof-of-work, and that
-a block's height is the parent's height plus one. The first rule
-restricts the DAG to be a tree.
+exactly one parent, that each block has a proof-of-work, and that a
+block's height is the parent's height plus one. The first rule restricts
+the DAG to be a tree.
 {{< /code-figure >}}
 
 Protocol designers may specify an initial set of blocks which do not
@@ -85,19 +86,18 @@ def roots():
     return [Block(height=0, miner=None)]
 ```
 
-[Nakamoto consensus]({{< protocol "nakamoto" >}}) has single root block,
-often called <<genesis>> block. It does not have any parent blocks. It's
-height is zero.
+[Nakamoto consensus]({{< protocol "nakamoto" >}}) has a single root
+block, often called *<<genesis>>*. It does not have any parent blocks
+and its height is zero.
 {{< /code-figure >}}
 
 ## Node
 
 The blockchain, as defined by `roots` and `validity`, is a global
-data-structure. But nodes, [that is](../virtual-environment),
-network-connected protocol participants, act on local knowledge. They
-might see only a subset of the blockchain depending on what information
-the other nodes share, when they share it, and how messages propagate
-through the network.
+data-structure. But nodes act on local knowledge. They might [see only a
+subset](../virtual-environment#visibility-and-communication) of the
+blockchain depending on what information the other nodes share, when
+they share it, and how messages propagate through the network.
 
 Nodes are specified with three functions `init`, `update`, and `mining`.
 
@@ -114,7 +114,7 @@ def init(roots: [Block]):
 ```
 
 [Nakamoto consensus]({{< protocol "nakamoto">}}) nodes use as state
-their preferred tip of the chain. Initially they prefer the <<genesis>>
+their preferred tip of the chain. Initially they prefer the genesis
 block.
 {{< /code-figure  >}}
 
@@ -128,14 +128,14 @@ protocol designer must ensure that
 * the new block given as argument and all its ancestors are locally visible,
 * the returned state will be given as first argument to the next update,
 * the to-be-shared blocks are validated and sent to the other nodes,
-* the to-be-appended blocks are validated, appended to the global DAG
-data-structure, and made visible locally,
+* the to-be-appended blocks are validated, appended to the global block
+  DAG, and made visible locally,
 * the `event` argument is `"mining"` if the new block was mined
-locally,
+  locally,
 * the `event` argument is `"append"` if the new block was appended locally
-without proof-of-work, and
+  without proof-of-work, and
 * the `event` argument is `"network"` if the new block was received from the
-network.
+  network.
 
 {{< code-figure >}}
 
@@ -154,11 +154,11 @@ the longest chain of blocks, measured by block-height. Newly mined
 blocks are shared immediately with the other participants.
 {{< /code-figure >}}
 
-Speaking of proof-of-work, we come to the `mining` function of the node
-specification. It takes as argument the current state of a node and
-returns the block that the node wants to mine on. The engineer who
-implements the specification and the protocol analyst interpret this
-function differently.
+`mining` defines what the node appends if successful at proof-of-work.
+The function takes as argument the current state of a node and returns
+the block that the node wants to mine on. The engineer who implements
+the specification and the protocol analyst interpret this function
+differently.
 
 The engineer will implement a proof-of-work loop that each node runs
 locally in the background.  For each iteration of the loop, the node
@@ -168,8 +168,9 @@ mining difficulty target. If yes, the block now has a proof-of-work and
 becomes valid. The node handles the new block according to the
 specification's `update` function.
 
-The analyst avoids doing the actual proof-of-work and just assumes that
-random nodes succeed with mining at random times. Only when a node
+The [analyst avoids doing the actual
+proof-of-work](../virtual-environment#proof-of-work) and just assumes
+that random nodes succeed with mining at random times. Only when a node
 succeeds, the analyst obtains a block from the `mining` function, sets
 its `has_pow()` property to true, and updates the node with the newly
 appended block.
@@ -192,7 +193,7 @@ def mining(b: Block):
 
 In [Nakamoto consensus]({{< protocol "nakamoto" >}}) all blocks require
 a proof-of-work. Nodes mine to append new blocks to their preferred tip
-of the chain. Miners include their id to facilitate disbursement of
+of the chain. Miners include their ID to facilitate disbursement of
 mining rewards.
 {{< /code-figure >}}
 
@@ -218,21 +219,24 @@ exponentially distributed, implying high variance. Observations of
 puzzle solving time are noisy. Second, nodes are distributed around the
 planet and might disagree about the current time. Third, nodes might try
 to intentionally confuse the DAA by lying about the current time. Forth,
-timestamps in orphaned blocks cannot be used. To summarize, difficulty
-adjustment is a complex control problem with its own line of research.
+timestamps in orphaned blocks cannot be used. In short, difficulty
+adjustment is a complex control problem. It even has its own line of
+research.
 
-We observe that DA is quite orthogonal to consensus. In practice,
-proof-of-work protocols require a DAA but in theory we can get away
-without. Depending on the analysis, we either assume knowledge about the
-true hash-rate or we assume that the DAA does a perfect job. To support
-the latter, protocols designers have to specify what kind of growth the
-DAA should control for. In Bitcoin, the growth rate is measured in
-increase in block height per time. Other protocols might choose a
-different metric. We specify that metric with a single function
-`progress` that maps a given block (tip of blockchain) to a scalar
-value. The engineer implementing the protocol will contribute a DAA that
-controls for constant progress per time. The analyst might in some
-situations just assume constant progress per time.
+Luckily, DA is somewhat orthogonal to consensus. In practice,
+proof-of-work protocols require a DAA but in theory can often get away
+without. Depending on the analysis, we either assume that the true
+hash-rate is constant and known or we assume that the DAA does a perfect
+job. To support the latter, protocols designers have to specify what
+kind of growth the DAA should control for. In Bitcoin, the growth rate
+equals increase in block height per time. Other protocols might choose a
+different metric.
+
+The protocol specification defines a single function `progress` that
+maps a given block (tip of blockchain) to a scalar value. The engineer
+implementing the protocol will contribute a DAA that controls for
+constant progress per time. The analyst sometimes assumes constant
+progress per time.
 
 {{< code-figure >}}
 
@@ -241,8 +245,8 @@ def progress(b: Block):
     return b.height
 ```
 
-[Nakamoto consensus](../nakamoto) uses block height as progress. The DAA
-tries to achieve constant growth of the progress (=height). Bitcoin targets 6
+[Nakamoto consensus](../nakamoto) uses the block height as progress. The
+DAA tries to achieve constant progress per time. Bitcoin targets 6
 blocks per hour.
 {{< /code-figure >}}
 
@@ -252,20 +256,22 @@ Deployed blockchain protocols usually implement some sort of virtual
 currency. Funds are associated with cryptographic key-pairs. Moving
 funds from one key-pair to another requires access to the source
 key-pair's private part. This introduces a new kind of system
-participant, namely the holders of the private keys and hence holders of
-the associated funds. We call them crypto-currency users. In principle,
-crypto-currency users and node operators are decoupled concepts. Users
-may operate a node but they do not have to. But in practice, blockchain
-protocols motivate participation as operator by handing out
+participant, namely the holders of the private keys and hence
+*<<owners>>* of the associated funds. We call them crypto-currency
+users.
+
+In principle, crypto-currency users and node operators can be disjunct.
+Users may operate a node but they do not have to. But in practice,
+blockchain protocols motivate participation as operator by handing out
 crypto-currency denoted rewards. Hence node operators usually are
 crypto-currency users.
 
-As consensus protocol designers, we want our protocol to accommodate as
-many applications as possible. We avoid imposing requirements on the
+As protocol designers, we want our protocol to accommodate as many
+applications as possible. We avoid imposing requirements on the
 crypto-currency. We just assume that each node has access to a unique
 identifier `my_id` that can receive rewards. In practice, `my_id` would
 be the account or wallet address of the node's operator. The
-specification however does not have any notion of crypto-currency
+specification itself however does not have any notion of crypto-currency
 address or wallet.
 
 We specify reward calculation using four functions `local_tip`, `global_tip`,
@@ -307,23 +313,19 @@ def reward(b: Block):
     return [Reward(b.miner, 1)]
 ```
 
-[Nakamoto consensus]({{< protocol "nakamoto" >}}) is quite boring when it
-comes to rewards: the node's state is the preferred tip of the chain.
-The best tip is the longest chain. The history is the blockchain itself,
-and the rewards are constant. Other protocols, e.g.
-[tree-structured voting]({{< protocol "parallel-tree" >}}), use more
-elaborate schemes.
+In [Nakamoto consensus]({{< protocol "nakamoto" >}}) the node's state is
+its preferred tip of the chain. The best tip is the longest chain. The
+history is the blockchain itself and the rewards are constant.
 {{< /code-figure >}}
 
 Splitting reward calculation into these four functions enables us to
 calculate different useful metrics like
 
 * subjective rewards for each node,
-* objective rewards, even in case of disagreement,
+* objective rewards in case of disagreement,
 * individual rewards for each block, and
-* accumulated rewards per node for any block in the DAG.
+* accumulated historic rewards per node for any tip of the chain.
 
-The reward API can be used to model situations where miners get assigned
-rewards for blocks that are not part of the linear history. This happens
-for example in [tree-structured voting]({{< protocol "parallel-tree"
->}}).
+The reward API can model situations where miners get assigned rewards
+for blocks that are not part of the linear history. This happens for
+example in [tree-structured voting]({{< protocol "parallel-tree" >}}).
