@@ -11,6 +11,7 @@ menu:
     parent: "method"
 weight: 210
 toc: true
+mermaid: true
 ---
 
 CPR's core component is a network simulation engine for proof-of-work
@@ -122,6 +123,32 @@ the same rank. We say the DAG imposes a partial order on the blocks.
 Each block also defines a blockchain, namely the block itself and all
 its ancestors. Blockchains have exactly one leave, which we sometimes
 refer to as tip of the chain.
+
+{{< mermaid-figure class="text-center">}}
+
+```mermaid
+graph RL
+b0[root]
+b1[block] --> b0
+b2[block] --> b1
+b3[block] --> b1
+b4[block] --> b2 & b3
+b5[block] --> b1 & b4
+b6[block] --> b5
+b10[tip] --> b6
+
+classDef orphan opacity:0.5,fill:gray
+b7[leave]:::orphan --> b5
+b8[block]:::orphan --> b0
+b9[leave]:::orphan --> b8 & b3
+linkStyle 9,10,11,12 opacity:0.5, stroke:gray
+```
+
+Block DAG example. Boxes are blocks and arrows indicate the parent-child
+relationship. Parents are placed left of their children, highlighting
+the DAG's partial order. A single root is on the far left and we've
+marked a tip on the far right. Blocks outside the corresponding
+blockchain are painted gray. {{< /mermaid-figure >}}
 
 ## Visibility and Communication
 
