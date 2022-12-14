@@ -18,6 +18,7 @@ class Config(BaseSettings):
     LAYER_SIZE: int = 100
     N_LAYERS: int = 2
     N_STEPS_MULTIPLE: int = 100
+    N_EPOCHS: int = 10
     HONEST_STEPS_FRACTION: float = 0.1
     STARTING_EPS: float = 0.99
     ENDING_EPS: float = 0.01

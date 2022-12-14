@@ -173,6 +173,7 @@ if __name__ == "__main__":
             verbose=1,
             batch_size=config.BATCH_SIZE,
             n_steps=config.BATCH_SIZE * config.N_STEPS_MULTIPLE,
+            n_epochs=config.N_EPOCHS,
             clip_range=0.1,
             # ent_coef=0.01,
             learning_rate=lr_schedule,
