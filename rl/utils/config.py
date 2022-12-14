@@ -9,10 +9,10 @@ class Config(BaseSettings):
     REWARD_SCHEME: Literal["discount", "constant"] = "discount"
     K: int = 8
     ALGO: Literal["PPO", "DQN"] = "PPO"
-    TOTAL_TIMESTEPS: int = 1e9
+    TOTAL_TIMESTEPS: int = 1e8
     STEPS_PER_ROLLOUT: int = 200
-    STARTING_LR: float = 1e-4
-    ENDING_LR: float = 1e-6
+    STARTING_LR: float = 1e-3
+    ENDING_LR: float = 0.0
     BATCH_SIZE: int = 2048
     ALPHA_SCHEDULE_CUTOFF: float = 0
     LAYER_SIZE: int = 100
