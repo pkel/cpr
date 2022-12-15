@@ -13,6 +13,8 @@ weight: 230
 toc: true
 ---
 
+{{< alert icon="👉" text="WIP. You are looking at an unfinished page." />}}
+
 Having talked about our [model for virtual protocol
 executions](../virtual-environment) and about [how we specify
 protocols](../protocol-specification), we can proceed with the
@@ -59,7 +61,7 @@ function returning independent and exponentially distributed values.
 It is typically a random function which selects nodes based on their
 relative hash-rate.
 
-**Example**
+### Example
 
 We provide an intuition about the simulator inputs by walking through a
 realistic (but still simplified) example scenario. We consider [Nakamoto
@@ -149,7 +151,7 @@ waiting.
 
 TODO. Speeding things up with DES.
 
-# Brainstorm
+## Brainstorm
 
 To be removed.
 
