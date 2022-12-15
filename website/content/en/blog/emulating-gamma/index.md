@@ -25,7 +25,7 @@ homepage: false
 
 ## Missing Pieces
 
-This post has a couple of (reverse) dependencies which are not yet written.
+This post has a couple of dependencies which are not yet written.
 Not sure whether I want to release stuff in didactic order or as they
 flow through my keyboard. If you read this, I apologize for not being a
 good teacher.
@@ -37,12 +37,6 @@ $\gamma$ here or over there.
 Sapirshtein's attack space somewhere.
 * In a post similar to this one, I could explain how to generalize
 relative reward with reward per progress.
-
-A few things remain open in the post itself.
-
-* The network figures lack connections from attacker node 0 to defender
-node 2. Requires redrawing.
-* Maybe add third figure with the final delays.
 
 ## Selfish Mining's Gamma Parameter
 
@@ -119,7 +113,7 @@ defenders this reordering succeeds.
 Based on the more general notion of message reordering, we can derive a
 CPR-network exhibiting a given $\gamma.$
 
-## Construction
+## Constructing a Network
 
 We start by imposing a couple of restrictions on the design space.
 First, the network should consist of $n \geq 3$ nodes. One attacker and
@@ -159,7 +153,7 @@ random variables. $D_i$ is the random message delay from the attacker
 $0$ to defender $i$. We assume that $D_i$ is uniformly distributed
 between $0$ and $d$. $X_i$ is one if node $i$ receives the attackers
 message first and zero otherwise. $X$ describes how many defenders
-receive the attackers message first. All of this applied in reverse
+receive the attacker's message first. All of this applied in reverse
 order yields
 
 $$
@@ -192,23 +186,58 @@ uniform distribution on the interval $[0, \frac{n - 2}{n - 1} \cdot
 \frac{\varepsilon}{\gamma}]$, then the network is compatible with the
 $\gamma$-assumption in Selfish Mining.
 
-## Choosing network size
+## Limiting Gamma
+
+It is common practice to evaluate Selfish Mining for $\gamma = 1$.
+This is not possible with our approach. But $\gamma = 1$ is also
+not possible in practice.
+
+The reason is that in any block race one of the honest nodes has mined
+the block which the attacker tries to match. This honest node will never
+accept the attacker's competing block. Instead, it will continue mining
+on the honest block.
+
+The same is true for message reordering. In order to craft a competing
+message, the attacker has to know the message. While the sending
+defender has not yet sent the message, the attacker cannot react to it.
+Hence, the sender of the message cannot receive the attacker's message
+first.
+
+In our network with $n-1$ defenders this manifest as follows. After any
+block race, $\frac{1}{n-1}$ of the defenders' hash-rate will be used to mine
+on the honest block. Consequently, $\gamma$ must be lower or equal $1 -
+\frac{1}{n-1} = \frac{n-2}{n-1}$. In reverse, in order to emulate a
+given $\gamma$ we have to simulate at least $n \geq \frac{1}{1 -
+\gamma}+ 1$ nodes. Setting $\gamma = 1$ implies $n = \infty$ and makes
+simulations unfeasible.
+
+Astute readers will now (at the latest) start questioning the formulas
+in the previous section. Why does the limitation presented here not show
+up above? It's because one of the steps requires qualification. We used
+that $D_i$ is uniformly distributed on the interval from $0$ to $d$.
+Then we said that $P[D_i < \varepsilon] = \frac{\varepsilon}{d}$. That's
+true if $d \geq \varepsilon$ but otherwise the probability is $1$.
+As a result, $E[X] \leq n-2$ and $\gamma \leq \frac{n-2}{n-1}$.
+
+In the real world, most of the hash-rate is concentrated around a view
+nodes. In December 2022, the two biggest Bitcoin mining pools have 26%
+and 19% of the overall hash-rate. Assume the bigger one turns malicious
+and starts selfish mining. That leaves 74% of the hash rate to the
+defender, of which about 26% belong to the second-biggest miner
+(the 19% one). In 26% of the block races, the second-biggest miner will
+be the sender of the block which the attacker tries to outrun. So in
+26% of the cases 26% of the defender hash-rate will not mine on the
+attackers block. This alone makes $\gamma > 0.94$ unrealistic.
+
+## Choosing the Network Size
 
 To be written.
 
 * We need at least 3 nodes.
+* We need at least $\frac{1}{1 - \gamma} + 1$ nodes.
 * Selfish Mining hits target $\gamma$ exactly for each block race.
 * Our network achieves $\gamma$ in expectation.
 * More nodes $\rightarrow$ less variance.
-
-## Limitations
-
-To be written.
-
-* One defender is sending the message
-* This defender will never receive the attackers message first.
-* Gamma can be at most $1 - (n-1)^{-1}$.
-* How does this argument fit into the above equation for $d$?
 
 ## Literature
 
