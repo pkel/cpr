@@ -168,7 +168,7 @@ E[X]
   = \sum_{n=2}^{n-1} P[D_i < \varepsilon]
   = \sum_{n=2}^{n-1} \frac{\varepsilon}{d}
   = (n - 2) \cdot \frac{\varepsilon}{d}
-  ~.
+  \quad.
 $$
 
 Now, recall that $\gamma$ represents the number of nodes who mine on the
@@ -177,13 +177,13 @@ of the defenders to receive the attacker's message first. Mathematically
 speaking,
 
 $$
-\frac{E[X]}{n - 1} \stackrel{!}{=} \gamma ~.
+\frac{E[X]}{n - 1} \stackrel{!}{=} \gamma \quad.
 $$
 
 Substituting $E[X]$ from above and resolving for $d$ yields
 
 $$
-d = \frac{n - 2}{n - 1} \cdot \frac{\varepsilon}{\gamma} ~.
+d = \frac{n - 2}{n - 1} \cdot \frac{\varepsilon}{\gamma} \quad.
 $$
 
 Following this reasoning backwards implies that if the message delays
