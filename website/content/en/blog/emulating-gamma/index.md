@@ -210,7 +210,6 @@ To be written.
 * Gamma can be at most $1 - (n-1)^{-1}$.
 * How does this argument fit into the above equation for $d$?
 
-
 ## Literature
 
 * Ittay Eyal and Emin G. Sirer. Majority is not enough: Bitcoin mining
