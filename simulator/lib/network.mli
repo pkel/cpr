@@ -58,11 +58,10 @@ module T : sig
       [selfish_mining ~alpha ~gamma ~propagation_delay ~defenders] creates a network that
       exhibits the given [gamma]. The network consists of one attacker node [0] and
       [defenders] honest nodes with symmetrical shares of compute power. Messages between
-      defenders exhibits constant [propagation_delay]. Attacker message delays chosen
+      defenders exhibits constant [propagation_delay]. Attacker message delays are chosen
       randomly to meet [gamma].
 
-      Due to technical reason, [gamma] must be smaller or equal [1 - (1 - alpha) /
-      defenders]. *)
+      Due to technical reasons, [defenders] must be at least [min 2 (1 / ( 1 - gamma ))]. *)
   val selfish_mining
     :  alpha:float
     -> activation_delay:float
