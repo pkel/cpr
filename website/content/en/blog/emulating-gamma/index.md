@@ -10,10 +10,10 @@ excerpt: |
   literature against Nakamoto consensus. We derive an equivalent but
   more general network assumption which can be used with any protocol
   and other attacks than Selfish Mining.
-date: 2022-12-15
+date: 2022-12-16
 draft: false
 weight: 50
-images: []
+images: ["stable-diffusion.png"]
 categories: ["Constructions"]
 tags: ["related work", "selfish mining", "assumptions"]
 contributors: ["Patrik Keller"]
@@ -21,22 +21,10 @@ pinned: false
 homepage: false
 ---
 
-{{< alert icon="👉" text="WIP. You are looking at an unfinished post." />}}
-
-## Missing Pieces
-
-This post has a couple of dependencies which are not yet written.
-Not sure whether I want to release stuff in didactic order or as they
-flow through my keyboard. If you read this, I apologize for not being a
-good teacher.
-
-* The example in [the simulator docs section]({{< method "simulator">}})
-should probably come as an example blog post. I could calculate its
-$\gamma$ here or over there.
-* I'll have to present Eyal's original Selfish Mining attack and
-Sapirshtein's attack space somewhere.
-* In a post similar to this one, I could explain how to generalize
-relative reward with reward per progress.
+**TL;DR:** We discuss a popular network assumption made in the Selfish
+Mining literature against Nakamoto consensus. We derive an equivalent
+but more general network assumption which can be used with any protocol
+and other attacks than Selfish Mining.
 
 ## Selfish Mining's Gamma Parameter
 
@@ -166,7 +154,7 @@ E[X]
 $$
 
 Now, recall that $\gamma$ represents the number of nodes who mine on the
-attackers block after the block race. In other words, we want $\gamma$
+attacker's block after the block race. In other words, we want $\gamma$
 of the defenders to receive the attacker's message first. Mathematically
 speaking,
 
@@ -227,17 +215,115 @@ defender, of which about 26% belong to the second-biggest miner
 (the 19% one). In 26% of the block races, the second-biggest miner will
 be the sender of the block which the attacker tries to outrun. So in
 26% of the cases 26% of the defender hash-rate will not mine on the
-attackers block. This alone makes $\gamma > 0.94$ unrealistic.
+attacker's block. This alone makes $\gamma > 0.94$ unrealistic.
 
-## Choosing the Network Size
+## Choosing Parameters
 
-To be written.
+So far, we've used three network parameters: number of nodes $n$,
+attacker's communication capability $\gamma$, and defenders
+communication delay $\varepsilon$. A full [network
+description]({{< method "simulator" >}})
+additionally sets the attacker's relative hash-rate $\alpha$, and the
+network's overall mining rate $\lambda$.
 
-* We need at least 3 nodes.
-* We need at least $\frac{1}{1 - \gamma} + 1$ nodes.
-* Selfish Mining hits target $\gamma$ exactly for each block race.
-* Our network achieves $\gamma$ in expectation.
-* More nodes $\rightarrow$ less variance.
+A couple of restrictions follow either from definitions of the
+parameters themselves or from the construction above.
+
+* Gamma and alpha are fractions, thus $0 \leq \gamma \leq 1$ and $0 \leq
+\alpha \leq 1$.
+* Defender communication has to be delayed at least a bit, thus $0 < \varepsilon$.
+* Network size must be at least $\min(3, \frac{1}{1 - \gamma} + 1) \leq
+n$.
+
+Attacker capabilities, $\alpha$ and $\gamma$, are typically higher level
+assumption. It's safe to assume that the analyst knows how to set them.
+It's less clear how to set $\lambda$, $\varepsilon$, and $n$ because
+these parameters are not present in Selfish Mining.
+
+$\varepsilon$ slows down the communication between the defenders. The
+construction needs some positive delay but it can be arbitrarily small.
+Typically, we want it to be very small. Delayed communication between
+the defenders causes natural orphans even without attacker interference.
+Natural orphans are a separate problem from Selfish Mining, thus we want
+to avoid them. That's possible by setting $\varepsilon \ll
+\lambda^{-1}$, that is, making the defender's message delay much smaller
+than the (expected) block interval. A nice trick is to set $\lambda = 1$
+which implies that the natural orphan rate is bounded by $\varepsilon$.
+We typically use $\lambda = 1$ and $\varepsilon = 10^{-5}$.
+
+The network size $n$ matters as well. In Selfish Mining, after *each*
+block race *exactly* $\gamma$ of the defender hash-rate mines on the
+attacker's block. In the constructed network, the number of defenders
+mining on the attacker's block is random. The expected value is $\gamma$
+by construction. But the variance depends on the number of defenders.
+Higher $n$ implies more messages per block race and---by the law of large
+numbers---less variance around $\gamma$.
+
+## Specification
+
+Last step is to produce some Python-like specification that works as
+input for our [network simulator]({{< method "simulator" >}}). As
+promised, it works with any protocol specification (supplied in Python
+module `protocol`) and attack (supplied in `attacker`).
+
+```python
+import protocol  # protocol specification
+import attacker  # attacker node implementation
+from numpy import random
+
+# Parameters:
+n = 42  # network size
+alpha = 1 / 3  # attacker's relative hash-rate
+gamma = 0.5  # Selfish Mining's Gamma
+epsilon = 1e-5  # propagation delay honest --> honest
+lambda_ = 1 / 600  # network's mining rate
+
+# Safety checks:
+assert 3 <= n
+assert 0 <= alpha <= 1
+assert 0 <= gamma <= 1
+assert 0 < epsilon
+assert 1 / (1 - gamma) + 1 <= n
+
+
+def mining_delay():
+    return random.exponential(scale=1 / lambda_)
+
+
+def miner():
+    dhr = (1 - alpha) / (n - 1)  # defender hash rate
+    hash_rates = [alpha] + [dhr] * (n - 1)
+    return random.choice(range(n), p=hash_rates)
+
+
+def neighbours(i):
+    return [x for x in range(n) if x != i]
+
+
+def message_delay(src, dst):
+    d = (n - 2) / (n - 1) * epsilon / gamma
+    if src == 0:  # attacker --> defender
+        return random.uniform(low=0, high=d)
+    elif dst == 0:  # defender --> attacker
+        return 0
+    else:  # defender --> defender
+        return epsilon
+
+
+def roots():
+    return protocol.roots()
+
+
+def validity(block):
+    return protocol.validity(block)
+
+
+def node(i):
+    if i == 0:
+        return (attacker.init, attacker.update, attacker.mining)
+    else:
+        return (protocol.init, protocol.update, protocol.mining)
+```
 
 ## Literature
 
