@@ -1,0 +1,113 @@
+# Meta Data for SEO
+
+## Homepage
+title = "CPR"
+titleSeparator = "-"
+titleAddition = "Consensus Protocol Research"
+description = "CPR provides tools for specifying, simulating, and attacking proof-of-work consensus protocols like Bitcoin and Ethereum."
+
+## Documentation
+# docsVersion = "0.3"
+
+## Open Graph
+# images = ["doks.png"]
+# ogLocale = "en_US"
+# domainTLD = "doks.netlify.app"
+# titleHome = "Doks Theme"
+
+## Twitter Cards
+# twitterSite = "@getdoks"
+# twitterCreator = "@henkverlinde"
+
+## JSON-LD
+# schemaType = "Person"
+# schemaType = "Organization"
+schemaName = "CPR"
+schemaAuthor = "Patrik Keller"
+# schemaAuthorTwitter = "https://twitter.com/henkverlinde"
+# schemaAuthorLinkedIn = "https://www.linkedin.com/in/henkverlinde/"
+schemaAuthorGitHub = "https://github.com/pkel"
+schemaLocale = "en-US"
+# schemaLogo = "logo-doks.png"
+# schemaLogoWidth = 512
+# schemaLogoHeight = 512
+# schemaImage = "doks.png"
+# schemaImageWidth = 1280
+# schemaImageHeight = 640
+# schemaTwitter = "https://twitter.com/getdoks"
+# schemaLinkedIn = ""
+schemaGitHub = "https://github.com/pkel/cpr"
+# schemaSection = "blog"
+
+## Sitelinks Search Box
+siteLinksSearchBox = false
+
+## Chrome Browser
+themeColor = "#fff"
+
+# Images - Temporarily left in place for backward compatibility
+quality = 85
+bgColor = "#fff"
+landscapePhotoWidths = [900, 800, 700, 600, 500]
+portraitPhotoWidths = [800, 700, 600, 500]
+lqipWidth = "20x"
+smallLimit = "300"
+
+# Images
+imageResponsive = true
+imageConvertTo = "webp"
+imageImageSizes = ["480","720","1080","1280","1600","2048"]
+singleSize = false
+imageAddClass = "img-fluid lazyload blur-up"
+
+### Image template
+defaultImage = "default-image.png" # put in `./assets/images/`
+fillImage = "1270x740 Center" # normalize image size
+
+# Footer
+footer = "Powered by <a class=\"text-muted\" href=\"https://gohugo.io/\">Hugo</a> and <a class=\"text-muted\" href=\"https://getdoks.org/\">Doks</a>"
+
+# Feed
+copyRight = "Copyright (c) 2022 Patrik Keller"
+
+# Alert
+alert = false
+alertDismissable = false
+alertText = "Preview deployment. Do not share links!"
+
+# Edit Page
+# repoHost [Github | Gitea | GitLab | Bitbucket | BitbucketServer ] is used for building the edit link based on git hoster
+repoHost = "GitHub"
+#repoHost = "Gitea"
+docsRepo = "https://github.com/pkel/cpr"
+docsRepoBranch = "website"
+docsRepoSubPath = "website"
+editPage = true
+lastMod = true
+
+[sections]
+  sectionNav = ["docs", "guides"]
+
+[options]
+  lazySizes = true
+  clipBoard = true
+  instantPage = true
+  flexSearch = true
+  searchSectionsShow = []
+  searchSectionsIndex = []
+  darkMode = false
+  bootStrapJs = true
+  breadCrumb = false
+  highLight = true
+  kaTex = true
+  # multilingualMode = false
+  docsVersioning = false
+  fullWidth = false
+  navbarSticky = true
+  toTopButton = false
+  scrollSpy = false # experimental; needs Bootstrap >= 5.2.0-beta1
+
+[menu]
+  [menu.section]
+    auto = true
+    collapsibleSidebar = true

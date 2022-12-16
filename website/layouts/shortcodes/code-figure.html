@@ -1,0 +1,7 @@
+<figure style="width:100%">
+  {{- $code := index (findRE "(?s)(```.*```)" .Inner 1) 0 -}}
+  {{ $code | markdownify }}
+  <figcaption>
+    {{- replaceRE "(?s)(\\s*```.*```\\s*)" "\n" .Inner | markdownify -}}
+  </figcaption>
+</figure>
