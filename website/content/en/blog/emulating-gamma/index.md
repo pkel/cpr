@@ -232,7 +232,7 @@ parameters themselves or from the construction above.
 * Gamma and alpha are fractions, thus $0 \leq \gamma \leq 1$ and $0 \leq
 \alpha \leq 1$.
 * Defender communication has to be delayed at least a bit, thus $0 < \varepsilon$.
-* Network size must be at least $\min(3, \frac{1}{1 - \gamma} + 1) \leq
+* Network size must be at least $\max(3, \frac{1}{1 - \gamma} + 1) \leq
 n$.
 
 Attacker capabilities, $\alpha$ and $\gamma$, are typically higher level
