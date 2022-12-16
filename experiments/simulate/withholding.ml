@@ -47,6 +47,7 @@ let selfish_mining n_activations (AttackSpace (module A)) =
          List.map
            (fun gamma ->
              let defenders = 1. /. (1. -. gamma) |> Float.ceil |> Float.to_int in
+             let defenders = max 2 defenders in
              selfish_mining ~defenders ~alpha gamma)
            gammas)
        alphas)
