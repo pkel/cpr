@@ -61,7 +61,7 @@ module T : sig
       defenders exhibits constant [propagation_delay]. Attacker message delays are chosen
       randomly to meet [gamma].
 
-      Due to technical reasons, [defenders] must be at least [min 2 (1 / ( 1 - gamma ))]. *)
+      Due to technical reasons, [defenders] must be at least [max 2 (1 / ( 1 - gamma ))]. *)
   val selfish_mining
     :  alpha:float
     -> activation_delay:float
