@@ -168,30 +168,58 @@ let () =
   Py_module.set
     m
     "nakamoto"
-    (Defunc.return (fun () -> Proto (Engine.of_module nakamoto_ssz) |> python_of_protocol));
+    (let%map unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
+     in
+     fun () ->
+       Proto (Engine.of_module (nakamoto_ssz ~unit_observation)) |> python_of_protocol);
   Py_module.set
     m
     "ethereum"
-    (let%map reward = keyword "reward" string ~docstring:"reward function" in
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
+     and unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
+     in
      let incentive_scheme = Options.of_string_exn Ethereum.incentive_schemes reward in
      fun () ->
-       Proto (Engine.of_module (ethereum_ssz ~incentive_scheme)) |> python_of_protocol);
+       Proto (Engine.of_module (ethereum_ssz ~unit_observation ~incentive_scheme))
+       |> python_of_protocol);
   Py_module.set
     m
     "bk"
     (let%map reward = keyword "reward" string ~docstring:"reward function"
-     and k = keyword "k" int ~docstring:"puzzles per block" in
+     and k = keyword "k" int ~docstring:"puzzles per block"
+     and unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
+     in
      let incentive_scheme = Options.of_string_exn Bk.incentive_schemes reward in
      fun () ->
-       Proto (Engine.of_module (bk_ssz ~k ~incentive_scheme)) |> python_of_protocol);
+       Proto (Engine.of_module (bk_ssz ~unit_observation ~k ~incentive_scheme))
+       |> python_of_protocol);
   Py_module.set
     m
     "bkll"
     (let%map reward = keyword "reward" string ~docstring:"reward function"
-     and k = keyword "k" int ~docstring:"puzzles per block" in
+     and k = keyword "k" int ~docstring:"puzzles per block"
+     and unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
+     in
      let incentive_scheme = Options.of_string_exn Bkll.incentive_schemes reward in
      fun () ->
-       Proto (Engine.of_module (bkll_ssz ~k ~incentive_scheme)) |> python_of_protocol);
+       Proto (Engine.of_module (bkll_ssz ~unit_observation ~k ~incentive_scheme))
+       |> python_of_protocol);
   Py_module.set
     m
     "tailstorm"
@@ -199,13 +227,20 @@ let () =
      and k = keyword "k" int ~docstring:"puzzles per block"
      and subblock_selection =
        keyword "subblock_selection" string ~docstring:"sub-block selection mechanism"
+     and unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
      in
      let incentive_scheme = Options.of_string_exn Tailstorm.incentive_schemes reward
      and subblock_selection =
        Options.of_string_exn Tailstorm.subblock_selections subblock_selection
      in
      fun () ->
-       Proto (Engine.of_module (tailstorm_ssz ~subblock_selection ~incentive_scheme ~k))
+       Proto
+         (Engine.of_module
+            (tailstorm_ssz ~unit_observation ~subblock_selection ~incentive_scheme ~k))
        |> python_of_protocol);
   Py_module.set
     m
@@ -214,12 +249,34 @@ let () =
      and k = keyword "k" int ~docstring:"puzzles per block"
      and subblock_selection =
        keyword "subblock_selection" string ~docstring:"sub-block selection mechanism"
+     and unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
      in
      let incentive_scheme = Options.of_string_exn Tailstormll.incentive_schemes reward
      and subblock_selection =
        Options.of_string_exn Tailstormll.subblock_selections subblock_selection
      in
      fun () ->
-       Proto (Engine.of_module (tailstormll_ssz ~subblock_selection ~incentive_scheme ~k))
+       Proto
+         (Engine.of_module
+            (tailstormll_ssz ~unit_observation ~subblock_selection ~incentive_scheme ~k))
+       |> python_of_protocol);
+  Py_module.set
+    m
+    "tailstormjune"
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
+     and k = keyword "k" int ~docstring:"puzzles per block"
+     and unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
+     in
+     let incentive_scheme = Options.of_string_exn Tailstormll.incentive_schemes reward in
+     fun () ->
+       Proto (Engine.of_module (tailstormjune_ssz ~unit_observation ~incentive_scheme ~k))
        |> python_of_protocol)
 ;;

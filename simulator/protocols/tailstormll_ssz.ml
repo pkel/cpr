@@ -1,11 +1,17 @@
 open Cpr_lib
 
-module Make (Parameters : Tailstormll.Parameters) = struct
+module Make (Parameters : Tailstorm_ssz.Parameters) = struct
+  open Parameters
   module Protocol = Tailstormll.Make (Parameters)
   open Protocol
 
-  let key = "ssz"
-  let info = "SSZ'16-like attack space"
+  let key = Format.asprintf "ssz-%s" (if unit_observation then "unitobs" else "rawobs")
+
+  let info =
+    Format.asprintf
+      "SSZ'16-like attack space with %s observations"
+      (if unit_observation then "unit" else "raw")
+  ;;
 
   module Tailstorm_ssz = Tailstorm_ssz.Make (Parameters)
   module Observation = Tailstorm_ssz.Observation

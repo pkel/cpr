@@ -12,7 +12,14 @@ let nakamoto = Protocol (module Nakamoto)
 (** Attack space against {!nakamoto} as described by Sapirshtein, Sompolinsky, and Zohar.
     Optimal Selfish Mining Strategies in Bitcoin. 2016.
     {{:https://arxiv.org/abs/1507.06183}Paper.} *)
-let nakamoto_ssz = AttackSpace (module Nakamoto_ssz)
+let nakamoto_ssz ~unit_observation:uo =
+  let module M =
+    Nakamoto_ssz.Make (struct
+      let unit_observation = uo
+    end)
+  in
+  AttackSpace (module M)
+;;
 
 (** Simplified version of GHOST as used in the Ethereum Platform *)
 let ethereum ~incentive_scheme:is =
@@ -28,12 +35,13 @@ let ethereum ~incentive_scheme:is =
 ;;
 
 (** {!nakamoto_ssz} adapted for Ethereum. *)
-let ethereum_ssz ~incentive_scheme:is =
+let ethereum_ssz ~unit_observation:uo ~incentive_scheme:is =
   let module M =
     Ethereum_ssz.Make (struct
       include Ethereum.Byzantium
 
       let incentive_scheme = is
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -52,11 +60,12 @@ let bk ~k ~incentive_scheme =
 ;;
 
 (** {!nakamoto_ssz} adapted for Bₖ. *)
-let bk_ssz ~k ~incentive_scheme =
+let bk_ssz ~unit_observation:uo ~k ~incentive_scheme =
   let module M =
     Bk_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -75,11 +84,12 @@ let bkll ~k ~incentive_scheme =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!bkll}. *)
-let bkll_ssz ~k ~incentive_scheme =
+let bkll_ssz ~unit_observation:uo ~k ~incentive_scheme =
   let module M =
     Bkll_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -98,12 +108,13 @@ let tailstorm ~k ~incentive_scheme ~subblock_selection =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!tailstorm}. *)
-let tailstorm_ssz ~k ~incentive_scheme ~subblock_selection =
+let tailstorm_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstorm_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -124,12 +135,36 @@ let tailstormll ~k ~incentive_scheme ~subblock_selection =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!tailstormll}. *)
-let tailstormll_ssz ~k ~incentive_scheme ~subblock_selection =
+let tailstormll_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstormll_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
+      let unit_observation = uo
+    end)
+  in
+  AttackSpace (module M)
+;;
+
+(** Almost {!tailstormll} but recovered from June version. *)
+let tailstormjune ~k ~incentive_scheme =
+  let module M =
+    Tailstorm_june.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+    end)
+  in
+  Protocol (module M)
+;;
+
+(** {!nakamoto_ssz} adapted for {!tailstormjune}. *)
+let tailstormjune_ssz ~unit_observation:uo ~k ~incentive_scheme =
+  let module M =
+    Tailstorm_june_ssz.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -350,6 +385,36 @@ let%test_module "protocol" =
         ~orphan_rate_limit:0.1
         (tailstormll ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Hybrid)
     ;;
+
+    let n = "tailstormjune8constant/easy"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (tailstormjune ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "tailstormjune8discount/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (tailstormjune ~k:8 ~incentive_scheme:`Discount)
+    ;;
+
+    let n = "tailstormjune32hybrid/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (tailstormjune ~k:32 ~incentive_scheme:`Hybrid)
+    ;;
   end)
 ;;
 
@@ -409,6 +474,13 @@ let%test_module "policy" =
       else ()
     ;;
 
+    let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
+    let ethereum_ssz = ethereum_ssz ~unit_observation:true
+    let bk_ssz = bk_ssz ~unit_observation:true
+    let bkll_ssz = bkll_ssz ~unit_observation:true
+    let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
+    let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
+    let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/ssz/honest"
 
     let%test_unit [%name n] = test n ~policy:"honest" ~orphan_rate_limit:0.01 nakamoto_ssz
@@ -482,6 +554,26 @@ let%test_module "policy" =
         ~orphan_rate_limit:0.01
         (tailstormll_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
+
+    let n = "tailstormjune8constant/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstormjune_ssz ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "tailstormjune8discount/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (tailstormjune_ssz ~k:8 ~incentive_scheme:`Discount)
+    ;;
   end)
 ;;
 
@@ -539,6 +631,13 @@ let%test_module "random" =
       else ()
     ;;
 
+    let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
+    let ethereum_ssz = ethereum_ssz ~unit_observation:true
+    let bk_ssz = bk_ssz ~unit_observation:true
+    let bkll_ssz = bkll_ssz ~unit_observation:true
+    let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
+    let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
+    let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/random"
 
     let%test_unit [%name n] = test n nakamoto_ssz
@@ -584,6 +683,14 @@ let%test_module "random" =
         n
         (tailstormll_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
+
+    let n = "tailstormjune8constant/ssz/random"
+
+    let%test_unit [%name n] = test n (tailstormjune_ssz ~k:8 ~incentive_scheme:`Constant)
+
+    let n = "tailstormjune8discount/ssz/random"
+
+    let%test_unit [%name n] = test n (tailstormjune_ssz ~k:8 ~incentive_scheme:`Discount)
   end)
 ;;
 
@@ -648,6 +755,12 @@ include struct
       lift3 f int (option incentive_schemes) (option subblock_selections)
     ;;
 
+    let tailstormjune =
+      let f k incentive_scheme = tailstormjune ~k ~incentive_scheme in
+      let open Tailstorm_june in
+      lift2 f int (option incentive_schemes)
+    ;;
+
     let protocol =
       let* str = take_while a_to_z in
       match str with
@@ -657,6 +770,7 @@ include struct
       | "bkll" -> bkll
       | "tailstorm" -> tailstorm
       | "tailstormll" -> tailstormll
+      | "tailstormjune" -> tailstormjune
       | _ -> fail "unknown protocol"
     ;;
 

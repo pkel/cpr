@@ -11,7 +11,7 @@ class Core(gym.Env):
 
     def __init__(
         self,
-        proto=protocols.nakamoto(),
+        proto=protocols.nakamoto(unit_observation=True),
         alpha=0.25,
         gamma=0.5,
         activation_delay=1.0,
@@ -99,7 +99,7 @@ gym.envs.register(id="core-v0", entry_point=Core)
 def env_fn(
     protocol="nakamoto",
     protocol_args=None,
-    _protocol_args=dict(),
+    _protocol_args=dict(unit_observation=True),
     episode_len=128,
     alpha=0.45,
     gamma=0.5,
@@ -168,7 +168,7 @@ gym.envs.register(
     entry_point=env_fn,
     kwargs=dict(
         protocol="nakamoto",
-        _protocol_args=dict(),
+        _protocol_args=dict(unit_observation=True),
         reward="sparse_relative",
     ),
 )
@@ -178,7 +178,12 @@ gym.envs.register(
     entry_point=env_fn,
     kwargs=dict(
         protocol="tailstorm",
-        _protocol_args=dict(k=8, reward="discount", subblock_selection="heuristic"),
+        _protocol_args=dict(
+            k=8,
+            reward="discount",
+            subblock_selection="heuristic",
+            unit_observation=True,
+        ),
         reward="sparse_per_progress",
     ),
 )
