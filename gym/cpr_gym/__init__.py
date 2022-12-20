@@ -45,18 +45,28 @@ dll_dir = os.path.dirname(dll_path)
 
 # Rebuild DLL locally?
 # --------------------
+# TODO. This does not work with forkserver-multiprocessing
+# All the forks call dune in parallel which results in a lock error
+
+# if editable_install:
+#     if os.path.exists(os.path.join(repo_path, "_build")):
+#         cmd = f"opam exec dune -- build {ext_build_name}"
+#         print(
+#             f"{package}: OCaml build directory (_build) exists. Rebuild DLL.\n"
+#             f"{package}: {cmd}"
+#         )
+#         os.putenv("CPR_VERSION", __version__)
+#         import subprocess
+#
+#         subprocess.run(cmd, shell=True, check=True, cwd=repo_path)
+#         dll_path = os.path.join(dll_dir, "_build/default", ext_build_name)
 
 if editable_install:
     if os.path.exists(os.path.join(repo_path, "_build")):
-        cmd = f"opam exec dune -- build {ext_build_name}"
         print(
-            f"{package}: OCaml build directory (_build) exists. Rebuild DLL.\n"
-            f"{package}: {cmd}"
+            f"{package}: OCaml build directory (_build) exists.\n"
+            f"{package}: Use DLL from build directory."
         )
-        os.putenv("CPR_VERSION", __version__)
-        import subprocess
-
-        subprocess.run(cmd, shell=True, check=True, cwd=repo_path)
         dll_path = os.path.join(dll_dir, "_build/default", ext_build_name)
 
 # Custom import
