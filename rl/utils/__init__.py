@@ -13,7 +13,9 @@ def env_fn(alpha, target, config: Config):
     elif config.PROTOCOL == "bk_ll":
         pass
     elif config.PROTOCOL == "tailstorm":
-        proto = protocols.tailstorm(k=config.K, reward=config.REWARD_SCHEME, unit_observation=uo)
+        proto = protocols.tailstorm(k=config.K, reward=config.REWARD_SCHEME, unit_observation=uo, subblock_selection="heuristic")
+    elif config.PROTOCOL == "tailstormll":
+        proto = protocols.tailstormll(k=config.K, reward=config.REWARD_SCHEME, unit_observation=uo, subblock_selection="heuristic")
     elif config.PROTOCOL == "tailstormjune":
         proto = protocols.tailstormjune(k=config.K, reward=config.REWARD_SCHEME, unit_observation=uo)
     if config.USE_DAA:

@@ -4,9 +4,9 @@ from typing import List, Literal
 
 class Config(BaseSettings):
     PROTOCOL: Literal[
-        "tailstorm", "nakamoto", "bk", "bk_ll", "tailstormjune"
-    ] = "tailstormjune"
-    UNIT_OBSERVATION : bool = False
+        "tailstorm", "nakamoto", "bk", "bk_ll", "tailstormll", "tailstormjune"
+    ] = "tailstormll"
+    UNIT_OBSERVATION : bool = True
     REWARD_SCHEME: Literal["discount", "constant"] = "discount"
     K: int = 8
     ALGO: Literal["PPO", "DQN"] = "PPO"
