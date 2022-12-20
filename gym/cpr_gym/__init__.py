@@ -17,7 +17,6 @@ __repo_path = pathlib.Path(__file__).parent.parent.parent
 
 editable_install = False
 if __repo_path.joinpath("cpr.opam").is_file():
-    print(f"{package}: Editable install detected.")
     editable_install = True
     repo_path = __repo_path
 
@@ -43,20 +42,11 @@ if not dll_spec:
 dll_path = dll_spec.origin
 dll_dir = os.path.dirname(dll_path)
 
-# Rebuild DLL locally?
-# --------------------
-
 if editable_install:
     if os.path.exists(os.path.join(repo_path, "_build")):
-        cmd = f"opam exec dune -- build {ext_build_name}"
         print(
-            f"{package}: OCaml build directory (_build) exists. Rebuild DLL.\n"
-            f"{package}: {cmd}"
+            f"{package}: Editable install detected. " "Load DLL from _build directory."
         )
-        os.putenv("CPR_VERSION", __version__)
-        import subprocess
-
-        subprocess.run(cmd, shell=True, check=True, cwd=repo_path)
         dll_path = os.path.join(dll_dir, "_build/default", ext_build_name)
 
 # Custom import
@@ -76,6 +66,8 @@ import engine, protocols  # noqa
 engine_version = engine.cpr_lib_version.strip()
 if __version__ != engine_version:
     __version__ = f"{__version__} (engine: {engine_version})"
+
+print(f"{package}: __version__ = {__version__}")
 
 # Register gym envs
 from . import envs

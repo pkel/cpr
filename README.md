@@ -67,11 +67,9 @@ Now, installing `cpr_gym` as editable Python package should work. Try
 `pip install -e .` and follow the short Python example above. If it
 works, you're ready to go.
 
-The editable install will automatically invoke `dune` to keep the
-`cpr_gym_engine.so` up to date. If you change the OCaml code for the
-simulator, these changes will be reflected in the Python gym
-environment. Updating the `cpr_gym_engine.so` happens during `import`,
-so you'll have to restart your kernel if you work from a notebook.
+`import cpr_gym` tries to detect editable installs. If so,
+`cpr_gym_engine.so` is loaded from the OCaml build directory
+(`./_build`). You can update rebuild the DLL with `make build`.
 
 It might be useful to install all Python development dependencies with
 `pip install -r requirements.txt`. Afterwards, you can run the full test
