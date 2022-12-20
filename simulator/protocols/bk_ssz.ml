@@ -1,12 +1,22 @@
 open Cpr_lib
 
-module Make (Parameters : Bk.Parameters) = struct
+module type Parameters = sig
+  include Bk.Parameters
+  include Nakamoto_ssz.Parameters
+end
+
+module Make (Parameters : Parameters) = struct
   open Parameters
   module Protocol = Bk.Make (Parameters)
   open Protocol
 
-  let key = "ssz"
-  let info = "SSZ'16-like attack space"
+  let key = Format.asprintf "ssz-%s" (if unit_observation then "unitobs" else "rawobs")
+
+  let info =
+    Format.asprintf
+      "SSZ'16-like attack space with %s observations"
+      (if unit_observation then "unit" else "raw")
+  ;;
 
   module Observation = struct
     type t =
@@ -39,13 +49,38 @@ module Make (Parameters : Bk.Parameters) = struct
 
     let length = List.length Fields.names
 
+    let low, high =
+      let low, high = Float.Array.make length 0., Float.Array.make length 0. in
+      let set spec i _field =
+        let l, h = Ssz_tools.NormalizeObs.range ~unit:unit_observation spec in
+        Float.Array.set low i l;
+        Float.Array.set high i h;
+        i + 1
+      in
+      let _ =
+        let open Normalizers in
+        Fields.fold
+          ~init:0
+          ~public_blocks:(set public_blocks)
+          ~private_blocks:(set private_blocks)
+          ~diff_blocks:(set diff_blocks)
+          ~public_votes:(set public_votes)
+          ~private_votes_inclusive:(set private_votes_inclusive)
+          ~private_votes_exclusive:(set private_votes_exclusive)
+          ~lead:(set lead)
+          ~event:(set event)
+      in
+      low, high
+    ;;
+
     let to_floatarray t =
       let a = Float.Array.make length Float.nan in
       let set spec i field =
         Float.Array.set
           a
           i
-          (Fieldslib.Field.get field t |> Ssz_tools.NormalizeObs.to_float spec);
+          (Fieldslib.Field.get field t
+          |> Ssz_tools.NormalizeObs.to_float ~unit:unit_observation spec);
         i + 1
       in
       let _ =
@@ -66,7 +101,10 @@ module Make (Parameters : Bk.Parameters) = struct
 
     let of_floatarray =
       let get spec _ i =
-        (fun a -> Float.Array.get a i |> Ssz_tools.NormalizeObs.of_float spec), i + 1
+        ( (fun a ->
+            Float.Array.get a i
+            |> Ssz_tools.NormalizeObs.of_float ~unit:unit_observation spec)
+        , i + 1 )
       in
       let open Normalizers in
       fst

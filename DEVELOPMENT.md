@@ -1,36 +1,16 @@
-# OCaml
+# Release
 
-**Opam** is the OCaml package manager. We use it to get our dependencies
-from the internet in the correct version. It also manages different
-versions of the OCaml compiler.
+Release is automated in `.github/workflows/release.yml`. The script is
+triggered on tags matching `v*`. It proceeds as follows.
 
-You do not have to interact with opam directly. Just make sure that a
-recent version (>= 2.0) is installed on your system. Then use `make
-setup` to setup an OCaml toolchain in the current working directory
-under `./_opam`.
+1. Packaging.
+   - Build Python wheels for package `cpr_gym`.
+2. Release.
+   - Create Github release; mark as pre-release if tag contains `+`.
+   - Push to PyPI; only if tag does not contain `+`.
 
-Later, e.g. when dependencies change, run `make dependencies` to update
-the toolchain.
-
-**Dune** is an OCaml build system. We use it to build executables and
-shared objects, and to run tests. You do not have to interact with dune
-directly. Just run `make bridge` to build the latest `bridge.so` and
-copy it to the Python `cpr_gym` library.
-
-## Ubuntu
-
-```shell
-sudo apt install opam
-opam init
-make setup
-make bridge
-```
-
-## MacOS
-
-```shell
-brew install opam
-opam init
-make setup
-make bridge
-```
+Version numbers are derived directly from the tag, ignoring the leading
+`v` where appropriate. Any valid Python version tag should work. I want
+to stick to semantic versioning, i.e., use version tags like `v0.6.2`
+for public releases and something like `v0.6.2+pre` for internal and
+test releases.

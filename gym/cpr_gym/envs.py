@@ -11,7 +11,7 @@ class Core(gym.Env):
 
     def __init__(
         self,
-        proto=protocols.nakamoto(),
+        proto=protocols.nakamoto(unit_observation=True),
         alpha=0.25,
         gamma=0.5,
         activation_delay=1.0,
@@ -69,14 +69,14 @@ class Core(gym.Env):
         kwargs = self.core_kwargs.copy()
         d = kwargs.pop("defenders", None)
         if d is None:
-            a = kwargs["alpha"]
             g = kwargs["gamma"]
             if g >= 1:
                 raise ValueError("gamma must be smaller than 1")
-            d = int(np.ceil((1 - a) / (1 - g)))
+            d = int(np.ceil(1 / (1 - g)))
+            d = max(2, d)
             if d >= 100:
                 warnings.warn(
-                    f"Expensive assumptions: alpha={a} and gamma={g} imply defenders={d}"
+                    f"Expensive assumptions: gamma={g} implies defenders>={d}"
                 )
 
         self.ocaml_env = engine.create(defenders=d, **kwargs)
@@ -99,7 +99,7 @@ gym.envs.register(id="core-v0", entry_point=Core)
 def env_fn(
     protocol="nakamoto",
     protocol_args=None,
-    _protocol_args=dict(),
+    _protocol_args=dict(unit_observation=True),
     episode_len=128,
     alpha=0.45,
     gamma=0.5,
@@ -168,7 +168,7 @@ gym.envs.register(
     entry_point=env_fn,
     kwargs=dict(
         protocol="nakamoto",
-        _protocol_args=dict(),
+        _protocol_args=dict(unit_observation=True),
         reward="sparse_relative",
     ),
 )
@@ -178,7 +178,12 @@ gym.envs.register(
     entry_point=env_fn,
     kwargs=dict(
         protocol="tailstorm",
-        _protocol_args=dict(k=8, reward="discount", subblock_selection="heuristic"),
+        _protocol_args=dict(
+            k=8,
+            reward="discount",
+            subblock_selection="heuristic",
+            unit_observation=True,
+        ),
         reward="sparse_per_progress",
     ),
 )

@@ -2,6 +2,7 @@ black[jupyter]
 flake8
 flake8-pyproject
 pytest
+pytest-benchmark
 pytest-forked
 
 pandas
@@ -16,7 +17,7 @@ seaborn
 
 networkx
 
--e ./gym
+-e .
 
 stable-baselines3
 wandb
