@@ -84,9 +84,21 @@ class cpr_build_ext(build_ext):
 
 setup(
     name="cpr_gym",
+    version=version,
+    description="Gym environment for attacking proof-of-work protocols with RL",
     long_description=open("README.md", "r", encoding="utf8").read(),
     long_description_content_type="text/markdown",
-    version=version,
+    keywords="proof-of-work consensus rl gym selfish-mining reinforcement-learning",
+    url="https://github.com/pkel/cpr",
+    author="Patrik Keller",
+    author_email="git@pkel.dev",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Science/Research",
+        "Programming Language :: OCaml",
+        "Programming Language :: Python :: 3",
+        "Topic :: Security",
+    ],
     packages=["cpr_gym"],
     package_dir={"cpr_gym": "./gym/cpr_gym"},
     ext_modules=[
