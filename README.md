@@ -69,7 +69,7 @@ works, you're ready to go.
 
 `import cpr_gym` tries to detect editable installs. If so,
 `cpr_gym_engine.so` is loaded from the OCaml build directory
-(`./_build`). You can update rebuild the DLL with `make build`.
+(`./_build`). You can rebuild the DLL with `make build`.
 
 It might be useful to install all Python development dependencies with
 `pip install -r requirements.txt`. Afterwards, you can run the full test
