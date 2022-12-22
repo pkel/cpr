@@ -3,7 +3,7 @@ from typing import List, Literal
 
 
 class Config(BaseSettings):
-    PROTOCOL: Literal["tailstorm", "nakamoto", "bk", "bk_ll"] = "tailstormml"
+    PROTOCOL: Literal["tailstorm", "nakamoto", "bk", "bk_ll"] = "tailstorm"
     REWARD_SCHEME: Literal["discount", "constant"] = "discount"
     K: int = 8
     ALGO: Literal["PPO", "DQN"] = "PPO"
