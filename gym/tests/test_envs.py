@@ -47,7 +47,7 @@ def test_sparseRewardPerProgressWrapper():
 
 
 def test_denseRewardPerProgressWrapper():
-    env = gym.make("cpr_gym:core-v0", max_progress=float("inf"))
+    env = gym.make("cpr_gym:core-v0", max_progress=None)
     env = wrappers.DenseRewardPerProgressWrapper(env, episode_len=32)
     check_env(env)
     for i in range(42):
@@ -146,15 +146,17 @@ def test_registered_envs(capsys):
     env = gym.make("cpr_gym:cpr-nakamoto-v0")
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.45 attacker"
+    assert captured == (
+        "Nakamoto consensus; "
+        "SSZ'16 attack space with unit observations; α=0.45 attacker"
+    )
 
     env = gym.make("cpr_gym:cpr-tailstorm-v0")
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
-        "Tailstorm with k=8, discount rewards, and "
-        "heuristic sub-block selection; "
-        "SSZ'16-like attack space; α=0.45 attacker"
+        "Tailstorm with k=8, discount rewards, and heuristic sub-block selection; "
+        "SSZ'16-like attack space with unit observations; α=0.45 attacker"
     )
 
     env = gym.make(

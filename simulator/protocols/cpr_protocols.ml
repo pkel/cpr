@@ -12,7 +12,14 @@ let nakamoto = Protocol (module Nakamoto)
 (** Attack space against {!nakamoto} as described by Sapirshtein, Sompolinsky, and Zohar.
     Optimal Selfish Mining Strategies in Bitcoin. 2016.
     {{:https://arxiv.org/abs/1507.06183}Paper.} *)
-let nakamoto_ssz = AttackSpace (module Nakamoto_ssz)
+let nakamoto_ssz ~unit_observation:uo =
+  let module M =
+    Nakamoto_ssz.Make (struct
+      let unit_observation = uo
+    end)
+  in
+  AttackSpace (module M)
+;;
 
 (** Simplified version of GHOST as used in the Ethereum Platform *)
 let ethereum ~incentive_scheme:is =
@@ -28,12 +35,13 @@ let ethereum ~incentive_scheme:is =
 ;;
 
 (** {!nakamoto_ssz} adapted for Ethereum. *)
-let ethereum_ssz ~incentive_scheme:is =
+let ethereum_ssz ~unit_observation:uo ~incentive_scheme:is =
   let module M =
     Ethereum_ssz.Make (struct
       include Ethereum.Byzantium
 
       let incentive_scheme = is
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -52,11 +60,12 @@ let bk ~k ~incentive_scheme =
 ;;
 
 (** {!nakamoto_ssz} adapted for Bₖ. *)
-let bk_ssz ~k ~incentive_scheme =
+let bk_ssz ~unit_observation:uo ~k ~incentive_scheme =
   let module M =
     Bk_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -75,11 +84,12 @@ let bkll ~k ~incentive_scheme =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!bkll}. *)
-let bkll_ssz ~k ~incentive_scheme =
+let bkll_ssz ~unit_observation:uo ~k ~incentive_scheme =
   let module M =
     Bkll_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -98,12 +108,13 @@ let tailstorm ~k ~incentive_scheme ~subblock_selection =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!tailstorm}. *)
-let tailstorm_ssz ~k ~incentive_scheme ~subblock_selection =
+let tailstorm_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstorm_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -124,12 +135,36 @@ let tailstormll ~k ~incentive_scheme ~subblock_selection =
 ;;
 
 (** {!nakamoto_ssz} adapted for {!tailstormll}. *)
-let tailstormll_ssz ~k ~incentive_scheme ~subblock_selection =
+let tailstormll_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstormll_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
+      let unit_observation = uo
+    end)
+  in
+  AttackSpace (module M)
+;;
+
+(** Almost {!tailstormll} but recovered from June version. *)
+let tailstormjune ~k ~incentive_scheme =
+  let module M =
+    Tailstorm_june.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+    end)
+  in
+  Protocol (module M)
+;;
+
+(** {!nakamoto_ssz} adapted for {!tailstormjune}. *)
+let tailstormjune_ssz ~unit_observation:uo ~k ~incentive_scheme =
+  let module M =
+    Tailstorm_june_ssz.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+      let unit_observation = uo
     end)
   in
   AttackSpace (module M)
@@ -461,6 +496,13 @@ let%test_module "policy" =
       else ()
     ;;
 
+    let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
+    let ethereum_ssz = ethereum_ssz ~unit_observation:true
+    let bk_ssz = bk_ssz ~unit_observation:true
+    let bkll_ssz = bkll_ssz ~unit_observation:true
+    let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
+    let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
+    let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/ssz/honest"
 
     let%test_unit [%name n] = test n ~policy:"honest" ~orphan_rate_limit:0.01 nakamoto_ssz
@@ -611,6 +653,13 @@ let%test_module "random" =
       else ()
     ;;
 
+    let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
+    let ethereum_ssz = ethereum_ssz ~unit_observation:true
+    let bk_ssz = bk_ssz ~unit_observation:true
+    let bkll_ssz = bkll_ssz ~unit_observation:true
+    let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
+    let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
+    let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/random"
 
     let%test_unit [%name n] = test n nakamoto_ssz

@@ -13,13 +13,16 @@ def test_default(capsys):
     env = gym.make("cpr_gym:core-v0", max_steps=1000)
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.25 attacker"
+    assert captured == (
+        "Nakamoto consensus; "
+        "SSZ'16 attack space with unit observations; α=0.25 attacker"
+    )
 
 
 def test_policies_honest():
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bk(k=8, reward="constant"),
+        proto=protocols.bk(k=8, reward="constant", unit_observation=True),
         alpha=0.33,
         gamma=0.2,
         defenders=2,
@@ -33,7 +36,7 @@ def test_policies_honest():
 def test_policies_selfish():
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bk(k=8, reward="constant"),
+        proto=protocols.bk(k=8, reward="constant", unit_observation=True),
         alpha=0.33,
         gamma=0.5,
         defenders=3,
@@ -47,7 +50,7 @@ def test_policies_selfish():
 def test_nakamoto(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.nakamoto(),
+        proto=protocols.nakamoto(unit_observation=True),
         alpha=0.33,
         gamma=0.7,
         defenders=5,
@@ -55,7 +58,10 @@ def test_nakamoto(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == "Nakamoto consensus; SSZ'16 attack space; α=0.33 attacker"
+    assert captured == (
+        "Nakamoto consensus; "
+        "SSZ'16 attack space with unit observations; α=0.33 attacker"
+    )
 
     obs = env.reset()
     for x in range(600):
@@ -71,7 +77,7 @@ def test_nakamoto(capsys):
 def test_ethereum(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.ethereum(reward="discount"),
+        proto=protocols.ethereum(reward="discount", unit_observation=True),
         alpha=0.13,
         gamma=0.9,
         defenders=10,
@@ -82,7 +88,7 @@ def test_ethereum(capsys):
     assert captured == (
         "Ethereum with heaviest_chain-preference, work-progress, uncle cap 2, "
         "and discount-rewards; "
-        "SSZ'16-like attack space; α=0.13 attacker"
+        "SSZ'16-like attack space with unit observations; α=0.13 attacker"
     )
 
     obs = env.reset()
@@ -99,7 +105,7 @@ def test_ethereum(capsys):
 def test_bk(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bk(k=42, reward="constant"),
+        proto=protocols.bk(k=42, reward="constant", unit_observation=True),
         alpha=0.33,
         gamma=0.3,
         defenders=4,
@@ -107,9 +113,9 @@ def test_bk(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert (
-        captured
-        == "Bₖ with k=42 and constant rewards; SSZ'16-like attack space; α=0.33 attacker"
+    assert captured == (
+        "Bₖ with k=42 and constant rewards; "
+        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
     )
 
     obs = env.reset()
@@ -128,7 +134,7 @@ def test_bk(capsys):
 def test_bkll(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bkll(k=17, reward="constant"),
+        proto=protocols.bkll(k=17, reward="constant", unit_observation=True),
         alpha=0.33,
         gamma=0.3,
         defenders=4,
@@ -136,9 +142,9 @@ def test_bkll(capsys):
     )
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
-    assert (
-        captured
-        == "Bₖ/ll with k=17 and constant rewards; SSZ'16-like attack space; α=0.33 attacker"
+    assert captured == (
+        "Bₖ/ll with k=17 and constant rewards; "
+        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
     )
 
     obs = env.reset()
@@ -158,7 +164,10 @@ def test_tailstorm(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
         proto=protocols.tailstorm(
-            k=13, reward="discount", subblock_selection="heuristic"
+            k=13,
+            reward="discount",
+            subblock_selection="heuristic",
+            unit_observation=True,
         ),
         alpha=0.33,
         gamma=0.8,
@@ -169,7 +178,7 @@ def test_tailstorm(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
         "Tailstorm with k=13, discount rewards, and heuristic sub-block selection; "
-        "SSZ'16-like attack space; α=0.33 attacker"
+        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
     )
 
     obs = env.reset()
@@ -189,7 +198,7 @@ def test_tailstormll(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
         proto=protocols.tailstormll(
-            k=13, reward="discount", subblock_selection="optimal"
+            k=13, reward="discount", subblock_selection="optimal", unit_observation=True
         ),
         alpha=0.33,
         gamma=0.8,
@@ -200,7 +209,7 @@ def test_tailstormll(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
         "Tailstorm/ll with k=13, discount rewards, and optimal sub-block selection; "
-        "SSZ'16-like attack space; α=0.33 attacker"
+        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
     )
 
     obs = env.reset()
@@ -219,7 +228,7 @@ def test_tailstormll(capsys):
 def test_tailstormjune(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.tailstormjune(k=7, reward="discount"),
+        proto=protocols.tailstormjune(k=7, reward="discount", unit_observation=False),
         alpha=0.25,
         gamma=0.7,
         defenders=4,
@@ -229,7 +238,7 @@ def test_tailstormjune(capsys):
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
         "Tailstorm/ll (June '22 version) with k=7 and discount rewards; "
-        "SSZ'16-like attack space; α=0.25 attacker"
+        "SSZ'16-like attack space with raw observations; α=0.25 attacker"
     )
 
     obs = env.reset()

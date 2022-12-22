@@ -60,20 +60,19 @@ module T = struct
 
   let selfish_mining ~alpha ~activation_delay ~gamma ~propagation_delay ~defenders =
     let defender_compute =
-      if defenders < 1
-      then raise (Invalid_argument "defenders must be greater zero.")
+      if defenders < 2
+      then raise (Invalid_argument "defenders must be at least 2")
       else (1. -. alpha) /. float_of_int defenders
     in
+    let defenders_ = float_of_int defenders in
     let attacker_msg_delay =
-      if gamma > 1. -. defender_compute
+      if gamma > (defenders_ -. 1.) /. defenders_
       then
         raise
-          (Invalid_argument "gamma must not be greater ( 1 - (1 - alpha) / defenders )")
+          (Invalid_argument "gamma must not be greater ( (defenders - 1) / defenders )")
       else (
-        let gamma' = gamma +. defender_compute in
-        let lower = propagation_delay *. (1. -. gamma')
-        and upper = propagation_delay *. (2. -. gamma') in
-        Distributions.uniform ~lower ~upper)
+        let d = (defenders_ -. 1.) /. defenders_ *. propagation_delay /. gamma in
+        Distributions.uniform ~lower:0. ~upper:d)
     in
     let n = defenders + 1 in
     let links src =

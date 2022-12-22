@@ -11,7 +11,7 @@ def test_simple_daa():
     def env_with_activation_delay(x):
         env = gym.make(
             "cpr_gym:core-v0",
-            proto=protocols.nakamoto(),
+            proto=protocols.nakamoto(unit_observation=True),
             max_steps=100,
             alpha=1 / 3,
             gamma=0.5,
@@ -63,7 +63,7 @@ def test_max_time():
     target = 42 * 10
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.nakamoto(),
+        proto=protocols.nakamoto(unit_observation=True),
         max_time=target,
         max_steps=int(target * 2),  # set high enough such that max_time takes effect
         activation_delay=1,

@@ -47,16 +47,28 @@ let selfish_mining n_activations (AttackSpace (module A)) =
          List.map
            (fun gamma ->
              let defenders = 1. /. (1. -. gamma) |> Float.ceil |> Float.to_int in
+             let defenders = max 2 defenders in
              selfish_mining ~defenders ~alpha gamma)
            gammas)
        alphas)
 ;;
 
+module Protocols = struct
+  open Cpr_protocols
+
+  let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
+  let ethereum_ssz = ethereum_ssz ~unit_observation:true
+  let bk_ssz = bk_ssz ~unit_observation:true
+  let bkll_ssz = bkll_ssz ~unit_observation:true
+  let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
+  let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
+end
+
 (* Run all combinations of protocol, attack, network and block_interval. *)
 let tasks ~n_activations =
   let two_agents = two_agents n_activations
   and selfish_mining = selfish_mining n_activations in
-  let open Cpr_protocols in
+  let open Protocols in
   two_agents nakamoto_ssz
   @ selfish_mining nakamoto_ssz
   @ two_agents (ethereum_ssz ~incentive_scheme:`Discount)
