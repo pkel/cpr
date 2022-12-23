@@ -53,13 +53,13 @@ all nodes are honest, `node(i)` for any `i` returns the tree functions
 In attack scenarios, `node(i)` returns nonconforming functions for the
 malicious nodes.
 
-`mining_delay() -> float` and `miner() -> int` model proof-of-work
-difficulty and hash-rates of the nodes. `mining_delay()` defines the
-time between consecutive mining events. It is typically a random
-function returning independent and exponentially distributed values.
-`miner()` defines which node is successful at a particular mining event.
-It is typically a random function which selects nodes based on their
-relative hash-rate.
+`mining_delay() -> float` and `select_miner() -> int` model
+proof-of-work difficulty and hash-rates of the nodes. `mining_delay()`
+defines the time between consecutive mining events. It is typically a
+random function returning independent and exponentially distributed
+values. `select_miner()` defines which node is successful at a
+particular mining event. It is typically a random function which selects
+nodes based on their relative hash-rate.
 
 ### Example
 
@@ -97,8 +97,8 @@ with `n = 15`.
 block interval of about 554 seconds. Individual block intervals are
 exponentially distributed. To meet the average block interval, we scale
 the distribution by factor 554 and let `mining_delay()` do the sampling.
-`miner()` returns a random node according to the hash-rate distribution
-in the table.
+`select_miner()` returns a random node according to the hash-rate
+distribution in the table.
 
 Regarding the communication, me make a another simplification. We assume
 that all nodes are connected to each other and that blocks propagate in
@@ -117,7 +117,7 @@ def mining_delay():
     return random.exponential(scale=554)
 
 
-def miner():
+def select_miner():
     hash_rates = [0.24817, 0.20147, ..., 0.00275, 0.01]  # from table
     return random.choice(range(n), p=hash_rates)
 
@@ -146,6 +146,67 @@ def node(i):
 
 TODO. High level description of the simulator as concurrent program with
 waiting.
+
+```python
+# initialization
+dag = DAG()
+state = []
+blocks = [dag.add(r) for r in roots()]
+for b in blocks:
+    for i in range(n):
+        dag.make_visible(b, i)
+for i in range(n):
+    dag.set_view(i)
+    init, _update, _mining = node(i)
+    state[i] = init(blocks)
+
+# proof-of-work loop
+while true:
+    wait_seconds(mining_delay())
+    i = select_miner()
+    dag.set_view(i)
+    _init, _update, mining = node(i)
+    draft = mining()
+    block = dag.add(draft)
+    block.pow = True
+    if validity(block):
+        deliver(block, i, "proof-of-work")
+
+
+def deliver(block, i, event):
+    # deliver block in DAG-order
+    wait_until(
+        lambda: all([dag.is_visible(b, i) for b in block.parents()])
+    )
+
+    # deliver block once
+    if dag.is_visible(block, i):
+        return
+    dag.make_visible(block, i)
+
+    # simulate node-action
+    dag.set_view(i)
+    _init, update, _mining = node(i)
+    upd = update(state[i], block, event)
+
+    # handle state update
+    state[i] = upd.state
+
+    # handle communication
+    for m in upd.share:
+        for dst in neighbours(node):
+            after_seconds(
+                message_delay(node, dst),
+                lambda: deliver(dst, m, "network"),
+            )
+
+    # handle non-proof-of-work appends
+    for draft in upd.append:
+        block = dag.add(draft)
+        block.pow = False
+        if validity(block):
+            deliver(block, node, "append")
+```
 
 ## Discrete event simulation
 

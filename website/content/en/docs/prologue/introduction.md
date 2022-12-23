@@ -72,7 +72,7 @@ blocks) of honest behaviour in [Nakamoto consensus]({{<protocol
 import gym
 import cpr_gym
 
-env = gym.make("cpr-nakamoto-v0", episode_len = 2016)
+env = gym.make("cpr-nakamoto-v0", episode_len=2016)
 obs = env.reset()
 done = False
 while not done:

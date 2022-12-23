@@ -290,7 +290,7 @@ def mining_delay():
     return random.exponential(scale=1 / lambda_)
 
 
-def miner():
+def select_miner():
     dhr = (1 - alpha) / (n - 1)  # defender hash rate
     hash_rates = [alpha] + [dhr] * (n - 1)
     return random.choice(range(n), p=hash_rates)
