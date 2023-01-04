@@ -12,7 +12,19 @@ def env_fn(alpha, target, config: Config):
     elif config.PROTOCOL == "bk_ll":
         pass
     elif config.PROTOCOL == "tailstorm":
-        proto = protocols.tailstorm(k=config.K, reward=config.REWARD_SCHEME)
+        proto = protocols.tailstorm(
+            k=config.K,
+            reward=config.REWARD_SCHEME,
+            subblock_selection=config.SUBBLOCK_SELECTION,
+            unit_observation=True,
+        )
+    elif config.PROTOCOL == "tailstormll":
+        proto = protocols.tailstormll(
+            k=config.K,
+            reward=config.REWARD_SCHEME,
+            subblock_selection=config.SUBBLOCK_SELECTION,
+            unit_observation=True,
+        )
 
     if config.USE_DAA:
         max_steps = config.STEPS_PER_ROLLOUT * 1000000
@@ -26,7 +38,6 @@ def env_fn(alpha, target, config: Config):
         alpha=alpha,
         max_steps=max_steps,
         max_time=max_time,
-        max_height=max_steps,
         gamma=config.GAMMA,
         defenders=config.DEFENDERS,
         activation_delay=target,

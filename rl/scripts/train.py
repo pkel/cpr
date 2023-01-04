@@ -6,6 +6,7 @@ import numpy as np
 
 import gym
 from cpr_gym import protocols
+import cpr_gym
 import stable_baselines3
 from stable_baselines3 import A2C, PPO, DQN
 from stable_baselines3.ppo.policies import MlpPolicy
@@ -28,7 +29,7 @@ from rl.wrappers import ReleaseOnDoneWrapper
 from rl.utils import config, env_fn
 from rl.wrappers.decreasing_alpha_wrapper import AlphaScheduleWrapper
 
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList, EvalCallback
 from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results
 from stable_baselines3.common.monitor import Monitor
 
@@ -149,6 +150,20 @@ if __name__ == "__main__":
             env = WastedBlocksRewardWrapper(env)
         return env
 
+    def eval_env_fn(alpha):
+        env = env_fn(0, 1, config)
+        env = AlphaScheduleWrapper(env, env_fn, config)
+        env.alpha_schedule = [alpha]
+        # env = ReleaseOnDoneWrapper(env)
+        if config.USE_DAA:
+            if config.DAA_METHOD == "sparse":
+                env = SparseDaaRewardWrapper(env)
+            else:
+                env = AbsoluteRewardWrapper(env)
+        else:
+            env = WastedBlocksRewardWrapper(env)
+        return env
+
     if config.N_ENVS > 1:
         env = SubprocVecEnv([vec_env_fn] * config.N_ENVS)
     else:
@@ -157,6 +172,7 @@ if __name__ == "__main__":
     env = VecWandbLogger(env)
     print(env.action_space)
     print(env.observation_space)
+    print(f"version: {cpr_gym.__version__}")
     if config.ALGO == "PPO":
         policy_kwargs = dict(
             activation_fn=torch.nn.ReLU,
@@ -199,13 +215,32 @@ if __name__ == "__main__":
             exploration_final_eps=config.ENDING_EPS,
         )
 
+    eval_callbacks = [
+        EvalCallback(
+            eval_env_fn(alpha),
+            best_model_save_path=f"{log_dir}/{alpha}/",
+            log_path=f"{log_dir}/{alpha}/",
+            eval_freq=10000,
+            deterministic=True,
+            render=False,
+            n_eval_episodes=10,
+        )
+        for alpha in config.ALPHA_SCHEDULE
+    ]
+    callbacks = CallbackList(
+        [
+            WandbCallback(
+                gradient_save_freq=10000,
+                model_save_path=log_dir,
+                model_save_freq=10000,
+                verbose=0,
+            )
+        ]
+        + eval_callbacks
+    )
+
     model.learn(
         total_timesteps=config.TOTAL_TIMESTEPS,
-        callback=WandbCallback(
-            gradient_save_freq=10000,
-            model_save_path=log_dir,
-            model_save_freq=10000,
-            verbose=0,
-        ),
+        callback=callbacks,
     )
     model.save(os.path.join(log_dir, f"{config.ALGO}_{config.PROTOCOL}"))
