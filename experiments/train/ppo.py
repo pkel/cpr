@@ -107,16 +107,17 @@ if __name__ == "__main__":
 ###
 
 if __name__ == "__main__":
-    wandb_tags = config.wandb.tags + ["ppo"]
+    wandb_tags = config.wandb.tags
     cfg = config.dict()
     cfg.pop("wandb", None)
     print("## WandB init ##")
     wandb.init(
-        project="dqn",
+        project="cpr-v0.7-ppo",
         entity="tailstorm",
         tags=wandb_tags,
         config=dict(config=cfg, info=info),
     )
+    wandb.run.name = f"{args.task}-{wandb.run.id}"
 
 ###
 # env
