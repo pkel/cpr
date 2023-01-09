@@ -52,7 +52,7 @@ class Env(BaseModel):
     name = "cpr_gym:cpr-v0"
     activation_delay = 1.0
     gamma = 0.5
-    defenders = 32
+    defenders = 100
     episode_len = 128
 
 
