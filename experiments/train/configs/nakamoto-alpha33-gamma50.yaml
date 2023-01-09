@@ -3,10 +3,9 @@ main:
   alpha: .33
   total_timesteps: 20_000_000
 env:
-  gamma: 0.00
+  gamma: 0.50
 protocol:
-  name: 'bk'
-  k: 8
+  name: 'nakamoto'
 eval:
   freq: 32
   episodes_per_alpha_per_env: 128
