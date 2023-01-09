@@ -1,7 +1,7 @@
 main:
   n_envs: 4
   alpha: .33
-  total_timesteps: 20_000_000
+  total_timesteps: 10_000_000
 env:
   gamma: 0.50
 protocol:
