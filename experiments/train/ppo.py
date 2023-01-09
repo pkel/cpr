@@ -139,7 +139,14 @@ def env_fn(eval=False, n_recordings=42):
         env = cpr_gym.wrappers.EpisodeRecorderWrapper(
             env,
             n=n_recordings,
-            info_keys=["alpha", "gamma", "episode_chain_time", "episode_progress"],
+            info_keys=[
+                "alpha",
+                "gamma",
+                "episode_sim_time",
+                "episode_chain_time",
+                "episode_progress",
+                "episode_n_activations",
+            ],
         )
 
     # Uncomment to let agent observe the progress within the episode
