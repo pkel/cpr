@@ -88,17 +88,3 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard data/viz/*.dot))
 
 %.png: %.dot
 	dot -Tpng < $^ > $@
-
-# RL
-
-reset-config:
-	rm -f experiments/train/config.ini
-
-train-online: _venv
-	if [ ! -e experiments/train/config.ini ] ; then\
-		cp experiments/train/defaults.ini experiments/train/config.ini ; fi
-	${EDITOR} experiments/train/config.ini
-	. _venv/bin/activate && python experiments/train/ppo.py
-
-train-offline: export WANDB_MODE=offline
-train-offline: _venv train-online
