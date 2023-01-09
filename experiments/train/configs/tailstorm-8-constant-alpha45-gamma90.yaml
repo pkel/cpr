@@ -3,7 +3,8 @@ main:
   alpha: .45
   total_timesteps: 20_000_000
 env:
-  gamma: 0.99
+  gamma: 0.90
+  defenders: 10
 protocol:
   name: 'tailstorm'
   k: 8
