@@ -231,6 +231,7 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
       ; float "episode_chain_time" chain_time
       ; float "episode_sim_time" sim_time
       ; int "episode_n_steps" t.episode_steps
+      ; int "episode_n_activations" t.sim.clock.c_activations
       ]
       @ Info.prefix_key "protocol_" Protocol.info
       @ Info.prefix_key "head_" (Ref.info head)
