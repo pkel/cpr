@@ -140,11 +140,10 @@ module Make (Parameters : Parameters) = struct
       skip_eq Block.eq cmp
     ;;
 
-    let winner l =
-      List.map last_block l
-      |> Compare.first (Compare.neg compare_blocks) 1
-      |> Option.get
-      |> List.hd
+    let winner = function
+      | [] -> failwith "bk.winner: empty list"
+      | hd :: tl ->
+        List.fold_left (fun acc x -> if compare_blocks x acc > 0 then x else acc) hd tl
     ;;
 
     let precursor this = List.nth_opt (parents this) 0

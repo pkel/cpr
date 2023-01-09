@@ -188,7 +188,7 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
       let event = skip_to_interaction t.sim (fun () -> a.puzzle_payload state) in
       a.state <- a.prepare state event
     in
-    (* End simulation? *)
+    (* Find objectively best tip *)
     let prefs =
       Array.mapi
         Simulator.(
@@ -201,6 +201,7 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
       |> Array.to_list
     in
     let head = Ref.winner prefs in
+    (* End simulation? *)
     let progress = Ref.progress head in
     let done_ =
       not
