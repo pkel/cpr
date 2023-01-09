@@ -103,7 +103,7 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
       ~gamma:p.gamma
       ~alpha:p.alpha
       ~defenders:p.defenders
-      ~propagation_delay:0.00001
+      ~propagation_delay:1e-9
   in
   let rec skip_to_interaction sim puzzle_payload =
     let open Simulator in

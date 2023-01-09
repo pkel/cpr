@@ -3,7 +3,7 @@ main:
   alpha: .33
   total_timesteps: 20_000_000
 env:
-  gamma: 0.90
+  gamma: 0.01
 protocol:
   name: 'bk'
   k: 8
