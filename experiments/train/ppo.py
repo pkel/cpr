@@ -96,9 +96,13 @@ info["eval_overhead"] = (
     info["eval_n_steps"] / info["rollout_n_steps"] / config.eval.freq
 )
 
+dirty = "dirty" in cpr_gym.__version__
+
 if __name__ == "__main__":
     print("## Configuration ##")
     print(json.dumps(dict(config=config.dict(), info=info), indent=2))
+    if dirty:
+        print("OFFLINE: will set WANDB_MODE=offline due to dirty version")
     input("Press Enter to continue.")
 
 
@@ -111,11 +115,15 @@ if __name__ == "__main__":
     cfg = config.dict()
     cfg.pop("wandb", None)
     print("## WandB init ##")
+    wandb_kwargs = dict()
+    if dirty:
+        wandb_kwargs["mode"] = "offline"
     wandb.init(
         project="cpr-v0.7-ppo",
         entity="tailstorm",
         tags=wandb_tags,
         config=dict(config=cfg, info=info),
+        **wandb_kwargs,
     )
     wandb.run.name = f"{args.task}-{wandb.run.id}"
 
