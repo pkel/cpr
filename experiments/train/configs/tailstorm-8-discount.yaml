@@ -1,0 +1,23 @@
+main:
+  n_envs: 4
+  alpha: .45 # set from command line argument
+  total_timesteps: 20_000_000
+env:
+  gamma: 0.5 # set from command line argument
+  defenders: 20
+  reward: 'sparse_per_progress'
+protocol:
+  name: 'tailstorm'
+  k: 8
+  reward: 'discount'
+eval:
+  freq: 4
+  episodes_per_alpha_per_env: 128
+ppo:
+  batch_size: 32768
+  n_steps_multiple: 1
+  gamma: 0.999
+  starting_lr: 1e-3
+  ending_lr: 0
+  n_layers: 3
+  layer_size: 128
