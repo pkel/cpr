@@ -16,7 +16,7 @@ ppo:
   batch_size: 4096
   n_steps_multiple: 1
   gamma: 0.999
-  starting_lr: 1e-3
+  starting_lr: 3e-2
   ending_lr: 0
   n_layers: 3
-  layer_size: 64
+  layer_size: 128
