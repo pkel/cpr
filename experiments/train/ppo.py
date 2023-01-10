@@ -254,28 +254,34 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
 
         # create data frame from buffers in vectorized envs
         buffers = self.eval_env.get_attr("erw_history")
-        df = pandas.DataFrame(itertools.chain(*buffers))
-        # acc per alpha
-        df = df.groupby("alpha").mean()
-        # plot metric over alpha
-        df2 = df.reset_index()
-        table = wandb.Table(
-            data=df2,
-            columns=list(df2),
+        df = pandas.DataFrame(itertools.chain(*buffers)).drop(
+            columns=["alpha", "gamma"]
         )
-        plots = {
-            f"plot_over_alpha/{key}": wandb.plot.line(table, "alpha", key)
-            for key in list(df)
-        }
+        mean = {"eval/mean_" + k: v for k, v in df.mean().to_dict().items()}
+        std = {"eval/std_" + k: v for k, v in df.std().to_dict().items()}
 
-        # timeline for subset of alpha
-        if alpha_schedule(eval=True)[1]["range"]:
-            df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
-        per_alpha = {
-            f"eval_per_alpha/{key}/{alpha:.2g}": df.loc[alpha, key]
-            for key in list(df)
-            for alpha in df.index
-        }
+        # # acc per alpha
+        # # might become relevant again, if we decide to train range of alphas
+        # df = df.groupby("alpha").mean()
+        # # plot metric over alpha
+        # df2 = df.reset_index()
+        # table = wandb.Table(
+        #     data=df2,
+        #     columns=list(df2),
+        # )
+        # plots = {
+        #     f"plot_over_alpha/{key}": wandb.plot.line(table, "alpha", key)
+        #     for key in list(df)
+        # }
+
+        # # timeline for subset of alpha
+        # if alpha_schedule(eval=True)[1]["range"]:
+        #     df = df.loc[df.index[0 :: config["eval"]["report_alpha"]]]
+        # per_alpha = {
+        #     f"eval_per_alpha/{key}/{alpha:.2g}": df.loc[alpha, key]
+        #     for key in list(df)
+        #     for alpha in df.index
+        # }
 
         time = {
             "time/total_timesteps": self.num_timesteps,
@@ -283,7 +289,7 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
         }
 
         # log
-        wandb.log(plots | per_alpha | time, commit=True)
+        wandb.log(mean | std | time, commit=True)
 
         return r
 
