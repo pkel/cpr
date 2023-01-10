@@ -300,7 +300,7 @@ if __name__ == "__main__":
             1 - remaining
         )
 
-    log_dir = f"saved_models/ppo-{args.task}-{wandb.run.id}"
+    log_dir = f"saved_models/ppo-{task}-{wandb.run.id}"
 
     vec_steps_per_rollout = config.ppo.batch_size * config.ppo.n_steps_multiple
     # rollout buffer is this time n_envs
