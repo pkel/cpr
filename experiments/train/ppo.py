@@ -40,6 +40,11 @@ parser.add_argument(
     help="network capability of the attacker (percent)",
     required=True,
 )
+parser.add_argument(
+    "--batch",
+    action=argparse.BooleanOptionalAction,
+    help="skip interaction before training",
+)
 args = parser.parse_args()
 
 loc = os.path.dirname(__file__)
@@ -124,7 +129,8 @@ if __name__ == "__main__":
     print(json.dumps(dict(config=config.dict(), info=info), indent=2))
     if dirty:
         print("OFFLINE: will set WANDB_MODE=offline due to dirty version")
-    input("Press Enter to continue.")
+    if not args.batch:
+        input("Press Enter to continue.")
 
 
 ###
