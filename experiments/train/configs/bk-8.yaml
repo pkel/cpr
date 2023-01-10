@@ -1,11 +1,13 @@
 main:
   n_envs: 4
-  alpha: .33
-  total_timesteps: 2_000_000
+  alpha: .45 # set from command line argument
+  total_timesteps: 10_000_000
 env:
-  gamma: 0.50
+  gamma: 0.5 # set from command line argument
+  defenders: 32
 protocol:
-  name: 'nakamoto'
+  name: 'bk'
+  k: 8
 eval:
   freq: 32
   episodes_per_alpha_per_env: 128

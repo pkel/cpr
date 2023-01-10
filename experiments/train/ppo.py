@@ -22,14 +22,35 @@ import wandb.integration.sb3
 
 parser = argparse.ArgumentParser(description="Train PPO against cpr_gym.")
 parser.add_argument(
-    "task", metavar="TASK", help="a task with TASK.yaml config file under config/"
+    "protocol",
+    metavar="PROTOCOL",
+    help="a protocol with PROTOCOL.yaml file under configs/",
+)
+parser.add_argument(
+    "--alpha",
+    metavar="INT",
+    type=int,
+    help="compute capability of the attacker (percent)",
+    required=True,
+)
+parser.add_argument(
+    "--gamma",
+    metavar="INT",
+    type=int,
+    help="network capability of the attacker (percent)",
+    required=True,
 )
 args = parser.parse_args()
 
 loc = os.path.dirname(__file__)
 
-with open(os.path.join(loc, "configs", args.task + ".yaml"), "r") as f:
+with open(os.path.join(loc, "configs", args.protocol + ".yaml"), "r") as f:
     config = cfg_model.Config.parse_raw(f.read())
+
+config.env.gamma = args.gamma / 100
+config.main.alpha = args.alpha / 100
+
+task = f"{args.protocol}-alpha{args.alpha:02d}-gamma{args.gamma:02d}"
 
 os.chdir(loc)
 
@@ -76,7 +97,7 @@ def alpha_schedule(eval=False):
 
 
 info = dict()
-info["task"] = args.task
+info["task"] = task
 info["host"] = socket.gethostname()
 info["version"] = cpr_gym.__version__
 info["episode_n_steps"] = config.env.episode_len
@@ -125,7 +146,7 @@ if __name__ == "__main__":
         config=dict(config=cfg, info=info),
         **wandb_kwargs,
     )
-    wandb.run.name = f"{args.task}-{wandb.run.id}"
+    wandb.run.name = f"{task}-{wandb.run.id}"
 
 ###
 # env
