@@ -54,6 +54,9 @@ class Env(BaseModel):
     gamma = 0.5
     defenders = 100
     episode_len = 128
+    reward: Literal[
+        "sparse_relative", "sparse_per_progress", "dense_per_progress"
+    ] = "sparse_relative"
 
 
 class Eval(BaseModel):
