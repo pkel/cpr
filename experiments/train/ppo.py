@@ -45,6 +45,12 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     help="skip interaction before training",
 )
+parser.add_argument(
+    "--tag",
+    action="append",
+    default=[],
+    help="apply WandB tag",
+)
 args = parser.parse_args()
 
 loc = os.path.dirname(__file__)
@@ -54,6 +60,7 @@ with open(os.path.join(loc, "configs", args.protocol + ".yaml"), "r") as f:
 
 config.env.gamma = args.gamma / 100
 config.main.alpha = args.alpha / 100
+config.wandb.tags += args.tag
 
 task = f"{args.protocol}-alpha{args.alpha:02d}-gamma{args.gamma:02d}"
 
@@ -138,17 +145,15 @@ if __name__ == "__main__":
 ###
 
 if __name__ == "__main__":
-    wandb_tags = config.wandb.tags
+    wandb_kwargs = dict(tags=config.wandb.tags)
     cfg = config.dict()
     cfg.pop("wandb", None)
     print("## WandB init ##")
-    wandb_kwargs = dict()
     if dirty:
         wandb_kwargs["mode"] = "offline"
     wandb.init(
         project="cpr-v0.7-ppo",
         entity="tailstorm",
-        tags=wandb_tags,
         config=dict(config=cfg, info=info),
         **wandb_kwargs,
     )
