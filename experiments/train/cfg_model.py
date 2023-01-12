@@ -44,6 +44,7 @@ class Range(BaseModel):
 
 class Main(BaseModel):
     n_envs: int = psutil.cpu_count()
+    torch_threads: int = psutil.cpu_count()
     alpha: Union[Range, list[float], float]
     total_timesteps: int
 

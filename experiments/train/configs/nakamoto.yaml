@@ -1,5 +1,6 @@
 main:
   n_envs: 1
+  torch_threads: 1
   alpha: .45 # set from command line argument
   total_timesteps: 2_000_000
 env:
