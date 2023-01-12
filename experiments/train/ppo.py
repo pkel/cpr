@@ -66,6 +66,8 @@ task = f"{args.protocol}-alpha{args.alpha:02d}-gamma{args.gamma:02d}"
 
 os.chdir(loc)
 
+torch.set_num_threads(config.main.torch_threads)
+
 ###
 # Alpha Schedule
 ###
@@ -318,6 +320,7 @@ if __name__ == "__main__":
         )
 
     log_dir = f"saved_models/ppo-{task}-{wandb.run.id}"
+    print("Use output directory " + log_dir)
 
     vec_steps_per_rollout = config.ppo.batch_size * config.ppo.n_steps_multiple
     # rollout buffer is this time n_envs
