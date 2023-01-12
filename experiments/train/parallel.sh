@@ -13,7 +13,7 @@ protos=(
 )
 
 hosts=(
-  1/localhost
+  # 1/localhost
   1/athene
   1/iris
   1/nike
