@@ -36,6 +36,9 @@ end = struct
 
   let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_progress ~max_time =
     let () =
+      if Float.is_nan activation_delay then failwith "activation_delay cannot be NaN";
+      if Float.is_nan alpha then failwith "alpha cannot be NaN";
+      if Float.is_nan gamma then failwith "gamma cannot be NaN";
       if alpha < 0. || alpha > 1. then failwith "alpha < 0 || alpha > 1";
       if gamma < 0. || gamma > 1. then failwith "gamma < 0 || gamma > 1";
       if defenders < 1 then failwith "defenders < 0";
