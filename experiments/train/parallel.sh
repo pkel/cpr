@@ -7,13 +7,13 @@ branch=origin/training
 alphas=(33 40 45)
 gammas=(05 50 95)
 protos=(
-  # nakamoto
-  bk-8
+  nakamoto
+  # bk-8
   # tailstorm-8-constant
 )
 
 hosts=(
-  # 1/localhost
+  1/localhost
   1/athene
   1/iris
   1/nike
@@ -33,7 +33,7 @@ ppo () (
     git fetch
     git checkout "$branch"
 
-    make python=python3 _venv build
+    make python=python3.10 _venv build
 
     # TODO it might be useful to run the above commands once per batch in
     # advance. Then version is used of batch start time, not job start time.
