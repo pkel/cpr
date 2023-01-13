@@ -9,15 +9,15 @@ gammas=(05 50 95)
 repeat=(1 2 3) # how often should each config be repeated?
 protos=(
   nakamoto
-  # bk-8
-  # tailstorm-8-constant
+  bk-8
+  tailstorm-8-constant
 )
 
 hosts=(
-  8/localhost
+  # 8/localhost
   4/athene
   4/iris
-  4/nike
+  # 4/nike
 )
 servers=$(printf ",%s" "${hosts[@]}")
 servers=${servers:1}
@@ -93,8 +93,8 @@ parallel -S "$servers" \
   --joblog "+job.log" \
   --eta \
   --header : \
-  ppo \
+  ppo "{proto}" "{alpha}" "{gamma}" \
+  ::: dummy "${repeat[@]}" \
   ::: proto "${protos[@]}" \
   ::: alpha "${alphas[@]}" \
-  ::: gamma "${gammas[@]}" \
-  ::: dummy "${repeat[@]}"
+  ::: gamma "${gammas[@]}"
