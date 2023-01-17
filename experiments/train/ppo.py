@@ -204,7 +204,7 @@ def env_fn(eval=False, n_recordings=42):
                     return 0.0
                 orphans = i["episode_n_activations"] / i["episode_progress"]
                 if orphans <= 1.05:
-                    return r * 0.9
+                    return r * 0.9 / i["alpha"]
                 else:
                     return r / i["alpha"]
 
