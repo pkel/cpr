@@ -24,21 +24,20 @@ if [ -e "$dst/$name" ] ; then
   exit 3
 fi
 
-mkdir "$name.results/_tmp"
 for z in "$name.results"/*.zip ; do
-  unzip "$z" -d "$name.results/_tmp"
+  unzip "$z" -d "$name.results/"
 done
 
 mkdir "$dst/$name"
 
-for m in "$name.results"/_tmp/*/best_model.zip ; do
+for m in "$name.results"/saved_models/*/best_model.zip ; do
   x=$(basename "$(dirname "$m")")-best.zip
   mv "$m" "$dst/$name/$x"
 done
 
-for m in "$name.results"/_tmp/*/model.zip ; do
+for m in "$name.results"/saved_models/*/model.zip ; do
   x=$(basename "$(dirname "$m")")-last.zip
   mv "$m" "$dst/$name/$x"
 done
 
-rm -r "$name.results"/_tmp
+rm -r "$name.results"/saved_models
