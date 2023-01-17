@@ -39,9 +39,10 @@ setup () (
 
 # might run in parallel on individual host
 ppo () (
-  proto=$1
-  alpha=$2
-  gamma=$3
+  iteri=$1
+  proto=$2
+  alpha=$3
+  gamma=$4
   echo "$proto" --alpha "$alpha" --gamma "$gamma" @ "$(hostname)"
   set -Eeuo pipefail
   set -x
@@ -59,7 +60,7 @@ ppo () (
     # locate and zip output directory
     out=$(grep -o "saved_models/ppo-$proto-alpha$alpha-gamma$gamma-[A-Za-z0-9-]*" "$buf")
     rm "$buf"
-    zip ../../../"ppo-$proto-alpha$alpha-gamma$gamma.zip" -r "$out"
+    zip ../../"ppo-$proto-alpha$alpha-gamma$gamma-$iteri.zip" -r "$out"
 
   } 2>&1
 )
@@ -87,14 +88,14 @@ parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
   --env ppo --env name \
   --workdir cpr \
-  --return "ppo-{proto}-alpha{alpha}-gamma{gamma}.zip" \
+  --return "ppo-{proto}-alpha{alpha}-gamma{gamma}-{iteri}.zip" \
   --cleanup \
-  --results "./ppo-{proto}-alpha{alpha}-gamma{gamma}" \
+  --results "./ppo-{proto}-alpha{alpha}-gamma{gamma}-{iteri}" \
   --joblog "+job.log" \
   --eta \
   --header : \
-  ppo "{proto}" "{alpha}" "{gamma}" \
-  ::: dummy "${repeat[@]}" \
+  ppo \
+  ::: iteri "${repeat[@]}" \
   ::: proto "${protos[@]}" \
   ::: alpha "${alphas[@]}" \
   ::: gamma "${gammas[@]}"
