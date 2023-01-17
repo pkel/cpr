@@ -41,6 +41,14 @@ parser.add_argument(
     required=True,
 )
 parser.add_argument(
+    "--shape",
+    metavar="STR",
+    type=str,
+    help="apply reward shaping (raw, cut, exp) (default: raw)",
+    required=False,
+    default="raw",
+)
+parser.add_argument(
     "--batch",
     action=argparse.BooleanOptionalAction,
     help="skip interaction before training",
@@ -60,9 +68,10 @@ with open(os.path.join(loc, "configs", args.protocol + ".yaml"), "r") as f:
 
 config.env.gamma = args.gamma / 100
 config.main.alpha = args.alpha / 100
+config.env.shape = args.shape
 config.wandb.tags += args.tag
 
-task = f"{args.protocol}-alpha{args.alpha:02d}-gamma{args.gamma:02d}"
+task = f"{args.protocol}-alpha{args.alpha:02d}-gamma{args.gamma:02d}-{args.shape}"
 
 os.chdir(loc)
 
@@ -175,7 +184,34 @@ def env_fn(eval=False, n_recordings=42):
     alpha_f, _ = alpha_schedule(eval=eval)
     env_args["alpha"] = alpha_f
 
+    env_args["normalize_reward"] = True  # (x / alpha) mapping
+
+    shape = env_args.pop("shape")
+    if not env_args["reward"].startswith("sparse_") and not shape == "raw":
+        raise ValueError("reward shaping requires sparse reward scheme")
+
     env = gym.make(env_args.pop("name"), **env_args)
+
+    if not eval:
+        if shape == "cut":
+
+            def cut(r, i):
+                # set reward = 0 if behaviour seems honest
+                if i["episode_progress"] <= 0:
+                    return 0
+                orphans = i["episode_n_activations"] / i["episode_progress"]
+                if orphans <= 1.05:
+                    return 0.0
+                else:
+                    return r
+
+            env = cpr_gym.wrappers.MapRewardWrapper(env, cut)
+        elif shape == "exp":
+            env = cpr_gym.wrappers.MapRewardWrapper(env, lambda r, i: numpy.exp(r - 1))
+        elif shape == "raw":
+            env = env
+        else:
+            raise ValueError("unknown reward shape")
 
     if eval:
         env = cpr_gym.wrappers.EpisodeRecorderWrapper(

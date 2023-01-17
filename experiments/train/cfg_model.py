@@ -32,6 +32,9 @@ class TailstormJune(BaseModel):
     reward: Literal["block", "constant", "discount", "hybrid", "punish"] = "constant"
 
 
+Protocol = Union[Nakamoto, Bk, Tailstorm, TailstormJune]
+
+
 ###
 # Training
 ###
@@ -56,8 +59,15 @@ class Env(BaseModel):
     defenders = 100
     episode_len = 128
     reward: Literal[
-        "sparse_relative", "sparse_per_progress", "dense_per_progress"
+        "sparse_relative",
+        "sparse_per_progress",
+        "dense_per_progress",
     ] = "sparse_relative"
+    shape: Literal[
+        "raw",  # use reward function as is
+        "cut",  # punish honest behaviour with reward=0
+        "exp",  # scale reward exponentially
+    ] = "raw"
 
 
 class Eval(BaseModel):
@@ -105,7 +115,7 @@ class WandB(BaseModel):
 class Config(YamlModel):
     main: Main
     env = Env()
-    protocol: Union[Nakamoto, Bk, Tailstorm, TailstormJune] = Nakamoto()
+    protocol: Protocol = Nakamoto()
     eval: Eval
     ppo: PPO
     wandb = WandB()
