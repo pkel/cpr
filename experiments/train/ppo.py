@@ -184,7 +184,7 @@ def env_fn(eval=False, n_recordings=42):
     alpha_f, _ = alpha_schedule(eval=eval)
     env_args["alpha"] = alpha_f
 
-    env_args["normalize_reward"] = True  # (x / alpha) mapping
+    env_args["normalize_reward"] = False  # (x / alpha) mapping is done below
 
     shape = env_args.pop("shape")
     if not env_args["reward"].startswith("sparse_") and not shape == "raw":
@@ -192,7 +192,10 @@ def env_fn(eval=False, n_recordings=42):
 
     env = gym.make(env_args.pop("name"), **env_args)
 
-    if not eval:
+    # reward shaping
+    if eval:
+        env = cpr_gym.wrappers.MapRewardWrapper(env, lambda r, i: r / i["alpha"])
+    else:
         if shape == "cut":
 
             # set reward = 0 if behaviour seems honest
@@ -203,7 +206,7 @@ def env_fn(eval=False, n_recordings=42):
                 if orphans <= 1.05:
                     return 0.0
                 else:
-                    return r
+                    return r / i["alpha"]
 
             env = cpr_gym.wrappers.MapRewardWrapper(env, cut)
         elif shape == "exp":
@@ -211,14 +214,15 @@ def env_fn(eval=False, n_recordings=42):
             def exp(r, i):
                 if r <= 0.0:
                     return 0.0
-                return numpy.exp(r - 1.0)
+                return numpy.exp(r - 1.0) / i["alpha"]
 
             env = cpr_gym.wrappers.MapRewardWrapper(env, exp)
         elif shape == "raw":
-            env = env
+            env = cpr_gym.wrappers.MapRewardWrapper(env, lambda r, i: r / i["alpha"])
         else:
             raise ValueError("unknown reward shape")
 
+    # data recording
     if eval:
         env = cpr_gym.wrappers.EpisodeRecorderWrapper(
             env,
