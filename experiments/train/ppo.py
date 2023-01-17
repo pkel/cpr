@@ -195,10 +195,10 @@ def env_fn(eval=False, n_recordings=42):
     if not eval:
         if shape == "cut":
 
+            # set reward = 0 if behaviour seems honest
             def cut(r, i):
-                # set reward = 0 if behaviour seems honest
-                if i["episode_progress"] <= 0:
-                    return 0
+                if r <= 0.0 or i["episode_progress"] <= 0.0:
+                    return 0.0
                 orphans = i["episode_n_activations"] / i["episode_progress"]
                 if orphans <= 1.05:
                     return 0.0
@@ -207,7 +207,13 @@ def env_fn(eval=False, n_recordings=42):
 
             env = cpr_gym.wrappers.MapRewardWrapper(env, cut)
         elif shape == "exp":
-            env = cpr_gym.wrappers.MapRewardWrapper(env, lambda r, i: numpy.exp(r - 1))
+
+            def exp(r, i):
+                if r <= 0.0:
+                    return 0.0
+                return numpy.exp(r - 1.0)
+
+            env = cpr_gym.wrappers.MapRewardWrapper(env, exp)
         elif shape == "raw":
             env = env
         else:
