@@ -6,7 +6,8 @@ branch=origin/training
 
 alphas=(20 25 30 35 40 45)
 gammas=(05 50 95)
-repeat=(1 2 3) # how often should each config be repeated?
+iteris=(1) # how often should each config be repeated?
+shapes=(raw cut exp)
 protos=(
   nakamoto
   bk-8
@@ -40,10 +41,10 @@ setup () (
 # might run in parallel on individual host
 ppo () (
   iteri=$1
-  proto=$2
-  alpha=$3
-  gamma=$4
-  echo "$proto" --alpha "$alpha" --gamma "$gamma" @ "$(hostname)"
+  shape=$2
+  proto=$3
+  alpha=$4
+  gamma=$5
   set -Eeuo pipefail
   set -x
 
@@ -55,7 +56,7 @@ ppo () (
 
     cd experiments/train
     buf=$(mktemp ppo-XXXXXXXXX-out)
-    python ppo.py "$proto" --alpha "$alpha" --gamma "$gamma" --batch --tag "$name" | tee "$buf"
+    python ppo.py "$proto" --alpha "$alpha" --gamma "$gamma" --shape "$shape" --batch --tag "$name" | tee "$buf"
 
     # locate and zip output directory
     out=$(grep -o "saved_models/ppo-$proto-alpha$alpha-gamma$gamma-[A-Za-z0-9-]*" "$buf")
@@ -88,14 +89,15 @@ parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
   --env ppo --env name \
   --workdir cpr \
-  --return "ppo-{proto}-alpha{alpha}-gamma{gamma}-{iteri}.zip" \
+  --return "ppo-{proto}-alpha{alpha}-gamma{gamma}-{shape}-{iteri}.zip" \
   --cleanup \
-  --results "./ppo-{proto}-alpha{alpha}-gamma{gamma}-{iteri}" \
+  --results "./ppo-{proto}-alpha{alpha}-gamma{gamma}-{shape}-{iteri}" \
   --joblog "+job.log" \
   --eta \
   --header : \
   ppo \
-  ::: iteri "${repeat[@]}" \
+  ::: iteri "${iteris[@]}" \
+  ::: shape "${shapes[@]}" \
   ::: proto "${protos[@]}" \
   ::: alpha "${alphas[@]}" \
   ::: gamma "${gammas[@]}"
