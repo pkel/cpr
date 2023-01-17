@@ -65,7 +65,7 @@ class Env(BaseModel):
     ] = "sparse_relative"
     shape: Literal[
         "raw",  # use reward function as is
-        "cut",  # punish honest behaviour with reward=0
+        "cut",  # punish honest behaviour with reward=0.9
         "exp",  # scale reward exponentially
     ] = "raw"
 
