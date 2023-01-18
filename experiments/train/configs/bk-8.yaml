@@ -10,12 +10,12 @@ protocol:
   name: 'bk'
   k: 8
 eval:
-  freq: 32
+  freq: 16
   episodes_per_alpha_per_env: 512
 ppo:
-  batch_size: 4096
-  n_steps_multiple: 4
-  gamma: 0.999
+  batch_size: 1024
+  n_steps_multiple: 32
+  gamma: 1
   starting_lr: 1e-3
   ending_lr: 0
   n_layers: 3
