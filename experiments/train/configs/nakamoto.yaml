@@ -2,18 +2,19 @@ main:
   n_envs: 1
   torch_threads: 1
   alpha: .45 # set from command line argument
-  total_timesteps: 4_000_000
+  total_timesteps: 8_000_000
 env:
+  episode_len: 256
   gamma: 0.5 # set from command line argument
   defenders: 32
 protocol:
   name: 'nakamoto'
 eval:
-  freq: 32
+  freq: 16
   episodes_per_alpha_per_env: 512
 ppo:
   batch_size: 4096
-  n_steps_multiple: 4
+  n_steps_multiple: 8
   gamma: 0.999
   starting_lr: 1e-3
   ending_lr: 0
