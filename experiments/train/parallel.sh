@@ -6,24 +6,19 @@ branch=origin/training
 
 protos=(
   nakamoto
-  # bk-8
-  # tailstorm-8-constant
+  bk-8
+  tailstorm-8-constant
 )
 alphas=(20 25 30 35 40 45)
-alphas=(40)
 gammas=(05 50 95)
-gammas=(05)
 shapes=(raw cut exp)
-iteris=(1 2) # how often should each config be repeated?
+iteris=(1) # how often should each config be repeated?
 
 hosts=(
   # 6/localhost
-  # 4/athene
-  # 4/iris
-  # 4/nike
-  2/athene
-  2/iris
-  2/nike
+  4/athene
+  4/iris
+  4/nike
 )
 servers=$(printf ",%s" "${hosts[@]}")
 servers=${servers:1}
