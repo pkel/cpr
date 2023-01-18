@@ -54,9 +54,9 @@ ppo () (
     set -x
     cd experiments/train
     buf=$(mktemp ppo-XXXXXXXXX-out)
-    echo python ppo.py --batch --tag "$name" "${@}" | tee "$buf"
+    python ppo.py --batch --tag "$name" "${@}" | tee "$buf"
 
-    locate and zip output directory
+    # locate and zip output directory
     out=$(grep -o "saved_models/ppo-[A-Za-z0-9-]*" "$buf")
     rm "$buf"
     zip ../../"ppo-$name-$jobnr.zip" -r "$out"
