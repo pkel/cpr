@@ -5,19 +5,19 @@ main:
   total_timesteps: 20_000_000
 env:
   gamma: 0.5 # set from command line argument
-  defenders: 20
+  defenders: 16
   reward: 'sparse_per_progress'
 protocol:
   name: 'tailstorm'
   k: 8
   reward: 'constant'
 eval:
-  freq: 4
+  freq: 8
   episodes_per_alpha_per_env: 512
 ppo:
-  batch_size: 32768
-  n_steps_multiple: 4
-  gamma: 0.999
+  batch_size: 1024
+  n_steps_multiple: 64
+  gamma: 1
   starting_lr: 1e-3
   ending_lr: 0
   n_layers: 3
