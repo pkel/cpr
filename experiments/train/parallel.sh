@@ -10,12 +10,14 @@ protos=(
   tailstorm-8-constant
 )
 alphas=(20 25 30 35 40 45)
+alphas=(35 40 45)
 gammas=(05 50 95)
+gammas=(05 50)
 shapes=(raw cut exp)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  # 6/localhost
+  6/localhost
   4/athene
   4/iris
   4/nike
@@ -52,14 +54,13 @@ ppo () (
     python --version
 
     set -x
-    cd experiments/train
-    buf=$(mktemp ppo-XXXXXXXXX-out)
-    python ppo.py --batch --tag "$name" "${@}" | tee "$buf"
+    mkdir -p "_parallel/$name"
+    cd "_parallel/$name"
+    python ../../experiments/train/ppo.py --batch --tag "$name" "${@}" | tee "ppo-$jobnr.out"
 
     # locate and zip output directory
-    out=$(grep -o "saved_models/ppo-[A-Za-z0-9-]*" "$buf")
-    rm "$buf"
-    zip ../../"ppo-$name-$jobnr.zip" -r "$out"
+    out=$(grep -o "saved_models/ppo-[A-Za-z0-9-]*" "ppo-$jobnr.out")
+    zip "ppo-$jobnr.zip" -r "$out"
 
   } 2>&1
 )
@@ -69,8 +70,8 @@ if [ $# -ge 1 ] ; then
   name=$1
 fi
 
-mkdir "$name.results"
-cd "$name.results"
+mkdir "$name"
+cd "$name"
 
 export -f ppo setup
 export branch name
@@ -87,9 +88,8 @@ parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
   --env ppo --env name \
   --workdir cpr \
-  --return "ppo-$name-{#}.zip" \
-  --cleanup \
-  --results "./ppo-$name-{#}" \
+  --return "_parallel/$name/ppo-{#}.zip" \
+  --results "./ppo-{#}" \
   --joblog "ppo.job.log" \
   --retries 2 \
   --eta \
