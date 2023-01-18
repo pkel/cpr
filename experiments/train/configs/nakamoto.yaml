@@ -14,7 +14,7 @@ eval:
 ppo:
   batch_size: 4096
   n_steps_multiple: 4
-  gamma: 0.999
+  gamma: 1
   starting_lr: 1e-3
   ending_lr: 0
   n_layers: 3
