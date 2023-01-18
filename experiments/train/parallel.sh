@@ -35,7 +35,8 @@ setup () (
     git fetch
     git checkout "$branch"
 
-    make python=python3.10 _venv build
+    root=$(git rev-parse --show-toplevel)
+    make -C "$root" python=python3.10 _venv build
 
   } 2>&1
 )
@@ -48,19 +49,22 @@ ppo () (
   set -Eeuo pipefail
 
   {
+    root=$(git rev-parse --show-toplevel)
+
     # shellcheck disable=SC1091
-    . _venv/bin/activate
+    . "$root/_venv/bin/activate"
+
+    set -x
+
     which python
     python --version
 
-    set -x
-    mkdir -p "_parallel/$name"
-    cd "_parallel/$name"
-    python ../../experiments/train/ppo.py --batch --tag "$name" "${@}" | tee "ppo-$jobnr.out"
+    mkdir -p "$dir"
+    python ppo.py --batch --tag "$name" "${@}" | tee "$dir/ppo-$jobnr.out"
 
     # locate and zip output directory
-    out=$(grep -o "saved_models/ppo-[A-Za-z0-9-]*" "ppo-$jobnr.out")
-    zip "ppo-$jobnr.zip" -r "$out"
+    out=$(grep -o "saved_models/ppo-[A-Za-z0-9-]*" "$dir/ppo-$jobnr.out")
+    zip "$dir/ppo-$jobnr.zip" -r "$out"
 
   } 2>&1
 )
@@ -70,27 +74,28 @@ if [ $# -ge 1 ] ; then
   name=$1
 fi
 
-mkdir "$name"
-cd "$name"
+dir=_parallel/$name
+mkdir -p _parallel
+mkdir "$dir"
 
 export -f ppo setup
-export branch name
+export branch name dir
 
 parallel -S "$servers" --nonall \
   --env setup --env branch --env name \
-  --workdir cpr \
+  --workdir cpr/experiments/train \
   --results setup \
-  --joblog "setup.job.log" \
+  --joblog "$dir/setup.job.log" \
   --eta \
   setup
 
 parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
-  --env ppo --env name \
-  --workdir cpr \
-  --return "_parallel/$name/ppo-{#}.zip" \
-  --results "./ppo-{#}" \
-  --joblog "ppo.job.log" \
+  --env ppo --env name --env dir \
+  --workdir cpr/experiments/train \
+  --return "$dir/ppo-{#}.zip" \
+  --results "$dir/ppo-{#}" \
+  --joblog "$dir/ppo.job.log" \
   --retries 2 \
   --eta \
   --header : \

@@ -2,17 +2,20 @@
 
 set -Eeuo pipefail
 
-dst=../../data/models
+repo=$(git rev-parse --show-toplevel)
+dst=$repo/data/models
 
-name=parallel
-if [ $# -ge 1 ] ; then
-  name=$1
-fi
-
-if [ ! -d "$name.results" ] ; then
-  echo Result directory "$name.results" does not exist. Abort.
+if [ $# -lt 1 ] ; then
+  echo not enough arguments
   exit 1
 fi
+
+if [ ! -d "$1" ] ; then
+  echo Result directory "$1" does not exist. Abort.
+  exit 1
+fi
+
+name=$(basename "$1")
 
 if [ ! -d "$dst" ] ; then
   echo Target directory "$dst" does not exist. Abort.
@@ -24,20 +27,20 @@ if [ -e "$dst/$name" ] ; then
   exit 3
 fi
 
-for z in "$name.results"/*.zip ; do
-  unzip "$z" -d "$name.results/"
+for z in "$1"/*.zip ; do
+  unzip "$z" -d "$1"
 done
 
 mkdir "$dst/$name"
 
-for m in "$name.results"/saved_models/*/best_model.zip ; do
+for m in "$1"/saved_models/*/best_model.zip ; do
   x=$(basename "$(dirname "$m")")-best.zip
   mv "$m" "$dst/$name/$x"
 done
 
-for m in "$name.results"/saved_models/*/model.zip ; do
+for m in "$1"/saved_models/*/model.zip ; do
   x=$(basename "$(dirname "$m")")-last.zip
   mv "$m" "$dst/$name/$x"
 done
 
-rm -r "$name.results"/saved_models
+rm -r "$1"/saved_models
