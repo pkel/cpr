@@ -12,15 +12,15 @@ protos=(
 alphas=(20 25 30 35 40 45)
 alphas=(35 40 45)
 gammas=(05 50 95)
-gammas=(05 50)
-shapes=(raw cut exp)
+gammas=(95)
+shapes=(raw exp cut)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  6/localhost
+  # 6/localhost
   4/athene
   4/iris
-  4/nike
+  # 4/nike
 )
 servers=$(printf ",%s" "${hosts[@]}")
 servers=${servers:1}
@@ -100,8 +100,8 @@ parallel -S "$servers" \
   --eta \
   --header : \
   ppo "{#}" "{proto}" --alpha "{alpha}" --gamma "{gamma}" --shape "{shape}" \
+  ::: iteri "${iteris[@]}" \
+  ::: shape "${shapes[@]}" \
   ::: proto "${protos[@]}" \
   ::: alpha "${alphas[@]}" \
-  ::: gamma "${gammas[@]}" \
-  ::: shape "${shapes[@]}" \
-  ::: iteri "${iteris[@]}"
+  ::: gamma "${gammas[@]}"
