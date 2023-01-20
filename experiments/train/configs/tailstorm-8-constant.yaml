@@ -5,7 +5,7 @@ main:
   total_timesteps: 20_000_000
 env:
   gamma: 0.5 # set from command line argument
-  defenders: 16
+  defenders: 20
   reward: 'sparse_per_progress'
 protocol:
   name: 'tailstorm'
