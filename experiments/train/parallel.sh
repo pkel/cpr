@@ -5,21 +5,20 @@ set -Eeuo pipefail
 branch=origin/training
 
 protos=(
-  nakamoto
-  bk-8
-  tailstorm-8-constant
+  # nakamoto
+  # bk-8
+  # tailstorm-8-constant
+  tailstorm-8-discount
 )
-alphas=(20 25 30 35 40 45)
-alphas=(35 40 45)
+alphas=(45 40 35 30 25 20)
 gammas=(05 50 95)
-gammas=(95)
 shapes=(raw exp cut)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  # 6/localhost
-  4/athene
-  4/iris
+  16/localhost
+  # 4/athene
+  # 4/iris
   # 4/nike
 )
 servers=$(printf ",%s" "${hosts[@]}")
@@ -35,8 +34,7 @@ setup () (
     git fetch
     git checkout "$branch"
 
-    root=$(git rev-parse --show-toplevel)
-    make -C "$root" python=python3.10 _venv build
+    make python=python3.10 _venv build
 
   } 2>&1
 )
@@ -83,7 +81,7 @@ export branch name dir
 
 parallel -S "$servers" --nonall \
   --env setup --env branch --env name \
-  --workdir cpr/experiments/train \
+  --workdir /scratch4/ben/cpr_training \
   --results setup \
   --joblog "$dir/setup.job.log" \
   --eta \
@@ -92,7 +90,7 @@ parallel -S "$servers" --nonall \
 parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
   --env ppo --env name --env dir \
-  --workdir cpr/experiments/train \
+  --workdir /scratch4/ben/cpr_training/experiments/train \
   --return "$dir/ppo-{#}.zip" \
   --results "$dir/ppo-{#}" \
   --joblog "$dir/ppo.job.log" \
@@ -101,7 +99,7 @@ parallel -S "$servers" \
   --header : \
   ppo "{#}" "{proto}" --alpha "{alpha}" --gamma "{gamma}" --shape "{shape}" \
   ::: iteri "${iteris[@]}" \
-  ::: shape "${shapes[@]}" \
   ::: proto "${protos[@]}" \
   ::: alpha "${alphas[@]}" \
-  ::: gamma "${gammas[@]}"
+  ::: gamma "${gammas[@]}" \
+  ::: shape "${shapes[@]}"
