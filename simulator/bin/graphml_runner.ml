@@ -21,24 +21,20 @@ let run g =
   let (module Ref) = sim.referee in
   let () = Simulator.loop ~activations sim in
   let machine_duration = Mtime_clock.count clock |> Mtime.Span.to_s in
-  let head =
-    Array.to_list sim.nodes
-    |> List.map (fun (Simulator.Node x) -> x.preferred x.state)
-    |> Ref.winner
-  in
-  let headd = Dag.data head in
+  let head = Simulator.head sim in
   let open GraphML.Data.Write in
   let graph_data =
     [ "version", string version
-    ; "protocol", string P.key
+    ; "protocol_key", string P.key
     ; "protocol_description", string P.description
-    ; "head_time", float (Simulator.timestamp headd)
-    ; "head_progress", float (Ref.progress head)
+    ; "sim_time", float sim.clock.now
+    ; "progress", float (Ref.progress head)
+    ; "chain_time", float (Simulator.timestamp (Dag.data head))
     ; "machine_duration", float machine_duration
     ]
   in
   let node_data i =
-    [ "reward", float (Float.Array.get headd.rewards i)
+    [ "reward", float (Float.Array.get (Dag.data head).rewards i)
     ; "activations", int sim.activations.(i)
     ]
   in
