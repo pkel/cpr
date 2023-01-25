@@ -5,9 +5,9 @@ set -Eeuo pipefail
 branch=origin/training
 
 protos=(
-  # nakamoto
-  # bk-8
-  # tailstorm-8-constant
+  nakamoto
+  bk-8
+  tailstorm-8-constant
   tailstorm-8-discount
 )
 alphas=(45 40 35 30 25 20)
@@ -34,7 +34,7 @@ setup () (
     git fetch
     git checkout "$branch"
 
-    make python=python3.10 _venv build
+    make _venv build
 
   } 2>&1
 )
@@ -72,6 +72,8 @@ if [ $# -ge 1 ] ; then
   name=$1
 fi
 
+remotedir=.cpr-training
+
 dir=_parallel/$name
 mkdir -p _parallel
 mkdir "$dir"
@@ -81,7 +83,7 @@ export branch name dir
 
 parallel -S "$servers" --nonall \
   --env setup --env branch --env name \
-  --workdir /scratch4/ben/cpr_training \
+  --workdir $remotedir \
   --results setup \
   --joblog "$dir/setup.job.log" \
   --eta \
@@ -90,7 +92,7 @@ parallel -S "$servers" --nonall \
 parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
   --env ppo --env name --env dir \
-  --workdir /scratch4/ben/cpr_training/experiments/train \
+  --workdir $remotedir/experiments/train \
   --return "$dir/ppo-{#}.zip" \
   --results "$dir/ppo-{#}" \
   --joblog "$dir/ppo.job.log" \

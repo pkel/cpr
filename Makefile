@@ -1,7 +1,7 @@
 export CPR_MALFORMED_DAG_TO_FILE=/tmp/malformed.dot
 export CPR_VERSION=$(shell git describe --tags --dirty || git describe --all --long --dirty)
 
-python=python3.9
+python=$(shell tools/select_python.sh 3.9 3.10)
 
 .PHONY: build
 build:
