@@ -36,6 +36,9 @@ end = struct
 
   let t ~alpha ~gamma ~defenders ~activation_delay ~max_steps ~max_progress ~max_time =
     let () =
+      if Float.is_nan activation_delay then failwith "activation_delay cannot be NaN";
+      if Float.is_nan alpha then failwith "alpha cannot be NaN";
+      if Float.is_nan gamma then failwith "gamma cannot be NaN";
       if alpha < 0. || alpha > 1. then failwith "alpha < 0 || alpha > 1";
       if gamma < 0. || gamma > 1. then failwith "gamma < 0 || gamma > 1";
       if defenders < 1 then failwith "defenders < 0";
@@ -188,7 +191,7 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
       let event = skip_to_interaction t.sim (fun () -> a.puzzle_payload state) in
       a.state <- a.prepare state event
     in
-    (* End simulation? *)
+    (* Find objectively best tip *)
     let prefs =
       Array.mapi
         Simulator.(
@@ -201,6 +204,7 @@ let of_module ?(logger = Log.dummy_logger) (AttackSpace (module M)) (p : Paramet
       |> Array.to_list
     in
     let head = Ref.winner prefs in
+    (* End simulation? *)
     let progress = Ref.progress head in
     let done_ =
       not

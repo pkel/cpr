@@ -40,9 +40,11 @@ module Referee (D : BlockDAG with type data = data) = struct
 
   let progress x = float_of_int (data x).height
 
-  let winner l =
-    let height x = (data x).height in
-    List.fold_left (fun acc x -> if height x > height acc then x else acc) (List.hd l) l
+  let winner = function
+    | [] -> failwith "nakamoto.winner: empty list"
+    | hd :: tl ->
+      let height x = (data x).height in
+      List.fold_left (fun acc x -> if height x > height acc then x else acc) hd tl
   ;;
 
   let precursor this = List.nth_opt (parents this) 0
