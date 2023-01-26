@@ -40,17 +40,16 @@ macosx-opam:
 
 cibuildwheel-setup:
 	opam init --auto-setup --disable-sandboxing --bare
-	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda --no-install --yes
-	opam install ./cpr.opam --deps-only --working-dir --yes
+	opam switch create . --packages=ocaml-variants.4.12.1+options,ocaml-option-flambda --yes --no-install
+	opam install ./cpr.opam --deps-only --inplace-build --yes
 
 setup:
 	ln -sf ../../tools/pre-commit-hook.sh .git/hooks/pre-commit
-	opam switch create . --package=ocaml-variants.4.12.1+options,ocaml-option-flambda --no-install --yes
-	opam install . --deps-only --working-dir --yes
+	opam switch create . --packages=ocaml-variants.4.12.1+options,ocaml-option-flambda --yes --deps-only --inplace-build
 
 dependencies:
 	opam exec dune build cpr.opam cpr-dev.opam
-	opam install . --deps-only --working-dir
+	opam install . --deps-only --inplace-build
 
 _venv: requirements.txt
 	${python} -m venv _venv
