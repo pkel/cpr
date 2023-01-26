@@ -28,7 +28,8 @@ if [ -e "$dst/$name" ] ; then
 fi
 
 for z in "$1"/*.zip ; do
-  unzip "$z" -d "$1"
+  echo unzip "$z"
+  unzip -q "$z" -d "$1"
 done
 
 mkdir "$dst/$name"
