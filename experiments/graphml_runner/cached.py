@@ -36,12 +36,3 @@ def sim(G, **kwargs):
         G = networkx.parse_graphml(out)
         node_labels = {x: type_of_node_key(x) for x in G.nodes.keys()}
         return networkx.relabel_nodes(G, node_labels)
-
-
-# rebuild simulator once per import
-
-subprocess.run(
-    ["dune", "build", "simulator/bin/graphml_runner.exe"],
-    cwd=loc + "/../..",
-    check=True,
-)
