@@ -197,7 +197,6 @@ def env_fn(eval=False, n_recordings=42):
         env = cpr_gym.wrappers.MapRewardWrapper(env, lambda r, i: r / i["alpha"])
     else:
         if shape == "cut":
-
             # set reward = 0 if behaviour seems honest
             def cut(r, i):
                 if r <= 0.0 or i["episode_progress"] <= 0.0:
