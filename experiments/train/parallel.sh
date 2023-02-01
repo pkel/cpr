@@ -10,7 +10,8 @@ protos=(
   tailstorm-8-constant
   tailstorm-8-discount
 )
-alphas=(45 40 35 30 25 20)
+alphas=(50 45 40 35 30 25 20)
+alphas=(50)
 gammas=(05 50 95)
 shapes=(raw exp cut)
 iteris=(1) # how often should each config be repeated?
