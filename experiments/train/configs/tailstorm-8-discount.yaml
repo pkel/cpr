@@ -12,7 +12,7 @@ protocol:
   k: 8
   reward: 'discount'
 eval:
-  freq: 4
+  freq: 8
   episodes_per_alpha_per_env: 512
 ppo:
   batch_size: 1024
@@ -21,4 +21,4 @@ ppo:
   starting_lr: 1e-3
   ending_lr: 0
   n_layers: 3
-  layer_size: 128
+  layer_size: 256
