@@ -45,14 +45,12 @@ functions mentioned above.
 
 ## Blockchain
 
-Protocols specify and use a global, append-only data-structure.
 [A-priori, blocks form a directed acyclic graph
 (DAG)](../virtual-environment#blobs-hashes-blockchain). Each block has
-an arbitrary number of parent blocks and can store arbitrary data. The
-`validity` function then restricts what blocks can be appended and
-thereby imposes a certain structure on the DAG.
-
-The `validity` function takes a block as argument. It may return `True`
+an arbitrary number of parent blocks and can store arbitrary data.
+Protocol designers can impose additional structure by specifying a
+restrictive `validity` function.
+This function takes a block as argument. It may return `True`
 or `False`, or it may fail. The specification consumer must ensure that
 all appended blocks are valid, that is, `validity` returns `True`.
 
@@ -99,7 +97,8 @@ subset](../virtual-environment#visibility-and-communication) of the
 blockchain depending on what information the other nodes share, when
 they share it, and how messages propagate through the network.
 
-Nodes are specified with three functions `init`, `update`, and `mining`.
+Protocol designers specify the behaviour of honest nodes through three
+functions `init`, `update`, and `mining`.
 
 `init` takes a list of blocks as argument and returns the node's initial
 state. The specification consumer must ensure that the list of blocks
@@ -119,22 +118,22 @@ block.
 {{< /code-figure  >}}
 
 `update` informs the node about new blocks. It takes as argument the
-node's old state, the new block, and a string indicating how the new
-block became visible locally. It returns a new state, a list of blocks
-to share, and a list of blocks to append without proof-of-work. The
-protocol designer must ensure that
+node's old state, the new block, and a string indicating the source of
+the block. It returns a new state, a list of blocks to share, and a list
+of blocks to append without proof-of-work. The specification consumer
+must ensure that
 
 * `update` is called on all blocks as they become locally visible,
-* the new block given as argument and all its ancestors are locally visible,
+* the new block (second argument) and all its ancestors are locally visible,
 * the returned state will be given as first argument to the next update,
 * the to-be-shared blocks are validated and sent to the other nodes,
 * the to-be-appended blocks are validated, appended to the global block
   DAG, and made visible locally,
-* the `event` argument is `"mining"` if the new block was mined
+* the third argument is `"mining"` if the new block was mined
   locally,
-* the `event` argument is `"append"` if the new block was appended locally
+* the third argument is `"append"` if the new block was appended locally
   without proof-of-work, and
-* the `event` argument is `"network"` if the new block was received from the
+* the third argument is `"network"` if the new block was received from the
   network.
 
 {{< code-figure >}}
@@ -181,14 +180,14 @@ that
 * `b.has_pow()` is true if and only if `b` was appended through
 proof-of-work, and
 * when a node learns about a successful proof-of-work with
-`update(old_state, new_block, event = "mining")` it holds that
+`update(old_state, new_block, "mining")` it holds that
 `new_block == mining(old_state)`.
 
 {{< code-figure >}}
 
 ```python
 def mining(b: Block):
-    return Block(height=b.height + 1, parents=[b], miner=Env.my_id)
+    return Block(height=b.height + 1, parents=[b], miner=my_id)
 ```
 
 In [Nakamoto consensus]({{< protocol "nakamoto" >}}) all blocks require
@@ -223,20 +222,11 @@ timestamps in orphaned blocks cannot be used. In short, difficulty
 adjustment is a complex control problem. It even has its own line of
 research.
 
-Luckily, DA is somewhat orthogonal to consensus. In practice,
-proof-of-work protocols require a DAA but in theory can often get away
-without. Depending on the analysis, we either assume that the true
-hash-rate is constant and known or we assume that the DAA does a perfect
-job. To support the latter, protocols designers have to specify what
-kind of growth the DAA should control for. In Bitcoin, the growth rate
-equals increase in block height per time. Other protocols might choose a
-different metric.
-
-The protocol specification defines a single function `progress` that
-maps a given block (tip of blockchain) to a scalar value. The engineer
-implementing the protocol will contribute a DAA that controls for
-constant progress per time. The analyst sometimes assumes constant
-progress per time.
+Protocol designers use the `progress` function to specify what kind of
+growth the DAA should control for. The function maps a given block (tip
+of blockchain) to a scalar value. The engineer implementing the protocol
+will contribute a DAA that controls for constant progress per time. The
+analyst may just assume constant progress per time.
 
 {{< code-figure >}}
 
@@ -261,20 +251,20 @@ participant, namely the holders of the private keys and hence
 users.
 
 In principle, crypto-currency users and node operators can be disjunct.
-Users may operate a node but they do not have to. But in practice,
+Users may operate a node but they do not have to. But in practice
 blockchain protocols motivate participation as operator by handing out
 crypto-currency denoted rewards. Hence node operators usually are
 crypto-currency users.
 
 As protocol designers, we want our protocol to accommodate as many
-applications as possible. We avoid imposing requirements on the
+applications as possible. We thus avoid imposing requirements on the
 crypto-currency. We just assume that each node has access to a unique
 identifier `my_id` that can receive rewards. In practice, `my_id` would
 be the account or wallet address of the node's operator. The
 specification itself however does not have any notion of crypto-currency
 address or wallet.
 
-We specify reward calculation using four functions `local_tip`, `global_tip`,
+We specify incentive mechanisms using four functions `local_tip`, `global_tip`,
 `history` and `reward`.
 
 * `local_tip` takes a node's state as argument and returns its preferred
@@ -283,7 +273,7 @@ tip of the chain.
 tips.
 * `history` calculates the linear history of the best tip.
 * `reward` maps a block (in the linear history) to reward assignments.
-* A reward assignment assigns a scalar reward to a node id.
+* Each reward assignment assigns a scalar reward to a node id.
 
 {{< code-figure >}}
 
@@ -326,6 +316,8 @@ calculate different useful metrics like
 * individual rewards for each block, and
 * accumulated historic rewards per node for any tip of the chain.
 
-The reward API can model situations where miners get assigned rewards
-for blocks that are not part of the linear history. This happens for
-example in [tree-structured voting]({{< protocol "parallel-tree" >}}).
+Note that this reward specification can model situations where miners
+get assigned rewards for blocks that are not part of the linear history.
+This happens for example in [tree-structured voting]({{< protocol
+"parallel-tree"
+>}}).
