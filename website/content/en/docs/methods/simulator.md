@@ -142,118 +142,66 @@ def node(i):
     return (nakamoto.init, nakamoto.update, nakamoto.mining)
 ```
 
-## Concurrent programming
+## Concurrent Programming
 
-We describe the simulator as a concurrent program. We thereby follow the
-conventions introduced by [Python's `asyncio`][asyncio]. We use the
-language primitives `async` and `await` as well as the `asyncio` functions
-`sleep`, `create_task` and `run`. We assume the following import at the
-beginning of all our concurrent programs.
+We describe the simulator as a concurrent program.
+The program does not use parallelism---all computations happen
+sequentially in a single thread.
+We introduce two primitives to delay function evaluation.
 
-[asyncio]: https://docs.python.org/3.11/library/asyncio-task.html
+- `delay(n, fun, *args)` schedules the evaluation of `fun(*args)` in `n`
+  seconds. While waiting, other computations may happen concurrently.
+- `delay_until(prop, fun, *args)` schedules the evaluation of
+`fun(*args)` as soon as `prop()` returns `True`. While `prop()` returns
+`False` other computations may take place concurrently.
 
-```python
-from asyncio import sleep, create_task, run
-```
-
-We shortly summarize the semantics:
-- `async def f(): ...` turns function `f` into a coroutine. `f()` immediately
-returns an *Awaitable*, that is, an object representing the potentially
-unfinished evaluation of the underlying function.
-- `await x` waits for the Awaitable `x` to complete and returns the
-result of the underlying function.
-- `sleep(x)` creates an awaitable that completes after `x` seconds.
-- `create_task(x)` schedules awaitable `x` for completion in the background,
-even if `x` is never *<<awaited>>*.
-
-Our concurrent programs are not parallel. Computations take place
-sequentially in a single thread. `await` does not block the whole thread
-but only the current coroutine---other Awaitables can be evaluated
-concurrently.
-
-We will regularly write statements of the form *wait n seconds, then do
-this or that*. For brevity, we introduce a short wrapper function that
-does exactly that. Note that we use `create_task` to ensure that
-`fun()` is completed even if `delay(n, fun)` is not awaited.
-
-```python
-async def delay(seconds, fun, *args, **kwargs):
-    await sleep(seconds)
-    task = create_task(fun(*args, **kwargs))
-    result = await task
-    return result
-```
+Consider the following example program which prints the letters *a* to
+*f* in order. We invite the curious reader to take a look at the
+[complete program](../concurrent_programming_asyncio.py), including
+an implementation of the two primitives `delay` and `delay_until` using
+Python's `asyncio`.
 
 {{< code-figure >}}
-```pycon
->>> async def f(x):
-...     """print argument prefixed with current time"""
-...     print(f"{now()}: {x}")
-...
->>> async def main():
-...     f("a")
-...     delay(0, f, "b")
-...     delay(1, f, "c")
-...     delay(60, f, "d")
-...     sleep(10)
-...     delay(30, f, "e")
-...     f("g")
-...
->>> run(main())
-07:42:00: a
-07:42:00: b
-07:42:01: c
-07:42:10: g
-07:42:40: e
-07:43:00: d
+
+```python
+def f(x):
+    f.count += 1
+    t = time.time() - f.start
+    print(f"at second {t:.0f}: {x}")
+
+
+f.start = time.time()
+f.count = 0
+
+f("a")
+delay(2, f, "d")
+delay(0, f, "c")
+delay(1, delay, 2, f, "f")
+delay_until(lambda: f.count >= 4, f, "e")
+f("b")
+
+## expected output:
+# at second 0: a
+# at second 0: b
+# at second 0: c
+# at second 2: d
+# at second 2: e
+# at second 3: f
 ```
 
-Python example demonstrating the use of concurrent programming.
-The execution was started at 7:42:00.
+Example program demonstrating the two scheduling primitives `delay` and
+`delay_until`.
 {{< /code-figure >}}
 
-{{< alert icon="👉" text="WIP. Continue below." />}}
+## Initialization
 
-Helper co-routine `delay_until`. Active waiting; easy to follow but too
-much overhead in practice.
-
-```python
-async def delay_until(prop, fun, *args, **kwargs):
-    if prop():
-        return fun(*args, **kwargs)
-    else:
-        return await delay_until(prop, fun, *args, **kwargs)
-```
-
-Example script.
-
-```python
-state = 0
-delay_until(lambda: state > 0, f, "a")
-f("b")
-delay(10, lambda: state=1)
-```
-
-Script output if executed at 7:42:00.
-
-```text
-07:42:00: b
-07:42:10: a
-```
-
-## Naive real time simulation
-
-TODO. High level description of the simulator as concurrent program with
-waiting.
-
-
-Initialization.
 - Initialize empty Block DAG.
 - Add `roots()` blocks to the DAG. Make visible to all nodes.
 - Initialize node IDs 1 ... `n`.
 - Initialize node states with `node(i)["init"](roots)`.
 
 In background run proof-of-work loop.
+
 - wait `mining_delay()` seconds
 - obtain node id from `i = select_miner()`
 - obtain block draft from `node(i)["mining"]()`
@@ -263,9 +211,10 @@ In background run proof-of-work loop.
 - re-enter the loop.
 
 Delivery. Arguments `block`, `i`, `source`.
+
 - ensure that block is delivered at most once and in dag-imposed order
-  * wait until all parents are visible
-  * if block not yet visible continue, else abort delivery
+  - wait until all parents are visible
+  - if block not yet visible continue, else abort delivery
 - make block visible to node `i`
 - recall old state `old_state = state[i]`
 - obtain update `upd = node(i)["update"](old_state, block, source)`
@@ -277,18 +226,19 @@ append blocks in `upd.append`. For each of these blocks do `append(m,
 i)`.
 
 Communication. Function `send(block, src)`.
+
 - Get neighbours of node `src`.
 - For each neighbor `dst`, concurrently do
-  * wait for `message_delay(src, dst)` seconds
-  * do `deliver(block, dst, "network"`
+  - wait for `message_delay(src, dst)` seconds
+  - do `deliver(block, dst, "network"`
 
 Block appends w/o proof-of-work. Function `append(block_draft, src)`.
-  * Convert block draft into global block. Reuse existing blocks if
-  possible.
-  * Set pow property to false
-  * check block validity
-  * if valid, do `deliver(src, block, "append")`
 
+- Convert block draft into global block. Reuse existing blocks if
+  possible.
+- Set pow property to false
+- check block validity
+- if valid, do `deliver(src, block, "append")`
 
 ```python
 dag = DAG()
@@ -362,21 +312,21 @@ To be removed.
 
 State:
 
-* Global DAG.
-* State for each node.
-* Block-visibility for each node.
+- Global DAG.
+- State for each node.
+- Block-visibility for each node.
 
 Time:
 
 (implementation detail, nice to know but maybe not fully describe this
 here)
 
-* Discrete event simulation
-* Time-ordered queue of future events
-* Infinite loop consuming & handling first event in the queue
-* Event handler might queue future events
-* Time between events is skipped
-* Single non-blocking process
+- Discrete event simulation
+- Time-ordered queue of future events
+- Infinite loop consuming & handling first event in the queue
+- Event handler might queue future events
+- Time between events is skipped
+- Single non-blocking process
 
 Appends:
 
