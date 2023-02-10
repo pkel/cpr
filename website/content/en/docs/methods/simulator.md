@@ -193,44 +193,161 @@ Example program demonstrating the two scheduling primitives `delay` and
 `delay_until`.
 {{< /code-figure >}}
 
+## Block DAG and Visibility
+
+As [discussed before]({{< method "virtual-environment" >}}) the
+simulator will maintain a DAG of all blocks mined or appended by any
+nodes. Individual nodes however have only a partial (but growing) view
+on this DAG. In our program, we set local views as follows.
+
+```python
+dag = DAG()
+...
+# in this context dag represents the global view on _all_ blocks
+with dag.set_view(i):
+    ...
+    # in this context visibility of parents and children is restricted
+    # according to the local view of node i
+...
+# in this context dag represents the global view on _all_ blocks
+```
+
+Local views are read-only. The node functions `init`, `mining`, and
+`update` cannot append blocks to the DAG. Instead, they return requests
+for appending a block to the simulator. We will describe below, how the
+simulator handles these requests.
+
+The local view makes the nodes' id accessible to the node by setting
+`my_id = i` within the context.
+
 ## Initialization
 
-- Initialize empty Block DAG.
-- Add `roots()` blocks to the DAG. Make visible to all nodes.
-- Initialize node IDs 1 ... `n`.
-- Initialize node states with `node(i)["init"](roots)`.
+We start each simulation with the initialization of the block DAG,
+the protocol's `root` blocks, and the nodes' state.
 
-In background run proof-of-work loop.
+```python
+# initialize empty block DAG
+dag = DAG()
 
-- wait `mining_delay()` seconds
-- obtain node id from `i = select_miner()`
-- obtain block draft from `node(i)["mining"]()`
-- convert block draft into block, set pow property, check validity
-- if valid, deliver block to node `i` with source `"mining"`.
-- else, delete block
-- re-enter the loop.
+# obtain drafts for the protocol's root blocks, convert them into
+# actual blocks, and make them visible to all nodes.
+root_blocks = [dag.add(b) for b in roots()]
+for b in roots_blocks:
+    for i in range(n):
+        dag.make_visible(b, i)
 
-Delivery. Arguments `block`, `i`, `source`.
+# nodes' state
+state = [None for _ in range(n)]
+for i in range(n):
+    init, _update, _mining = node(i)
+    with dag.set_view(i):
+        state[i] = init(blocks)
+```
 
-- ensure that block is delivered at most once and in dag-imposed order
-  - wait until all parents are visible
-  - if block not yet visible continue, else abort delivery
-- make block visible to node `i`
-- recall old state `old_state = state[i]`
-- obtain update `upd = node(i)["update"](old_state, block, source)`
-- store new state `state[i] = upd.state`
-- handle communication. Node returned request to share messages in
-`upd.share`. For each of these messages do `send(m)`.
-- handle block appends w/o proof-of-work. Node returned request to
-append blocks in `upd.append`. For each of these blocks do `append(m,
-i)`.
+## Proof-of-Work
 
-Communication. Function `send(block, src)`.
+After initialization, the simulator starts a concurrent loop which
+models proof-of-work and mining. The loop repeatedly samples and waits
+for a mining delay, selects a random node as successful miner, obtains a
+block draft from this miner, converts the draft into a block, checks
+block validity, and informs the miner about the freshly mined block.
+
+```python
+def proof_of_work():
+    # select random miner
+    i = select_miner()
+    # obtain block draft from miner
+    _init, _update, mining = node(i)
+    with dag.set_view(i):
+        draft = mining()
+    # convert draft to block w/ proof-of-work
+    block = dag.add(draft)
+    block.has_pow = True
+    # enforce validity of all appended blocks
+    if validity(block):
+        # inform miner about freshly mined block
+        deliver(block, i, "proof-of-work")
+    else:
+        dag.remove(block)
+    # continue proof-of-work loop after random delay
+    delay(mining_delay(), proof_of_work)
+
+
+# enter proof-of-work loop
+delay(mining_delay(), proof_of_work)
+```
+
+## Block Delivery
+
+Block delivery is what we call informing a node about a new block.
+From the perspective of a node, new blocks might be freshly mined
+locally, just appended locally, or received from the network.
+
+We handle these deliveries in the `deliver` function. It makes the block
+visible to the node, then it obtains and handles a state update from the
+node's `update` function.
+
+```python
+def deliver(block, i, event):
+    # update local visibility
+    dag.make_visible(block, i)
+
+    # simulate node i's action
+    _init, update, _mining = node(i)
+    with dag.set_view(i):
+        ret = update(state[i], block, event)
+
+    # store updated state
+    state[i] = ret.state
+
+    # handle communication
+    for msg in ret.share:
+        broadcast(i, msg)
+
+    # handle appends w/o proof-of-work
+    for draft in ret.append:
+        append(i, draft)
+```
+
+The [protocol specification]({{< method "protocol-specification" >}})
+assumes that blocks are delivered in order, that is, that the parents of
+a delivered block have been delivered before. For our previous use of
+`deliver` in the proof-of-work loop, this invariant is trivially true.
+The following wrapper ensures the invariant for messages received from
+the network.
+
+```python
+def deliver_in_order(block, i, event):
+    def deliver_once(block, i, event):
+        if not dag.is_visible(block, i):
+            deliver(block, i, event)
+
+    def all_parents_visible():
+        for parent in block.parents():
+            if not dag.is_visible(parent, i):
+                return False
+        return True
+
+    delay_until(parents_visible, deliver_once, block, i, event)
+```
+
+## Communication
+
+Function `broadcast(block, src)`.
 
 - Get neighbours of node `src`.
 - For each neighbor `dst`, concurrently do
   - wait for `message_delay(src, dst)` seconds
   - do `deliver(block, dst, "network"`
+
+```python
+def broadcast(src, block):
+    for dst in neighbours(src):
+        t = message_delay(src, dst)
+        delay(t, deliver_in_order, dst, block, "network")
+```
+
+## Non-PoW Blocks
 
 Block appends w/o proof-of-work. Function `append(block_draft, src)`.
 
@@ -241,95 +358,68 @@ Block appends w/o proof-of-work. Function `append(block_draft, src)`.
 - if valid, do `deliver(src, block, "append")`
 
 ```python
-dag = DAG()
-blocks = [dag.add(b) for b in roots()]
-state = [None for _ in range(n)]
-for b in blocks:
-    for i in range(n):
-        dag.make_visible(b, i)
-for i in range(n):
-    init, _update, _mining = node(i)
-    with dag.partial_visibility(i):
-        state[i] = init(blocks)
-
-# proof-of-work loop
-while true:
-    wait_seconds(mining_delay())
-    i = select_miner()
-    _init, _update, mining = node(i)
-    with dag.partial_visibility(i):
-        draft = mining()
+def append(i, draft):
     block = dag.add(draft)
-    block.pow = True
+    block.pow = False
     if validity(block):
-        deliver(block, i, "proof-of-work")
-    else:
-        dag.remove(block)
-
-
-def deliver(block, i, event):
-    # deliver block in DAG-order
-    wait_until(
-        lambda: all([dag.is_visible(b, i) for b in block.parents()])
-    )
-
-    # deliver block once
-    if dag.is_visible(block, i):
-        return
-    dag.make_visible(block, i)
-
-    # simulate node-action
-    _init, update, _mining = node(i)
-    with dag.partial_visibility(i):
-        upd = update(state[i], block, event)
-
-    # handle state update
-    state[i] = upd.state
-
-    # handle communication
-    for m in upd.share:
-        for dst in neighbours(node):
-            after_seconds(
-                message_delay(node, dst),
-                lambda: deliver(dst, m, "network"),
-            )
-
-    # handle non-proof-of-work appends
-    for draft in upd.append:
-        block = dag.add(draft)
-        block.pow = False
-        if validity(block):
-            deliver(block, node, "append")
+        deliver(block, node, "append")
 ```
 
-## Discrete event simulation
+## Discrete Event Simulation
 
-TODO. Speeding things up with DES.
+[Above](#concurrent-programming) we suggest to use concurrent
+programming to implement the scheduling primitives `delay` and
+`delay_until`. If implemented naively, the simulator would spend most
+the time waiting for the delays or checking properties becoming true.
+A delays of `n` seconds would actually take `n` seconds to
+simulate. Simulations would be real-time, but real-time is
+inconveniently slow in the proof-of-work blockchain context.
 
-## Brainstorm
+We speed up the simulation by skipping the delayed time instead of
+waiting for it to pass. The approach is called [discrete-event
+simulation](https://en.wikipedia.org/wiki/Discrete-event_simulation).
+The trick is to maintain a time-ordered queue of future events and let
+an infinite loop handle the scheduled events one after another until
+none are left. In the context of this simulator, future events are
+delayed function calls. Handling an event is as simple as evaluating the
+call. The simulator functions schedule further delayed calls. The
+time-ordering of the queue ensures that the calls happen in the same
+order as they would with naive waiting.
 
-To be removed.
+```python
+from queue import PriorityQueue
 
-State:
+time = 0
+queue = PriorityQueue()
+props = []
 
-- Global DAG.
-- State for each node.
-- Block-visibility for each node.
 
-Time:
+def delay(seconds, fun, *args):
+    queue.put(time + seconds, fun, args)
 
-(implementation detail, nice to know but maybe not fully describe this
-here)
 
-- Discrete event simulation
-- Time-ordered queue of future events
-- Infinite loop consuming & handling first event in the queue
-- Event handler might queue future events
-- Time between events is skipped
-- Single non-blocking process
+def delay_until(prop, fun, *args):
+    prop.append(prop, fun, args)
 
-Appends:
 
-Communication:
+# simulator code goes here
+...
 
-Proof-of-work:
+while not queue.empty():
+    # dequeue and handle next event
+    time, fun, args = queue.get()
+    fun(*args)
+    # re-evaluate delay_until properties
+    next_props = []
+    for prop, fun, args in props:
+        if prop():
+            fun(*args)
+        else:
+            next_props.append(prop, fun, args)
+    props = next_props
+```
+
+Note that using `delay_until` can cause significant overhead. We
+introduced this scheduling primitive to improve readability of the
+simulator pseudo-code. We completely avoid this kind of scheduling in
+our optimized simulator implementation.
