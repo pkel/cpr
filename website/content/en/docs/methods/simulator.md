@@ -333,12 +333,12 @@ def deliver_in_order(block, i, event):
 
 ## Communication
 
-Function `broadcast(block, src)`.
-
-- Get neighbours of node `src`.
-- For each neighbor `dst`, concurrently do
-  - wait for `message_delay(src, dst)` seconds
-  - do `deliver(block, dst, "network"`
+Nodes may request block broadcasts from their `update` function. The
+simulator's [`delivery`](#block-delivery) function forwards these
+requests to the `broadcast` function below. For each of the sending
+nodes (`src`) neighbors, this function samples a message delay (`t`)
+and---after waiting for delay---delivers the block to the receiver
+(`dst`).
 
 ```python
 def broadcast(src, block):
@@ -349,20 +349,21 @@ def broadcast(src, block):
 
 ## Non-PoW Blocks
 
-Block appends w/o proof-of-work. Function `append(block_draft, src)`.
-
-- Convert block draft into global block. Reuse existing blocks if
-  possible.
-- Set pow property to false
-- check block validity
-- if valid, do `deliver(src, block, "append")`
+Nodes may request block appends from their `update` function. The
+simulator's [`delivery`](#block-delivery) function forwards these
+requests to the `append` function below. Without delay, the function
+appends the block draft to the DAG, ensures validity, and delivers the
+new block to the requesting node. Block's originating from this
+mechanism do not carry a proof-of-work.
 
 ```python
 def append(i, draft):
     block = dag.add(draft)
     block.pow = False
     if validity(block):
-        deliver(block, node, "append")
+        deliver(block, i, "append")
+    else:
+        dag.remove(block)
 ```
 
 ## Discrete Event Simulation
