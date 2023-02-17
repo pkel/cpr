@@ -49,7 +49,7 @@ invalid blocks.
 `node(i: int) -> tuple[init, update, mining]` defines the behaviour of nodes
 as discussed in the [the section on protocol
 specifications](../protocol-specification). In the simplest case, when
-all nodes are honest, `node(i)` for any `i` returns the tree functions
+all nodes are honest, `node(i)` for all `i` returns the three functions
 `init`, `update`, and `mining` as defined in the protocol specification.
 In attack scenarios, `node(i)` returns nonconforming functions for the
 malicious nodes.
@@ -162,8 +162,8 @@ Example program demonstrating the two scheduling primitives `delay` and
 
 As [discussed before]({{< method "virtual-environment" >}}) the
 simulator will maintain a DAG of all blocks mined or appended by any
-nodes. Individual nodes however have only a partial (but growing) view
-on this DAG. In our program, we set local views as follows.
+nodes. Individual nodes however have only a partial view on this DAG. In
+our program, we set local views as follows.
 
 ```python
 dag = DAG()
@@ -197,7 +197,7 @@ dag = DAG()
 # obtain drafts for the protocol's root blocks, convert them into
 # actual blocks, and make them visible to all nodes.
 root_blocks = [dag.add(b) for b in roots()]
-for b in roots_blocks:
+for b in root_blocks:
     for i in range(n):
         dag.make_visible(b, i)
 
@@ -248,9 +248,10 @@ Block delivery is what we call informing a node about a new block.
 From the perspective of a node, new blocks might be freshly mined
 locally, just appended locally, or received from the network.
 
-We handle these deliveries in the `deliver` function. It makes the block
-visible to the node, then it obtains and handles a state update from the
-node's `update` function.
+We handle these deliveries in the `deliver` function. The function makes
+the block visible to the node, applies the node's `update` function, and
+handles the returned instructions to share existing or append new
+blocks.
 
 ```python
 def deliver(block, i, event):
@@ -278,8 +279,8 @@ The [protocol specification]({{< method "protocol-specification" >}})
 assumes that blocks are delivered in order, that is, that the parents of
 a delivered block have been delivered before. For our previous use of
 `deliver` in the proof-of-work loop, this invariant is trivially true.
-The following wrapper ensures the invariant for messages received from
-the network.
+The following wrapper ensures in-order delivery for messages received
+from the network.
 
 ```python
 def deliver_in_order(block, i, event):
@@ -301,7 +302,7 @@ def deliver_in_order(block, i, event):
 Nodes may request block broadcasts from their `update` function. The
 simulator's [`delivery`](#block-delivery) function forwards these
 requests to the `broadcast` function below. For each of the sending
-nodes (`src`) neighbors, this function samples a message delay (`t`)
+node's (`src`) neighbors, this function samples a message delay (`t`)
 and---after waiting for delay---delivers the block to the receiver
 (`dst`).
 
@@ -337,20 +338,20 @@ def append(i, draft):
 programming to implement the scheduling primitives `delay` and
 `delay_until`. If implemented naively, the simulator would spend most
 the time waiting for the delays or checking properties becoming true.
-A delays of `n` seconds would actually take `n` seconds to
+A delay of `n` seconds would actually take `n` seconds to
 simulate. Simulations would be real-time, but real-time is
 inconveniently slow in the proof-of-work blockchain context.
 
 We speed up the simulation by skipping the delayed time instead of
 waiting for it to pass. The approach is called [discrete-event
 simulation](https://en.wikipedia.org/wiki/Discrete-event_simulation).
-The trick is to maintain a time-ordered queue of future events and let
-an infinite loop handle the scheduled events one after another until
+The trick is to maintain a time-ordered queue of future events and
+define a loop that handles the scheduled events one after another until
 none are left. In the context of this simulator, future events are
 delayed function calls. Handling an event is as simple as evaluating the
-call. The simulator functions schedule further delayed calls. The
-time-ordering of the queue ensures that the calls happen in the same
-order as they would with naive waiting.
+call. Each call may schedule further delayed calls. The time-ordering of
+the queue ensures that the calls happen in the same order as they would
+with naive waiting.
 
 ```python
 from queue import PriorityQueue
