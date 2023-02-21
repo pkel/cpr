@@ -11,9 +11,10 @@ protos=(
   tailstorm-8-discount
 )
 alphas=(50 45 40 35 30 25 20)
-alphas=(50)
 gammas=(05 50 95)
 shapes=(raw exp cut)
+shapes=(raw)
+ent_coefs=(0.01 0.001 0.0001)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
@@ -100,9 +101,10 @@ parallel -S "$servers" \
   --retries 2 \
   --eta \
   --header : \
-  ppo "{#}" "{proto}" --alpha "{alpha}" --gamma "{gamma}" --shape "{shape}" \
+  ppo "{#}" "{proto}" --alpha "{alpha}" --gamma "{gamma}" --shape "{shape}" --ent_coef "{ent_coef}" \
   ::: iteri "${iteris[@]}" \
   ::: proto "${protos[@]}" \
   ::: alpha "${alphas[@]}" \
   ::: gamma "${gammas[@]}" \
-  ::: shape "${shapes[@]}"
+  ::: shape "${shapes[@]}" \
+  ::: ent_coef "${ent_coefs[@]}"

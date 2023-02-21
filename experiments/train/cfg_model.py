@@ -104,6 +104,7 @@ class PPO(BaseModel):
     n_steps_multiple: int
     n_layers: int
     layer_size: int
+    ent_coef: float = 0.0
     starting_lr: float
     ending_lr: float
 

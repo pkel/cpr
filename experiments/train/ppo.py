@@ -49,6 +49,13 @@ parser.add_argument(
     default="raw",
 )
 parser.add_argument(
+    "--ent_coef",
+    metavar="FLOAT",
+    type=float,
+    help="PPO's ent_coef parameter",
+    required=False,
+)
+parser.add_argument(
     "--batch",
     action=argparse.BooleanOptionalAction,
     help="skip interaction before training",
@@ -72,6 +79,9 @@ config.env.shape = args.shape
 config.wandb.tags += args.tag
 
 task = f"{args.protocol}-alpha{args.alpha:02d}-gamma{args.gamma:02d}-{args.shape}"
+if args.ent_coef is not None:
+    config.ppo.ent_coef = args.ent_coef
+    task += f"-entcoef{args.ent_coef:g}"
 
 os.chdir(loc)
 
@@ -378,7 +388,7 @@ if __name__ == "__main__":
         gamma=config.ppo.gamma,
         n_steps=vec_steps_per_rollout,
         clip_range=0.1,
-        # ent_coef=0.01,
+        ent_coef=config.ppo.ent_coef,
         learning_rate=lr_schedule,
         # clip_range=clip_schedule,
         policy_kwargs=dict(
