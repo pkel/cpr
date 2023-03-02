@@ -187,7 +187,7 @@ def test_tailstorm(capsys):
 
     obs = env.reset()
     for x in range(600):
-        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
+        obs, _, _, info = env.step(env.policy(obs, "avoid-loss"))
 
     assert info["protocol_k"] == 13
 

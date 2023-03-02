@@ -365,42 +365,39 @@ module Make (Parameters : Parameters) = struct
   ;;
 
   module Policies = struct
+    open Observation
+    open Action
+
+    (* Emulate honest behaviour by mining the longest chain and releasing all blocks *)
     let honest o =
-      let open Observation in
-      let open Action in
-      if o.public_blocks > 0 then Adopt_Proceed else Override_Proceed
+      if o.public_blocks > o.private_blocks then Adopt_Proceed else Override_Proceed
     ;;
 
-    let release_block o =
-      let open Observation in
-      let open Action in
-      if o.private_blocks < o.public_blocks
+    (* Withhold subblocks, release summaries *)
+    let get_ahead o =
+      if o.public_blocks > o.private_blocks
       then Adopt_Proceed
-      else if o.private_blocks > o.public_blocks
+      else if o.public_blocks < o.private_blocks
       then Override_Proceed
       else Wait_Proceed
     ;;
 
-    let override_block o =
-      let open Observation in
-      let open Action in
-      if o.private_blocks < o.public_blocks
+    (* Like {get_ahead}, but {Wait} while defenders have no new summary *)
+    let minor_delay o =
+      if o.public_blocks > o.private_blocks
       then Adopt_Proceed
       else if o.public_blocks = 0
       then Wait_Proceed
       else Override_Proceed
     ;;
 
-    let override_catchup o =
-      let open Observation in
-      let open Action in
+    (* Build long fork, release when margin is high or defenders are about to catch up *)
+    let avoid_loss o =
       if o.private_blocks < o.public_blocks
       then Adopt_Proceed
-      else if o.private_blocks = 0 && o.public_blocks = 0
-      then Wait_Proceed
       else if o.public_blocks = 0
       then Wait_Proceed
-      else if o.private_depth_inclusive = 0 && o.private_blocks = o.public_blocks + 1
+      else if o.private_votes_inclusive = 0 && o.private_blocks = o.public_blocks + 1
       then Override_Proceed
       else if o.public_blocks = o.private_blocks
               && o.private_votes_inclusive = o.public_votes + 1
@@ -418,11 +415,11 @@ module Make (Parameters : Parameters) = struct
     let open Policies in
     empty
     |> add ~info:"emulate honest behaviour" "honest" honest
-    |> add ~info:"release private block a.s.a.p." "release-block" release_block
-    |> add ~info:"override public block a.s.a.p." "override-block" override_block
+    |> add ~info:"release private block a.s.a.p." "get-ahead" get_ahead
+    |> add ~info:"override public block a.s.a.p." "minor-delay" minor_delay
     |> add
          ~info:"override public head just before defender catches up"
-         "override-catchup"
-         override_catchup
+         "avoid-loss"
+         avoid_loss
   ;;
 end
