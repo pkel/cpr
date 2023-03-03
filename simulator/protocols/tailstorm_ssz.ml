@@ -408,6 +408,18 @@ module Make (Parameters : Parameters) = struct
       then Override_Proceed
       else Wait_Proceed
     ;;
+
+    let avoid_loss_alt o =
+      let hp = (o.public_blocks * k) + o.public_votes
+      and ap = (o.private_blocks * k) + o.private_votes_inclusive in
+      match o.public_blocks (* h *), o.private_blocks (* a *) with
+      | 0, _ -> Wait_Proceed (* implies h >= 1 for the other branches *)
+      | 1, _ when hp = ap -> Match_Proceed
+      | _, _ when hp > ap -> Adopt_Proceed
+      | _, _ when hp = ap - 1 -> Override_Proceed
+      | h, a when h < a - 10 -> Override_Proceed (* cut-off if fork is long *)
+      | _, _ -> Wait_Proceed
+    ;;
   end
 
   let policies =
@@ -420,6 +432,6 @@ module Make (Parameters : Parameters) = struct
     |> add
          ~info:"override public head just before defender catches up"
          "avoid-loss"
-         avoid_loss
+         avoid_loss_alt
   ;;
 end
