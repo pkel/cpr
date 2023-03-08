@@ -63,8 +63,12 @@ ppo () (
     python ppo.py --batch --tag "$name" "${@}" | tee "$dir/ppo-$jobnr.out"
 
     # locate and zip output directory
-    out=$(grep -o "saved_models/ppo-[A-Za-z0-9-]*" "$dir/ppo-$jobnr.out")
-    zip "$dir/ppo-$jobnr.zip" -r "$out"
+    # ( read all lines because sometimes, likely due to a bug,
+    #   train.py creates or writes to a second directory with suffix _2 )
+    grep -o "saved_models/ppo-[A-Za-z0-9_.-]*" "$dir/ppo-$jobnr.out" | \
+      while read -r out ; do
+        zip "$dir/ppo-$jobnr.zip" -r "$out"
+      done
 
   } 2>&1
 )
