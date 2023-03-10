@@ -5,10 +5,11 @@ set -Eeuo pipefail
 branch=origin/training
 
 protos=(
-  nakamoto
-  bk-8
-  tailstorm-8-constant
-  tailstorm-8-discount
+  dummy
+  # nakamoto
+  # bk-8
+  # tailstorm-8-constant
+  # tailstorm-8-discount
 )
 alphas=(50 45 40 35 30 25 20)
 gammas=(05 50 95)
@@ -18,7 +19,7 @@ ent_coefs=(0.01 0.001 0.0001)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  16/localhost
+  6/localhost
   # 4/athene
   # 4/iris
   # 4/nike
@@ -29,6 +30,7 @@ servers=${servers:1}
 # run once per host
 setup () (
   set -Eeuo pipefail
+  eval "$(direnv export bash || true)"
   set -x
   {
     hostname
@@ -36,8 +38,7 @@ setup () (
     git fetch
     git checkout "$branch"
 
-    make _venv build
-
+    make build test
   } 2>&1
 )
 
@@ -47,6 +48,7 @@ ppo () (
   shift
 
   set -Eeuo pipefail
+  eval "$(direnv export bash || true)"
 
   {
     root=$(git rev-parse --show-toplevel)
@@ -97,7 +99,7 @@ parallel -S "$servers" --nonall \
 
 parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
-  --env ppo --env name --env dir \
+  --env ppo --env name --env dir --env WANDB_MODE \
   --workdir $remotedir/experiments/train \
   --return "$dir/ppo-{#}.zip" \
   --results "$dir/ppo-{#}" \
