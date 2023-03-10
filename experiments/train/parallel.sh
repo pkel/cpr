@@ -62,7 +62,7 @@ ppo () (
     python --version
 
     mkdir -p "$dir"
-    python ppo.py --batch --tag "$name" "${@}" | tee "$dir/ppo-$jobnr.out"
+    python ppo.py --batch --tag "$tag" "${@}" | tee "$dir/ppo-$jobnr.out"
 
     # locate and zip output directory
     # ( read all lines because sometimes, likely due to a bug,
@@ -75,22 +75,22 @@ ppo () (
   } 2>&1
 )
 
-name=parallel
+tag=parallel
 if [ $# -ge 1 ] ; then
-  name=$1
+  tag=$1
 fi
 
 remotedir=.cpr-training
 
-dir=_parallel/$name
+dir=_parallel/$tag
 mkdir -p _parallel
 mkdir "$dir"
 
 export -f ppo setup
-export branch name dir
+export branch tag dir
 
 parallel -S "$servers" --nonall \
-  --env setup --env branch --env name \
+  --env setup --env branch --env tag \
   --workdir $remotedir \
   --results setup \
   --joblog "$dir/setup.job.log" \
@@ -99,7 +99,7 @@ parallel -S "$servers" --nonall \
 
 parallel -S "$servers" \
   --controlmaster --sshdelay 0.1 \
-  --env ppo --env name --env dir --env WANDB_MODE \
+  --env ppo --env tag --env dir --env WANDB_MODE \
   --workdir $remotedir/experiments/train \
   --return "$dir/ppo-{#}.zip" \
   --results "$dir/ppo-{#}" \
