@@ -417,14 +417,14 @@ if __name__ == "__main__":
         callback=[
             wandb.integration.sb3.WandbCallback(
                 gradient_save_freq=vec_steps_per_rollout,
-                model_save_path=log_dir,
+                model_save_path=log_dir,  # saves model.zip
                 model_save_freq=vec_steps_per_rollout,
                 verbose=0,
             ),
             EvalCallback(
                 eval_env,
                 start_at_iteration=config.eval.start_at_iteration,
-                best_model_save_path=log_dir,
+                best_model_save_path=log_dir,  # saves best-model.zip
                 log_path=log_dir,
                 eval_freq=config.eval.freq,
                 n_eval_episodes=info["eval_n_alphas"]
@@ -436,4 +436,4 @@ if __name__ == "__main__":
         ],
     )
 
-    model.save(log_dir)
+    model.save(f"{log_dir}/last-model.zip")
