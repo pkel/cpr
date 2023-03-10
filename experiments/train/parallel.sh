@@ -5,17 +5,18 @@ set -Eeuo pipefail
 branch=origin/training
 
 protos=(
-  dummy
-  # nakamoto
-  # bk-8
-  # tailstorm-8-constant
-  # tailstorm-8-discount
+  nakamoto
+  bk-8
+  tailstorm-8-constant
+  tailstorm-8-discount
 )
+# protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
 gammas=(05 50 95)
 shapes=(raw exp cut)
 shapes=(raw)
 ent_coefs=(0.01 0.001 0.0001)
+ent_coefs=(0)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
