@@ -31,13 +31,16 @@ servers=${servers:1}
 # run once per host
 setup () (
   set -Eeuo pipefail
-  eval "$(direnv export bash || true)"
   set -x
+
   {
     hostname
 
     git fetch
     git checkout "$branch"
+
+    nix-shell --command true || true # build shell
+    eval "$(direnv export bash || true)" > /dev/null # load nix env
 
     make build test
   } 2>&1
@@ -49,7 +52,6 @@ ppo () (
   shift
 
   set -Eeuo pipefail
-  eval "$(direnv export bash || true)"
 
   {
     root=$(git rev-parse --show-toplevel)
@@ -58,6 +60,8 @@ ppo () (
     . "$root/_venv/bin/activate"
 
     set -x
+
+    eval "$(direnv export bash || true)" > /dev/null # load nix env
 
     which python
     python --version
