@@ -18,7 +18,9 @@ ppo:
   batch_size: 1024
   n_steps_multiple: 128
   gamma: 1
-  starting_lr: 1e-3
-  ending_lr: 0
+  learning_rate:
+    schedule: linear
+    start: 1e-3
+    end: 0
   n_layers: 3
   layer_size: 256

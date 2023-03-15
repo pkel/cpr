@@ -98,6 +98,15 @@ class Eval(BaseModel):
     report_alpha = 1
 
 
+class LinearSchedule(BaseModel):
+    schedule: Literal["linear"] = "linear"
+    start: float
+    end: float
+
+
+Schedule = Union[float, LinearSchedule]
+
+
 class PPO(BaseModel):
     batch_size: int
     gamma: float
@@ -105,8 +114,7 @@ class PPO(BaseModel):
     n_layers: int
     layer_size: int
     ent_coef: float = 0.0
-    starting_lr: float
-    ending_lr: float
+    learning_rate: Schedule
 
 
 class WandB(BaseModel):

@@ -366,13 +366,17 @@ class EvalCallback(stable_baselines3.common.callbacks.EvalCallback):
 # Training
 ###
 
+
+def schedule(s: cfg_model.Schedule):
+    if isinstance(s, cfg_model.LinearSchedule):
+        # x is percent remaining
+        return lambda x: s.start * x + s.end * (1 - x)
+    elif isinstance(s, float):
+        return s
+
+
 if __name__ == "__main__":
     print("## Training ##")
-
-    def lr_schedule(remaining):
-        return config.ppo.starting_lr * remaining + config.ppo.ending_lr * (
-            1 - remaining
-        )
 
     log_dir = f"saved_models/ppo-{task}-{wandb.run.id}"
     print("Use output directory " + log_dir)
@@ -389,7 +393,7 @@ if __name__ == "__main__":
         n_steps=vec_steps_per_rollout,
         clip_range=0.1,
         ent_coef=config.ppo.ent_coef,
-        learning_rate=lr_schedule,
+        learning_rate=schedule(config.ppo.learning_rate),
         # clip_range=clip_schedule,
         policy_kwargs=dict(
             activation_fn=torch.nn.ReLU,
