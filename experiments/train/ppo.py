@@ -56,6 +56,13 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--learning_rate",
+    metavar="FLOAT",
+    type=float,
+    help="PPO's learning_rate parameter",
+    required=False,
+)
+parser.add_argument(
     "--batch",
     action=argparse.BooleanOptionalAction,
     help="skip interaction before training",
@@ -82,6 +89,9 @@ task = f"{args.protocol}-alpha{args.alpha:02d}-gamma{args.gamma:02d}-{args.shape
 if args.ent_coef is not None:
     config.ppo.ent_coef = args.ent_coef
     task += f"-entcoef{args.ent_coef:g}"
+if args.learning_rate is not None:
+    config.ppo.learning_rate = args.learning_rate
+    task += f"-lr{args.learning_rate:g}"
 
 os.chdir(loc)
 
