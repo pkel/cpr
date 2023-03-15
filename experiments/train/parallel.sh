@@ -10,7 +10,7 @@ protos=(
   tailstorm-8-constant
   tailstorm-8-discount
 )
-protos=(dummy)
+# protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
 alphas=(50 45 40 35)
 gammas=(05 50 95)
@@ -22,7 +22,7 @@ learning_rates=(3e-3 1e-3 3e-4)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  16/localhost
+  12/localhost
   # 4/athene
   # 4/iris
   # 4/nike
@@ -121,4 +121,4 @@ parallel -S "$servers" \
   ::: gamma "${gammas[@]}" \
   ::: shape "${shapes[@]}" \
   ::: ent_coef "${ent_coefs[@]}" \
-  ::: learning_rate "${learning_rates[@]}" \
+  ::: learning_rate "${learning_rates[@]}"
