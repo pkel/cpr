@@ -407,12 +407,10 @@ if __name__ == "__main__":
         # clip_range=clip_schedule,
         policy_kwargs=dict(
             activation_fn=torch.nn.ReLU,
-            net_arch=[
-                dict(
-                    pi=[config.ppo.layer_size] * config.ppo.n_layers,
-                    vf=[config.ppo.layer_size] * config.ppo.n_layers,
-                )
-            ],
+            net_arch=dict(
+                pi=[config.ppo.layer_size] * config.ppo.n_layers,
+                vf=[config.ppo.layer_size] * config.ppo.n_layers,
+            ),
         ),
     )
 

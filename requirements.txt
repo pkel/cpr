@@ -20,5 +20,5 @@ networkx
 
 -e .
 
-stable-baselines3
+stable-baselines3 >= 1.7.0
 wandb
