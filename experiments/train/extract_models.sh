@@ -39,7 +39,7 @@ for m in "$1"/saved_models/*/best_model.zip ; do
   mv "$m" "$dst/$name/$x"
 done
 
-for m in "$1"/saved_models/*/model.zip ; do
+for m in "$1"/saved_models/*/last-model.zip ; do
   x=$(basename "$(dirname "$m")")-last.zip
   mv "$m" "$dst/$name/$x"
 done

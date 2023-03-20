@@ -111,7 +111,7 @@ parallel -S "$servers" \
   --return "$dir/ppo-{#}.zip" \
   --results "$dir/ppo-{#}" \
   --joblog "$dir/ppo.job.log" \
-  --retries 2 \
+  --retries 1 \
   --eta \
   --header : \
   ppo "{#}" "{proto}" --alpha "{alpha}" --gamma "{gamma}" --shape "{shape}" --ent_coef "{ent_coef}" --learning_rate "{learning_rate}" \
