@@ -22,7 +22,7 @@ learning_rates=(3e-3 1e-3 3e-4)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  12/localhost
+  9/localhost
   # 4/athene
   # 4/iris
   # 4/nike
