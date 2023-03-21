@@ -22,7 +22,8 @@ learning_rates=(3e-3 1e-3 3e-4)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  9/localhost
+  9/localhost # on teide, faster than 6? check 2023-03-10_full (6) vs 2023-03-21_learning-rate (9)
+  # 16/localhost # on lennie, faster than 12
   # 4/athene
   # 4/iris
   # 4/nike
@@ -58,12 +59,12 @@ ppo () (
   {
     root=$(git rev-parse --show-toplevel)
 
+    eval "$(direnv export bash || true)" > /dev/null # load nix env
+
     # shellcheck disable=SC1091
     . "$root/_venv/bin/activate"
 
     set -x
-
-    eval "$(direnv export bash || true)" > /dev/null # load nix env
 
     which python
     python --version
