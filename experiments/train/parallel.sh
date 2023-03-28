@@ -12,18 +12,18 @@ protos=(
 )
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
-alphas=(50 45 40 35)
+alphas=(45 40 35)
 gammas=(05 50 95)
 shapes=(raw exp cut)
 shapes=(raw)
 ent_coefs=(0.01 0.001 0.0001)
-ent_coefs=(0.01)
-learning_rates=(3e-3 1e-3 3e-4)
+ent_coefs=(0.005 0.01 0.05)
+learning_rates=(1e-3 3e-4 1e-4)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  9/localhost # on teide, faster than 6? check 2023-03-10_full (6) vs 2023-03-21_learning-rate (9)
-  # 16/localhost # on lennie, faster than 12
+  # 9/localhost # on teide, faster than 6? check 2023-03-10_full (6) vs 2023-03-21_learning-rate (9)
+  16/localhost # on lennie, faster than 12
   # 4/athene
   # 4/iris
   # 4/nike
