@@ -1,0 +1,15 @@
+\bgroup
+\newcolumntype{Y}{>{\centering\arraybackslash}X}
+\begin{tabularx}{\linewidth}{lYYYYYY}
+\toprule
+ & \multicolumn{3}{c}{Trained Policy} & \multicolumn{3}{c}{Reference Policy} \\
+\cmidrule(lr){2-4}\cmidrule(l){5-7}
+$\gamma$ & 5\,\% & 50\,\% & 95\,\% & 5\,\% & 50\,\% & 95\,\% \\
+\midrule
+Bitcoin & 32.9 & 27.3& {$\leq 10$} & 33.0 & 25.2& {$\leq 10$} \\
+Constant & 30.3 & 25.9 & 19.6 & 37.6 & 32.8 & 28.7 \\
+Tailstorm & 39.9 & 42.3 & 30.6 & 43.6 & 42.0 & 38.8 \\
+$\mathcal B_k$ & 25.1 & 26.8 & 20.2 & 44.3 & 44.6 & 44.0 \\
+\bottomrule
+\end{tabularx}
+\egroup
