@@ -51,7 +51,7 @@ dependencies:
 	opam exec dune build cpr.opam cpr-dev.opam
 	opam install . --deps-only --inplace-build
 
-_venv: requirements.txt
+_venv: setup.py requirements.txt
 	${python} -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
 	_venv/bin/python -m pip install wheel
