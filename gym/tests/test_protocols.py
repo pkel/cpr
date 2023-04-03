@@ -44,7 +44,7 @@ def test_policies_selfish():
     )
     obs = env.reset()
     for x in range(600):
-        obs, _, _, _ = env.step(env.policy(obs, "selfish"))
+        obs, _, _, _ = env.step(env.policy(obs, "minor-delay"))
 
 
 def test_nakamoto(capsys):
@@ -124,7 +124,7 @@ def test_bk(capsys):
 
     obs = env.reset()
     for x in range(600):
-        obs, _, _, info = env.step(env.policy(obs, "selfish"))
+        obs, _, _, info = env.step(env.policy(obs, "minor-delay"))
 
     assert info["protocol_k"] == 42
 

@@ -7,7 +7,7 @@ python=$(shell tools/select_python.sh 3.9 3.10)
 build:
 	opam exec dune build
 
-test:
+test: build
 	opam exec dune runtest
 	make _venv
 	_venv/bin/pytest --forked --benchmark-disable
