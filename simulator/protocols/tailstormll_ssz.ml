@@ -235,6 +235,32 @@ module Make (Parameters : Tailstorm_ssz.Parameters) = struct
       then Override_Proceed
       else Wait_Proceed
     ;;
+
+    (* copy & paste from tailstorm_ssz.ml *)
+    let minor_delay o =
+      let open Observation in
+      let open Action in
+      if o.public_blocks > o.private_blocks
+      then Adopt_Proceed
+      else if o.public_blocks = 0
+      then Wait_Proceed
+      else Override_Proceed
+    ;;
+
+    (* copy & paste from tailstorm_ssz.ml *)
+    let avoid_loss_alt o =
+      let open Observation in
+      let open Action in
+      let hp = (o.public_blocks * k) + o.public_votes
+      and ap = (o.private_blocks * k) + o.private_votes_inclusive in
+      match o.public_blocks (* h *), o.private_blocks (* a *) with
+      | 0, _ -> Wait_Proceed (* implies h >= 1 for the other branches *)
+      | 1, _ when hp = ap -> Match_Proceed
+      | _, _ when hp > ap -> Adopt_Proceed
+      | _, _ when hp = ap - 1 -> Override_Proceed
+      | h, a when h < a - 10 -> Override_Proceed (* cut-off if fork is long *)
+      | _, _ -> Wait_Proceed
+    ;;
   end
 
   let policies =
@@ -248,5 +274,10 @@ module Make (Parameters : Tailstorm_ssz.Parameters) = struct
          ~info:"override public head just before defender catches up"
          "override-catchup"
          override_catchup
+    |> add ~info:"override public block a.s.a.p." "minor-delay" minor_delay
+    |> add
+         ~info:"override public head just before defender catches up"
+         "avoid-loss"
+         avoid_loss_alt
   ;;
 end
