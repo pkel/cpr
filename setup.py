@@ -110,8 +110,6 @@ setup(
     ],
     cmdclass=dict(bdist_wheel=cpr_bdist_wheel, build_ext=cpr_build_ext),
     install_requires=[
-        "setuptools<0.67.0",  # fix gym 0.21 setup issue https://github.com/openai/gym/issues/3202
-        "wheel<0.39.0",  # fix gym 0.21 setup issue https://github.com/openai/gym/issues/3202
         "gym<0.22",  # breaking changes ahead; switch to gymnasium 0.27
         "numpy",
     ],
