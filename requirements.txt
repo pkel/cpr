@@ -1,4 +1,4 @@
-black[jupyter]
+black[jupyter] == 23.*
 flake8
 flake8-pyproject
 pytest
@@ -8,6 +8,7 @@ pytest-forked
 pandas
 pandarallel
 pydantic
+pydantic_yaml
 numpy
 jupyter
 matplotlib
@@ -19,5 +20,5 @@ networkx
 
 -e .
 
-stable-baselines3
+stable-baselines3 >= 1.7.0
 wandb

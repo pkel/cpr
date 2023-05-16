@@ -1,13 +1,13 @@
 export CPR_MALFORMED_DAG_TO_FILE=/tmp/malformed.dot
 export CPR_VERSION=$(shell git describe --tags --dirty || git describe --all --long --dirty)
 
-python=python3.9
+python=$(shell tools/select_python.sh 3.9 3.10)
 
 .PHONY: build
 build:
 	opam exec dune build
 
-test:
+test: build
 	opam exec dune runtest
 	make _venv
 	_venv/bin/pytest --forked --benchmark-disable
@@ -51,7 +51,7 @@ dependencies:
 	opam exec dune build cpr.opam cpr-dev.opam
 	opam install . --deps-only --inplace-build
 
-_venv: requirements.txt
+_venv: setup.py requirements.txt
 	${python} -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
 	_venv/bin/python -m pip install wheel
@@ -87,17 +87,3 @@ visualize.render: $$(patsubst %.dot, %.png, $$(wildcard data/viz/*.dot))
 
 %.png: %.dot
 	dot -Tpng < $^ > $@
-
-# RL
-
-reset-config:
-	rm -f experiments/train/config.ini
-
-train-online: _venv
-	if [ ! -e experiments/train/config.ini ] ; then\
-		cp experiments/train/defaults.ini experiments/train/config.ini ; fi
-	${EDITOR} experiments/train/config.ini
-	. _venv/bin/activate && python experiments/train/ppo.py
-
-train-offline: export WANDB_MODE=offline
-train-offline: _venv train-online

@@ -100,6 +100,7 @@ def env_fn(
     protocol="nakamoto",
     protocol_args=None,
     _protocol_args=dict(unit_observation=True),
+    activation_delay=1.0,
     episode_len=128,
     alpha=0.45,
     gamma=0.5,
@@ -137,6 +138,7 @@ def env_fn(
 
     env = Core(
         proto=protocol_fn(**protocol_args),
+        activation_delay=1.0,
         alpha=0.0,  # set from wrapper below
         gamma=0.0,  # set from wrapper below
         defenders=defenders,

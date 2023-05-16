@@ -99,8 +99,12 @@ setup(
         "Programming Language :: Python :: 3",
         "Topic :: Security",
     ],
-    packages=["cpr_gym"],
-    package_dir={"cpr_gym": "./gym/cpr_gym"},
+    packages=["cpr_gym", "cfg_model"],
+    package_dir={
+        "cpr_gym": "./gym/cpr_gym",
+        "cfg_model": "./experiments/train/cfg_model",
+    },
+    py_modules=["experiments.train.cfg_model"],
     ext_modules=[
         Extension(name="cpr_gym_engine", sources=["simulator/gym/cpr_gym_engine.ml"])
     ],

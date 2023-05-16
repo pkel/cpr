@@ -7,6 +7,7 @@ type 'a iid =
 
 let sample t = t.sample ()
 let to_string t = Lazy.force t.string
+let pp fmt t = Format.pp_print_string fmt (to_string t)
 
 let constant x =
   { sample = (fun () -> x); string = lazy (Printf.sprintf "constant %g" x) }

@@ -1,0 +1,23 @@
+main:
+  n_envs: 1
+  torch_threads: 1
+  alpha: .45 # set from command line argument
+  total_timesteps: 8_000_000
+env:
+  gamma: 0.5 # set from command line argument
+  defenders: 32
+protocol:
+  name: 'nakamoto'
+eval:
+  freq: 16
+  episodes_per_alpha_per_env: 512
+ppo:
+  batch_size: 1024
+  n_steps_multiple: 32
+  gamma: 1
+  learning_rate:
+    schedule: linear
+    start: 1e-3
+    end: 0
+  n_layers: 3
+  layer_size: 64

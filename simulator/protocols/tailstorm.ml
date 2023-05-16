@@ -290,22 +290,26 @@ module Make (Parameters : Parameters) = struct
             then (* quorum would grow to big *) f acc n q tl
             else f (BlockSet.union fresh acc) n' (hd :: q) tl)
       in
-      acc_votes children (children b)
-      |> BlockSet.elements
-      |> List.sort
-           Compare.(
-             by
-               (tuple (neg int) (tuple int float))
-               (fun x -> depth x, ((if appended_by_me x then 0 else 1), visible_since x)))
-      |> f BlockSet.empty 0 []
-      |> Option.map
-           (List.sort
-              Compare.(
-                by
-                  (tuple (neg int) compare_pow)
-                  (fun x ->
-                    let hash = pow x |> Option.value ~default:max_pow in
-                    depth x, hash)))
+      let votes = acc_votes children (children b) in
+      if BlockSet.cardinal votes >= k
+      then
+        BlockSet.elements votes
+        |> List.sort
+             Compare.(
+               by
+                 (tuple (neg int) (tuple int float))
+                 (fun x ->
+                   depth x, ((if appended_by_me x then 0 else 1), visible_since x)))
+        |> f BlockSet.empty 0 []
+        |> Option.map
+             (List.sort
+                Compare.(
+                  by
+                    (tuple (neg int) compare_pow)
+                    (fun x ->
+                      let hash = pow x |> Option.value ~default:max_pow in
+                      depth x, hash)))
+      else None
     ;;
 
     (** Algorithm for selecting sub block heuristically but quickly.
@@ -323,53 +327,56 @@ module Make (Parameters : Parameters) = struct
         most valuable branch an reiterate until enough sub blocks are added.
     *)
     let heuristic_quorum ~children b =
-      let leaves = ref BlockSet.empty
-      and votes = ref BlockSet.empty
-      and n = ref k in
-      let included x = BlockSet.mem x !votes in
-      let include_ x =
-        assert (not (included x));
-        leaves := BlockSet.add x !leaves;
-        acc_votes parents [ x ]
-        |> BlockSet.iter (fun x ->
-               if not (included x)
-               then (
-                 votes := BlockSet.add x !votes;
-                 decr n))
-      and reward ?(all = false) x =
-        let i = ref 0 in
-        let () =
+      let all_votes = acc_votes children (children b) in
+      if BlockSet.cardinal all_votes >= k
+      then (
+        let leaves = ref BlockSet.empty
+        and votes = ref BlockSet.empty
+        and n = ref k in
+        let included x = BlockSet.mem x !votes in
+        let include_ x =
+          assert (not (included x));
+          leaves := BlockSet.add x !leaves;
           acc_votes parents [ x ]
           |> BlockSet.iter (fun x ->
-                 if (not (included x)) && (all || appended_by_me x) then incr i)
+                 if not (included x)
+                 then (
+                   votes := BlockSet.add x !votes;
+                   decr n))
+        and reward ?(all = false) x =
+          let i = ref 0 in
+          let () =
+            acc_votes parents [ x ]
+            |> BlockSet.iter (fun x ->
+                   if (not (included x)) && (all || appended_by_me x) then incr i)
+          in
+          !i
         in
-        !i
-      in
-      let rec loop () =
-        assert (!n >= 0);
-        if !n > 0
-        then (
-          acc_votes children (children b)
-          |> BlockSet.elements
-          |> List.filter (fun x -> not (included x))
-          |> (* calculate own and overall reward for branch *)
-          List.map (fun x -> x, reward x, reward ~all:true x)
-          |> (* ensure branch fits into quorum *) List.filter (fun (_, _, x) -> x <= !n)
-          |> (* prefer own reward, then overall reward *)
-          List.sort
-            Compare.(
-              by int (fun (_, x, _) -> x) |> neg $ (by int (fun (_, _, x) -> x) |> neg))
-          |> function
-          | [] -> None (* no branches left, not enough votes *)
-          | (x, _, _) :: _ ->
-            (* add best branch, continue *)
-            include_ x;
-            loop ())
-        else
-          (* quorum complete. Ensure that it satisfies quorum validity *)
-          Some (BlockSet.elements !leaves |> List.sort compare_votes_in_block)
-      in
-      loop ()
+        let rec loop () =
+          assert (!n >= 0);
+          if !n > 0
+          then (
+            BlockSet.elements all_votes
+            |> List.filter (fun x -> not (included x))
+            |> (* calculate own and overall reward for branch *)
+            List.map (fun x -> x, reward x, reward ~all:true x)
+            |> (* ensure branch fits into quorum *) List.filter (fun (_, _, x) -> x <= !n)
+            |> (* prefer own reward, then overall reward *)
+            List.sort
+              Compare.(
+                by int (fun (_, x, _) -> x) |> neg $ (by int (fun (_, _, x) -> x) |> neg))
+            |> function
+            | [] -> assert false (* no branches left, not enough votes *)
+            | (x, _, _) :: _ ->
+              (* add best branch, continue *)
+              include_ x;
+              loop ())
+          else
+            (* quorum complete. Ensure that it satisfies quorum validity *)
+            Some (BlockSet.elements !leaves |> List.sort compare_votes_in_block)
+        in
+        loop ())
+      else None
     ;;
 
     (** Algorithm for reward-optimizing sub block choice

@@ -1,0 +1,26 @@
+main:
+  n_envs: 1
+  torch_threads: 1
+  alpha: .45 # set from command line argument
+  total_timesteps: 20_000_000
+env:
+  gamma: 0.5 # set from command line argument
+  defenders: 20
+  reward: 'dense_per_progress'
+protocol:
+  name: 'tailstorm'
+  k: 8
+  reward: 'constant'
+eval:
+  freq: 4
+  episodes_per_alpha_per_env: 512
+ppo:
+  batch_size: 32768
+  n_steps_multiple: 4
+  gamma: 0.999
+  learning_rate:
+    schedule: linear
+    start: 1e-3
+    end: 0
+  n_layers: 3
+  layer_size: 128

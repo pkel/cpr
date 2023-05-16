@@ -12,6 +12,7 @@ val geometric : success_probability:float -> int iid
 val discrete : weights:float list -> int iid
 
 val to_string : 'a iid -> string
+val pp : Format.formatter -> float iid -> unit
 val float_of_string : string -> (float iid, R.msg) result
 
 (** same as [float_of_string] but reuses previously returned values *)

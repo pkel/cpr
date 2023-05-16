@@ -325,9 +325,7 @@ module Make (Parameters : Parameters) = struct
 
            Don't do: append to the public tip of chain if it differs from private tip.
            This would result in attacker always adopting public chain if longer. (see
-           [prepare])
-
-           Hope I got this right! *)
+           [prepare]) *)
         let vote_filter =
           match action with
           | Adopt_Proceed | Override_Proceed | Match_Proceed | Wait_Proceed ->
@@ -365,42 +363,53 @@ module Make (Parameters : Parameters) = struct
   ;;
 
   module Policies = struct
+    open Observation
+    open Action
+
+    (* Emulate honest behaviour by mining the longest chain and releasing all blocks *)
     let honest o =
-      let open Observation in
-      let open Action in
-      if o.public_blocks > 0 then Adopt_Proceed else Override_Proceed
+      if o.public_blocks > o.private_blocks then Adopt_Proceed else Override_Proceed
     ;;
 
-    let release_block o =
-      let open Observation in
-      let open Action in
-      if o.private_blocks < o.public_blocks
+    (* Withhold subblocks, release summaries *)
+    let get_ahead o =
+      if o.public_blocks > o.private_blocks
       then Adopt_Proceed
-      else if o.private_blocks > o.public_blocks
+      else if o.public_blocks < o.private_blocks
       then Override_Proceed
       else Wait_Proceed
     ;;
 
-    let override_block o =
-      let open Observation in
-      let open Action in
-      if o.private_blocks < o.public_blocks
+    (* Like {get_ahead}, but {Wait} while defenders have no new summary *)
+    let minor_delay o =
+      if o.public_blocks > o.private_blocks
       then Adopt_Proceed
       else if o.public_blocks = 0
       then Wait_Proceed
       else Override_Proceed
     ;;
 
-    let override_catchup o =
-      let open Observation in
-      let open Action in
-      if o.private_blocks < o.public_blocks
+    (* Like {get_ahead}, but {Wait} while defenders have no new summary *)
+    let long_delay o =
+      if o.public_blocks > o.private_blocks
       then Adopt_Proceed
-      else if o.private_blocks = 0 && o.public_blocks = 0
-      then Wait_Proceed
       else if o.public_blocks = 0
       then Wait_Proceed
-      else if o.private_depth_inclusive = 0 && o.private_blocks = o.public_blocks + 1
+      else if o.public_blocks + 10 < o.private_blocks
+      then Override_Proceed
+      else if (o.public_blocks * k) + o.public_votes + 1
+              < (o.private_blocks * k) + o.private_votes_inclusive
+      then Wait_Proceed
+      else Override_Proceed
+    ;;
+
+    (* Build long fork, release when margin is high or defenders are about to catch up *)
+    let avoid_loss o =
+      if o.private_blocks < o.public_blocks
+      then Adopt_Proceed
+      else if o.public_blocks = 0
+      then Wait_Proceed
+      else if o.private_votes_inclusive = 0 && o.private_blocks = o.public_blocks + 1
       then Override_Proceed
       else if o.public_blocks = o.private_blocks
               && o.private_votes_inclusive = o.public_votes + 1
@@ -411,6 +420,30 @@ module Make (Parameters : Parameters) = struct
       then Override_Proceed
       else Wait_Proceed
     ;;
+
+    let avoid_loss_alt o =
+      let hp = (o.public_blocks * k) + o.public_votes
+      and ap = (o.private_blocks * k) + o.private_votes_inclusive in
+      match o.public_blocks (* h *), o.private_blocks (* a *) with
+      | 0, _ -> Wait_Proceed (* implies h >= 1 for the other branches *)
+      | 1, _ when hp = ap -> Match_Proceed
+      | _, _ when hp > ap -> Adopt_Proceed
+      | _, _ when hp = ap - 1 -> Override_Proceed
+      | h, a when h < a - 10 -> Override_Proceed (* cut-off if fork is long *)
+      | _, _ -> Wait_Proceed
+    ;;
+
+    let avoid_loss_alt2 o =
+      let hp = (o.public_blocks * k) + o.public_votes
+      and ap = (o.private_blocks * k) + o.private_votes_inclusive in
+      match o.public_blocks (* h *), o.private_blocks (* a *) with
+      | 0, _ -> Wait_Proceed (* implies h >= 1 for the other branches *)
+      | 1, _ when hp = ap -> Override_Proceed
+      | _, _ when hp > ap -> Adopt_Proceed
+      | _, _ when hp = ap - 1 -> Override_Proceed
+      | h, a when h < a - 10 -> Override_Proceed (* cut-off if fork is long *)
+      | _, _ -> Wait_Proceed
+    ;;
   end
 
   let policies =
@@ -418,11 +451,23 @@ module Make (Parameters : Parameters) = struct
     let open Policies in
     empty
     |> add ~info:"emulate honest behaviour" "honest" honest
-    |> add ~info:"release private block a.s.a.p." "release-block" release_block
-    |> add ~info:"override public block a.s.a.p." "override-block" override_block
+    |> add ~info:"release private block a.s.a.p." "get-ahead" get_ahead
+    |> add ~info:"override public block a.s.a.p." "minor-delay" minor_delay
     |> add
          ~info:"override public head just before defender catches up"
-         "override-catchup"
-         override_catchup
+         "avoid-loss"
+         avoid_loss_alt
+    |> add
+         ~info:"override public head just before defender catches up"
+         "avoid-loss-a"
+         avoid_loss
+    |> add
+         ~info:"override public head just before defender catches up"
+         "avoid-loss-b"
+         avoid_loss_alt2
+    |> add
+         ~info:"override public head just before defender catches up"
+         "long-delay"
+         long_delay
   ;;
 end
