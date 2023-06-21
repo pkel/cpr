@@ -16,6 +16,7 @@
   (bos (>= 0.2.1))
   (cmdliner (>= 1.1.1))
   (ezxmlm (>= 1.1.0))
+  (mtime (and (>= 1.4) (< 2)))
   (ocaml (>= 4.12))
   (parany (>= 12.2))
   (ppx_expect (>= v0.15))
