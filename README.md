@@ -4,12 +4,23 @@ CPR is a toolbox for specifying, simulating, and attacking proof-of-work
 consensus protocols. In this repository you find
 - protocol specifications for Bitcoin, Ethereum PoW, and others,
 - implementations of known attacks against these protocols,
-- a simulator that executes the specified protocols and attacks in a,
+- a simulator that executes the specified protocols and attacks in a
   virtual environment,
 - tooling for automatic attack-search with reinforcement learning (RL) and
 - evaluation scripts and notebooks for the above.
 
 I'm working on [a website](https://pkel.github.io/cpr/) with more details.
+
+##### Related Work
+
+- CPR was inspired by previous work on HotPoW and Parallel Proof-of-Work
+  / $\mathcal B_k$.
+  [[code]](https://github.com/pkel/hotpow)
+  [[preprint]](https://arxiv.org/abs/1907.13531)
+  [[AFT'22 paper]](https://arxiv.org/abs/2204.00034)
+- We applied CPR to analyze the Tailstorm consensus and cryptocurrency.
+  [[preprint]](https://arxiv.org/abs/2306.12206)
+
 
 ## Python/RL Quickstart
 
