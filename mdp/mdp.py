@@ -1,12 +1,16 @@
-from dataclasses import dataclass
+import copy
+import dataclasses
+import queue
 from typing import Union
+import xxhash
 
-from protocol import Protocol
+from protocol import Protocol, Template
 
 
-@dataclass
+@dataclasses.dataclass
 class State:
-    edges: list[set[int]]  # parent relationship
+    edges: list[list[int]]  # parent relationship
+    blocks: list[dict[str, Union[int, float, str]]]
     attacker_prefers: int
     defender_prefers: int
     ignored_by_attacker: set[int]
@@ -15,121 +19,184 @@ class State:
     known_to_defender: set[int]
 
     def compress(self):
-        raise NotImplementedError
         # Truncate common history:
         # 1. Find common ancestor of attacker_prefers and defender_prefers
         # 2. Remove ancestors of common ancestor from state
-        # 3. Relabel blocks such that common ancestor becomes node 0
-        # 4. Maintain invariance that node are enumerated in order mined
+        # 3. Maintain invariance that blocks are enumerated in order mined
 
+        # TODO order mined is not relevant for the MDP, I think.
+        # To further reduce state space, we probably should ensure that the
+        # mining order does not affect the digest. It might also be worth to
+        # change the type of edges to list[set[int]], but this would require
+        # changes to the protocol specification API.
 
-@dataclass
-class Release:
-    i: int
+        # TODO. Use protocol's predecessor.
+        # As is, it will only work for Nakamoto/Bitcoin.
+        def predecessor(i):
+            return self.edges[i][0]
 
+        # find common ancestor
+        a = self.defender_prefers
+        b = self.attacker_prefers
+        while a != b:
+            if a < b:
+                b = predecessor(b)
+            else:
+                a = predecessor(a)
+        ca = a
 
-@dataclass
-class Consider:
-    i: int
+        # find descendants of common ancestor
+        keep = {ca}
+        children = self.children()
+        stack = set(children[ca])
+        while len(stack) > 0:
+            i = stack.pop()
+            keep |= {i}
+            stack |= children[i]
 
+        # filter and rename ids
+        if len(keep) < len(self.edges):
+            # define new block ids
+            id_map = dict()
+            i = 0
+            for old_id in sorted(list(keep)):
+                id_map[old_id] = i
+                i += 1
 
-class Continue:
-    pass
+            # filter and rename ids
+            new_edges = [[]] * len(id_map)
+            new_blocks = [dict()] * len(id_map)
+            for old_id, new_id in id_map.items():
+                e = self.edges[old_id]
+                new_edges[new_id] = [id_map[x] for x in e if x in id_map]
+                new_blocks[new_id] = self.blocks[old_id]
+            self.edges = new_edges
+            self.attacker_prefers = id_map[self.attacker_prefers]
+            self.defender_prefers = id_map[self.defender_prefers]
 
+            def compress_set(s):
+                return {id_map[x] for x in s if x in id_map}
 
-Action = Union[Release, Consider, Continue]
+            self.withheld_by_attacker = compress_set(self.withheld_by_attacker)
+            self.mined_by_attacker = compress_set(self.mined_by_attacker)
+            self.known_to_defender = compress_set(self.known_to_defender)
+            self.ignored_by_attacker = compress_set(self.ignored_by_attacker)
 
+        return None
 
-class DAG:
-    def __init__(self, edges: list[set[int]], exclude=set[int]):
-        self.parents = edges
-        # invert edge list for children relationship
-        self.children = [{} for _ in edges]
-        child = 0
-        for parents in edges:
-            for p in parents:
-                self.children[p] |= {child}
-            child += 1
-        # filter excluded blocks
-        for edges in self.parents:
-            edges -= exclude
-        for edges in self.children:
-            edges -= exclude
+    def all_blocks(self):
+        return set(range(len(self.edges)))
 
+    def invert_blockset(self, s: set[int]):
+        return self.all_blocks() - s
 
-class Block:
-    def __init__(self, *args, i: int, dag: DAG):
-        self.i = i
-        self.dag = dag
-
-    def parents(self):
-        return [Block(i, self.dag) for i in self.dag.parents[self.i]]
+    def append_template(self, template: Template):
+        i = len(self.edges)
+        d = dataclasses.asdict(template)
+        p = [x.i for x in d.pop("parents")]
+        self.edges.append(p)
+        self.blocks.append(d)
+        return i
 
     def children(self):
-        return [Block(i, self.dag) for i in self.dag.children[self.i]]
+        # invert parent relationship
+        children = [set() for _ in self.edges]
+        child = 0
+        for parents in self.edges:
+            for p in parents:
+                children[p] |= {child}
+            child += 1
+        return children
+
+    def copy(self):
+        return copy.deepcopy(self)
+
+    def digest(self):
+        data = []
+        data.append(self.edges)
+        #  data.append(self.blocks)  # intentionally not hashing block data
+        data.append(self.attacker_prefers)
+        data.append(self.defender_prefers)
+        data.append(sorted(list(self.withheld_by_attacker)))
+        data.append(sorted(list(self.mined_by_attacker)))
+        data.append(sorted(list(self.known_to_defender)))
+        data.append(sorted(list(self.ignored_by_attacker)))
+        return xxhash.xxh3_128_digest(repr(data))
 
 
-class Explorer:
-    def __init__(self, protocol: Protocol, *args, alpha: float, gamma: float):
-        if alpha < 0 or alpha > 1:
+@dataclasses.dataclass
+class Config:
+    alpha: float
+    gamma: float
+    protocol: Protocol
+
+    def __post_init__(self):
+        if self.alpha < 0 or self.alpha > 1:
             raise ValueError("alpha must be between 0 and 1")
-        if gamma < 0 or gamma > 1:
+        if self.gamma < 0 or self.gamma > 1:
             raise ValueError("gamma must be between 0 and 1")
-        self.protocol = Protocol
-        self.alpha = alpha
-        self.gamma = gamma
 
-    def actions(self, s: State) -> list[Action]:
-        lst = [Continue]
-        for i in s.withheld_by_attacker:
-            lst.append(Release(i))
-        for i in s.ignored_by_attacker:
-            lst.append(Consider(i))
-        return lst
 
-    def release(self, i: int, s: State) -> list[tuple[float, State]]:
-        if i not in s.withheld_by_attacker:
-            raise ValueError(f"block <{i}> already released")
+class Action:
+    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
+        raise NotImplementedError
+
+
+@dataclasses.dataclass(frozen=True)
+class Release(Action):
+    i: int
+
+    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
+        if self.i not in s.withheld_by_attacker:
+            raise ValueError(f"block <{self.i}> already released")
         s = s.copy()
         # mark i and all ancestors as not withheld
-        s.withheld_by_attacker -= {i}
-        stack = s.edges[i].copy()
+        s.withheld_by_attacker -= {self.i}
+        stack = set(s.edges[self.i])
         while len(stack) > 0:
             j = stack.pop()
             if j in s.withheld_by_attacker:
                 s.withheld_by_attacker -= {j}
-                stack |= s.edges[j]
+                stack |= set(s.edges[j])
         # this transition is deterministic
         return [(1, s)]
 
-    def consider(self, i: int, s: State) -> list[tuple[float, State]]:
-        if i not in s.ignored_by_attacker:
-            raise ValueError(f"block <{i}> not ignored (anymore)")
+
+@dataclasses.dataclass(frozen=True)
+class Consider(Action):
+    i: int
+
+    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
+        if self.i not in s.ignored_by_attacker:
+            raise ValueError(f"block <{self. i}> not ignored (anymore)")
         s = s.copy()
         # mark i and all ancestors as not ignored
-        s.ignored_by_attacker -= {i}
-        stack = s.edges[i].copy()
+        s.ignored_by_attacker -= {self.i}
+        stack = set(s.edges[self.i])
         while len(stack) > 0:
             j = stack.pop()
             if j in s.ignored_by_attacker:
                 s.ignored_by_attacker -= {j}
-                stack |= s.edges[j]
+                stack |= set(s.edges[j])
         # update attacker's preference
-        dag = DAG(s.edges, exclude=s.ignored_by_attacker)
+        dag = DAG(s, exclude=s.ignored_by_attacker)
         old = Block(s.attacker_prefers, dag)
-        new = Block(i, dag)
-        s.attacker_prefers = self.protocol.preference(new, old)
+        new = Block(self.i, dag)
+        s.attacker_prefers = cfg.protocol.preference(old, new).i
         # truncate ancestors of common ancestor
         s.compress()
         # this transition is deterministic
         return [(1, s)]
 
-    def continue_(self, s: State) -> list[tuple[float, State]]:
+
+@dataclasses.dataclass(frozen=True)
+class Continue(Action):
+    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
         # calculate freshly released blocks
         release = s.mined_by_attacker - s.withheld_by_attacker - s.known_to_defender
         release = sorted(list(release))
         # calculate freshly mined defender blocks
-        defender = set(range(len(s.edges))) - s.mined_by_defender - s.known_to_defender
+        defender = s.all_blocks() - s.mined_by_attacker - s.known_to_defender
         assert len(defender) <= 1
         defender = list(defender)
         # fork two bernoulli outcomes: communication
@@ -137,42 +204,157 @@ class Explorer:
         s1 = s.copy()
         for i in release + defender:
             s1.known_to_defender |= {i}
-            dag = DAG(s1.edges, include=s1.known_to_defender)
-            old = Block(s1.attacker_prefers, dag)
+            dag = DAG(s1, include=s1.known_to_defender)
+            old = Block(s1.defender_prefers, dag)
             new = Block(i, dag)
-            s1.defender_prefers = self.protocol.preference(new, old)
+            s1.defender_prefers = cfg.protocol.preference(old, new).i
         s1.compress()
         # case 2: attacker communicates slow, p = 1 - gamma
         s2 = s.copy()
         for i in defender + release:
             s2.known_to_defender |= {i}
-            dag = DAG(s2.edges, include=s2.known_to_defender)
-            old = Block(s2.attacker_prefers, dag)
+            dag = DAG(s2, include=s2.known_to_defender)
+            old = Block(s2.defender_prefers, dag)
             new = Block(i, dag)
-            s2.defender_prefers = self.protocol.preference(new, old)
+            s2.defender_prefers = cfg.protocol.preference(old, new).i
         s2.compress()
-        transitionsA = [(self.gamma, s1), (1 - self.gamma, s2)]
+        transitionsA = [(cfg.gamma, s1), (1 - cfg.gamma, s2)]
         # fork two bernoulli outcomes: mining
         transitionsB = []
         for p, s in transitionsA:
             # case 1: attacker mines next block, p = alpha
             s1 = s.copy()
-            dag = DAG(s1.edges, exclude=s1.ignored_by_attacker)
+            dag = DAG(s1, exclude=s1.ignored_by_attacker)
             pref = Block(s1.attacker_prefers, dag)
-            tmpl = self.protocol.mining(pref)
-            # TODO: store template fields in state s1
-            n = len(s1.edges)
-            s1.edges.append([block.id for block in tmpl.parents])
-            s1.withheld_by_attacker |= {n}
-            s1.mined_by_attacker |= {n}
-            s1.ignored_by_attacker |= {n}
-            transitionsB.append((p * self.alpha, s1))
+            tmpl = cfg.protocol.mining(pref)
+            b = s1.append_template(tmpl)
+            s1.withheld_by_attacker |= {b}
+            s1.mined_by_attacker |= {b}
+            transitionsB.append((p * cfg.alpha, s1))
             # case 2: defender mines next block, p = 1 - alpha
             s2 = s.copy()
-            dag = DAG(s2.edges, include=s2.known_to_defender)
+            s2.ignored_by_attacker |= {b}
+            dag = DAG(s2, include=s2.known_to_defender)
             pref = Block(s2.defender_prefers, dag)
-            tmpl = self.protocol.mining(pref)
-            # TODO: store template fields in state s2
-            n = len(s2.edges)
-            transitionsB.append((p * (1 - self.alpha), s2))
+            tmpl = cfg.protocol.mining(pref)
+            _ = s2.append_template(tmpl)
+            transitionsB.append((p * (1 - cfg.alpha), s2))
         return transitionsB
+
+
+class DAG:
+    def __init__(
+        self, state: State, exclude: set[int] = set(), include: set[int] = None
+    ):
+        self.state = state
+        if include is None:
+            self.include = state.all_blocks() - exclude
+        else:
+            self.include = include - exclude
+
+        self._children = None
+
+    @property
+    def children(self):
+        if self._children is None:
+            self._children = self.state.children()
+        return self._children
+
+
+class Block:
+    def __init__(self, i: int, dag: DAG):
+        self.i = i
+        self.dag = dag
+
+    def parents(self):
+        filtered = [i for i in self.dag.state.edges[self.i] if i in self.include]
+        return [Block(i, self.dag) for i in filtered]
+
+    def children(self):
+        filtered = [i for i in self.dag.children[self.i] if i in self.include]
+        return [Block(i, self.dag) for i in filtered]
+        # This would be easier with an adjacency matrix
+        raise NotImplementedError
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if name in self.dag.state.blocks[self.i]:
+            return self.dag.state.blocks[self.i][name]
+        else:
+            raise AttributeError(name)
+
+
+class Explorer:
+    def __init__(self, cfg: Config):
+        self.config = cfg
+        self.queue = queue.Queue()
+        self.action_map = dict()  # maps action to integer
+        self.state_map = dict()  # maps state digest to integer
+        self.states_explored = 0
+        # handle start state
+        state = self.start_state()
+        digest = state.digest()
+        self.state_map[digest] = 0
+        self.queue.put((0, digest, state))
+
+    def start_state(self):
+        start = State(
+            edges=[],
+            blocks=[],
+            attacker_prefers=0,
+            defender_prefers=0,
+            ignored_by_attacker=set(),
+            withheld_by_attacker=set(),
+            mined_by_attacker=set(),
+            known_to_defender={0},
+        )
+        g = start.append_template(self.config.protocol.genesis())
+        assert g == 0
+        return start
+
+    def explore(self, steps=1000) -> bool:
+        for i in range(steps):
+            if self.queue.empty():
+                return False
+            else:
+                self.step()
+
+    def step(self):
+        src_id, src_digest, src_state = self.queue.get()
+        self.states_explored += 1
+
+        for action in self.actions(src_state):
+            # alias action/integer
+            if action in self.action_map:
+                action_id = self.action_map[action]
+            else:
+                action_id = len(self.action_map)
+                self.action_map[action] = action_id
+
+            # apply action, obtain probabilistic transitions
+            for prob, dst_state in action.apply(src_state, self.config):
+                # alias state/digest/integer
+                dst_digest = dst_state.digest()
+                if dst_digest in self.state_map:
+                    dst_id = self.state_map[dst_digest]
+                else:
+                    # we see this state for the first time
+                    dst_id = len(self.state_map)
+                    self.state_map[dst_digest] = dst_id
+                    # recursive exploration
+                    self.queue.put((dst_id, dst_digest, dst_state))
+
+                # sanity check; we do not have noop actions
+                assert src_id != dst_id
+
+                # record transition
+                # TODO
+
+    def actions(self, s: State) -> list[Action]:
+        lst = [Continue()]
+        for i in s.withheld_by_attacker:
+            lst.append(Release(i))
+        for i in s.ignored_by_attacker:
+            lst.append(Consider(i))
+        return lst

@@ -18,7 +18,7 @@ class Block(Template, protocol.Block):
 
 class Bitcoin(Protocol):
     def genesis(self) -> Template:
-        return Template(height=0)
+        return Template(height=0, parents=[])
 
     def unsafe_validity(self, b: Block) -> bool:
         assert len(b.parents) == 1
@@ -37,4 +37,4 @@ class Bitcoin(Protocol):
         return new if new.height > old.height else old
 
     def mining(self, b: Block) -> Template:
-        return Template(height=b.height + 1)
+        return Template(height=b.height + 1, parents=[b])
