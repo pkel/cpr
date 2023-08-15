@@ -2,9 +2,9 @@ import copy
 import dataclasses
 import queue
 import numpy as np
+import typing
 import xxhash
 
-import typing
 import protocol
 from protocol import Protocol
 
@@ -103,10 +103,8 @@ class State:
                 assert old_id not in id_map
                 new_id = len(id_map)
                 id_map[old_id] = new_id
-        # TODO. children returns set and is ambiguous. We need a deterministic
-        # ordering of children(). Alternatively, we can maybe locate the leaves
-        # and use the parents relationship. Parents are ordered, so we only
-        # have to order the leaves deterministically.
+        # TODO. children is a set and its order ambiguous. Deterministic order
+        # could avoid isomorphisms.
 
         # print()
         # print("pre-compress", self)
@@ -161,13 +159,13 @@ class State:
     def digest(self):
         data = []
         data.append(self.parents)
-        #  data.append(self.blocks)  # intentionally not hashing block data
+        #  data.append(self.children)  # redundant with parents
         data.append(self.attacker_prefers)
         data.append(self.defender_prefers)
         data.append(sorted(list(self.withheld_by_attacker)))
-        data.append(sorted(list(self.mined_by_attacker)))
         data.append(sorted(list(self.known_to_defender)))
         data.append(sorted(list(self.ignored_by_attacker)))
+        data.append(sorted(list(self.mined_by_attacker)))
         return xxhash.xxh3_128_digest(repr(data))
 
     def pack(self):
