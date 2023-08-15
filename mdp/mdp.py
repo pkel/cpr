@@ -32,6 +32,7 @@ class View(protocol.View):
 
 @dataclasses.dataclass()
 class State:
+    # TODO encode this closer to packed state, i.e. single np.array
     children: list[set[int]]
     parents: list[set[int]]
     attacker_prefers: int
@@ -154,6 +155,7 @@ class State:
         return id
 
     def copy(self):
+        # TODO avoid deepcopy of state. Do repeated unpacks instead
         return copy.deepcopy(self)
 
     def digest(self):
@@ -252,7 +254,7 @@ class Release(Action):
     def apply(self, s: State, cfg: Config) -> list[Transition]:
         if self.i not in s.withheld_by_attacker:
             raise ValueError(f"block <{self.i}> already released")
-        s = s.copy()
+        s = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
         # mark i and all ancestors as not withheld
         s.withheld_by_attacker -= {self.i}
         todo = s.parents[self.i].copy()
@@ -272,7 +274,7 @@ class Consider(Action):
     def apply(self, s: State, cfg: Config) -> list[Transition]:
         if self.i not in s.ignored_by_attacker:
             raise ValueError(f"block <{self. i}> not ignored (anymore)")
-        s = s.copy()
+        s = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
         # mark i and all ancestors as not ignored
         s.ignored_by_attacker -= {self.i}
         todo = s.parents[self.i].copy()
@@ -305,7 +307,7 @@ class Continue(Action):
         defender = list(defender)
         # fork two bernoulli outcomes: communication
         # case 1: attacker communicates fast, p = gamma
-        s1 = s.copy()
+        s1 = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
         for i in release + defender:
             s1.known_to_defender.add(i)
             s1.defender_prefers = cfg.protocol.preference(
@@ -315,7 +317,7 @@ class Continue(Action):
             )
         s1.compress(cfg.protocol)
         # case 2: attacker communicates slow, p = 1 - gamma
-        s2 = s.copy()
+        s2 = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
         for i in defender + release:
             s2.known_to_defender.add(i)
             s2.defender_prefers = cfg.protocol.preference(
@@ -329,7 +331,7 @@ class Continue(Action):
         transitionsB = []
         for p, s in transitionsA:
             # case 1: attacker mines next block, p = alpha
-            s1 = s.copy()
+            s1 = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
             view = View(s1, exclude=s1.ignored_by_attacker)
             append_to = cfg.protocol.mining(view, s1.attacker_prefers)
             new_b = s1.append(append_to)
@@ -337,7 +339,7 @@ class Continue(Action):
             s1.mined_by_attacker |= {new_b}
             transitionsB.append((p * cfg.alpha, s1))
             # case 2: defender mines next block, p = 1 - alpha
-            s2 = s.copy()
+            s2 = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
             view = View(s2, include=s2.known_to_defender)
             append_to = cfg.protocol.mining(view, s2.defender_prefers)
             new_b = s2.append(append_to)
