@@ -4,6 +4,7 @@ import queue
 import numpy as np
 import xxhash
 
+import typing
 import protocol
 from protocol import Protocol
 
@@ -353,7 +354,7 @@ class QState:
     distance_step: int
     id: int
     digest: bytes
-    state: State = dataclasses.field(compare=False)
+    packed_state: typing.Any = dataclasses.field(compare=False)
 
 
 class Explorer:
@@ -370,7 +371,7 @@ class Explorer:
         state = self.start_state()
         digest = state.digest()
         self.state_map[digest] = 0
-        self.queue.put(QState(0, 0, 0, digest, state))
+        self.queue.put(QState(0, 0, 0, digest, state.pack()))
 
     def start_state(self):
         start = State(
@@ -388,20 +389,13 @@ class Explorer:
     def step(self):
         src = self.queue.get()
         self.states_explored += 1
+        src_state = unpack(src.packed_state)
 
-        actions = self.actions(src.state)
+        actions = self.actions(src_state)
         self.max_actions = max(self.max_actions, len(actions))
         # TODO max_actions is about factor two smaller than action_map. By
         # renaming the actions per source state, we can cut the number of
         # actions in half.
-
-        # test pack/unpack
-        unpacked = unpack(src.state.pack())
-        if unpacked.digest() != src.digest:
-            print()
-            print("state", src.state)
-            print("unpacked", unpacked)
-            assert False, "pack error"
 
         for action in actions:
             # alias action/integer
@@ -412,7 +406,7 @@ class Explorer:
                 self.action_map[action] = action_id
 
             # apply action, obtain probabilistic transitions
-            for t in action.apply(src.state, self.config):
+            for t in action.apply(src_state, self.config):
                 # alias state/digest/integer
                 dst_digest = t.state.digest()
                 if dst_digest in self.state_map:
@@ -427,7 +421,7 @@ class Explorer:
                         distance_step=src.distance_step + 1,
                         id=dst_id,
                         digest=dst_digest,
-                        state=t.state,
+                        packed_state=t.state.pack(),
                     )
                     self.queue.put(dst)
 
