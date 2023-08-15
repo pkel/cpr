@@ -1,6 +1,7 @@
 import copy
 import dataclasses
 import queue
+import numpy as np
 import xxhash
 
 import protocol
@@ -167,6 +168,56 @@ class State:
         data.append(sorted(list(self.known_to_defender)))
         data.append(sorted(list(self.ignored_by_attacker)))
         return xxhash.xxh3_128_digest(repr(data))
+
+    def pack(self):
+        n = len(self.parents)
+        rows = self.parents.copy()
+        rows.append(self.ignored_by_attacker)
+        rows.append(self.withheld_by_attacker)
+        rows.append(self.mined_by_attacker)
+        rows.append(self.known_to_defender)
+        rows.append({self.attacker_prefers})
+        rows.append({self.defender_prefers})
+        a = np.full((n + 6, n), False)
+        for i, s in enumerate(rows):
+            for x in s:
+                a[i, x] = True
+        return (n, np.packbits(a, axis=None))
+
+
+def unpack(packed):
+    n, bits = packed
+    size = (n + 6) * n
+    a = np.unpackbits(bits, axis=None)[:size].reshape((n + 6, n)).view(bool)
+    rows = []
+    for i in range(n + 6):
+        rows.append(set())
+        for x in range(n):
+            if a[i, x]:
+                rows[i].add(x)
+    parents = rows[:n]
+    iba = rows[n]
+    wba = rows[n + 1]
+    mba = rows[n + 2]
+    ktd = rows[n + 3]
+    ap = rows[n + 4]
+    dp = rows[n + 5]
+    assert len(ap) == 1
+    assert len(dp) == 1
+    children = [set() for _ in range(n)]
+    for i, s in enumerate(parents):
+        for p in s:
+            children[p].add(i)
+    return State(
+        parents=parents,
+        children=children,
+        attacker_prefers=ap.pop(),
+        defender_prefers=dp.pop(),
+        ignored_by_attacker=iba,
+        withheld_by_attacker=wba,
+        mined_by_attacker=mba,
+        known_to_defender=ktd,
+    )
 
 
 @dataclasses.dataclass
@@ -343,6 +394,14 @@ class Explorer:
         # TODO max_actions is about factor two smaller than action_map. By
         # renaming the actions per source state, we can cut the number of
         # actions in half.
+
+        # test pack/unpack
+        unpacked = unpack(src.state.pack())
+        if unpacked.digest() != src.digest:
+            print()
+            print("state", src.state)
+            print("unpacked", unpacked)
+            assert False, "pack error"
 
         for action in actions:
             # alias action/integer
