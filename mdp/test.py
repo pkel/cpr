@@ -1,11 +1,13 @@
 import mdp
-import bitcoin
+from bitcoin import Bitcoin
+from parallel import Parallel
 import pprint
 import psutil
 
 pp = pprint.PrettyPrinter(indent=2)
 
-config = mdp.Config(protocol=bitcoin.Bitcoin(), alpha=0.25, gamma=0.5)
+config = mdp.Config(protocol=Bitcoin(), alpha=0.25, gamma=0.5)
+config = mdp.Config(protocol=Parallel(k=4), alpha=0.25, gamma=0.5)
 explorer = mdp.Explorer(config)
 
 for _ in range(500):
