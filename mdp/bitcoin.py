@@ -1,40 +1,35 @@
-from dataclasses import dataclass
 from typing import Optional
 
-import protocol
-from protocol import Protocol, Reward
-
-
-@dataclass
-class Template(protocol.Template):
-    height: int
-
-
-class Block(Template, protocol.Block):
-    def __init__(self, *args, parents: list["Block"], **kwargs):
-        Template.__init__(self, parents=parents, **kwargs)
-        protocol.Block.__init(self, parents=parents)
+from protocol import Block, Protocol, Reward, View
 
 
 class Bitcoin(Protocol):
-    def genesis(self) -> Template:
-        return Template(height=0, parents=[])
+    def mining(self, v: View, b: Block) -> set[Block]:
+        return {b}
 
-    def unsafe_validity(self, b: Block) -> bool:
-        assert len(b.parents) == 1
-        return b.height == b.parents[0].height + 1
+    def predecessor(self, v: View, b: Block) -> Optional[Block]:
+        parents = v.parents(b)
+        if len(parents) == 1:
+            return list(parents)[0]
+        else:
+            return None
 
-    def progress(self, b: Block) -> float:
-        return b.height
+    def height(self, v: View, b: Block) -> int:
+        h = 0
+        p = self.predecessor(v, b)
+        while p is not None:
+            h += 1
+            p = self.predecessor(v, p)
+        return h
 
-    def predecessor(self, b: Block) -> Optional[Block]:
-        return b.parents[0] if len(b.parents) > 0 else None
+    def preference(self, v: View, *args, old: Block, new: Block) -> Block:
+        if self.height(v, new) > self.height(v, old):
+            return new
+        else:
+            return old
 
-    def reward(self, b: Block) -> list[Reward]:
-        return [Reward(b.miner, 1)]
+    def progress(self, v: View, b: Block) -> float:
+        return self.height(v, b)
 
-    def preference(self, old: Block, new: Block) -> Block:
-        return new if new.height > old.height else old
-
-    def mining(self, b: Block) -> Template:
-        return Template(height=b.height + 1, parents=[b])
+    def reward(self, v: View, b: Block) -> list[Reward]:
+        return [Reward(v.miner(b), 1)]
