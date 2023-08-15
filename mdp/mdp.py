@@ -137,8 +137,16 @@ class Config:
             raise ValueError("gamma must be between 0 and 1")
 
 
+@dataclasses.dataclass
+class Transition:
+    prob: float
+    state: State
+    timestep: bool
+    # TODO. reward: float
+
+
 class Action:
-    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
+    def apply(self, s: State, cfg: Config) -> list[Transition]:
         raise NotImplementedError
 
 
@@ -146,7 +154,7 @@ class Action:
 class Release(Action):
     i: int
 
-    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
+    def apply(self, s: State, cfg: Config) -> list[Transition]:
         if self.i not in s.withheld_by_attacker:
             raise ValueError(f"block <{self.i}> already released")
         s = s.copy()
@@ -159,14 +167,14 @@ class Release(Action):
                 s.withheld_by_attacker -= {j}
                 stack |= set(s.edges[j])
         # this transition is deterministic
-        return [(1, s)]
+        return [Transition(1, s, False)]
 
 
 @dataclasses.dataclass(frozen=True)
 class Consider(Action):
     i: int
 
-    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
+    def apply(self, s: State, cfg: Config) -> list[Transition]:
         if self.i not in s.ignored_by_attacker:
             raise ValueError(f"block <{self. i}> not ignored (anymore)")
         s = s.copy()
@@ -186,12 +194,12 @@ class Consider(Action):
         # truncate ancestors of common ancestor
         s.compress()
         # this transition is deterministic
-        return [(1, s)]
+        return [Transition(1, s, False)]
 
 
 @dataclasses.dataclass(frozen=True)
 class Continue(Action):
-    def apply(self, s: State, cfg: Config) -> list[tuple[float, State]]:
+    def apply(self, s: State, cfg: Config) -> list[Transition]:
         # calculate freshly released blocks
         release = s.mined_by_attacker - s.withheld_by_attacker - s.known_to_defender
         release = sorted(list(release))
@@ -239,7 +247,7 @@ class Continue(Action):
             tmpl = cfg.protocol.mining(pref)
             _ = s2.append_template(tmpl)
             transitionsB.append((p * (1 - cfg.alpha), s2))
-        return transitionsB
+        return [Transition(p, s, True) for p, s in transitionsB]
 
 
 class DAG:
@@ -285,18 +293,28 @@ class Block:
             raise AttributeError(name)
 
 
+@dataclasses.dataclass(order=True)
+class QState:
+    distance_time: int
+    distance_step: int
+    id: int
+    digest: bytes
+    state: State = dataclasses.field(compare=False)
+
+
 class Explorer:
     def __init__(self, cfg: Config):
         self.config = cfg
-        self.queue = queue.Queue()
+        self.queue = queue.PriorityQueue()
         self.action_map = dict()  # maps action to integer
         self.state_map = dict()  # maps state digest to integer
         self.states_explored = 0
+        self.max_actions = 0
         # handle start state
         state = self.start_state()
         digest = state.digest()
         self.state_map[digest] = 0
-        self.queue.put((0, digest, state))
+        self.queue.put(QState(0, 0, 0, digest, state))
 
     def start_state(self):
         start = State(
@@ -313,18 +331,17 @@ class Explorer:
         assert g == 0
         return start
 
-    def explore(self, steps=1000) -> bool:
-        for i in range(steps):
-            if self.queue.empty():
-                return False
-            else:
-                self.step()
-
     def step(self):
-        src_id, src_digest, src_state = self.queue.get()
+        src = self.queue.get()
         self.states_explored += 1
 
-        for action in self.actions(src_state):
+        actions = self.actions(src.state)
+        self.max_actions = max(self.max_actions, len(actions))
+        # TODO max_actions is about factor two smaller than action_map. By
+        # renaming the actions per source state, we can cut the number of
+        # actions in half.
+
+        for action in actions:
             # alias action/integer
             if action in self.action_map:
                 action_id = self.action_map[action]
@@ -333,9 +350,9 @@ class Explorer:
                 self.action_map[action] = action_id
 
             # apply action, obtain probabilistic transitions
-            for prob, dst_state in action.apply(src_state, self.config):
+            for t in action.apply(src.state, self.config):
                 # alias state/digest/integer
-                dst_digest = dst_state.digest()
+                dst_digest = t.state.digest()
                 if dst_digest in self.state_map:
                     dst_id = self.state_map[dst_digest]
                 else:
@@ -343,10 +360,17 @@ class Explorer:
                     dst_id = len(self.state_map)
                     self.state_map[dst_digest] = dst_id
                     # recursive exploration
-                    self.queue.put((dst_id, dst_digest, dst_state))
+                    dst = QState(
+                        distance_time=src.distance_time + t.timestep,
+                        distance_step=src.distance_step + 1,
+                        id=dst_id,
+                        digest=dst_digest,
+                        state=t.state,
+                    )
+                    self.queue.put(dst)
 
                 # sanity check; we do not have noop actions
-                assert src_id != dst_id
+                assert src.id != dst_id
 
                 # record transition
                 # TODO
@@ -358,3 +382,15 @@ class Explorer:
         for i in s.ignored_by_attacker:
             lst.append(Consider(i))
         return lst
+
+    def explore(self, steps=1000) -> bool:
+        for i in range(steps):
+            if self.queue.empty():
+                return False
+            else:
+                self.step()
+
+    def peek(self):
+        s = self.queue.get()
+        self.queue.put(s)
+        return s
