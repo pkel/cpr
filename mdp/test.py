@@ -8,7 +8,7 @@ pp = pprint.PrettyPrinter(indent=2)
 config = mdp.Config(protocol=bitcoin.Bitcoin(), alpha=0.25, gamma=0.5)
 explorer = mdp.Explorer(config)
 
-for _ in range(50):
+for _ in range(500):
     explorer.explore()
     process = psutil.Process()
     s = explorer.peek()

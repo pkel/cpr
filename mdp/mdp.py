@@ -21,19 +21,29 @@ class State:
     def compress(self):
         # Truncate common history:
         # 1. Find common ancestor of attacker_prefers and defender_prefers
-        # 2. Remove ancestors of common ancestor from state
-        # 3. Maintain invariance that blocks are enumerated in order mined
+        # 2. Filter blocks:
+        #     - remove ancestors of common ancestor
+        #     - keep ancestors/descendants of attacker_prefers/defender_prefers
+        #     - throw out the rest: descendants of common ancestors which are
+        #       not predecessor of attacker_prefers/defender_prefers
+        # 3. Deterministically label blocks by enumerating blocks in
+        #    topological order.
 
-        # TODO order mined is not relevant for the MDP, I think.
-        # To further reduce state space, we probably should ensure that the
-        # mining order does not affect the digest. It might also be worth to
-        # change the type of edges to list[set[int]], but this would require
-        # changes to the protocol specification API.
+        # TODO I think step 2.) above implies restrictions to the protocol spec
+        # API. Preference and mining may use children but not parents.
+        # Predecessor and reward may use parents but not children.
+
+        # TODO To further shrink the state space it might be worth to change
+        # the type of edges to list[set[int]], but this would require changes
+        # to the protocol specification API.
 
         # TODO. Use protocol's predecessor.
         # As is, it will only work for Nakamoto/Bitcoin.
         def predecessor(i):
             return self.edges[i][0]
+
+        parents = self.edges
+        children = self.children()
 
         # find common ancestor
         a = self.defender_prefers
@@ -45,42 +55,72 @@ class State:
                 a = predecessor(a)
         ca = a
 
-        # find descendants of common ancestor
-        keep = {ca}
-        children = self.children()
-        stack = set(children[ca])
-        while len(stack) > 0:
-            i = stack.pop()
-            keep |= {i}
-            stack |= children[i]
+        # keep blocks reachable from attacker/defender preference
+        keep = set()
+        for entry in [self.attacker_prefers, self.defender_prefers]:
+            keep.add(entry)
+            # ancestors
+            todo = set(parents[entry])
+            while len(todo) > 0:
+                i = todo.pop()
+                keep.add(i)
+                todo |= set(parents[i])
+            # descendants
+            todo = children[entry].copy()
+            while len(todo) > 0:
+                i = todo.pop()
+                keep.add(i)
+                todo |= children[i]
+        # remove ancestors of common ancestor
+        todo = set(parents[ca])
+        while len(todo) > 0:
+            i = todo.pop()
+            keep.remove(i)
+            todo |= set(parents[i])
 
-        # filter and rename ids
-        if len(keep) < len(self.edges):
-            # define new block ids
-            id_map = dict()
-            i = 0
-            for old_id in sorted(list(keep)):
-                id_map[old_id] = i
-                i += 1
+        # relabel blocks in topological order
+        id_map = dict()
+        todo = {ca}
+        while len(todo) > 0:
+            old_id = todo.pop()
+            if old_id in keep:
+                todo |= children[old_id]
+                assert old_id not in id_map
+                new_id = len(id_map)
+                id_map[old_id] = new_id
+        # TODO. children returns set and is ambiguous. We need a deterministic
+        # ordering of children(). Alternatively, we can maybe locate the leaves
+        # and use the parents relationship. Parents are ordered, so we only
+        # have to order the leaves deterministically.
 
-            # filter and rename ids
-            new_edges = [[]] * len(id_map)
-            new_blocks = [dict()] * len(id_map)
-            for old_id, new_id in id_map.items():
-                e = self.edges[old_id]
-                new_edges[new_id] = [id_map[x] for x in e if x in id_map]
-                new_blocks[new_id] = self.blocks[old_id]
-            self.edges = new_edges
-            self.attacker_prefers = id_map[self.attacker_prefers]
-            self.defender_prefers = id_map[self.defender_prefers]
+        # print()
+        # print("pre-compress", self)
+        # print("parents", parents)
+        # print("children", children)
+        # print("ca", ca)
+        # print("keep", keep)
+        # print("id_map", id_map)
 
-            def compress_set(s):
-                return {id_map[x] for x in s if x in id_map}
+        # create new state
+        new_edges = [[]] * len(id_map)
+        new_blocks = [dict()] * len(id_map)
+        for old_id, new_id in id_map.items():
+            e = self.edges[old_id]
+            new_edges[new_id] = [id_map[x] for x in e if x in id_map]
+            new_blocks[new_id] = self.blocks[old_id]
+        self.edges = new_edges
+        self.attacker_prefers = id_map[self.attacker_prefers]
+        self.defender_prefers = id_map[self.defender_prefers]
 
-            self.withheld_by_attacker = compress_set(self.withheld_by_attacker)
-            self.mined_by_attacker = compress_set(self.mined_by_attacker)
-            self.known_to_defender = compress_set(self.known_to_defender)
-            self.ignored_by_attacker = compress_set(self.ignored_by_attacker)
+        def compress_set(s):
+            return {id_map[x] for x in s if x in id_map}
+
+        self.withheld_by_attacker = compress_set(self.withheld_by_attacker)
+        self.mined_by_attacker = compress_set(self.mined_by_attacker)
+        self.known_to_defender = compress_set(self.known_to_defender)
+        self.ignored_by_attacker = compress_set(self.ignored_by_attacker)
+
+        #  print("post-compress", self)
 
         return None
 
@@ -101,11 +141,9 @@ class State:
     def children(self):
         # invert parent relationship
         children = [set() for _ in self.edges]
-        child = 0
-        for parents in self.edges:
+        for block, parents in enumerate(self.edges):
             for p in parents:
-                children[p] |= {child}
-            child += 1
+                children[p].add(block)
         return children
 
     def copy(self):
