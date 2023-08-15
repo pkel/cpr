@@ -2,7 +2,6 @@ import copy
 import dataclasses
 import queue
 import numpy as np
-import typing
 import xxhash
 
 import protocol
@@ -183,13 +182,15 @@ class State:
         for i, s in enumerate(rows):
             for x in s:
                 a[i, x] = True
-        return (n, np.packbits(a, axis=None))
+        packed_rows = np.packbits(a, axis=None)
+        return np.append(packed_rows, [np.uint8(n)])
 
 
 def unpack(packed):
-    n, bits = packed
+    n = packed[-1]
     size = (n + 6) * n
-    a = np.unpackbits(bits, axis=None)[:size].reshape((n + 6, n)).view(bool)
+    packed_rows = packed[:-1]
+    a = np.unpackbits(packed_rows, axis=None)[:size].reshape((n + 6, n)).view(bool)
     rows = []
     for i in range(n + 6):
         rows.append(set())
@@ -354,7 +355,7 @@ class QState:
     distance_step: int
     id: int
     digest: bytes
-    packed_state: typing.Any = dataclasses.field(compare=False)
+    packed_state: np.ndarray = dataclasses.field(compare=False)
 
 
 class Explorer:
@@ -415,13 +416,18 @@ class Explorer:
                     # we see this state for the first time
                     dst_id = len(self.state_map)
                     self.state_map[dst_digest] = dst_id
+                    # double check state packing
+                    dst_packed = t.state.pack()
+                    # TODO this safeguard slows down exploration.
+                    # Move into unit test!
+                    assert unpack(dst_packed).digest() == dst_digest
                     # recursive exploration
                     dst = QState(
                         distance_time=src.distance_time + t.timestep,
                         distance_step=src.distance_step + 1,
                         id=dst_id,
                         digest=dst_digest,
-                        packed_state=t.state.pack(),
+                        packed_state=dst_packed,
                     )
                     self.queue.put(dst)
 
