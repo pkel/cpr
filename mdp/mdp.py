@@ -348,6 +348,8 @@ class Explorer:
         self.state_map = dict()  # maps state digest to integer
         self.states_explored = 0
         self.max_actions = 0
+        self.reset_transitions = 0
+        self.nonreset_transitions = 0
         # handle start state
         state = self.start_state()
         digest = state.digest()
@@ -409,6 +411,12 @@ class Explorer:
 
                 # sanity check; we do not have noop actions
                 assert src.id != dst_id
+
+                # statistics
+                if dst_id == 0:
+                    self.reset_transitions += 1
+                else:
+                    self.nonreset_transitions += 1
 
                 # record transition
                 # TODO
