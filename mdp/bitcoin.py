@@ -4,6 +4,10 @@ from protocol import Block, Protocol, Reward, View
 
 
 class Bitcoin(Protocol):
+    @property
+    def name(self):
+        return "bitcoin"
+
     def mining(self, v: View, b: Block) -> set[Block]:
         return {b}
 

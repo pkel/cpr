@@ -295,6 +295,8 @@ class Config:
     gamma: float
     protocol: Protocol
 
+    stop_time: int
+
     def __post_init__(self):
         if self.alpha < 0 or self.alpha > 1:
             raise ValueError("alpha must be between 0 and 1")
@@ -446,6 +448,12 @@ class Explorer:
 
     def step(self):
         src = self.queue.get()
+
+        stop_time = self.config.stop_time
+        if stop_time > 0 and src.distance_time >= stop_time:
+            # TODO handle cutoff
+            return
+
         self.states_explored += 1
         src_state = unpack(src.packed_state)
 
@@ -522,6 +530,7 @@ class Explorer:
                 return False
             else:
                 self.step()
+        return True
 
     def peek(self):
         s = self.queue.get()

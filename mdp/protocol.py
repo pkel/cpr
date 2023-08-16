@@ -47,6 +47,10 @@ class Protocol:
     Protocol Specification API.
     """
 
+    @property
+    def name(self) -> str:
+        raise NotImplementedError
+
     def mining(self, v: View, b: Block) -> set[Block]:
         """
         Participants extend the block DAG according to this rule. Recall that

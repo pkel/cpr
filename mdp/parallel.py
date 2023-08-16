@@ -9,6 +9,10 @@ class Parallel(Protocol):
             raise ValueError("k must be greater 1")
         self.k = k
 
+    @property
+    def name(self):
+        return f"parallel-{self.k}"
+
     def mining(self, v: View, b: Block) -> set[Block]:
         children = v.children(b)
         if len(children) >= self.k:
