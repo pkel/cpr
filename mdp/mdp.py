@@ -4,6 +4,7 @@ import numpy as np
 import protocol
 import pynauty
 import queue
+import scipy
 import xxhash
 
 from protocol import Protocol
@@ -421,12 +422,14 @@ class Explorer:
     def __init__(self, cfg: Config):
         self.config = cfg
         self.queue = queue.PriorityQueue()
-        self.action_map = dict()  # maps action to integer
         self.state_map = dict()  # maps state digest to integer
-        self.states_explored = 0
-        self.max_actions = 0
+        self.action_map = dict()  # maps actions to integer
+        self.n_states = 0
+        self.n_actions = 0
+        self.transitions = []
         self.reset_transitions = 0
         self.nonreset_transitions = 0
+        self.explored = set()
         # handle start state
         state = self.start_state()
         digest = state.digest()
@@ -449,21 +452,15 @@ class Explorer:
     def step(self):
         src = self.queue.get()
 
-        stop_time = self.config.stop_time
-        if stop_time > 0 and src.distance_time >= stop_time:
-            # TODO handle cutoff
-            return
+        assert src.id not in self.explored, "double explore"
+        self.explored.add(src.id)
 
-        self.states_explored += 1
         src_state = unpack(src.packed_state)
 
-        actions = self.actions(src_state)
-        self.max_actions = max(self.max_actions, len(actions))
-        # TODO max_actions is about factor two smaller than action_map. By
-        # renaming the actions per source state, we can cut the number of
-        # actions in half.
+        for action in self.actions(src_state):
+            # check sum(prob) == 1
+            acc_p = 0
 
-        for action in actions:
             # alias action/integer
             if action in self.action_map:
                 action_id = self.action_map[action]
@@ -473,28 +470,40 @@ class Explorer:
 
             # apply action, obtain probabilistic transitions
             for t in action.apply(src_state, self.config):
-                # alias state/digest/integer
-                dst_digest = t.state.digest()
-                if dst_digest in self.state_map:
-                    dst_id = self.state_map[dst_digest]
-                else:
-                    # we see this state for the first time
-                    dst_id = len(self.state_map)
-                    self.state_map[dst_digest] = dst_id
-                    # double check state packing
-                    dst_packed = t.state.pack()
-                    # TODO this safeguard slows down exploration.
-                    # Move into unit test!
-                    assert unpack(dst_packed).digest() == dst_digest
-                    # recursive exploration
-                    dst = QState(
-                        distance_time=src.distance_time + t.timestep,
-                        distance_step=src.distance_step + 1,
-                        id=dst_id,
-                        digest=dst_digest,
-                        packed_state=dst_packed,
-                    )
-                    self.queue.put(dst)
+                acc_p += t.prob
+
+                # handle stopping condition
+                stop_time = self.config.stop_time
+                time = src.distance_time + t.timestep
+                if stop_time > 0 and time >= stop_time:
+                    # this would go beyond the stopping condition
+                    # hence terminate
+                    dst_id = 0
+                    # TODO. implement termination / reset
+                else:  # continue exploration
+                    # alias state/digest/integer
+                    dst_digest = t.state.digest()
+                    if dst_digest in self.state_map:
+                        dst_id = self.state_map[dst_digest]
+                    else:
+                        # we see this state for the first time
+                        # assign id
+                        dst_id = len(self.state_map)
+                        self.state_map[dst_digest] = dst_id
+                        # double check state packing
+                        dst_packed = t.state.pack()
+                        # TODO this safeguard slows down exploration.
+                        # Move into unit test!
+                        assert unpack(dst_packed).digest() == dst_digest
+                        # recursive exploration
+                        dst = QState(
+                            distance_time=time,
+                            distance_step=src.distance_step + 1,
+                            id=dst_id,
+                            digest=dst_digest,
+                            packed_state=dst_packed,
+                        )
+                        self.queue.put(dst)
 
                 # sanity check; we do not have noop actions
                 if src.id == dst_id:
@@ -514,7 +523,14 @@ class Explorer:
                     self.nonreset_transitions += 1
 
                 # record transition
-                # TODO
+                self.n_states = max(self.n_states, dst_id + 1)
+                self.n_actions = max(self.n_actions, action_id + 1)
+                self.transitions.append((src.id, action_id, t.prob, dst_id))
+
+                # TODO rewards
+
+            # check sum(prop) == 1
+            assert acc_p == 1, f"{acc_p}"
 
     def actions(self, s: State) -> list[Action]:
         lst = [Continue()]
@@ -536,3 +552,50 @@ class Explorer:
         s = self.queue.get()
         self.queue.put(s)
         return s
+
+    def mdp_matrices(self):
+        # create sparse matrix MDP suitable for pymdptoolbox
+        assert self.queue.qsize() == 0, "exploration in progress"
+        # init temp vectors
+        S = self.n_states + 1  # one additional state for invalid actions
+        A = self.n_actions
+        N = len(self.transitions)
+        row = [np.zeros(N) for _ in range(A)]
+        col = [np.zeros(N) for _ in range(A)]
+        p = [np.zeros(N) for _ in range(A)]
+        r = [np.zeros(N) for _ in range(A)]
+        # write transitions
+        for i, (src, a, prob, dst) in enumerate(self.transitions):
+            row[a][i] = src
+            col[a][i] = dst
+            assert prob > 0
+            # some src/a pair transition to the same dst, e.g. termination
+            p[a][i] += prob  # does not work for reward!
+            assert p[a][i] <= 1.0
+            # TODO reward
+        # create sparse matrices
+        matrix = scipy.sparse.csr_matrix
+        for a in range(A):
+            m = matrix((p[a], (row[a], col[a])), shape=(S, S))
+            p[a] = fix_invalid_actions(m)
+            r[a] = matrix((r[a], (row[a], col[a])), shape=(S, S))
+        return (p, r)
+
+
+def fix_invalid_actions(matrix):
+    (n, s) = matrix.shape
+    assert n == s, "non-square"
+    sums = matrix.sum(axis=1)
+    matrix = matrix.tolil()
+    for i, s in enumerate(sums):
+        assert s == 1 or s == 0
+        if s == 0:
+            # for this action there are not transitions
+            # this implies that the action is invalid
+            # to fix this, we transition to a special state
+            matrix[i, n - 1] = 1.0
+    matrix = matrix.tocsr()
+    sums = matrix.sum(axis=1)
+    for i, s in enumerate(sums):
+        assert s == 1
+    return matrix

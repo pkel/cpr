@@ -1,6 +1,7 @@
 import mdp
 from bitcoin import Bitcoin
 from parallel import Parallel
+import mdptoolbox
 import pprint
 import psutil
 
@@ -20,26 +21,30 @@ def explore_to_end(config):
         s = explorer.peek()
         info = dict(
             n_states_seen=len(explorer.state_map),
-            n_states_explored=explorer.states_explored,
             n_states_queued=explorer.queue.qsize(),
-            n_actions_used=len(explorer.action_map),
             transitions_explored=explorer.nonreset_transitions
             + explorer.reset_transitions,
-            max_actions=explorer.max_actions,
+            n_states=explorer.n_states,
+            n_actions=explorer.n_actions,
             distance_time=s.distance_time,
             distance_step=s.distance_step,
             ram_usage_gb=process.memory_info().rss / 1024**3,
         )
-        info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
+        info["queuing_factor"] = info["n_states_queued"] / info["n_states"]
         info["transitions_reset_ratio"] = (
             explorer.reset_transitions / info["transitions_explored"]
         )
         #  pp.pprint(info)
-    print(f"{config.protocol.name}: {explorer.states_explored}")
+    print(f"{config.protocol.name}: {explorer.n_states} / {len(explorer.transitions)}")
+    return explorer.mdp_matrices()
 
 
-explore_to_end(bitcoin)
-explore_to_end(parallel2)
-explore_to_end(parallel3)
-explore_to_end(parallel4)
-explore_to_end(parallel5)
+p, r = explore_to_end(bitcoin)
+#  explore_to_end(parallel2)
+#  explore_to_end(parallel3)
+#  explore_to_end(parallel4)
+#  explore_to_end(parallel5)
+
+VI = mdptoolbox.mdp.ValueIteration(p, r, 1)
+VI.setVerbose()
+VI.run()
