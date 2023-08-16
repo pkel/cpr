@@ -50,62 +50,37 @@ class State:
         #     - keep ancestors/descendants of attacker_prefers/defender_prefers
         #     - throw out the rest: descendants of common ancestors which are
         #       not predecessor of attacker_prefers/defender_prefers
-        # 3. Deterministically label blocks by enumerating blocks in
-        #    topological order.
-        # 4. Avoid graph isomorphisms TODO
-
-        parents = self.parents
-        children = self.children
-        view = View(self)
-
-        def predecessor(b):
-            return protocol.predecessor(view, b)
+        # 3. Apply canonical block labelling to avoid isomorphisms.
+        # 4. Derive deterministic topological-order block labelling.
 
         # find common ancestor
+        view = View(self)
+        hist_a = []
+        hist_b = []
         a = self.defender_prefers
         b = self.attacker_prefers
-        while a != b:
-            if a < b:
-                b = predecessor(b)
+        while a is not None:
+            hist_a.insert(0, a)
+            a = protocol.predecessor(view, a)
+        while b is not None:
+            hist_b.insert(0, b)
+            b = protocol.predecessor(view, b)
+        assert hist_a[0] == hist_b[0], "old ca"
+        while len(hist_a) > 0 and len(hist_b) > 0:
+            x = hist_a.pop(0)
+            if x == hist_b.pop(0):
+                ca = x
             else:
-                a = predecessor(a)
-        ca = a
+                break
 
         # keep blocks reachable from attacker/defender preference
         keep = set()
         for entry in [self.attacker_prefers, self.defender_prefers]:
             keep.add(entry)
-            # ancestors
-            todo = parents[entry].copy()
-            while len(todo) > 0:
-                i = todo.pop()
-                keep.add(i)
-                todo |= parents[i]
-            # descendants
-            todo = children[entry].copy()
-            while len(todo) > 0:
-                i = todo.pop()
-                keep.add(i)
-                todo |= children[i]
+            keep |= view.ancestors(entry)
+            keep |= view.descendants(entry)
         # remove ancestors of common ancestor
-        todo = parents[ca].copy()
-        while len(todo) > 0:
-            i = todo.pop()
-            keep.remove(i)
-            todo |= parents[i]
-
-        # relabel blocks in topological order
-        id_map = dict()
-        todo = {ca}
-        while len(todo) > 0:
-            old_id = todo.pop()
-            if old_id in keep:
-                todo |= children[old_id]
-                assert old_id not in id_map
-                new_id = len(id_map)
-                id_map[old_id] = new_id
-        # TODO. children is a set and its order ambiguous. Deterministic order
-        # could avoid isomorphisms.
+        keep -= view.ancestors(ca)
 
         # print()
         # print("pre-compress", self)
@@ -115,7 +90,40 @@ class State:
         # print("keep", keep)
         # print("id_map", id_map)
 
-        # create new state
+        # apply keep list
+        id_map = {old: new for new, old in enumerate(keep)}
+        self.relabel_and_filter(id_map)
+        ca = id_map[ca]
+
+        # merge isomorphic states by applying canonical ordering
+        cl = pynauty.canon_label(self.pynauty())
+        id_map = dict(enumerate(cl))
+        self.relabel_and_filter(id_map)
+        ca = id_map[ca]
+
+        # relabel topologically: parents have lower ids than children
+        id_map = dict()
+        todo = queue.PriorityQueue()
+        todo.put((0, ca))
+        while todo.qsize() > 0:
+            depth, old_id = todo.get()
+            if old_id not in id_map:
+                new_id = len(id_map)
+                id_map[old_id] = new_id
+                for c in self.children[old_id]:
+                    todo.put((depth + 1, c))
+        # NOTE. The priority queue makes this deterministic. Hence the new
+        # labels are still canonical.
+        self.relabel_and_filter(id_map)
+        # TODO. I think this could be one pass with the above relabel
+
+        # print("post-compress", self)
+        return None
+
+    def relabel_and_filter(self, id_map):
+        # sanity check
+        assert sorted(id_map.values()) == list(range(len(id_map)))
+        # end sanity check
         new_parents = [set()] * len(id_map)
         new_children = [set()] * len(id_map)
         for old_id, new_id in id_map.items():
@@ -136,10 +144,6 @@ class State:
         self.known_to_defender = compress_set(self.known_to_defender)
         self.ignored_by_attacker = compress_set(self.ignored_by_attacker)
 
-        # print("post-compress", self)
-
-        return None
-
     def all_blocks(self):
         return set(range(len(self.parents)))
 
@@ -158,18 +162,9 @@ class State:
         # TODO avoid deepcopy of state. Do repeated unpacks instead
         return copy.deepcopy(self)
 
-    def dag_digest(self):
-        # Our goal here is to hash the graph such that isomorphic ones,
-        # i.e. ones that could be obtained by relabeling the blocks, get the
-        # same hash. Same hash implies that the states are merged during
-        # exploration.
-        #
-        # https://stackoverflow.com/a/14574330
-        #
-        # We use the C library nauty with python binding pynauty. It can derive
-        # canonical labellings for input graphs. Isomorphic graphs have the
-        # same canonical labelling. Hashing the canonical graph does what we
-        # want.
+    def pynauty(self):
+        # nauty is a C library for finding canonical representations of graphs
+        # and checking for isomorphism. pynauty provides Python bindings.
         #
         # Nauty works on colored graphs. To make it work we have to encode all
         # state into colors. How many do we need?
@@ -190,7 +185,7 @@ class State:
         #   - defender_view: unknown, known, preferred
         #   - attacker_view: considered, ignored, preferred
         #   - withholding: defender, released, withheld
-        # but that's still 2 + 2 + 2 bits.
+        # and hence 3^3 = 27 colors.
         n = len(self.parents)
         dv = [0] * n  # defender_view = unknown
         for x in self.known_to_defender:
@@ -209,12 +204,12 @@ class State:
         colors = [set() for _ in range(27)]  # vertex coloring
         for i in range(n):
             colors[(dv[i] * 9) + (av[i] * 3) + w[i]].add(i)
-        # pynauty seems to ignore empty color sets?
+        # pynauty expects non-empty color sets
         vc = list()
-        palette = list()
+        #  palette = list()  # required to reconstruct state from colored graph
         for i in range(27):
             if len(colors[i]) > 0:
-                palette.append(i)
+                #  palette.append(i)
                 vc.append(colors[i])
         # pynauty graph representation: adjacency dict
         ad = dict()
@@ -227,15 +222,9 @@ class State:
             adjacency_dict=ad,
             vertex_coloring=vc,
         )
-        # find canonical form
-        c = pynauty.certificate(g)
-        # return hash
-        h = xxhash.xxh3_128_digest(repr([palette, c]))
-        print(n, xxhash.xxh3_64_hexdigest(c), ad, vc, palette)
-        return h
+        return g
 
     def digest(self):
-        return self.dag_digest()
         data = []
         data.append(self.parents)
         #  data.append(self.children)  # redundant with parents
@@ -336,12 +325,7 @@ class Release(Action):
         s = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
         # mark i and all ancestors as not withheld
         s.withheld_by_attacker -= {self.i}
-        todo = s.parents[self.i].copy()
-        while len(todo) > 0:
-            j = todo.pop()
-            if j in s.withheld_by_attacker:
-                s.withheld_by_attacker -= {j}
-                todo |= s.parents[j]
+        s.withheld_by_attacker -= View(s).ancestors(self.i)
         # this transition is deterministic
         return [Transition(1, s, False)]
 
@@ -356,12 +340,7 @@ class Consider(Action):
         s = s.copy()  # TODO avoid deepcopy; do unpack, modify, pack
         # mark i and all ancestors as not ignored
         s.ignored_by_attacker -= {self.i}
-        todo = s.parents[self.i].copy()
-        while len(todo) > 0:
-            j = todo.pop()
-            if j in s.ignored_by_attacker:
-                s.ignored_by_attacker.remove(j)
-                todo |= s.parents[j]
+        s.ignored_by_attacker -= View(s).ancestors(self.i)
         # update attacker's preference
         s.attacker_prefers = cfg.protocol.preference(
             View(s, exclude=s.ignored_by_attacker),
@@ -379,7 +358,7 @@ class Continue(Action):
     def apply(self, s: State, cfg: Config) -> list[Transition]:
         # calculate freshly released blocks
         release = s.mined_by_attacker - s.withheld_by_attacker - s.known_to_defender
-        release = sorted(list(release))
+        release = sorted(list(release))  # NOTE topological order
         # calculate freshly mined defender blocks
         defender = s.all_blocks() - s.mined_by_attacker - s.known_to_defender
         assert len(defender) <= 1

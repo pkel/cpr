@@ -16,21 +16,23 @@ class View:
         raise NotImplementedError
 
     def ancestors(self, b: Block) -> set[Block]:
-        acc = {}
+        acc = set()
         todo = self.parents(b).copy()
         while len(todo) > 0:
             b = todo.pop()
-            acc.add(b)
-            todo |= self.parents(b)
+            if b not in acc:
+                acc.add(b)
+                todo |= self.parents(b)
         return acc
 
     def descendants(self, b: Block) -> set[Block]:
-        acc = {}
+        acc = set()
         todo = self.children(b).copy()
         while len(todo) > 0:
             b = todo.pop()
-            acc.add(b)
-            todo |= self.children(b)
+            if b not in acc:
+                acc.add(b)
+                todo |= self.children(b)
         return acc
 
 

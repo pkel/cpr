@@ -20,13 +20,13 @@ class Parallel(Protocol):
         return len(v.parents(b)) == 1
 
     def predecessor(self, v: View, b: Block) -> Optional[Block]:
-        parents = v.parents(b)
         assert not self.is_vote(v, b)
-        if len(parents) == 0:
+        votes = v.parents(b)
+        if len(votes) == 0:
             return None
         else:
-            assert len(parents) == self.k
-            vote = parents.pop()
+            assert len(votes) == self.k, f"{len(votes)} != {self.k}"
+            vote = votes.pop()
             return v.parents(vote).pop()
 
     def height(self, v: View, b: Block) -> int:
@@ -56,9 +56,10 @@ class Parallel(Protocol):
         return len(v.ancestors(b))
 
     def reward(self, v: View, b: Block) -> list[Reward]:
+        assert not self.is_vote(v, b)
         votes = v.parents(b)
         if len(votes) == 0:  # genesis
             return []
         else:
-            assert len(votes) == self.k, "reward must not be called on votes"
+            assert len(votes) == self.k, f"{len(votes)} != {self.k}"
             return [Reward(v.miner(x), 1) for x in list(votes) + [b]]
