@@ -1,10 +1,11 @@
 import copy
 import dataclasses
-import queue
 import numpy as np
+import protocol
+import pynauty
+import queue
 import xxhash
 
-import protocol
 from protocol import Protocol
 
 
@@ -157,7 +158,84 @@ class State:
         # TODO avoid deepcopy of state. Do repeated unpacks instead
         return copy.deepcopy(self)
 
+    def dag_digest(self):
+        # Our goal here is to hash the graph such that isomorphic ones,
+        # i.e. ones that could be obtained by relabeling the blocks, get the
+        # same hash. Same hash implies that the states are merged during
+        # exploration.
+        #
+        # https://stackoverflow.com/a/14574330
+        #
+        # We use the C library nauty with python binding pynauty. It can derive
+        # canonical labellings for input graphs. Isomorphic graphs have the
+        # same canonical labelling. Hashing the canonical graph does what we
+        # want.
+        #
+        # Nauty works on colored graphs. To make it work we have to encode all
+        # state into colors. How many do we need?
+        #
+        # There are six boolean properties.
+        #   attacker_prefers: int
+        #   defender_prefers: int
+        #   ignored_by_attacker: set[int]
+        #   withheld_by_attacker: set[int]
+        #   mined_by_attacker: set[int]
+        #   known_to_defender: set[int]
+        # Naively, we'd need 2^6=64 colors. Since some combinations are not
+        # possible, we can shrink that number:
+        #   - defender_prefers implies known_to_defender
+        #   - attacker_prefers implies !ignored_by_attacker
+        #   - withheld_by_attacker implies mined_by_attacker
+        # So, we can get away with three properties
+        #   - defender_view: unknown, known, preferred
+        #   - attacker_view: considered, ignored, preferred
+        #   - withholding: defender, released, withheld
+        # but that's still 2 + 2 + 2 bits.
+        n = len(self.parents)
+        dv = [0] * n  # defender_view = unknown
+        for x in self.known_to_defender:
+            dv[x] = 1  # defender_view = known
+        dv[self.defender_prefers] = 2  # defender_view = preferred
+        av = [0] * n  # attacker_view = considered
+        for x in self.ignored_by_attacker:
+            av[x] = 1  # attacker_view = ignored
+        av[self.attacker_prefers] = 2  # attacker_view = preferred
+        w = [0] * n  # withholding = defender
+        for x in self.mined_by_attacker:
+            w[x] = 1  # withholding = released
+        for x in self.withheld_by_attacker:
+            w[x] = 2  # withholding = withheld
+        # pynauty color representation: list of sets
+        colors = [set() for _ in range(27)]  # vertex coloring
+        for i in range(n):
+            colors[(dv[i] * 9) + (av[i] * 3) + w[i]].add(i)
+        # pynauty seems to ignore empty color sets?
+        vc = list()
+        palette = list()
+        for i in range(27):
+            if len(colors[i]) > 0:
+                palette.append(i)
+                vc.append(colors[i])
+        # pynauty graph representation: adjacency dict
+        ad = dict()
+        for i, s in enumerate(self.parents):
+            ad[i] = list(s)
+        # init pynauty Graph
+        g = pynauty.Graph(
+            len(self.parents),
+            directed=True,
+            adjacency_dict=ad,
+            vertex_coloring=vc,
+        )
+        # find canonical form
+        c = pynauty.certificate(g)
+        # return hash
+        h = xxhash.xxh3_128_digest(repr([palette, c]))
+        print(n, xxhash.xxh3_64_hexdigest(c), ad, vc, palette)
+        return h
+
     def digest(self):
+        return self.dag_digest()
         data = []
         data.append(self.parents)
         #  data.append(self.children)  # redundant with parents
@@ -432,7 +510,15 @@ class Explorer:
                     self.queue.put(dst)
 
                 # sanity check; we do not have noop actions
-                assert src.id != dst_id
+                if src.id == dst_id:
+                    print()
+                    print("noop action")
+                    print("src", src_state)
+                    _ = src_state.digest()
+                    print(action)
+                    print("dst", t.state)
+                    _ = t.state.digest()
+                    assert False, "noop action"
 
                 # statistics
                 if dst_id == 0:
