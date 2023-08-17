@@ -1,59 +1,11 @@
 from dataclasses import dataclass
-from protocol import Block, View
+from protocol import View
 from typing import TypeVar
 
 State = TypeVar("State")
 
 
 class StateEditor(View):
-    @property
-    def attacker_prefers(self) -> Block:
-        raise NotImplementedError
-
-    @property
-    def defender_prefers(self) -> Block:
-        raise NotImplementedError
-
-    @property
-    def considered_by_attacker(self) -> set[Block]:
-        raise NotImplementedError
-
-    @property
-    def known_to_defender(self) -> set[Block]:
-        raise NotImplementedError
-
-    @property
-    def mined_by_attacker(self) -> set[Block]:
-        raise NotImplementedError
-
-    @property
-    def withheld_by_attacker(self) -> set[Block]:
-        raise NotImplementedError
-
-    def set_considered_by_attacker(self, Block) -> None:
-        raise NotImplementedError
-
-    def set_known_to_defender(self, Block) -> None:
-        raise NotImplementedError
-
-    def set_preferred_by_attacker(self, Block) -> None:
-        raise NotImplementedError
-
-    def set_preferred_by_defender(self, Block) -> None:
-        raise NotImplementedError
-
-    def set_released_by_attacker(self, Block) -> None:
-        raise NotImplementedError
-
-    def invert(self, s: set[Block]) -> set[Block]:
-        raise NotImplementedError
-
-    def append(self, parents: set[Block], mined_by_attacker: bool) -> Block:
-        raise NotImplementedError
-
-    def clear(self) -> None:
-        raise NotImplementedError
-
     def load(self, state: State) -> None:
         raise NotImplementedError
 
