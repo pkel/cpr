@@ -555,6 +555,8 @@ class Explorer:
 
     def mdp_matrices(self):
         # create sparse matrix MDP suitable for pymdptoolbox
+        # TODO. I'm pretty sure this is broken. All A matrices have the same
+        # sparcity structure here. I think they shouldn't!
         assert self.queue.qsize() == 0, "exploration in progress"
         # init temp vectors
         S = self.n_states + 1  # one additional state for invalid actions

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from protocol import View
+from protocol import Block, View
 from typing import TypeVar
 
 State = TypeVar("State")
@@ -12,8 +12,11 @@ class StateEditor(View):
     def save(self) -> State:
         raise NotImplementedError
 
+    def topo_sort(self, s: set[Block]) -> list[Block]:
+        raise NotImplementedError
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, order=True)
 class Trace:
     pass
 
@@ -39,11 +42,6 @@ class TransitionList:
 
 @dataclass(frozen=True)
 class Action:
-    pass
-
-
-@dataclass(frozen=True)
-class Priority:
     pass
 
 
@@ -73,19 +71,14 @@ class Model:
         Define state transitions. Action a is applied to state s. Trace t may
         be used to track how (= which actions and intermediate states) the
         source state s has been explored. This can be useful for early
-        termination.
+        termination. Trace also guided the exploration: state with smaller
+        trace are explored first.
         """
         raise NotImplementedError
 
     def apply_invalid(self, s: State, t: Trace) -> TransitionList:
         """
         Define what happens on invalid actions. That is, actions taken from
-        s but not listed in actions(s).
+        s which are not listed in actions(s).
         """
         raise NotImplementedError
-
-    def priority(self) -> Priority:
-        """
-        Guide exploration. States with low priority will be expanded first.
-        """
-        return Priority()

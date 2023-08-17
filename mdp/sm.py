@@ -20,11 +20,11 @@ class Config:
 
 class StateEditor(StateEditor):
     @property
-    def attacker_prefers(self) -> Block:
+    def preferred_by_attacker(self) -> Block:
         raise NotImplementedError
 
     @property
-    def defender_prefers(self) -> Block:
+    def preferred_by_defender(self) -> Block:
         raise NotImplementedError
 
     @property
@@ -43,19 +43,19 @@ class StateEditor(StateEditor):
     def released_by_attacker(self) -> set[Block]:
         raise NotImplementedError
 
-    def set_considered_by_attacker(self, Block) -> None:
+    def set_considered_by_attacker(self, b: Block) -> None:
         raise NotImplementedError
 
-    def set_known_to_defender(self, Block) -> None:
+    def set_known_to_defender(self, b: Block) -> None:
         raise NotImplementedError
 
-    def set_preferred_by_attacker(self, Block) -> None:
+    def set_preferred_by_attacker(self, b: Block) -> None:
         raise NotImplementedError
 
-    def set_preferred_by_defender(self, Block) -> None:
+    def set_preferred_by_defender(self, b: Block) -> None:
         raise NotImplementedError
 
-    def set_released_by_attacker(self, Block) -> None:
+    def set_released_by_attacker(self, b: Block) -> None:
         raise NotImplementedError
 
     def invert(self, s: set[Block]) -> set[Block]:
@@ -74,9 +74,6 @@ class StateEditor(StateEditor):
         """
         raise NotImplementedError
 
-    def partial_view(self, include: set[Block]) -> View:
-        raise NotImplementedError
-
 
 @dataclass(frozen=True)
 class Release(Action):
@@ -93,6 +90,33 @@ class Continue(Action):
     pass
 
 
+class PartialView(View):
+    def __init__(self, view: View, include: set[Block]):
+        self.view = view
+        self.include = include
+
+    def children(self, b):
+        return self.view.children(b) & self.include
+
+    def parents(self, b):
+        return self.view.parents(b) & self.include
+
+    def miner(self, b):
+        return self.view.miner(b)
+
+
+@dataclass(frozen=True, order=True)
+class Trace:
+    blocks_mined: int
+    actions_taken: int
+
+
+def trace(t: Trace, *args, block_mined=False) -> Trace:
+    return Trace(
+        blocks_mined=t.blocks_mined + block_mined, actions_taken=t.actions_taken + 1
+    )
+
+
 class SelfishMining(Model):
     def __init__(self, editor: StateEditor, config: Config):
         self.editor = editor
@@ -105,46 +129,55 @@ class SelfishMining(Model):
         # Any genesis we set here will be rewarded in the future. To make this
         # fair, we set two genesis blocks: one mined by the attacker and one by
         # the defender.
-        se = self.editor()
-        cfg = self.config()
+        se = self.editor
+        cfg = self.config
+        t = Trace(actions_taken=0, blocks_mined=0)
         # prefer attacker
         se.clear()
-        b = se.append(set(), mined_by_attacker=True)
+        b = se.append(set(), mined_by_defender=False)
+        se.set_considered_by_attacker(b)
+        se.set_released_by_attacker(b)
+        se.set_known_to_defender(b)
         se.set_preferred_by_defender(b)
         se.set_preferred_by_attacker(b)
-        t1 = Transition(state=se.save(), probability=cfg.alpha)
+        t1 = Transition(state=se.save(), probability=cfg.alpha, trace=t)
         # prefer defender
         se.clear()
-        b = se.append(set(), mined_by_attacker=False)
+        b = se.append(set(), mined_by_defender=True)
+        se.set_considered_by_attacker(b)
+        se.set_known_to_defender(b)
         se.set_preferred_by_defender(b)
         se.set_preferred_by_attacker(b)
-        t2 = Transition(state=se.save(), probability=1 - cfg.alpha)
+        t2 = Transition(state=se.save(), probability=1 - cfg.alpha, trace=t)
         # return
         return TransitionList([t1, t2])
 
     def actions(self, s: State) -> list[Action]:
         se = self.editor
         se.load(s)
+        if se.n_blocks == 0:
+            return []
         lst = [Continue()]
-        for i in se.invert(se.released_by_attacker):
+        for i in se.invert(se.released_by_attacker) - se.mined_by_defender:
             lst.append(Release(i))
         for i in se.invert(se.considered_by_attacker):
             lst.append(Consider(i))
         return lst
 
-    def apply_release(self, s: State, b: Block) -> TransitionList:
+    def apply_release(self, b: Block, s: State, t: Trace) -> TransitionList:
         se = self.editor
         se.load(s)
         # safeguard
-        assert b not in se.withheld_by_attacker, "block {b} already released"
+        assert b not in se.released_by_attacker, f"block {b} already released"
+        assert b not in se.mined_by_defender, f"block {b} cannot be released"
         # mark i and all ancestors as released
-        for x in {b} | se.ancestors(b):
+        for x in {b} | se.ancestors(b) - se.mined_by_defender:
             se.set_released_by_attacker(x)
         # this transition is deterministic
-        t = Transition(state=se.save(), probability=1)
-        return TransitionList([t])
+        to = Transition(state=se.save(), probability=1, trace=trace(t))
+        return TransitionList([to])
 
-    def apply_consider(self, s: State, b: Block) -> TransitionList:
+    def apply_consider(self, b: Block, s: State, t: Trace) -> TransitionList:
         se = self.editor
         cfg = self.config
         se.load(s)
@@ -155,21 +188,22 @@ class SelfishMining(Model):
             se.set_considered_by_attacker(b)
         # update attacker's preference according to protocol spec
         se.attacker_prefers = cfg.protocol.preference(
-            se.partial_view(s.considered_by_attacker),
-            old=se.attacker_prefers,
+            PartialView(se, se.considered_by_attacker),
+            old=se.preferred_by_attacker,
             new=b,
         )
         # this transition is deterministic
-        t = Transition(state=se.save(), probability=1)
-        return TransitionList([t])
+        to = Transition(state=se.save(), probability=1, trace=trace(t))
+        return TransitionList([to])
 
     # apply_continue has four cases which we handle individually here
     def _apply_continue(
         self,
         s: State,
+        t: Trace,
         *args,
         attacker_communicates_fast: bool,
-        attacker_mines_next_block: bool
+        attacker_mines_next_block: bool,
     ) -> Transition:
         se = self.editor
         cfg = self.config
@@ -193,47 +227,55 @@ class SelfishMining(Model):
         for b in blocks_received:
             se.set_known_to_defender(b)
             se.defender_prefers = cfg.protocol.preference(
-                se.partial_view(se.known_to_defender),
-                old=se.defender_prefers,
+                PartialView(se, se.known_to_defender),
+                old=se.preferred_by_defender,
                 new=b,
             )
         # mine next block
         if attacker_mines_next_block:
             p *= cfg.alpha
             parent_blocks = cfg.protocol.mining(
-                se.partial_view(se.considered_by_attacker), se.attacker_prefers
+                PartialView(se, se.considered_by_attacker), se.preferred_by_attacker
             )
             se.append(parent_blocks, mined_by_defender=False)
         else:
             p *= 1 - cfg.alpha
             parent_blocks = cfg.protocol.mining(
-                se.partial_view(se.known_to_defender), se.defender_prefers
+                PartialView(se, se.known_to_defender), se.preferred_by_defender
             )
             se.append(parent_blocks, mined_by_defender=True)
         # return Transition
-        return Transition(state=se.save(), probability=p)
+        return Transition(
+            state=se.save(), probability=p, trace=trace(t, block_mined=True)
+        )
 
-    def apply_continue(self, s: State) -> TransitionList:
+    def apply_continue(self, s: State, t: Trace) -> TransitionList:
         lst = []
         for i in [True, False]:
             for j in [True, False]:
-                t = self._apply_continue(
-                    s, attacker_communicates_fast=i, attacker_mines_next_block=j
+                to = self._apply_continue(
+                    s,
+                    t,
+                    attacker_communicates_fast=i,
+                    attacker_mines_next_block=j,
                 )
-                lst.append(t)
-        return TransitionList[lst]
+                lst.append(to)
+        return TransitionList(lst)
 
-    def apply(self, s: State, a: Action) -> TransitionList:
+    def apply(self, a: Action, s: State, t: Trace) -> TransitionList:
         if isinstance(a, Release):
-            return self.apply_release(s, a.b)
+            return self.apply_release(a.b, s, t)
         if isinstance(a, Consider):
-            return self.apply_consider(s, a.b)
+            return self.apply_consider(a.b, s, t)
         if isinstance(a, Continue):
-            return self.apply_continue(s)
+            return self.apply_continue(s, t)
         assert False, "invalid action"
 
-    def apply_invalid(self, s: State) -> TransitionList:
-        t = Transition(
-            state=self.invalid_state, probability=1, reward=self.config.invalid_reward
+    def apply_invalid(self, s: State, t: Trace) -> TransitionList:
+        to = Transition(
+            state=self.invalid_state,
+            probability=1,
+            reward=self.config.invalid_reward,
+            trace=Trace(blocks_mined=t.blocks_mined, actions_taken=t.actions_taken + 1),
         )
-        return TransitionList([t])
+        return TransitionList([to])
