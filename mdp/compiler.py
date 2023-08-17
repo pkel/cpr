@@ -197,11 +197,6 @@ class Compiler:
                 self.step()
         return True
 
-    def peek(self):
-        x = self.queue.get()
-        self.queue.put(x)
-        return x
-
     def step(self):
         trace, state = self.queue.get()
 
@@ -267,8 +262,9 @@ class Compiler:
                 p[a].append(prob)
                 r[a].append(rew)
             else:
-                invalid_transitions[src].add((dst, prob, rew))
+                invalid_transitions[src].append((dst, prob, rew))
         # handle invalid actions
+        # TODO. We have a problem here. Infinite loop or recursion?
         for a in range(A):
             for src in range(S):
                 if (src, a) in valid_actions:

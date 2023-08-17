@@ -10,6 +10,7 @@ class Config:
     protocol: Protocol
 
     invalid_reward: float = 0.0
+    truncate_on_pow: int = -1
 
     def __post_init__(self):
         if self.alpha < 0 or self.alpha > 1:
@@ -263,6 +264,14 @@ class SelfishMining(Model):
         return TransitionList(lst)
 
     def apply(self, a: Action, s: State, t: Trace) -> TransitionList:
+        # handle termination
+        top = self.config.truncate_on_pow
+        if top > 0 and t.blocks_mined >= top:
+            # we just do a reset here for now
+            # TODO. Calculate reward of actually applying the action but
+            # transition to terminal state or similar
+            return self.start()
+        # handle action
         if isinstance(a, Release):
             return self.apply_release(a.b, s, t)
         if isinstance(a, Consider):
