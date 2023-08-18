@@ -188,11 +188,12 @@ class SelfishMining(Model):
         for x in {b} | se.ancestors(b):
             se.set_considered_by_attacker(x)
         # update attacker's preference according to protocol spec
-        se.attacker_prefers = cfg.protocol.preference(
+        pref = cfg.protocol.preference(
             PartialView(se, se.considered_by_attacker),
             old=se.preferred_by_attacker,
             new=b,
         )
+        se.set_preferred_by_attacker(pref)
         # this transition is deterministic
         to = Transition(state=se.save(), probability=1, trace=trace(t))
         return TransitionList([to])
@@ -227,11 +228,12 @@ class SelfishMining(Model):
         # show blocks to defender, update preference according to protocol spec
         for b in blocks_received:
             se.set_known_to_defender(b)
-            se.defender_prefers = cfg.protocol.preference(
+            pref = cfg.protocol.preference(
                 PartialView(se, se.known_to_defender),
                 old=se.preferred_by_defender,
                 new=b,
             )
+            se.set_preferred_by_defender(pref)
         # mine next block
         if attacker_mines_next_block:
             p *= cfg.alpha

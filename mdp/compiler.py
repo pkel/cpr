@@ -1,7 +1,9 @@
 import numpy
+import pynauty
 import queue
 import scipy
 import sm
+import xxhash
 
 # Model and protocol spec use generic types which we instantiate here:
 # - Block: int
@@ -27,11 +29,29 @@ class StateEditor(sm.StateEditor):
     def clear(self):
         self.n_blocks = 0
 
-    def save(self):
+    def _save(self):
         sub = self.buf[: self.n_blocks + N_PROP, : self.n_blocks]
         packed = numpy.packbits(sub, axis=None)
         with_size = numpy.append(packed, [numpy.uint8(self.n_blocks)])
         return with_size.tobytes()
+
+    def save(self):
+        #  return self._save()
+
+        # _save plus safeguards
+        binary = self._save()
+        ic = self.isomorphism_class()
+        if self.n_blocks > 0:
+            subset = self.ancestors(self.preferred_by_attacker)
+            subset.add(self.preferred_by_attacker)
+            ics = self.isomorphism_class(subset)
+        else:
+            subset = None
+            ics = None
+        self.load(binary)
+        assert self.isomorphism_class() == ic
+        assert subset is None or self.isomorphism_class(subset) == ics
+        return binary
 
     def load(self, s):
         with_size = numpy.frombuffer(s, dtype=numpy.uint8)
@@ -166,6 +186,116 @@ class StateEditor(sm.StateEditor):
     def topo_sort(self, blocks):
         # blocks can only be appended, hence id's are already ordered
         return sorted(list(blocks))
+
+    def canonical_order(self, subset=None):
+        # nauty is a C library for finding canonical representations of graphs
+        # and checking for isomorphism. pynauty provides Python bindings.
+        #
+        # This function derives a pynauty graph isomorphic to the edited state
+        # or a subset thereof.
+
+        # set default subset = all blocks
+        if subset is None:
+            subset = set(range(self.n_blocks))
+
+        size = len(subset)
+
+        # my code only works for nonempty graphs
+        if size < 1:
+            return dict()
+
+        # pynauty expects integer keys starting from 0
+        block_id = {block: id for id, block in enumerate(subset)}
+
+        # Nauty works on colored graphs. To make it work we have to encode all
+        # state into colors. How many do we need?
+        #
+        # There are six boolean properties.
+        #   preferred_by_attacker: int
+        #   preferred_by_defender: int
+        #   ignored_by_attacker: set[int]
+        #   withheld_by_attacker: set[int]
+        #   mined_by_attacker: set[int]
+        #   known_to_defender: set[int]
+        # Naively, we'd need 2^6=64 colors. Since some combinations are not
+        # possible, we can shrink that number:
+        #   - preferred_by_defender implies known_to_defender
+        #   - preferred_by_attacker implies considered_by_attacker
+        #   - withheld_by_attacker implies !mined_by_defender
+        #   - released_by_attacker implies !mined_by_defender
+        # So, we can get away with three properties
+        #   - defender_view: unknown, known, preferred
+        #   - attacker_view: ignored, considered, preferred
+        #   - withholding: mined_by_defender, withheld, released
+        # and hence 3^3 = 27 colors.
+
+        dv = [0] * size  # defender_view = unknown
+        for x in self.known_to_defender & subset:
+            dv[block_id[x]] = 1  # defender_view = known
+        if self.preferred_by_defender in subset:
+            dv[block_id[self.preferred_by_defender]] = 2  # defender_view = preferred
+
+        av = [0] * size  # attacker_view = ignored
+        for x in self.considered_by_attacker & subset:
+            av[block_id[x]] = 1  # attacker_view = considered
+        if self.preferred_by_attacker in subset:
+            av[block_id[self.preferred_by_attacker]] = 2  # attacker_view = preferred
+
+        w = [0] * size  # withholding = withheld
+        for x in self.mined_by_defender & subset:
+            w[block_id[x]] = 1  # withholding = mined_by_defender
+        for x in self.released_by_attacker & subset:
+            w[block_id[x]] = 2  # withholding = released
+
+        # pynauty color representation: list of sets
+        colors = [set() for _ in range(27)]  # vertex coloring
+        for i in range(size):
+            colors[(dv[i] * 9) + (av[i] * 3) + w[i]].add(i)
+
+        # pynauty expects non-empty color sets
+        vc = list()
+        palette = list()  # required to reconstruct state from colored graph
+        for i in range(27):
+            if len(colors[i]) > 0:
+                palette.append(i)
+                vc.append(colors[i])
+
+        # pynauty graph representation: adjacency dict
+        ad = dict()
+        for src in subset:
+            ad[block_id[src]] = list()
+            for dst in self.parents(src) & subset:
+                ad[block_id[src]].append(block_id[dst])
+
+        # init pynauty Graph
+        g = pynauty.Graph(
+            size,
+            directed=True,
+            adjacency_dict=ad,
+            vertex_coloring=vc,
+        )
+
+        # find canonical labels and return
+        relabel = pynauty.canon_label(g)
+        return {b: relabel[block_id[b]] for b in subset}
+
+    def isomorphism_class(self, subset=None):
+        canonical_ids = self.canonical_order(subset)
+        size = len(canonical_ids)
+        arr = numpy.full((size + N_PROP, size), False)
+        if size > 0:
+            # copy data in canonical order from self.buf into arr
+            idx = numpy.zeros(size, dtype=int)
+            for block, canon in canonical_ids.items():
+                idx[canon] = block
+            for i in range(N_PROP):
+                arr[i,] = self.buf[i, idx]
+            arr[N_PROP:,] = self._adj[idx, idx]
+        # convert to bytes and hash
+        # WARNING: in principle, arr.tobytes() is a valid state. It can be
+        # loaded into the editor. However, this would break a core assumption
+        # that blocks are topologically sorted. See topo_sort() method.
+        return xxhash.xxh3_128_digest(arr.tobytes())
 
 
 class Compiler:
