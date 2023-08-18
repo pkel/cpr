@@ -3,6 +3,7 @@ from sm import Config, SelfishMining
 from bitcoin import Bitcoin
 from parallel import Parallel
 import mdptoolbox
+import pickle
 import pprint
 import psutil
 
@@ -11,7 +12,11 @@ pp = pprint.PrettyPrinter(indent=2)
 
 def cfg(protocol, *args, **kwargs):
     return Config(
-        protocol=protocol(*args, **kwargs), alpha=0.25, gamma=0.5, truncate_on_pow=5
+        protocol=protocol(*args, **kwargs),
+        alpha=0.25,
+        gamma=0.5,
+        truncate_on_pow=5,
+        horizon=1000,
     )
 
 
@@ -43,7 +48,10 @@ def compile(*args, verbose=False, **kwargs):
             info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
             pp.pprint(info)
     print(f"{config.protocol.name}: {len(c.explored)} / {len(c.transitions)}")
-    return c.mdp_matrices()
+    p, r = c.mdp_matrices()
+    with open(f"{config.protocol.name}.pkl", "wb") as f:
+        pickle.dump((p, r), f)
+    return (p, r)
 
 
 p, r = compile(Bitcoin, verbose=True)
