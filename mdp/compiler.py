@@ -253,7 +253,7 @@ class Compiler:
         r = [[] for _ in range(A)]
         # write transitions
         valid_actions = set()
-        invalid_transitions = [[]] * S
+        invalid_transitions = [[] for _ in range(S)]
         for a, src, dst, prob, rew in self.transitions:
             if a >= 0:
                 valid_actions.add((src, a))
@@ -264,7 +264,6 @@ class Compiler:
             else:
                 invalid_transitions[src].append((dst, prob, rew))
         # handle invalid actions
-        # TODO. We have a problem here. Infinite loop or recursion?
         for a in range(A):
             for src in range(S):
                 if (src, a) in valid_actions:

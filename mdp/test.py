@@ -45,7 +45,7 @@ def compile(*args, **kwargs):
 
 
 p, r = compile(Bitcoin)
-p, r = compile(Parallel, k=2)
+#  p, r = compile(Parallel, k=2)
 
 VI = mdptoolbox.mdp.ValueIteration(p, r, 1)
 VI.setVerbose()
