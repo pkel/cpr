@@ -50,12 +50,12 @@ def compile(*args, verbose=False, **kwargs):
     print(f"{config.protocol.name}: {len(c.explored)} / {len(c.transitions)}")
     p, r = c.mdp_matrices()
     with open(f"{config.protocol.name}.pkl", "wb") as f:
-        pickle.dump((p, r), f)
+        pickle.dump(c.transitions, f)
     return (p, r)
 
 
-p, r = compile(Bitcoin, verbose=True)
-#  p, r = compile(Bitcoin)
+#  p, r = compile(Bitcoin, verbose=True)
+p, r = compile(Bitcoin)
 p, r = compile(Parallel, k=2)
 p, r = compile(Parallel, k=3)
 p, r = compile(Parallel, k=4)

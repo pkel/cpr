@@ -4,34 +4,52 @@ import pickle
 protocol = "bitcoin"
 
 with open(f"{protocol}.pkl", "rb") as f:
-    P, R = pickle.load(f)
+    transitions = pickle.load(f)
 
 # Let's do a naive value iteration according to
 # Wikipedia:Markov Decision Process
 
-A = len(P)  # number of actions
-S = P[0].shape[0]  # number of states
+S = 0
+A = 0
+for act, src, dst, prob, rew in transitions:
+    S = max(src, S)
+    A = max(act, A)
+S += 1
+A += 1
 
 print(f"{protocol} protocol, {S} states, {A} actions")
 
-V = numpy.zeros((1, S), dtype=float)
+# Build table t[src][act] = list[tuple[dst, prob, rew]]
+tab = [dict() for _ in range(S)]
+for act, src, dst, prob, rew in transitions:
+    if act not in tab[src]:
+        tab[src][act] = []
+    tab[src][act].append((dst, prob, rew))
+
+value = numpy.zeros(S, dtype=float)
 policy = numpy.zeros(S, dtype=int)
+
 discount = 0.99
 
 for iteration in range(100):
-    Vnext = numpy.zeros((1, S))
+    value_next = numpy.zeros(S, dtype=float)
     policy_next = numpy.zeros(S, dtype=int)
-    for s in range(S):
-        best = 0.0
-        for a in range(A):
-            # The + V part becomes dense after some iterations
-            option = P[a][s].multiply(R[a][s] + (discount * V)).sum()
-            if option > best:
-                policy_next[s] = a
-                best = option
-        Vnext[0, s] = best
-    Vdelta = numpy.abs(Vnext - V).sum() / S
+
+    for src in range(S):
+        best_v = 0.0
+        best_a = 0
+        for act, lst in tab[src].items():
+            this_v = 0.0
+            for dst, prob, rew in lst:
+                this_v += prob * (rew + discount * value[dst])
+            if this_v > best_v:
+                best_v = this_v
+                best_a = act
+        value_next[src] = best_v
+        policy_next[src] = best_a
+
+    value_delta = numpy.abs(value_next - value).max()
     policy_delta = (policy_next != policy).sum()
-    print(iteration, V[0, 0:3], Vdelta, policy_delta)
-    V = Vnext
+    print(iteration, value[:3], value_delta, policy_delta)
+    value = value_next
     policy = policy_next
