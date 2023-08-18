@@ -36,7 +36,7 @@ class StateEditor(sm.StateEditor):
         return with_size.tobytes()
 
     def save(self):
-        #  return self._save()
+        return self._save()
 
         # _save plus safeguards
         binary = self._save()

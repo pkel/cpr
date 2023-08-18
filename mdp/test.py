@@ -47,10 +47,19 @@ def compile(*args, verbose=False, **kwargs):
 
 
 p, r = compile(Bitcoin, verbose=True)
+#  p, r = compile(Bitcoin)
 p, r = compile(Parallel, k=2)
 p, r = compile(Parallel, k=3)
 p, r = compile(Parallel, k=4)
 
-VI = mdptoolbox.mdp.ValueIteration(p, r, 1)
+# pymdptoolbox' matrix check uses non-sparse numpy matrices
+# https://github.com/sawcordwell/pymdptoolbox/issues/21
+if p[0].shape[0] > 10000:
+    too_large = True
+else:
+    too_large = False
+
+# CAUTION. skip_large is not released on pypi; install pymdptoolbox from Github
+VI = mdptoolbox.mdp.ValueIteration(p, r, 1, skip_check=too_large)
 VI.setVerbose()
 VI.run()

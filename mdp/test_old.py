@@ -40,9 +40,9 @@ def explore_to_end(config):
 
 
 p, r = explore_to_end(bitcoin)
-#  explore_to_end(parallel2)
-#  explore_to_end(parallel3)
-#  explore_to_end(parallel4)
+explore_to_end(parallel2)
+explore_to_end(parallel3)
+explore_to_end(parallel4)
 #  explore_to_end(parallel5)
 
 VI = mdptoolbox.mdp.ValueIteration(p, r, 1)
