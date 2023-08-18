@@ -186,7 +186,7 @@ class SelfishMining(Model):
         assert b not in se.considered_by_attacker, "block {b} already considered"
         # mark i and all ancestors as considered
         for x in {b} | se.ancestors(b):
-            se.set_considered_by_attacker(b)
+            se.set_considered_by_attacker(x)
         # update attacker's preference according to protocol spec
         se.attacker_prefers = cfg.protocol.preference(
             PartialView(se, se.considered_by_attacker),

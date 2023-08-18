@@ -21,31 +21,33 @@ def peek(c):
     return x
 
 
-def compile(*args, **kwargs):
+def compile(*args, verbose=False, **kwargs):
     config = cfg(*args, **kwargs)
     se = StateEditor()
     c = Compiler(SelfishMining(se, config))
     while c.explore():
-        process = psutil.Process()
-        trace, _state = peek(c)
-        info = dict(
-            n_states_explored=len(c.explored),
-            n_states_queued=c.queue.qsize(),
-            n_states_seen=len(c.state_map),
-            n_actions=len(c.action_map),
-            n_transitions=len(c.transitions),
-            trace_blocks_mined=trace.blocks_mined,
-            trace_actions_taken=trace.actions_taken,
-            ram_usage_gb=process.memory_info().rss / 1024**3,
-        )
-        info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
-        pp.pprint(info)
+        if verbose:
+            process = psutil.Process()
+            trace, _state = peek(c)
+            info = dict(
+                protocol=config.protocol.name,
+                n_states_explored=len(c.explored),
+                n_states_queued=c.queue.qsize(),
+                n_states_seen=len(c.state_map),
+                n_actions=len(c.action_map),
+                n_transitions=len(c.transitions),
+                trace_blocks_mined=trace.blocks_mined,
+                trace_actions_taken=trace.actions_taken,
+                ram_usage_gb=process.memory_info().rss / 1024**3,
+            )
+            info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
+            pp.pprint(info)
     print(f"{config.protocol.name}: {len(c.explored)} / {len(c.transitions)}")
     return c.mdp_matrices()
 
 
-p, r = compile(Bitcoin)
-#  p, r = compile(Parallel, k=2)
+p, r = compile(Bitcoin, verbose=True)
+p, r = compile(Parallel, k=2)
 
 VI = mdptoolbox.mdp.ValueIteration(p, r, 1)
 VI.setVerbose()
