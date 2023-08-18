@@ -179,9 +179,9 @@ class StateEditor(sm.StateEditor):
 
     def miner(self, b):
         if self._mined_by_defender[b]:
-            return 1
+            return sm.DEFENDER
         else:
-            return 0
+            return sm.ATTACKER
 
     def topo_sort(self, blocks):
         # blocks can only be appended, hence id's are already ordered

@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from model import Action, Model, State, StateEditor, Transition, TransitionList
 from protocol import Block, Protocol, View
 
+ATTACKER = 1
+DEFENDER = 1
+
 
 @dataclass
 class Config:
@@ -11,7 +14,6 @@ class Config:
 
     invalid_reward: float = 0.0
     truncate_on_pow: int = -1
-    merge_isomorphic_states: bool = True
 
     def __post_init__(self):
         if self.alpha < 0 or self.alpha > 1:
@@ -113,45 +115,26 @@ class Trace:
     actions_taken: int
 
 
-def trace(t: Trace, *args, block_mined=False) -> Trace:
-    return Trace(
-        blocks_mined=t.blocks_mined + block_mined, actions_taken=t.actions_taken + 1
-    )
-
-
 class SelfishMining(Model):
     def __init__(self, editor: StateEditor, config: Config):
         self.editor = editor
         self.config = config
-
-        # Setup joining of isomorphic states
-        if config.merge_isomorphic_states:
-            self.isomorphisms = dict()
-        else:
-            self.isomorphisms = None
+        self.isomorphisms = dict()
 
         # Use empty (no blocks) state as sink after taking invalid actions.
         self.editor.clear()
         self.invalid_state = self.save_or_reuse()
 
-    def save_or_reuse(self):
-        if self.isomorphisms is None:
-            return self.editor.save()
+    def save_or_reuse(self, subset=None):
+        ic = self.editor.isomorphism_class(subset)
+        if ic in self.isomorphisms:
+            return self.isomorphisms[ic]
         else:
-            if self.editor.n_blocks > 0:
-                ca = self.common_ancestor()
-                subset = self.editor.descendants(ca) | {ca}
-            else:
-                subset = None
-            ic = self.editor.isomorphism_class(subset)
-            if ic in self.isomorphisms:
-                return self.isomorphisms[ic]
-            else:
-                binary = self.editor.save()
-                self.isomorphisms[ic] = binary
-                return binary
+            binary = self.editor.save()
+            self.isomorphisms[ic] = binary
+            return binary
 
-    def common_ancestor(self):
+    def common_history(self):
         se = self.editor
         protocol = self.config.protocol
         hist_a = []
@@ -165,13 +148,14 @@ class SelfishMining(Model):
             hist_b.insert(0, b)
             b = protocol.predecessor(se, b)
         assert hist_a[0] == hist_b[0], "old ca"
+        hist_c = []
         while len(hist_a) > 0 and len(hist_b) > 0:
             x = hist_a.pop(0)
             if x == hist_b.pop(0):
-                ca = x
+                hist_c.append(x)
             else:
                 break
-        return ca
+        return hist_c
 
     def start(self) -> TransitionList:
         # Any genesis we set here will be rewarded in the future. To make this
@@ -179,7 +163,7 @@ class SelfishMining(Model):
         # the defender.
         se = self.editor
         cfg = self.config
-        t = Trace(actions_taken=0, blocks_mined=0)
+        tr = Trace(actions_taken=0, blocks_mined=0)
         # prefer attacker
         se.clear()
         b = se.append(set(), mined_by_defender=False)
@@ -188,7 +172,7 @@ class SelfishMining(Model):
         se.set_known_to_defender(b)
         se.set_preferred_by_defender(b)
         se.set_preferred_by_attacker(b)
-        t1 = Transition(state=self.save_or_reuse(), probability=cfg.alpha, trace=t)
+        t1 = self.transition(tr, probability=cfg.alpha)
         # prefer defender
         se.clear()
         b = se.append(set(), mined_by_defender=True)
@@ -196,9 +180,43 @@ class SelfishMining(Model):
         se.set_known_to_defender(b)
         se.set_preferred_by_defender(b)
         se.set_preferred_by_attacker(b)
-        t2 = Transition(state=self.save_or_reuse(), probability=1 - cfg.alpha, trace=t)
+        t2 = self.transition(tr, probability=1 - cfg.alpha)
         # return
         return TransitionList([t1, t2])
+
+    # finalize transition, calculate rewards
+    def transition(self, tr: Trace, *args, probability, block_mined=False):
+        # find common history
+        common_history = self.common_history()
+        assert len(common_history) > 0
+        common_ancestor = common_history.pop(-1)
+        # calculate rewards
+        rew_atk = 0.0
+        rew_def = 0.0
+        for x in common_history:
+            for r in self.config.protocol.reward(self.editor, x):
+                if r.miner == ATTACKER:
+                    rew_atk += r.amount
+                elif r.miner == DEFENDER:
+                    rew_def += r.amount
+                else:
+                    assert False, "unknown miner"
+        # calculate progress
+        self.config.protocol.progress(self.editor, common_ancestor)
+        # TODO implement probabilistic termination
+        # truncate common history and save
+        keep = self.editor.descendants(common_ancestor)
+        keep.add(common_ancestor)
+        state = self.save_or_reuse(keep)
+        # increment trace
+        tr = Trace(
+            blocks_mined=tr.blocks_mined + block_mined,
+            actions_taken=tr.actions_taken + 1,
+        )
+        # build transition and return
+        return Transition(
+            state=state, probability=probability, trace=tr, reward=rew_atk
+        )
 
     def actions(self, s: State) -> list[Action]:
         se = self.editor
@@ -212,7 +230,7 @@ class SelfishMining(Model):
             lst.append(Consider(i))
         return lst
 
-    def apply_release(self, b: Block, s: State, t: Trace) -> TransitionList:
+    def apply_release(self, b: Block, s: State, tr: Trace) -> TransitionList:
         se = self.editor
         se.load(s)
         # safeguard
@@ -222,10 +240,10 @@ class SelfishMining(Model):
         for x in {b} | se.ancestors(b) - se.mined_by_defender:
             se.set_released_by_attacker(x)
         # this transition is deterministic
-        to = Transition(state=self.save_or_reuse(), probability=1, trace=trace(t))
-        return TransitionList([to])
+        t1 = self.transition(tr, probability=1)
+        return TransitionList([t1])
 
-    def apply_consider(self, b: Block, s: State, t: Trace) -> TransitionList:
+    def apply_consider(self, b: Block, s: State, tr: Trace) -> TransitionList:
         se = self.editor
         cfg = self.config
         se.load(s)
@@ -242,14 +260,14 @@ class SelfishMining(Model):
         )
         se.set_preferred_by_attacker(pref)
         # this transition is deterministic
-        to = Transition(state=self.save_or_reuse(), probability=1, trace=trace(t))
-        return TransitionList([to])
+        t1 = self.transition(tr, probability=1)
+        return TransitionList([t1])
 
     # apply_continue has four cases which we handle individually here
     def _apply_continue(
         self,
         s: State,
-        t: Trace,
+        tr: Trace,
         *args,
         attacker_communicates_fast: bool,
         attacker_mines_next_block: bool,
@@ -295,9 +313,7 @@ class SelfishMining(Model):
             )
             se.append(parent_blocks, mined_by_defender=True)
         # return Transition
-        return Transition(
-            state=self.save_or_reuse(), probability=p, trace=trace(t, block_mined=True)
-        )
+        return self.transition(tr, probability=p, block_mined=True)
 
     def apply_continue(self, s: State, t: Trace) -> TransitionList:
         lst = []
