@@ -235,16 +235,19 @@ class SelfishMining(Model):
         # stochastic termination
         transitions = []
         if progress > 0:
-            factor = progress / self.config.horizon
-            assert self.symbolic or (factor > 0 and factor < 1)
+            # Bar-Zur et al. at AFT 2020:
+            # Efficient MDP Analysis for Selfish Mining in Blockchains
+            H = self.config.horizon
+            term_prob = 1.0 - ((1.0 - (1.0 / H)) ** progress)
+            assert self.symbolic or (term_prob > 0 and term_prob < 1)
             term = Transition(
                 state=self.terminal_state,
-                probability=probability * factor,
+                probability=probability * term_prob,
                 reward=rew_atk,
                 trace=tr,
             )
             transitions.append(term)
-            probability = probability * (1.0 - factor)
+            probability = probability * (1.0 - term_prob)
         # truncate common history and save
         keep = self.editor.descendants(common_ancestor)
         keep.add(common_ancestor)
