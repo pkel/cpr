@@ -1,11 +1,11 @@
-from compiler import Compiler, StateEditor
-from sm import Config, SelfishMining
 from bitcoin import Bitcoin
+from compiler import Compiler, StateEditor
 from parallel import Parallel
-import mdptoolbox
+from sm import Config, SelfishMining
 import pickle
 import pprint
 import psutil
+import sympy
 
 pp = pprint.PrettyPrinter(indent=2)
 
@@ -13,10 +13,10 @@ pp = pprint.PrettyPrinter(indent=2)
 def cfg(protocol, *args, **kwargs):
     return Config(
         protocol=protocol(*args, **kwargs),
-        alpha=0.25,
-        gamma=0.5,
+        alpha=sympy.Symbol("α"),
+        gamma=sympy.Symbol("γ"),
         truncate_on_pow=5,
-        horizon=1000,
+        horizon=sympy.Symbol("H"),
     )
 
 
@@ -47,27 +47,14 @@ def compile(*args, verbose=False, **kwargs):
             )
             info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
             pp.pprint(info)
-    print(f"{config.protocol.name}: {len(c.explored)} / {len(c.transitions)}")
-    p, r = c.mdp_matrices()
+    fname = f"{config.protocol.name}.pkl"
     with open(f"{config.protocol.name}.pkl", "wb") as f:
         pickle.dump(c.transitions, f)
-    return (p, r)
+    print(f"{fname}: {len(c.explored)} states and {len(c.transitions)} transitions")
 
 
-#  p, r = compile(Bitcoin, verbose=True)
-p, r = compile(Bitcoin)
-p, r = compile(Parallel, k=2)
-p, r = compile(Parallel, k=3)
-p, r = compile(Parallel, k=4)
-
-# pymdptoolbox' matrix check uses non-sparse numpy matrices
-# https://github.com/sawcordwell/pymdptoolbox/issues/21
-if p[0].shape[0] > 10000:
-    too_large = True
-else:
-    too_large = False
-
-# CAUTION. skip_large is not released on pypi; install pymdptoolbox from Github
-VI = mdptoolbox.mdp.ValueIteration(p, r, 1, skip_check=too_large)
-VI.setVerbose()
-VI.run()
+# compile(Bitcoin, verbose=True)
+compile(Bitcoin)
+compile(Parallel, k=2)
+compile(Parallel, k=3)
+compile(Parallel, k=4)

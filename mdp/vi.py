@@ -1,5 +1,6 @@
 import numpy
 import pickle
+import sympy
 
 protocol = "bitcoin"
 
@@ -17,19 +18,25 @@ for act, src, dst, prob, rew in transitions:
 S += 1
 A += 1
 
-print(f"{protocol} protocol, {S} states, {A} actions")
+print(f"{protocol} protocol, {S} states, {A} actions, {len(transitions)} transitions")
+
+sym_params = {"α": 0.25, "γ": 0.5, "H": 1000}
 
 # Build table t[src][act] = list[tuple[dst, prob, rew]]
 tab = [dict() for _ in range(S)]
 for act, src, dst, prob, rew in transitions:
     if act not in tab[src]:
         tab[src][act] = []
+    if isinstance(prob, sympy.Basic):
+        prob = float(prob.evalf(subs=sym_params))
     tab[src][act].append((dst, prob, rew))
 
 value = numpy.zeros(S, dtype=float)
 policy = numpy.zeros(S, dtype=int)
 
 discount = 0.99
+
+print("start value iteration")
 
 for iteration in range(100):
     value_next = numpy.zeros(S, dtype=float)

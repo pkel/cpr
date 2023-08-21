@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from model import Action, Model, State, StateEditor, Transition, TransitionList
 from protocol import Block, Protocol, View
+import sympy
 
 ATTACKER = 1
 DEFENDER = 1
@@ -20,6 +21,13 @@ class Config:
     horizon: float = 1000.0
 
     def __post_init__(self):
+        self.symbolic = False
+        for x in [self.alpha, self.gamma, self.horizon, self.invalid_reward]:
+            if isinstance(x, sympy.Basic):
+                self.symbolic = True
+                print("WARNING: disabling safeguards due to symbolic parameters")
+                return
+        #  if not symbolic, then parameters should be set correctly
         if self.alpha < 0 or self.alpha > 1:
             raise ValueError("alpha must be between 0 and 1")
         if self.gamma < 0 or self.gamma > 1:
@@ -124,6 +132,7 @@ class SelfishMining(Model):
         self.editor = editor
         self.config = config
         self.isomorphisms = dict()
+        self.symbolic = config.symbolic
 
         # Use empty state (= no blocks) state as terminal state (sink)
         self.editor.clear()
@@ -222,7 +231,7 @@ class SelfishMining(Model):
         transitions = []
         if progress > 0:
             factor = progress / self.config.horizon
-            assert factor > 0 and factor < 1
+            assert self.symbolic or (factor > 0 and factor < 1)
             term = Transition(
                 state=self.terminal_state,
                 probability=probability * factor,

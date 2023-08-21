@@ -374,6 +374,9 @@ class Compiler:
     def mdp_matrices(self):
         # create sparse matrix MDP suitable for pymdptoolbox
         assert self.queue.qsize() == 0, "exploration in progress"
+        assert (
+            not self.model.symbolic
+        ), "cannot generate matrices for symbolic parameters"
         # init temp vectors
         S = len(self.state_map)
         A = len(self.action_map)
