@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from protocol import Block, View
 from typing import TypeVar
+import math
 import sympy
 
 State = TypeVar("State")
@@ -42,8 +43,8 @@ class TransitionList:
             if isinstance(t.probability, sympy.Basic):
                 symbolic = True
                 break
-        assert (
-            symbolic or sum([t.probability for t in lst]) == 1.0
+        assert symbolic or math.isclose(
+            sum([t.probability for t in lst]), 1.0, rel_tol=1e-12
         ), "invalid transition list"
         self.lst = lst
 

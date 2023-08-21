@@ -3,8 +3,9 @@ from model import Action, Model, State, StateEditor, Transition, TransitionList
 from protocol import Block, Protocol, View
 import sympy
 
-ATTACKER = 1
+ATTACKER = 0
 DEFENDER = 1
+assert ATTACKER != DEFENDER
 
 
 @dataclass
@@ -224,7 +225,11 @@ class SelfishMining(Model):
             pnew = self.config.protocol.progress(self.editor, common_ancestor)
             pold = self.config.protocol.progress(self.editor, common_history[0])
             progress = pnew - pold
+            # not sure about the following assertions; currently they hold for
+            # all protocols so far
             assert progress > 0
+            assert progress == pnew
+            assert pold == 0
         else:
             progress = 0
         # stochastic termination
@@ -251,16 +256,22 @@ class SelfishMining(Model):
         return transitions
 
     def actions(self, s: State) -> list[Action]:
+        actions = []
         se = self.editor
         se.load(s)
+        # terminal state: no actions possible
         if se.n_blocks == 0:
             return []
-        lst = [Continue()]
+        # truncation: allow mining only up to a certain point
+        top = self.config.truncate_on_pow
+        if top < 1 or se.n_blocks < top:
+            actions.append(Continue())
+        # release/consider when it makes sense
         for i in se.invert(se.released_by_attacker) - se.mined_by_defender:
-            lst.append(Release(i))
+            actions.append(Release(i))
         for i in se.invert(se.considered_by_attacker):
-            lst.append(Consider(i))
-        return lst
+            actions.append(Consider(i))
+        return actions
 
     def apply_release(self, b: Block, s: State, tr: Trace) -> TransitionList:
         se = self.editor
@@ -360,13 +371,6 @@ class SelfishMining(Model):
         return TransitionList(lst)
 
     def apply(self, a: Action, s: State, t: Trace) -> TransitionList:
-        # handle termination
-        top = self.config.truncate_on_pow
-        if top > 0 and t.blocks_mined >= top:
-            # we just do a reset here for now
-            # TODO. Calculate reward of actually applying the action but
-            # transition to terminal state or similar
-            return self.start()
         # handle action
         if isinstance(a, Release):
             return self.apply_release(a.b, s, t)
