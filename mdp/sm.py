@@ -18,8 +18,8 @@ class Config:
     truncate_on_pow: int = -1  # TODO. rename to max_blocks or similar
 
     # expected protocol runtime before stochastic termination
-    # (same scale as protocol.progress)
-    horizon: float = 1000.0
+    # (same scale as protocol.progress) set <= 0 to disable termination
+    horizon: float = 0.0
 
     def __post_init__(self):
         self.symbolic = False
@@ -200,6 +200,10 @@ class SelfishMining(Model):
         return TransitionList(transitions)
 
     def reward_and_terminate(self, tr: Trace, *args, probability, block_mined=False):
+        # TODO. Since we safe progress in Transition now, we can in principle
+        # handle stochastic termination AFTER exploration.
+        # TODO. We are not using the trace for termination anymore, so we can
+        # get rid of it entirely, I guess.
         # increment trace
         tr = Trace(
             blocks_mined=tr.blocks_mined + block_mined,
@@ -235,15 +239,21 @@ class SelfishMining(Model):
         # stochastic termination
         transitions = []
         if progress > 0:
-            # Bar-Zur et al. at AFT 2020:
-            # Efficient MDP Analysis for Selfish Mining in Blockchains
-            H = self.config.horizon
-            term_prob = 1.0 - ((1.0 - (1.0 / H)) ** progress)
-            assert self.symbolic or (term_prob > 0 and term_prob < 1)
+            if self.symbolic or self.config.horizon > 0.0:
+                # Bar-Zur et al. at AFT 2020:
+                # Efficient MDP Analysis for Selfish Mining in Blockchains
+                H = self.config.horizon
+                term_prob = 1.0 - ((1.0 - (1.0 / H)) ** progress)
+                assert self.symbolic or (term_prob > 0 and term_prob < 1)
+            else:
+                # We do this to make the state ids of horizon = 0 model
+                # compatible with horizon > 0 model
+                term_prob = 0.0
             term = Transition(
                 state=self.terminal_state,
                 probability=probability * term_prob,
                 reward=rew_atk,
+                progress=progress,
                 trace=tr,
             )
             transitions.append(term)
@@ -254,7 +264,13 @@ class SelfishMining(Model):
         state = self.save_or_reuse(keep)
         # build transition and return
         transitions.append(
-            Transition(state=state, probability=probability, trace=tr, reward=rew_atk)
+            Transition(
+                state=state,
+                probability=probability,
+                trace=tr,
+                reward=rew_atk,
+                progress=progress,
+            )
         )
         return transitions
 
@@ -391,5 +407,6 @@ class SelfishMining(Model):
             trace=Trace(
                 blocks_mined=tr.blocks_mined, actions_taken=tr.actions_taken + 1
             ),
+            progress=0,
         )
         return TransitionList([to])

@@ -40,7 +40,7 @@ def compile(*args, verbose=False, **kwargs):
                 n_states_queued=c.queue.qsize(),
                 n_states_seen=len(c.state_map),
                 n_actions=len(c.action_map),
-                n_transitions=len(c.transitions),
+                n_transitions=c.transitions,
                 trace_blocks_mined=trace.blocks_mined,
                 trace_actions_taken=trace.actions_taken,
                 ram_usage_gb=process.memory_info().rss / 1024**3,
@@ -49,8 +49,8 @@ def compile(*args, verbose=False, **kwargs):
             pp.pprint(info)
     fname = f"{config.protocol.name}.pkl"
     with open(f"{config.protocol.name}.pkl", "wb") as f:
-        pickle.dump(c.transitions, f)
-    print(f"{fname}: {len(c.explored)} states and {len(c.transitions)} transitions")
+        pickle.dump(c.mdp_table(), f)
+    print(f"{fname}: {len(c.explored)} states and {c.transitions} transitions")
 
 
 # compile(Bitcoin, verbose=True)

@@ -28,7 +28,8 @@ class Transition:
     state: State
     trace: Trace
     probability: float
-    reward: float = 0.0
+    reward: float
+    progress: float
 
 
 class TransitionList:

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import numpy
 import pynauty
 import queue
@@ -298,6 +299,14 @@ class StateEditor(sm.StateEditor):
         return xxhash.xxh3_128_digest(arr.tobytes())
 
 
+@dataclass(frozen=True)
+class Transition:
+    destination: int
+    probability: float
+    reward: float
+    progress: float
+
+
 class Compiler:
     def __init__(self, model: sm.Model):
         self.model = model
@@ -305,8 +314,9 @@ class Compiler:
         self.state_map = dict()  # maps state to integer
         self.action_map = dict()  # maps action to integer
         self.explored = set()  # ids of already explored states
-        self.transitions = list()  # all explored transitions
         self.start_probabilities = dict()
+        self.tab = list()  # transitions tab[state][action] : list[Transition]
+        self.transitions = 0  # number of transitions in self.tab
 
         # insert start states
         for start in model.start().lst:
@@ -339,8 +349,8 @@ class Compiler:
         state_id = self.state_map[state]
 
         # explore invalid action (id = -1)
-        for to in self.model.apply_invalid(state, trace).lst:
-            self.handle_transition(state_id, -1, to)
+        # for to in self.model.apply_invalid(state, trace).lst:
+        #     self.handle_transition(state_id, -1, to)
 
         # explore possible actions
         for action in self.model.actions(state):
@@ -368,10 +378,35 @@ class Compiler:
             # schedule recursive exploration
             self.queue.put((to.trace, to.state))
 
-        # record transition (could go to disk/csv)
-        self.transitions.append((action_id, state_id, to_id, to.probability, to.reward))
+        self.record_transition(
+            src=state_id,
+            act=action_id,
+            dst=to_id,
+            prb=to.probability,
+            rew=to.reward,
+            prg=to.progress,
+        )
+
+    def record_transition(self, *args, src, act, dst, prb, rew, prg):
+        assert src >= 0
+        assert dst >= 0
+        max_id = max(src, dst)
+        if max_id >= len(self.tab):
+            for i in range(len(self.tab), max_id + 1):
+                self.tab.append(dict())
+            assert max_id == len(self.tab) - 1
+        if act not in self.tab[src]:
+            self.tab[src][act] = list()
+        t = Transition(destination=dst, probability=prb, reward=rew, progress=prg)
+        self.tab[src][act].append(t)
+        self.transitions += 1
+
+    def mdp_table(self):
+        assert self.queue.qsize() == 0, "exploration in progress"
+        return self.tab
 
     def mdp_matrices(self):
+        assert False, "method not maintained"
         # create sparse matrix MDP suitable for pymdptoolbox
         assert self.queue.qsize() == 0, "exploration in progress"
         assert (
