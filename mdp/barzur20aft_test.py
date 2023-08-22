@@ -37,8 +37,9 @@ def compile(*args, verbose=False, **kwargs):
     return mdp
 
 
-mdp = compile(alpha=0.25, gamma=0.5, maximum_fork_length=95, verbose=True)
-for i in range(10, 20):
-    compile(alpha=0.25, gamma=0.5, maximum_fork_length=i)
+if __name__ == "__main__":
+    mdp = compile(alpha=0.25, gamma=0.5, maximum_fork_length=95, verbose=True)
+    for i in range(10, 20):
+        compile(alpha=0.25, gamma=0.5, maximum_fork_length=i)
 
-ptmdp = barzur20aft.ptmdp(mdp, horizon=1000)
+    ptmdp = barzur20aft.ptmdp(mdp, horizon=1000)

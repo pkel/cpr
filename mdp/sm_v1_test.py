@@ -64,8 +64,9 @@ def compile(*args, verbose=False, **kwargs):
     print(f"{fname}: {mdp.n_states} states and {mdp.n_transitions} transitions")
 
 
-# compile(Bitcoin, verbose=True)
-compile(Bitcoin)
-compile(Parallel, k=2)
-compile(Parallel, k=3)
-compile(Parallel, k=4)
+if __name__ == "__main__":
+    # compile(Bitcoin, verbose=True)
+    compile(Bitcoin)
+    compile(Parallel, k=2)
+    compile(Parallel, k=3)
+    compile(Parallel, k=4)

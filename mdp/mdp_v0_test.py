@@ -5,6 +5,7 @@ import mdptoolbox
 import pprint
 import psutil
 
+
 pp = pprint.PrettyPrinter(indent=2)
 
 bitcoin = mdp.Config(protocol=Bitcoin(), alpha=0.25, gamma=0.5, stop_time=6)
@@ -39,12 +40,13 @@ def explore_to_end(config):
     return explorer.mdp_matrices()
 
 
-p, r = explore_to_end(bitcoin)
-explore_to_end(parallel2)
-explore_to_end(parallel3)
-explore_to_end(parallel4)
-#  explore_to_end(parallel5)
+if __name__ == "__main__":
+    p, r = explore_to_end(bitcoin)
+    explore_to_end(parallel2)
+    explore_to_end(parallel3)
+    explore_to_end(parallel4)
+    #  explore_to_end(parallel5)
 
-VI = mdptoolbox.mdp.ValueIteration(p, r, 1)
-VI.setVerbose()
-VI.run()
+    VI = mdptoolbox.mdp.ValueIteration(p, r, 1)
+    VI.setVerbose()
+    VI.run()
