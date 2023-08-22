@@ -1,7 +1,7 @@
 from bitcoin import Bitcoin
-from compiler import Compiler, StateEditor
+from compiler import Compiler
 from parallel import Parallel
-from sm import Config, SelfishMining
+from sm_v1 import Config, SelfishMining, StateEditor
 import pickle
 import pprint
 import psutil
