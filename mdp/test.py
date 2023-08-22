@@ -10,13 +10,23 @@ import sympy
 pp = pprint.PrettyPrinter(indent=2)
 
 
-def cfg(protocol, *args, **kwargs):
+def cfg_sym(protocol, *args, **kwargs):
     return Config(
         protocol=protocol(*args, **kwargs),
         alpha=sympy.Symbol("α"),
         gamma=sympy.Symbol("γ"),
         truncate_on_pow=5,
         horizon=sympy.Symbol("H"),
+    )
+
+
+def cfg(protocol, *args, **kwargs):
+    return Config(
+        protocol=protocol(*args, **kwargs),
+        alpha=0.35,
+        gamma=0.5,
+        truncate_on_pow=5,
+        horizon=1000,
     )
 
 
@@ -48,9 +58,10 @@ def compile(*args, verbose=False, **kwargs):
             info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
             pp.pprint(info)
     fname = f"{config.protocol.name}.pkl"
+    mdp = c.mdp()
     with open(f"{config.protocol.name}.pkl", "wb") as f:
-        pickle.dump(c.mdp_table(), f)
-    print(f"{fname}: {len(c.explored)} states and {c.transitions} transitions")
+        pickle.dump(mdp, f)
+    print(f"{fname}: {mdp.n_states} states and {mdp.n_transitions} transitions")
 
 
 # compile(Bitcoin, verbose=True)

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from mdp import MDP, Transition
 import numpy
 import pynauty
 import queue
@@ -299,14 +299,6 @@ class StateEditor(sm.StateEditor):
         return xxhash.xxh3_128_digest(arr.tobytes())
 
 
-@dataclass(frozen=True)
-class Transition:
-    destination: int
-    probability: float
-    reward: float
-    progress: float
-
-
 class Compiler:
     def __init__(self, model: sm.Model):
         self.model = model
@@ -315,8 +307,7 @@ class Compiler:
         self.action_map = dict()  # maps action to integer
         self.explored = set()  # ids of already explored states
         self.start_probabilities = dict()
-        self.tab = list()  # transitions tab[state][action] : list[Transition]
-        self.transitions = 0  # number of transitions in self.tab
+        self._mdp = MDP()
 
         # insert start states
         for start in model.start().lst:
@@ -378,32 +369,24 @@ class Compiler:
             # schedule recursive exploration
             self.queue.put((to.trace, to.state))
 
-        self.record_transition(
-            src=state_id,
-            act=action_id,
-            dst=to_id,
-            prb=to.probability,
-            rew=to.reward,
-            prg=to.progress,
+        # record transition
+        t = Transition(
+            destination=to_id,
+            probability=to.probability,
+            reward=to.reward,
+            progress=to.progress,
         )
+        self._mdp.add_transition(state_id, action_id, t)
 
     def record_transition(self, *args, src, act, dst, prb, rew, prg):
-        assert src >= 0
-        assert dst >= 0
-        max_id = max(src, dst)
-        if max_id >= len(self.tab):
-            for i in range(len(self.tab), max_id + 1):
-                self.tab.append(dict())
-            assert max_id == len(self.tab) - 1
-        if act not in self.tab[src]:
-            self.tab[src][act] = list()
         t = Transition(destination=dst, probability=prb, reward=rew, progress=prg)
-        self.tab[src][act].append(t)
-        self.transitions += 1
+        self._mdp.add_transition(src, act, t)
 
-    def mdp_table(self):
+    def mdp(self):
         assert self.queue.qsize() == 0, "exploration in progress"
-        return self.tab
+        if hasattr(self.model, "symbolic") and not self.model.symbolic:
+            self._mdp.check()
+        return self._mdp
 
     def mdp_matrices(self):
         assert False, "method not maintained"
