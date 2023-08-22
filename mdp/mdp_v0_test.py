@@ -1,4 +1,4 @@
-import mdp
+import mdp_v0 as mdp
 from bitcoin import Bitcoin
 from parallel import Parallel
 import mdptoolbox
