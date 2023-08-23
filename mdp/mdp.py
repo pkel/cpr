@@ -21,6 +21,11 @@ class MDP:
     n_actions: int = 0
     tab: list[dict[action, list[Transition]]] = field(default_factory=list)
 
+    def __repr__(self):
+        return (
+            f"MDP with size {self.n_states} / {self.n_actions} / {self.n_transitions}"
+        )
+
     def add_transition(self, src: state, act: action, t: Transition):
         dst = t.destination
         assert src >= 0

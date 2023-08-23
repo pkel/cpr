@@ -42,7 +42,7 @@ def compile(proto, verbose=False, alpha=0.33, gamma=0.5, maximum_size=5, **kwarg
             info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
             pp.pprint(info)
     mdp = c.mdp()
-    print(f"{model}: {mdp.n_states} s / {mdp.n_actions} a / {mdp.n_transitions} t")
+    print(f"{model}: {mdp}")
 
 
 if __name__ == "__main__":
