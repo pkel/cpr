@@ -14,15 +14,15 @@ def test_editor():
     g = 0
     b1 = e.append({g}, Miner.Attacker)
     assert e.n == 2
-    assert len(e.children(g)) == 1 and e.children(g)[0] == b1
-    assert len(e.parents(b1)) == 1 and e.parents(b1)[0] == g
+    assert len(e.children(g)) == 1 and list(e.children(g))[0] == b1
+    assert len(e.parents(b1)) == 1 and list(e.parents(b1))[0] == g
 
 
 if __name__ == "__main__":
     test_editor()
 
 
-def compile(proto, verbose=False, alpha=0.33, gamma=0.5, maximum_size=4, **kwargs):
+def compile(proto, verbose=False, alpha=0.33, gamma=0.5, maximum_size=5, **kwargs):
     model = SelfishMining(
         proto, alpha=alpha, gamma=gamma, maximum_size=maximum_size, **kwargs
     )

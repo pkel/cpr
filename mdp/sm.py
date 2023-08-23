@@ -85,12 +85,24 @@ class Editor(View):
         for b in range(self.n):
             for p in self.parents(b):
                 assert p < b, "topological order"
+        # exactly one genesis
+        no_parents_cnt = 0
+        for b in range(self.n):
+            if len(self.parents(b)) == 0:
+                no_parents_cnt += 1
+        assert no_parents_cnt == 1, f"{no_parents_cnt} root blocks"
 
     def parents(self, b):
-        return [int(x) for x in numpy.flatnonzero(self.adj[b, 0 : self.n])]
+        return {int(x) for x in numpy.flatnonzero(self.adj[b, 0 : self.n])}
 
     def children(self, b):
-        return [int(x) for x in numpy.flatnonzero(self.adj[0 : self.n, b])]
+        return {int(x) for x in numpy.flatnonzero(self.adj[0 : self.n, b])}
+
+    def miner(self, b):
+        if self.wh[b] == Withholding.Foreign:
+            return Miner.Defender
+        else:
+            return Miner.Attacker
 
     def append(self, parents: set[int], miner: Miner):
         assert isinstance(miner, Miner)
@@ -120,6 +132,34 @@ class Editor(View):
         self.check()
         assert isinstance(b, int)
         return b
+
+    def reorder_and_filter(self, old_ids: list[int]):
+        assert isinstance(old_ids, list)
+        assert len(old_ids) > 0
+        assert len(old_ids) == len(set(old_ids))
+
+        # recall old state
+        old_adj = self.adj
+        old_av = self.av
+        old_dv = self.dv
+        old_wh = self.wh
+
+        # update in-place
+        self.n = len(old_ids)
+        self.adj = numpy.full((self.n, self.n), False)
+        self.av = []
+        self.dv = []
+        self.wh = []
+
+        # copy stuff in new order
+        for new, old in enumerate(old_ids):
+            self.adj[new, 0 : self.n] = old_adj[old, old_ids]
+            self.av.append(old_av[old])
+            self.dv.append(old_dv[old])
+            self.wh.append(old_wh[old])
+
+        # safety check
+        self.check()
 
     def to_release(self):
         # withheld blocks w/o withheld parents
@@ -284,15 +324,74 @@ class SelfishMining(Model):
             f"force_consider_own={self.force_consider_own})"
         )
 
+    def common_history(self):
+        e = self.editor
+        hist_a = []
+        hist_b = []
+        a = e.attacker_prefers()
+        b = e.defender_prefers()
+        while a is not None:
+            hist_a.insert(0, a)
+            a = self.protocol.predecessor(e, a)
+        while b is not None:
+            hist_b.insert(0, b)
+            b = self.protocol.predecessor(e, b)
+        assert hist_a[0] == hist_b[0], "old ca"
+        hist_c = []
+        while len(hist_a) > 0 and len(hist_b) > 0:
+            x = hist_a.pop(0)
+            if x == hist_b.pop(0):
+                hist_c.append(x)
+            else:
+                break
+        return hist_c
+
     def transition(self, *args, probability):
-        # TODO: merge isomorphic states
-        # TODO: calculate reward and progress
-        # TODO: truncate common history
+        # TODO: consider merging isomorphic states
+
+        e = self.editor
+
+        # find common history
+        common_history = self.common_history()
+        assert len(common_history) > 0
+        common_ancestor = common_history[-1]
+
+        # calculate rewards
+        rew_atk = 0.0
+        rew_def = 0.0
+        for x in common_history[:-1]:
+            for r in self.protocol.reward(e, x):
+                if r.miner == Miner.Attacker:
+                    rew_atk += r.amount
+                elif r.miner == Miner.Defender:
+                    rew_def += r.amount
+                else:
+                    assert False, "unknown miner"
+
+        # calculate progress
+        if len(common_history) > 1:
+            pnew = self.protocol.progress(e, common_ancestor)
+            pold = self.protocol.progress(e, common_history[0])
+            progress = pnew - pold
+            # not sure about the following assertions; they hold for
+            # bitcoin and parallel as implemented currently
+            assert progress > 0
+            assert progress == pnew
+            assert pold == 0
+        else:
+            progress = 0
+
+        # truncate common history
+        keep = {common_ancestor} | self.editor.descendants(common_ancestor)
+        e.reorder_and_filter(sorted(list(keep)))
+        # TODO consider throwing out blocks that cannot be reached from
+        # attacker's and defender's preference
+
         return Transition(
             state=self.editor.save(),
             probability=probability,
-            progress=0,
-            reward=0,
+            progress=progress,
+            reward=rew_atk,
             trace=self.trace,
         )
 
