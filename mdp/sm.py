@@ -4,12 +4,14 @@ from model import Model, Transition, TransitionList
 from protocol import Protocol, View
 import numpy
 import pickle
+import pynauty
+import queue
 
-Miner = IntEnum("Miner", ["Attacker", "Defender"])
+Miner = IntEnum("Miner", ["Attacker", "Defender"], start=0)
 
-AttackerView = IntEnum("AttackerView", ["Ignored", "Considered", "Preferred"])
-DefenderView = IntEnum("DefenderView", ["Unknown", "Known", "Preferred"])
-Withholding = IntEnum("Withholding", ["Foreign", "Withheld", "Released"])
+AttackerView = IntEnum("AttackerView", ["Ignored", "Considered", "Preferred"], start=0)
+DefenderView = IntEnum("DefenderView", ["Unknown", "Known", "Preferred"], start=0)
+Withholding = IntEnum("Withholding", ["Foreign", "Withheld", "Released"], start=0)
 
 State = bytes
 
@@ -134,7 +136,7 @@ class Editor(View):
         return b
 
     def reorder_and_filter(self, old_ids: list[int]):
-        assert isinstance(old_ids, list)
+        assert isinstance(old_ids, list), old_ids
         assert len(old_ids) > 0
         assert len(old_ids) == len(set(old_ids))
 
@@ -260,6 +262,114 @@ class Editor(View):
                 self.av[i] = AttackerView.Considered
         self.av[b] = AttackerView.Preferred
 
+    def topologically_ordered(self, blocks: list[int]):
+        # Sort the list of blocks topologically, i.e. so that parents are
+        # listed before their children.
+
+        # NOTE: this assumes that blocks ids are topologically sorted and that
+        # the given blocks have a common ancestor.
+
+        assert isinstance(blocks, list)
+        for i in blocks:
+            assert isinstance(i, int)
+
+        pos = {b: pos for pos, b in enumerate(blocks)}
+        todo = queue.PriorityQueue()
+        ca = min(blocks)
+        todo.put((0, pos[ca], ca))  # tuple (depth, input position, block id)
+        out = []  # sorted blocks
+
+        while todo.qsize() > 0:
+            depth, _pos, b = todo.get()
+            if b not in out:
+                if b in pos:  # eq: b in blocks
+                    out.append(b)
+                # recursive exploration
+                for c in self.children(b):
+                    if c in pos:
+                        todo.put((depth + 1, pos[c], c))
+                    else:
+                        todo.put((depth + 1, len(blocks), c))
+
+        assert len(out) == len(blocks)
+        assert sorted(out) == sorted(blocks)
+        return out
+
+    def canonically_ordered(self, blocks: list[int]):
+        # nauty is a C library for finding canonical representations of graphs
+        # and checking for isomorphism. pynauty provides Python bindings.
+        #
+        # This function derives a pynauty graph isomorphic to the edited state
+        # or a subset thereof, defined by the given list of blocks. It then
+        # calculates canonical labels. The labels are used to return a
+        # canonically sorted list of blocks.
+
+        if blocks is None:
+            blocks = range(self.blocks)
+
+        assert isinstance(blocks, list)
+        assert len(blocks) > 0
+        for i in blocks:
+            assert isinstance(i, int)
+        assert len(blocks) == len(set(blocks))
+
+        n = len(blocks)
+
+        # Nauty works on colored graphs. The state space is already designed
+        # to avoid redundant (av, dv, wh) tuples. We translate these tuples
+        # to 3 * 3 * 3 = 27 colors. The enums are also integers, so the
+        # translation is straight forward.
+
+        # pynauty color representation: list of sets
+        colors = [set() for _ in range(27)]  # vertex coloring
+        for i in range(n):
+            c = (self.dv[i] * 9) + (self.av[i] * 3) + self.wh[i]
+            colors[c].add(i)
+
+        # pynauty expects non-empty color sets
+        vc = list()
+        # palette = list()
+        # NOTE: The palette would be required to reconstruct the state from the
+        # colored graph. We don't do this though.
+        for i in range(27):
+            if len(colors[i]) > 0:
+                # palette.append(i)
+                vc.append(colors[i])
+
+        # pynauty graph representation: adjacency dict
+        ad = dict()
+        nauty_id = {old: new for new, old in enumerate(blocks)}
+        for i, b in enumerate(blocks):
+            ad[i] = list()
+            for p in self.parents(b):
+                if p in blocks:
+                    ad[i].append(nauty_id[p])
+
+        # init pynauty Graph
+        g = pynauty.Graph(
+            n,
+            directed=True,
+            adjacency_dict=ad,
+            vertex_coloring=vc,
+        )
+
+        # find canonical labels and return
+        canon = pynauty.canon_label(g)
+        # NOTE: Is this a list of new labels or a list of old labels?
+        # Pynauty doc says: "A list with each node relabelled"
+        # Nauty doc says: "The canonical label is given in the form of a list
+        # of the vertices of g in canonical order"
+        # So, if Pynauty does no fiddle with the result, it should be a list of
+        # old labels.
+
+        # map the canonical labels back to block ids
+        canon_blocks = [blocks[i] for i in canon]
+        # This is a canonically sorted list of blocks
+
+        # To maintain the invariant that block ids are topologically ordered
+        # we reorder the topologically.
+        return self.topologically_ordered(canon_blocks)
+
 
 class PartialView(View):
     def __init__(self, view: View, filter=lambda _: True):
@@ -299,16 +409,18 @@ class SelfishMining(Model):
         gamma: float,
         maximum_size: int,
         force_consider_own: bool = True,
+        merge_isomorphic: bool = True,
     ):
         assert isinstance(protocol, Protocol)
         assert alpha >= 0 and alpha <= 1
         assert gamma >= 0 and gamma <= 1
         assert maximum_size > 0
+        self.protocol = protocol
         self.alpha = alpha
         self.gamma = gamma
         self.maximum_size = maximum_size
         self.force_consider_own = force_consider_own
-        self.protocol = protocol
+        self.merge_isomorphic = merge_isomorphic
 
         self.editor = Editor(first_miner=Miner.Attacker)
 
@@ -347,8 +459,6 @@ class SelfishMining(Model):
         return hist_c
 
     def transition(self, *args, probability):
-        # TODO: consider merging isomorphic states
-
         e = self.editor
 
         # find common history
@@ -388,7 +498,14 @@ class SelfishMining(Model):
             keep |= e.ancestors(entrypoint)
             keep |= e.descendants(entrypoint)
         keep -= e.ancestors(common_ancestor)
-        e.reorder_and_filter(list(sorted(keep)))
+        keep = sorted(list(keep))
+
+        # we'll apply keep filter and canonical ordering in one go!
+        if self.merge_isomorphic:
+            canonkeep = e.canonically_ordered(list(keep))
+            e.reorder_and_filter(canonkeep)
+        else:
+            e.reorder_and_filter(keep)
 
         return Transition(
             state=self.editor.save(),

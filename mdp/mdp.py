@@ -22,9 +22,10 @@ class MDP:
     tab: list[dict[action, list[Transition]]] = field(default_factory=list)
 
     def __repr__(self):
-        return (
-            f"MDP with size {self.n_states} / {self.n_actions} / {self.n_transitions}"
-        )
+        s = self.n_states
+        a = self.n_actions
+        t = self.n_transitions
+        return f"MDP of size {s} / {a} / {t} / {t/s:.1f}"
 
     def add_transition(self, src: state, act: action, t: Transition):
         dst = t.destination

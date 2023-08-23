@@ -88,9 +88,14 @@ class Compiler:
         self._mdp.add_transition(src, act, t)
 
     def mdp(self):
-        assert self.queue.qsize() == 0, "exploration in progress"
+        # exploration might be incomplete
+        while self.queue.qsize() > 0:
+            self.step()
+
+        # checks only work for non-symbolic MDPs
         if hasattr(self.model, "symbolic") and not self.model.symbolic:
             self._mdp.check()
+
         return self._mdp
 
     def mdp_matrices(self):
