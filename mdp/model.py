@@ -1,21 +1,10 @@
 from dataclasses import dataclass
-from protocol import Block, View
 from typing import TypeVar
 import math
 import sympy
 
 State = TypeVar("State")
-
-
-class StateEditor(View):
-    def load(self, state: State) -> None:
-        raise NotImplementedError
-
-    def save(self) -> State:
-        raise NotImplementedError
-
-    def topo_sort(self, s: set[Block]) -> list[Block]:
-        raise NotImplementedError
+Action = TypeVar("Action")
 
 
 @dataclass(frozen=True, order=True)
@@ -50,20 +39,7 @@ class TransitionList:
         self.lst = lst
 
 
-@dataclass(frozen=True)
-class Action:
-    pass
-
-
 class Model:
-    def __init__(self, editor: StateEditor):
-        """
-        States are immutable and densely packed. The editor can unpack states
-        for editing. We intentionally use a single editor: editor.load() will
-        not allocate memory.
-        """
-        raise NotImplementedError
-
     def start(self) -> TransitionList:
         """
         Define start states and initial probabilities. Rewards will be ignored.

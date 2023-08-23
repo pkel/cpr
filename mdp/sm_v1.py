@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from model import Action, Model, State, StateEditor, Transition, TransitionList
+from model import Model, State, Transition, TransitionList
 from protocol import Block, Protocol, View
 import numpy
 import pynauty
@@ -38,7 +38,7 @@ class Config:
             raise ValueError("gamma must be between 0 and 1")
 
 
-class StateEditorIntf(StateEditor):
+class StateEditor(View):
     @property
     def preferred_by_attacker(self) -> Block:
         raise NotImplementedError
@@ -88,11 +88,25 @@ class StateEditorIntf(StateEditor):
         """
         raise NotImplementedError
 
+    def load(self, state: State) -> None:
+        raise NotImplementedError
+
+    def save(self) -> State:
+        raise NotImplementedError
+
     def clear(self) -> None:
         """
         Remove all blocks from the state.
         """
         raise NotImplementedError
+
+    def topo_sort(self, s: set[Block]) -> list[Block]:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class Action:
+    pass
 
 
 @dataclass(frozen=True)
