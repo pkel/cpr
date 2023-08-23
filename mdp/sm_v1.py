@@ -714,9 +714,9 @@ class StateEditor(StateEditor):
                 idx[canon] = block
             for i in range(N_PROP):
                 arr[i,] = self.buf[i, idx]
-            # TODO I want to permute the adjacency matrix here but this
-            # permutation is buggy! See new sm.py for a fixed version.
-            arr[N_PROP:,] = self._adj[idx, idx]
+            # permute adjacency
+            for new, old in enumerate(idx):
+                arr[new + N_PROP,] = self._adj[old, idx]
         # convert to bytes and hash
         # WARNING: in principle, arr.tobytes() is a valid state. It can be
         # loaded into the editor. However, this would break a core assumption
