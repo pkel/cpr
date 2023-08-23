@@ -381,11 +381,14 @@ class SelfishMining(Model):
         else:
             progress = 0
 
-        # truncate common history
-        keep = {common_ancestor} | self.editor.descendants(common_ancestor)
-        e.reorder_and_filter(sorted(list(keep)))
-        # TODO consider throwing out blocks that cannot be reached from
-        # attacker's and defender's preference
+        # truncate common history, keep only reachable blocks
+        keep = set()
+        for entrypoint in [e.attacker_prefers(), e.defender_prefers()]:
+            keep.add(entrypoint)
+            keep |= e.ancestors(entrypoint)
+            keep |= e.descendants(entrypoint)
+        keep -= e.ancestors(common_ancestor)
+        e.reorder_and_filter(list(sorted(keep)))
 
         return Transition(
             state=self.editor.save(),
