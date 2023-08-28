@@ -15,6 +15,9 @@ class View:
     def miner(self, b: Block) -> Miner:
         raise NotImplementedError
 
+    def height(self, b: Block) -> int:
+        raise NotImplementedError
+
     def ancestors(self, b: Block) -> set[Block]:
         acc = set()
         todo = self.parents(b).copy()

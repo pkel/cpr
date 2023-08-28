@@ -27,7 +27,7 @@ class Bitcoin(Protocol):
         return h
 
     def preference(self, v: View, *args, old: Block, new: Block) -> Block:
-        if self.height(v, new) > self.height(v, old):
+        if v.height(new) > v.height(old):
             return new
         else:
             return old

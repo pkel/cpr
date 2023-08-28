@@ -5,7 +5,6 @@ from protocol import Protocol, View
 import numpy
 import pickle
 import pynauty
-import queue
 
 Miner = IntEnum("Miner", ["Attacker", "Defender"], start=0)
 
@@ -42,15 +41,16 @@ class Editor(View):
         self.adj = numpy.full((1, 1), False)
         self.av = [AttackerView.Preferred]
         self.dv = [DefenderView.Preferred]
+        self.ht = [0]
         if first_miner == Miner.Attacker:
             self.wh = [Withholding.Withheld]
         if first_miner == Miner.Defender:
             self.wh = [Withholding.Foreign]
         assert isinstance(first_miner, Miner)
-        self.check()
+        assert self.check()
 
     def save(self):
-        self.check()
+        assert self.check()
         return pickle.dumps(self)
 
     def load(self, buf):
@@ -60,7 +60,8 @@ class Editor(View):
         self.av = x.av
         self.dv = x.dv
         self.wh = x.wh
-        self.check()
+        self.ht = x.ht
+        assert self.check()
 
     def check(self):
         # shape and lengths
@@ -68,6 +69,7 @@ class Editor(View):
         assert len(self.av) == self.n
         assert len(self.dv) == self.n
         assert len(self.wh) == self.n
+        assert len(self.ht) == self.n
         # exactly one preferred
         apref = 0
         dpref = 0
@@ -87,12 +89,20 @@ class Editor(View):
         for b in range(self.n):
             for p in self.parents(b):
                 assert p < b, "topological order"
+        # height
+        for b in range(self.n):
+            ph = -1
+            for p in self.parents(b):
+                ph = max(ph, self.ht[p])
+            assert ph + 1 == self.ht[b], f"height {ph} == {self.ht[b]}"
         # exactly one genesis
         no_parents_cnt = 0
         for b in range(self.n):
             if len(self.parents(b)) == 0:
                 no_parents_cnt += 1
         assert no_parents_cnt == 1, f"{no_parents_cnt} root blocks"
+
+        return True
 
     def parents(self, b):
         return {int(x) for x in numpy.flatnonzero(self.adj[b, 0 : self.n])}
@@ -105,6 +115,9 @@ class Editor(View):
             return Miner.Defender
         else:
             return Miner.Attacker
+
+    def height(self, b):
+        return self.ht[b]
 
     def append(self, parents: set[int], miner: Miner):
         assert isinstance(miner, Miner)
@@ -130,8 +143,9 @@ class Editor(View):
             self.wh.append(Withholding.Foreign)
         else:
             assert False, "unkown miner"
+        self.ht.append(max([self.ht[p] for p in parents]) + 1)
         # safety check
-        self.check()
+        assert self.check()
         assert isinstance(b, int)
         return b
 
@@ -145,6 +159,7 @@ class Editor(View):
         old_av = self.av
         old_dv = self.dv
         old_wh = self.wh
+        old_ht = self.ht
 
         # update in-place
         self.n = len(old_ids)
@@ -152,6 +167,7 @@ class Editor(View):
         self.av = []
         self.dv = []
         self.wh = []
+        self.ht = []
 
         # copy stuff in new order
         for new, old in enumerate(old_ids):
@@ -159,9 +175,14 @@ class Editor(View):
             self.av.append(old_av[old])
             self.dv.append(old_dv[old])
             self.wh.append(old_wh[old])
+            self.ht.append(old_ht[old])
+
+        # genesis height zero
+        delta_height = min(self.ht)
+        self.ht = [x - delta_height for x in self.ht]
 
         # safety check
-        self.check()
+        assert self.check()
 
     def to_release(self):
         # withheld blocks w/o withheld parents
@@ -266,34 +287,12 @@ class Editor(View):
         # Sort the list of blocks topologically, i.e. so that parents are
         # listed before their children.
 
-        # NOTE: this assumes that blocks ids are topologically sorted and that
-        # the given blocks have a common ancestor.
-
         assert isinstance(blocks, list)
         for i in blocks:
             assert isinstance(i, int)
 
-        pos = {b: pos for pos, b in enumerate(blocks)}
-        todo = queue.PriorityQueue()
-        ca = min(blocks)
-        todo.put((0, pos[ca], ca))  # tuple (depth, input position, block id)
-        out = []  # sorted blocks
-
-        while todo.qsize() > 0:
-            depth, _pos, b = todo.get()
-            if b not in out:
-                if b in pos:  # eq: b in blocks
-                    out.append(b)
-                # recursive exploration
-                for c in self.children(b):
-                    if c in pos:
-                        todo.put((depth + 1, pos[c], c))
-                    else:
-                        todo.put((depth + 1, len(blocks), c))
-
-        assert len(out) == len(blocks)
-        assert sorted(out) == sorted(blocks)
-        return out
+        prio = [(self.ht[b], pos, b) for pos, b in enumerate(blocks)]
+        return [b for _, _, b in sorted(prio)]
 
     def canonically_ordered(self, blocks: list[int]):
         # nauty is a C library for finding canonical representations of graphs
@@ -393,6 +392,9 @@ class PartialView(View):
 
     def miner(self, b):
         return self.view.miner(b)
+
+    def height(self, b):
+        return self.view.height(b)
 
 
 @dataclass(order=True)

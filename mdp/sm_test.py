@@ -1,4 +1,6 @@
 from bitcoin import Bitcoin
+
+from ethereum import EthereumWhitepaper, EthereumByzantium
 from compiler import Compiler
 from parallel import Parallel
 from sm import Editor, Miner, SelfishMining
@@ -36,7 +38,7 @@ def compile(proto, verbose=False, alpha=0.33, gamma=0.5, maximum_size=5, **kwarg
                 n_states_queued=c.queue.qsize(),
                 n_states_seen=len(c.state_map),
                 n_actions=len(c.action_map),
-                n_transitions=c.transitions,
+                n_transitions=c._mdp.n_transitions,
                 ram_usage_gb=process.memory_info().rss / 1024**3,
             )
             info["queuing_factor"] = info["n_states_queued"] / info["n_states_explored"]
@@ -50,6 +52,12 @@ if __name__ == "__main__":
     compile(Bitcoin(), maximum_size=4, force_consider_own=False)
     compile(Bitcoin(), maximum_size=4)
     compile(Bitcoin())
+    compile(EthereumWhitepaper(horizon=0))
+    compile(EthereumWhitepaper(horizon=1))
+    compile(EthereumWhitepaper(horizon=2))
+    compile(EthereumByzantium(horizon=0))
+    compile(EthereumByzantium(horizon=1))
+    compile(EthereumByzantium(horizon=2))
     compile(Parallel(k=2))
     compile(Parallel(k=3))
     compile(Parallel(k=4))
