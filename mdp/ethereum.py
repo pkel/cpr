@@ -66,7 +66,7 @@ class EthereumWhitepaper(Protocol):
         rew = [Reward(v.miner(b), 1)]
         _, uncles = self.parent_and_uncles(v, b)
         for u in uncles:
-            rew.append(Reward(v.miner(u, 1)))
+            rew.append(Reward(v.miner(u), 1))
         return rew
 
 
@@ -115,5 +115,5 @@ class EthereumByzantium(EthereumWhitepaper):
         max_d = self.horizon + 1  # TODO separate protocol parameter?
         for u in uncles:
             d = h - v.height(u)
-            rew.append(Reward(v.miner(u, (max_d - d) / max_d)))
+            rew.append(Reward(v.miner(u), (max_d - d) / max_d))
         return rew
