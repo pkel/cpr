@@ -20,7 +20,7 @@ class View:
 
     def ancestors(self, b: Block) -> set[Block]:
         acc = set()
-        todo = self.parents(b).copy()
+        todo = self.parents(b)
         while len(todo) > 0:
             b = todo.pop()
             if b not in acc:
@@ -30,7 +30,7 @@ class View:
 
     def descendants(self, b: Block) -> set[Block]:
         acc = set()
-        todo = self.children(b).copy()
+        todo = self.children(b)
         while len(todo) > 0:
             b = todo.pop()
             if b not in acc:

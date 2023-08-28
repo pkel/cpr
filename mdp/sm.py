@@ -47,11 +47,20 @@ class Editor(View):
         if first_miner == Miner.Defender:
             self.wh = [Withholding.Foreign]
         assert isinstance(first_miner, Miner)
+
+        self.reset_adj_cache()
+
         assert self.check()
 
+    def _save(self):
+        del self._parents
+        del self._children
+        return pickle.dumps(self, protocol=-1)
+
     def save(self):
-        assert self.check()
-        return pickle.dumps(self)
+        b = self._save()
+        assert self.load(b) is None and self._save() == b
+        return b
 
     def load(self, buf):
         x = pickle.loads(buf)
@@ -61,7 +70,12 @@ class Editor(View):
         self.dv = x.dv
         self.wh = x.wh
         self.ht = x.ht
+        self.reset_adj_cache()
         assert self.check()
+
+    def reset_adj_cache(self):
+        self._parents = [None] * self.n
+        self._children = [None] * self.n
 
     def check(self):
         # shape and lengths
@@ -105,10 +119,18 @@ class Editor(View):
         return True
 
     def parents(self, b):
-        return {int(x) for x in numpy.flatnonzero(self.adj[b, 0 : self.n])}
+        if self._parents[b] is None:
+            self._parents[b] = {
+                int(x) for x in numpy.flatnonzero(self.adj[b, 0 : self.n])
+            }
+        return self._parents[b].copy()
 
     def children(self, b):
-        return {int(x) for x in numpy.flatnonzero(self.adj[0 : self.n, b])}
+        if self._children[b] is None:
+            self._children[b] = {
+                int(x) for x in numpy.flatnonzero(self.adj[0 : self.n, b])
+            }
+        return self._children[b].copy()
 
     def miner(self, b):
         if self.wh[b] == Withholding.Foreign:
@@ -144,6 +166,7 @@ class Editor(View):
         else:
             assert False, "unkown miner"
         self.ht.append(max([self.ht[p] for p in parents]) + 1)
+        self.reset_adj_cache()
         # safety check
         assert self.check()
         assert isinstance(b, int)
@@ -180,6 +203,9 @@ class Editor(View):
         # genesis height zero
         delta_height = min(self.ht)
         self.ht = [x - delta_height for x in self.ht]
+
+        # reset cache
+        self.reset_adj_cache()
 
         # safety check
         assert self.check()
