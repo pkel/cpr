@@ -24,7 +24,7 @@ if __name__ == "__main__":
     test_editor()
 
 
-def compile(proto, verbose=False, alpha=0.33, gamma=0.5, maximum_size=5, **kwargs):
+def compile(proto, verbose=False, alpha=0.33, gamma=0.5, maximum_size=6, **kwargs):
     model = SelfishMining(
         proto, alpha=alpha, gamma=gamma, maximum_size=maximum_size, **kwargs
     )
@@ -52,13 +52,10 @@ if __name__ == "__main__":
     compile(Bitcoin(), maximum_size=4, force_consider_own=False)
     compile(Bitcoin(), maximum_size=4)
     compile(Bitcoin())
-    compile(EthereumWhitepaper(horizon=0))
-    compile(EthereumWhitepaper(horizon=1))
-    compile(EthereumWhitepaper(horizon=2))
-    compile(EthereumByzantium(horizon=0))
-    compile(EthereumByzantium(horizon=1))
-    compile(EthereumByzantium(horizon=2))
-    compile(Parallel(k=2))
-    compile(Parallel(k=3))
-    compile(Parallel(k=4))
-    #  compile(EthereumByzantium(horizon=7), maximum_size=14, verbose=True)
+    for h in range(0, 3):
+        compile(EthereumWhitepaper(horizon=h))
+        compile(EthereumByzantium(horizon=h))
+    for k in range(2, 5):
+        compile(Parallel(k=k))
+
+    #  compile(EthereumByzantium(horizon=2), maximum_size=12, verbose=True)
