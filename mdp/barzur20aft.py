@@ -7,7 +7,7 @@
 # York, NY, USA, 19 pages. https://doi.org/10.1145/3419614.3423264
 
 from dataclasses import dataclass
-from model import Action, Model, Transition, TransitionList
+from model import Action, Model, Transition
 import mdp
 
 # Bitcoin action space
@@ -42,10 +42,9 @@ class Bitcoin(Model):
         self.gamma = gamma
         self.mfl = maximum_fork_length
 
-    def start(self) -> TransitionList:
+    def start(self) -> list[tuple[BState, float]]:
         s = BState(a=0, h=0, fork=IRRELEVANT)
-        t = Transition(state=s, reward=0, probability=1, progress=0)
-        return TransitionList([t])
+        return [(s, 1)]
 
     def actions(self, s: BState) -> list[Action]:
         actions = []
@@ -64,7 +63,7 @@ class Bitcoin(Model):
         actions.append(ADOPT)
         return actions
 
-    def apply_wait(self, s: BState) -> TransitionList:
+    def apply_wait(self, s: BState) -> list[Transition]:
         t = []
         if s.fork != ACTIVE:
             # attacker mines block
@@ -130,14 +129,14 @@ class Bitcoin(Model):
             )
             assert snew.h <= self.mfl
 
-        return TransitionList(t)
+        return t
 
-    def apply_adopt(self, s: BState) -> TransitionList:
+    def apply_adopt(self, s: BState) -> list[Transition]:
         snew = BState(a=0, h=0, fork=s.fork)
         t = Transition(state=snew, probability=1.0, reward=0, progress=s.h)
-        return TransitionList([t])
+        return [t]
 
-    def apply_override(self, s: BState) -> TransitionList:
+    def apply_override(self, s: BState) -> list[Transition]:
         snew = BState(a=s.a - s.h - 1, h=0, fork=s.fork)
         t = Transition(
             state=snew,
@@ -145,16 +144,16 @@ class Bitcoin(Model):
             reward=s.h + 1,
             progress=s.h + 1,
         )
-        return TransitionList([t])
+        return [t]
 
-    def apply_match(self, s: BState) -> TransitionList:
+    def apply_match(self, s: BState) -> list[Transition]:
         assert s.fork == RELEVANT
         assert s.a >= s.h
         snew = BState(a=s.a, h=s.h, fork=ACTIVE)
         t = Transition(state=snew, probability=1, reward=0, progress=0)
-        return TransitionList([t])
+        return [t]
 
-    def apply(self, a: Action, s: BState) -> TransitionList:
+    def apply(self, a: Action, s: BState) -> list[Transition]:
         # handle action
         if a == ADOPT:
             return self.apply_adopt(s)

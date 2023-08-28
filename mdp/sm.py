@@ -1,6 +1,6 @@
 from enum import IntEnum
 from dataclasses import dataclass
-from model import Model, Transition, TransitionList
+from model import Model, Transition
 from protocol import Protocol, View
 import numpy
 import pickle
@@ -534,13 +534,13 @@ class SelfishMining(Model):
             reward=rew_atk,
         )
 
-    def start(self) -> TransitionList:
+    def start(self) -> list[tuple[State, float]]:
         lst = []
         self.editor = Editor(first_miner=Miner.Attacker)
-        lst.append(self.transition(probability=self.alpha))
+        lst.append((self.editor.save(), self.alpha))
         self.editor = Editor(first_miner=Miner.Defender)
-        lst.append(self.transition(probability=1 - self.alpha))
-        return TransitionList(lst)
+        lst.append((self.editor.save(), 1 - self.alpha))
+        return lst
 
     def actions(self, s: State) -> list[Action]:
         actions = []
@@ -560,7 +560,7 @@ class SelfishMining(Model):
 
         return actions
 
-    def apply(self, a: Action, s: State) -> TransitionList:
+    def apply(self, a: Action, s: State) -> list[Transition]:
         if isinstance(a, Release):
             return self.apply_release(a.i, s)
         if isinstance(a, Consider):
@@ -570,7 +570,7 @@ class SelfishMining(Model):
         assert isinstance(a, Action)
         assert False, "unknown action"
 
-    def apply_release(self, i: int, s: State) -> TransitionList:
+    def apply_release(self, i: int, s: State) -> list[Transition]:
         e = self.editor
         e.load(s)
         # which block will be released?
@@ -579,9 +579,9 @@ class SelfishMining(Model):
         e.set_released(b)
         # this transition is deterministic
         lst = [self.transition(probability=1)]
-        return TransitionList(lst)
+        return lst
 
-    def apply_consider(self, i: int, s: State) -> TransitionList:
+    def apply_consider(self, i: int, s: State) -> list[Transition]:
         e = self.editor
         e.load(s)
         # which block will be considered?
@@ -597,14 +597,14 @@ class SelfishMining(Model):
         e.set_attacker_prefers(pref)
         # this transition is deterministic
         lst = [self.transition(probability=1)]
-        return TransitionList(lst)
+        return lst
 
-    def apply_continue(self, s: State) -> TransitionList:
+    def apply_continue(self, s: State) -> list[Transition]:
         lst = []
         for gamma in [True, False]:
             for alpha in [True, False]:
                 lst.append(self._apply_continue(s, gamma, alpha))
-        return TransitionList(lst)
+        return lst
 
     def _apply_continue(self, s: State, gamma: bool, alpha: bool):
         e = self.editor

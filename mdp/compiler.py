@@ -1,6 +1,20 @@
 from mdp import MDP, Transition
 from model import Model
+import math
 import queue
+
+
+def is_one(x):
+    return math.isclose(x, 1, rel_tol=1e-12)
+
+
+def check_transitions(lst):
+    assert isinstance(lst, list)
+    acc_prob = 0
+    for t in lst:
+        acc_prob += t.probability
+    assert is_one(acc_prob)
+    return True
 
 
 class Compiler:
@@ -14,15 +28,18 @@ class Compiler:
         self._mdp = MDP()
 
         # insert start states
-        for start in model.start().lst:
-            assert start.state not in self.state_map
+        for state, probability in model.start():
+            assert state not in self.state_map
             # obtain id
             state_id = len(self.state_map)
-            self.state_map[start.state] = state_id
+            self.state_map[state] = state_id
             # record probability
-            self.start_probabilities[state_id] = start.probability
+            self.start_probabilities[state_id] = probability
             # schedule exploration
-            self.queue.put(start.state)
+            self.queue.put(state)
+
+        # check start probabilities
+        assert is_one(sum(self.start_probabilities.values()))
 
     def explore(self, steps=1000) -> bool:
         for i in range(steps):
@@ -43,10 +60,6 @@ class Compiler:
         # recall state id
         state_id = self.state_map[state]
 
-        # explore invalid action (id = -1)
-        # for to in self.model.apply_invalid(state).lst:
-        #     self.handle_transition(state_id, -1, to)
-
         # explore possible actions
         for action in self.model.actions(state):
             # create or reuse action id
@@ -57,7 +70,9 @@ class Compiler:
                 self.action_map[action] = action_id
 
             # apply action, iterate transitions
-            for to in self.model.apply(action, state).lst:
+            transitions = self.model.apply(action, state)
+            assert check_transitions(transitions)
+            for to in transitions:
                 self.handle_transition(state_id, action_id, to)
 
     def handle_transition(self, state_id, action_id, to):
@@ -91,8 +106,6 @@ class Compiler:
         while self.queue.qsize() > 0:
             self.step()
 
-        # checks only work for non-symbolic MDPs
-        if hasattr(self.model, "symbolic") and not self.model.symbolic:
-            self._mdp.check()
+        self._mdp.check()
 
         return self._mdp
