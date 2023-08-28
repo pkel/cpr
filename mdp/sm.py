@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from model import Model, Transition
 from protocol import Protocol, View
 import numpy
-import pickle
 import pynauty
 
 Miner = IntEnum("Miner", ["Attacker", "Defender"], start=0)
@@ -38,52 +37,74 @@ class Continue(Action):
 class Editor(View):
     def __init__(self, *args, first_miner: Miner):
         self.n = 1
-        self.adj = numpy.full((1, 1), False)
+        self._parents = [set()]
+        self._children = [set()]
         self.av = [AttackerView.Preferred]
         self.dv = [DefenderView.Preferred]
-        self.ht = [0]
         if first_miner == Miner.Attacker:
             self.wh = [Withholding.Withheld]
         if first_miner == Miner.Defender:
             self.wh = [Withholding.Foreign]
+        self.ht = [0]
         assert isinstance(first_miner, Miner)
-
-        self.reset_adj_cache()
 
         assert self.check()
 
     def _save(self):
-        del self._parents
-        del self._children
-        return pickle.dumps(self, protocol=-1)
+        n = self.n
+        buf = numpy.full((n + 4, n), 0, dtype=numpy.uint8)
+        for b in range(n):
+            for p in self._parents[b]:
+                buf[b, p] = 1
+            buf[-4, b] = self.av[b]
+            buf[-3, b] = self.dv[b]
+            buf[-2, b] = self.wh[b]
+            buf[-1, b] = self.ht[b]
+        # TODO. Boolean adjacency matrix could be compressed with numpy.packbits
+        return buf.tobytes() + numpy.uint8(n).tobytes()
 
     def save(self):
         b = self._save()
         assert self.load(b) is None and self._save() == b
         return b
 
-    def load(self, buf):
-        x = pickle.loads(buf)
-        self.n = x.n
-        self.adj = x.adj
-        self.av = x.av
-        self.dv = x.dv
-        self.wh = x.wh
-        self.ht = x.ht
-        self.reset_adj_cache()
-        assert self.check()
+    def load(self, b):
+        buf = numpy.frombuffer(b, dtype=numpy.uint8)
+        n = int(buf[-1])
+        assert buf.shape == ((n + 4) * n + 1,), buf.shape
+        buf = buf[:-1].reshape((n + 4, n))
 
-    def reset_adj_cache(self):
-        self._parents = [None] * self.n
-        self._children = [None] * self.n
+        self.n = n
+        self._parents = [set() for _ in range(n)]
+        self._children = [set() for _ in range(n)]
+        self.av = []
+        self.dv = []
+        self.wh = []
+        self.ht = []
+        for b in range(n):
+            for p in range(n):
+                if buf[b, p]:
+                    self._parents[b].add(p)
+                    self._children[p].add(b)
+            self.av.append(AttackerView(buf[-4, b]))
+            self.dv.append(DefenderView(buf[-3, b]))
+            self.wh.append(Withholding(buf[-2, b]))
+            self.ht.append(buf[-1, b])
+
+        assert self.check()
 
     def check(self):
         # shape and lengths
-        assert self.adj.shape == (self.n, self.n)
+        assert len(self._parents) == self.n
+        assert len(self._children) == self.n
         assert len(self.av) == self.n
         assert len(self.dv) == self.n
         assert len(self.wh) == self.n
         assert len(self.ht) == self.n
+        # adjacency
+        for lst in self._parents + self._children:
+            for b in lst:
+                assert b >= 0 and b < self.n
         # exactly one preferred
         apref = 0
         dpref = 0
@@ -99,37 +120,30 @@ class Editor(View):
             isinstance(self.av[i], AttackerView)
             isinstance(self.dv[i], DefenderView)
             isinstance(self.wh[i], Withholding)
+            isinstance(self.ht[i], int)
         # topological order
         for b in range(self.n):
-            for p in self.parents(b):
+            for p in self._parents[b]:
                 assert p < b, "topological order"
         # height
         for b in range(self.n):
             ph = -1
-            for p in self.parents(b):
+            for p in self._parents[b]:
                 ph = max(ph, self.ht[p])
             assert ph + 1 == self.ht[b], f"height {ph} == {self.ht[b]}"
         # exactly one genesis
         no_parents_cnt = 0
         for b in range(self.n):
-            if len(self.parents(b)) == 0:
+            if len(self._parents[b]) == 0:
                 no_parents_cnt += 1
         assert no_parents_cnt == 1, f"{no_parents_cnt} root blocks"
 
         return True
 
     def parents(self, b):
-        if self._parents[b] is None:
-            self._parents[b] = {
-                int(x) for x in numpy.flatnonzero(self.adj[b, 0 : self.n])
-            }
         return self._parents[b].copy()
 
     def children(self, b):
-        if self._children[b] is None:
-            self._children[b] = {
-                int(x) for x in numpy.flatnonzero(self.adj[0 : self.n, b])
-            }
         return self._children[b].copy()
 
     def miner(self, b):
@@ -147,16 +161,13 @@ class Editor(View):
         for p in parents:
             assert isinstance(p, int), f"p = {p}"
 
-        b = self.n
-        # construct new adjacency matrix
-        new_n = self.n + 1
-        new_adj = numpy.full((new_n, new_n), False)
-        new_adj[0 : self.n, 0 : self.n] = self.adj
-        for p in parents:
-            new_adj[b, p] = True
         # update editor in place
-        self.n = new_n
-        self.adj = new_adj
+        new = self.n
+        self.n += 1
+        self._parents.append(parents.copy())
+        self._children.append(set())
+        for p in parents:
+            self._children[p].add(new)
         self.av.append(AttackerView.Ignored)
         self.dv.append(DefenderView.Unknown)
         if miner == Miner.Attacker:
@@ -166,11 +177,10 @@ class Editor(View):
         else:
             assert False, "unkown miner"
         self.ht.append(max([self.ht[p] for p in parents]) + 1)
-        self.reset_adj_cache()
         # safety check
         assert self.check()
-        assert isinstance(b, int)
-        return b
+        assert isinstance(new, int)
+        return new
 
     def reorder_and_filter(self, old_ids: list[int]):
         assert isinstance(old_ids, list), old_ids
@@ -178,7 +188,8 @@ class Editor(View):
         assert len(old_ids) == len(set(old_ids))
 
         # recall old state
-        old_adj = self.adj
+        old_parents = self._parents
+        old_children = self._children
         old_av = self.av
         old_dv = self.dv
         old_wh = self.wh
@@ -186,15 +197,22 @@ class Editor(View):
 
         # update in-place
         self.n = len(old_ids)
-        self.adj = numpy.full((self.n, self.n), False)
+        self._parents = []
+        self._children = []
         self.av = []
         self.dv = []
         self.wh = []
         self.ht = []
 
         # copy stuff in new order
-        for new, old in enumerate(old_ids):
-            self.adj[new, 0 : self.n] = old_adj[old, old_ids]
+        new_id = {old: new for new, old in enumerate(old_ids)}
+
+        def f(s):
+            return {new_id[x] for x in s if x in new_id}
+
+        for old in old_ids:
+            self._parents.append(f(old_parents[old]))
+            self._children.append(f(old_children[old]))
             self.av.append(old_av[old])
             self.dv.append(old_dv[old])
             self.wh.append(old_wh[old])
@@ -203,9 +221,6 @@ class Editor(View):
         # genesis height zero
         delta_height = min(self.ht)
         self.ht = [x - delta_height for x in self.ht]
-
-        # reset cache
-        self.reset_adj_cache()
 
         # safety check
         assert self.check()
