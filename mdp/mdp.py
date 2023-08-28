@@ -77,3 +77,4 @@ class MDP:
         assert all(state_seen)
         assert n_transitions == self.n_transitions
         # check reachability of states TODO
+        return True

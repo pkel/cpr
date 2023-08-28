@@ -1,5 +1,6 @@
 from enum import IntEnum
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from mdp import MDP
 from model import Model, Transition
 from protocol import Protocol, View
 import numpy
@@ -669,3 +670,36 @@ class SelfishMining(Model):
             )
             e.append(parents, Miner.Defender)
         return self.transition(probability=prob)
+
+
+mappable_params = dict(alpha=0.125, gamma=0.25)
+
+
+def map_params(m: MDP, *args, alpha: float, gamma: float):
+    a = mappable_params["alpha"]
+    g = mappable_params["gamma"]
+    mapping = dict()
+    mapping[1] = 1
+    mapping[a * g] = alpha * gamma
+    mapping[(1 - a) * g] = (1 - alpha) * gamma
+    mapping[a * (1 - g)] = alpha * (1 - gamma)
+    mapping[(1 - a) * (1 - g)] = (1 - alpha) * (1 - gamma)
+
+    assert len(set(mapping.keys())) == 5, "mappable_params are not mappable"
+
+    # map probabilities
+    tab = []
+    for actions in m.tab:
+        new_actions = dict()
+        for act, transitions in actions.items():
+            new_transitions = []
+            for t in transitions:
+                new_t = replace(t, probability=mapping[t.probability])
+                new_transitions.append(new_t)
+            new_actions[act] = new_transitions
+        tab.append(new_actions)
+
+    new = replace(m, tab=tab)
+
+    assert new.check()
+    return new
