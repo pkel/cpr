@@ -7,15 +7,9 @@ State = TypeVar("State")
 Action = TypeVar("Action")
 
 
-@dataclass(frozen=True, order=True)
-class Trace:
-    pass
-
-
 @dataclass(frozen=True)
 class Transition:
     state: State
-    trace: Trace
     probability: float
     reward: float
     progress: float
@@ -52,17 +46,13 @@ class Model:
         """
         raise NotImplementedError
 
-    def apply(self, a: Action, s: State, t: Trace) -> TransitionList:
+    def apply(self, a: Action, s: State) -> TransitionList:
         """
-        Define state transitions. Action a is applied to state s. Trace t may
-        be used to track how (= which actions and intermediate states) the
-        source state s has been explored. This can be useful for early
-        termination. Trace also guided the exploration: state with smaller
-        trace are explored first.
+        Define state transitions. Action a is applied to state s.
         """
         raise NotImplementedError
 
-    def apply_invalid(self, s: State, t: Trace) -> TransitionList:
+    def apply_invalid(self, s: State) -> TransitionList:
         """
         Define what happens on invalid actions. That is, actions taken from
         s which are not listed in actions(s).

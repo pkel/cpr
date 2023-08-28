@@ -29,11 +29,6 @@ class BState:  # Bitcoin State
     fork: int  # one of the above IRRELEVANT RELEVANT ACTIVE
 
 
-@dataclass(order=True)
-class Trace:
-    pass
-
-
 class Bitcoin(Model):
     def __init__(self, *args, alpha: float, gamma: float, maximum_fork_length: int):
         if alpha < 0 or alpha >= 0.5:
@@ -47,12 +42,9 @@ class Bitcoin(Model):
         self.gamma = gamma
         self.mfl = maximum_fork_length
 
-        # we don't use the trace, just return this one everywhere
-        self.trace = Trace()
-
     def start(self) -> TransitionList:
         s = BState(a=0, h=0, fork=IRRELEVANT)
-        t = Transition(state=s, trace=self.trace, reward=0, probability=1, progress=0)
+        t = Transition(state=s, reward=0, probability=1, progress=0)
         return TransitionList([t])
 
     def actions(self, s: BState) -> list[Action]:
@@ -80,7 +72,6 @@ class Bitcoin(Model):
             t.append(
                 Transition(
                     state=snew,
-                    trace=self.trace,
                     probability=self.alpha,
                     reward=0.0,
                     progress=0,
@@ -93,7 +84,6 @@ class Bitcoin(Model):
             t.append(
                 Transition(
                     state=snew,
-                    trace=self.trace,
                     probability=1.0 - self.alpha,
                     reward=0.0,
                     progress=0,
@@ -106,7 +96,6 @@ class Bitcoin(Model):
             t.append(
                 Transition(
                     state=snew,
-                    trace=self.trace,
                     probability=self.alpha,
                     reward=0.0,
                     progress=0,
@@ -121,7 +110,6 @@ class Bitcoin(Model):
             t.append(
                 Transition(
                     state=snew,
-                    trace=self.trace,
                     probability=(1 - self.alpha) * self.gamma,
                     reward=s.h,
                     progress=s.h,
@@ -135,7 +123,6 @@ class Bitcoin(Model):
             t.append(
                 Transition(
                     state=snew,
-                    trace=self.trace,
                     probability=(1 - self.alpha) * (1 - self.gamma),
                     reward=0,
                     progress=0,
@@ -147,16 +134,13 @@ class Bitcoin(Model):
 
     def apply_adopt(self, s: BState) -> TransitionList:
         snew = BState(a=0, h=0, fork=s.fork)
-        t = Transition(
-            state=snew, trace=self.trace, probability=1.0, reward=0, progress=s.h
-        )
+        t = Transition(state=snew, probability=1.0, reward=0, progress=s.h)
         return TransitionList([t])
 
     def apply_override(self, s: BState) -> TransitionList:
         snew = BState(a=s.a - s.h - 1, h=0, fork=s.fork)
         t = Transition(
             state=snew,
-            trace=self.trace,
             probability=1,
             reward=s.h + 1,
             progress=s.h + 1,
@@ -167,12 +151,10 @@ class Bitcoin(Model):
         assert s.fork == RELEVANT
         assert s.a >= s.h
         snew = BState(a=s.a, h=s.h, fork=ACTIVE)
-        t = Transition(
-            state=snew, trace=self.trace, probability=1, reward=0, progress=0
-        )
+        t = Transition(state=snew, probability=1, reward=0, progress=0)
         return TransitionList([t])
 
-    def apply(self, a: Action, s: BState, t: Trace) -> TransitionList:
+    def apply(self, a: Action, s: BState) -> TransitionList:
         # handle action
         if a == ADOPT:
             return self.apply_adopt(s)

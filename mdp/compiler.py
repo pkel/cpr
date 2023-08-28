@@ -1,13 +1,12 @@
 from mdp import MDP, Transition
 from model import Model
 import queue
-import scipy
 
 
 class Compiler:
     def __init__(self, model: Model):
         self.model = model
-        self.queue = queue.PriorityQueue()
+        self.queue = queue.Queue()
         self.state_map = dict()  # maps state to integer
         self.action_map = dict()  # maps action to integer
         self.explored = set()  # ids of already explored states
@@ -23,7 +22,7 @@ class Compiler:
             # record probability
             self.start_probabilities[state_id] = start.probability
             # schedule exploration
-            self.queue.put((start.trace, start.state))
+            self.queue.put(start.state)
 
     def explore(self, steps=1000) -> bool:
         for i in range(steps):
@@ -34,7 +33,7 @@ class Compiler:
         return True
 
     def step(self):
-        trace, state = self.queue.get()
+        state = self.queue.get()
 
         # do not explore twice
         if state in self.explored:
@@ -45,7 +44,7 @@ class Compiler:
         state_id = self.state_map[state]
 
         # explore invalid action (id = -1)
-        # for to in self.model.apply_invalid(state, trace).lst:
+        # for to in self.model.apply_invalid(state).lst:
         #     self.handle_transition(state_id, -1, to)
 
         # explore possible actions
@@ -58,7 +57,7 @@ class Compiler:
                 self.action_map[action] = action_id
 
             # apply action, iterate transitions
-            for to in self.model.apply(action, state, trace).lst:
+            for to in self.model.apply(action, state).lst:
                 self.handle_transition(state_id, action_id, to)
 
     def handle_transition(self, state_id, action_id, to):
@@ -72,7 +71,7 @@ class Compiler:
             to_id = len(self.state_map)
             self.state_map[to.state] = to_id
             # schedule recursive exploration
-            self.queue.put((to.trace, to.state))
+            self.queue.put(to.state)
 
         # record transition
         t = Transition(
@@ -97,46 +96,3 @@ class Compiler:
             self._mdp.check()
 
         return self._mdp
-
-    def mdp_matrices(self):
-        assert False, "method not maintained"
-        # create sparse matrix MDP suitable for pymdptoolbox
-        assert self.queue.qsize() == 0, "exploration in progress"
-        assert (
-            not self.model.symbolic
-        ), "cannot generate matrices for symbolic parameters"
-        # init temp vectors
-        S = len(self.state_map)
-        A = len(self.action_map)
-        row = [[] for _ in range(A)]
-        col = [[] for _ in range(A)]
-        p = [[] for _ in range(A)]
-        r = [[] for _ in range(A)]
-        # write transitions
-        valid_actions = set()
-        invalid_transitions = [[] for _ in range(S)]
-        for a, src, dst, prob, rew in self.transitions:
-            if a >= 0:
-                valid_actions.add((src, a))
-                row[a].append(src)
-                col[a].append(dst)
-                p[a].append(prob)
-                r[a].append(rew)
-            else:
-                invalid_transitions[src].append((dst, prob, rew))
-        # handle invalid actions
-        for a in range(A):
-            for src in range(S):
-                if (src, a) in valid_actions:
-                    continue
-                for dst, prob, rew in invalid_transitions[src]:
-                    row[a].append(src)
-                    col[a].append(dst)
-                    p[a].append(prob)
-                    r[a].append(rew)
-        # create sparse matrices
-        matrix = scipy.sparse.csr_matrix
-        for a in range(A):
-            p[a] = matrix((p[a], (row[a], col[a])), shape=(S, S))
-            r[a] = matrix((r[a], (row[a], col[a])), shape=(S, S))
-        return (p, r)

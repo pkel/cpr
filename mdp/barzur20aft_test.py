@@ -18,7 +18,6 @@ def compile(*args, verbose=False, **kwargs):
     while c.explore(steps=10000):
         if verbose:
             process = psutil.Process()
-            trace, _state = peek(c)
             info = dict(
                 n_states_explored=len(c.explored),
                 n_states_queued=c.queue.qsize(),

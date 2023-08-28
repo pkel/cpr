@@ -61,3 +61,4 @@ if __name__ == "__main__":
     compile(Parallel(k=2))
     compile(Parallel(k=3))
     compile(Parallel(k=4))
+    #  compile(EthereumByzantium(horizon=7), maximum_size=14, verbose=True)

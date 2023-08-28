@@ -423,11 +423,6 @@ class PartialView(View):
         return self.view.height(b)
 
 
-@dataclass(order=True)
-class Trace:
-    pass
-
-
 class SelfishMining(Model):
     def __init__(
         self,
@@ -451,9 +446,6 @@ class SelfishMining(Model):
         self.merge_isomorphic = merge_isomorphic
 
         self.editor = Editor(first_miner=Miner.Attacker)
-
-        # we don't use the trace, just return this one everywhere
-        self.trace = Trace()
 
     def __repr__(self):
         return (
@@ -540,7 +532,6 @@ class SelfishMining(Model):
             probability=probability,
             progress=progress,
             reward=rew_atk,
-            trace=self.trace,
         )
 
     def start(self) -> TransitionList:
@@ -569,7 +560,7 @@ class SelfishMining(Model):
 
         return actions
 
-    def apply(self, a: Action, s: State, t: Trace) -> TransitionList:
+    def apply(self, a: Action, s: State) -> TransitionList:
         if isinstance(a, Release):
             return self.apply_release(a.i, s)
         if isinstance(a, Consider):
