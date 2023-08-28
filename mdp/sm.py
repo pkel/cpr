@@ -243,7 +243,6 @@ class Editor(View):
         # ignored blocks w/o ignored parents
         lst = []
         for b in range(self.n):
-            assert isinstance(self.av[b], AttackerView)
             if self.av[b] == AttackerView.Ignored:
                 parents_ok = True
                 for p in self.parents(b):
