@@ -14,12 +14,17 @@ action = int
 state = int
 
 
+def sum_to_one(x):
+    return math.isclose(sum(x), 1, rel_tol=1e-16)
+
+
 @dataclass()
 class MDP:
     n_states: int = 0
     n_transitions: int = 0
     n_actions: int = 0
     tab: list[dict[action, list[Transition]]] = field(default_factory=list)
+    start: dict[int, float] = field(default_factory=dict)
 
     def __repr__(self):
         s = self.n_states
@@ -48,14 +53,15 @@ class MDP:
         self.tab[src][act].append(t)
         self.n_transitions += 1
 
-    def check(self, *args, rel_tol=1e-12):
+    def check(self, *args):
+        # start states
+        assert sum_to_one(self.start.values())
+        for state in self.start.keys():
+            assert state >= 0 and state < self.n_states, state
         # check that outgoing probabilities sum up to one
         for src in range(self.n_states):
             for act, transitions in self.tab[src].items():
-                acc_prb = 0.0
-                for t in transitions:
-                    acc_prb += t.probability
-                assert math.isclose(acc_prb, 1.0, rel_tol=rel_tol), f"{src}/{act}"
+                assert sum_to_one([t.probability for t in transitions]), f"{src}/{act}"
         # check continuity of actions / states & number of transitions
         act_seen = [False for _ in range(self.n_actions)]
         state_seen = [False for _ in range(self.n_states)]
@@ -70,4 +76,4 @@ class MDP:
         assert all(act_seen)
         assert all(state_seen)
         assert n_transitions == self.n_transitions
-        # check reachability of states TODO needs start states
+        # check reachability of states TODO

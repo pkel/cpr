@@ -1,20 +1,6 @@
-from mdp import MDP, Transition
+from mdp import MDP, Transition, sum_to_one
 from model import Model
-import math
 import queue
-
-
-def is_one(x):
-    return math.isclose(x, 1, rel_tol=1e-12)
-
-
-def check_transitions(lst):
-    assert isinstance(lst, list)
-    acc_prob = 0
-    for t in lst:
-        acc_prob += t.probability
-    assert is_one(acc_prob)
-    return True
 
 
 class Compiler:
@@ -24,7 +10,6 @@ class Compiler:
         self.state_map = dict()  # maps state to integer
         self.action_map = dict()  # maps action to integer
         self.explored = set()  # ids of already explored states
-        self.start_probabilities = dict()
         self._mdp = MDP()
 
         # insert start states
@@ -34,12 +19,9 @@ class Compiler:
             state_id = len(self.state_map)
             self.state_map[state] = state_id
             # record probability
-            self.start_probabilities[state_id] = probability
+            self._mdp.start[state_id] = probability
             # schedule exploration
             self.queue.put(state)
-
-        # check start probabilities
-        assert is_one(sum(self.start_probabilities.values()))
 
     def explore(self, steps=1000) -> bool:
         for i in range(steps):
@@ -71,7 +53,7 @@ class Compiler:
 
             # apply action, iterate transitions
             transitions = self.model.apply(action, state)
-            assert check_transitions(transitions)
+            assert sum_to_one([t.probability for t in transitions])
             for to in transitions:
                 self.handle_transition(state_id, action_id, to)
 

@@ -216,7 +216,11 @@ def ptmdp(old: mdp.MDP, *args, horizon: int):
 
     # construct check and return updated MDP
     new = mdp.MDP(
-        n_states=n_states, n_transitions=n_transitions, tab=tab, n_actions=old.n_actions
+        n_states=n_states,
+        n_transitions=n_transitions,
+        tab=tab,
+        n_actions=old.n_actions,
+        start=old.start,
     )
     new.check()
     return new
