@@ -5,6 +5,7 @@ from model import Model, Transition
 from protocol import Protocol, View
 import numpy
 import pynauty
+import subprocess
 
 Miner = IntEnum("Miner", ["Attacker", "Defender"], start=0)
 
@@ -43,7 +44,7 @@ class Editor(View):
         self.av = [AttackerView.Preferred]
         self.dv = [DefenderView.Preferred]
         if first_miner == Miner.Attacker:
-            self.wh = [Withholding.Withheld]
+            self.wh = [Withholding.Released]
         if first_miner == Miner.Defender:
             self.wh = [Withholding.Foreign]
         self.ht = [0]
@@ -131,7 +132,7 @@ class Editor(View):
             ph = -1
             for p in self._parents[b]:
                 ph = max(ph, self.ht[p])
-            assert ph + 1 == self.ht[b], f"height {ph} == {self.ht[b]}"
+            assert ph + 1 == self.ht[b], f"height {ph + 1} == {self.ht[b]}"
         # exactly one genesis
         no_parents_cnt = 0
         for b in range(self.n):
@@ -187,6 +188,15 @@ class Editor(View):
         assert isinstance(old_ids, list), old_ids
         assert len(old_ids) > 0
         assert len(old_ids) == len(set(old_ids))
+
+        def all_parents_or_none():
+            for b in old_ids:
+                removed = [p in old_ids for p in self.parents(b)]
+                assert all(removed) or not any(removed)
+            return True
+
+        assert all_parents_or_none()
+        # anything else could break self.ht
 
         # recall old state
         old_parents = self._parents
@@ -409,6 +419,37 @@ class Editor(View):
         # To maintain the invariant that block ids are topologically ordered
         # we reorder the topologically.
         return self.topologically_ordered(canon_blocks)
+
+    def graph_easy(self, info=dict()):
+        lbl = []
+        lns = []
+        for b in range(self.n):
+            av = self.av[b].name[0]
+            dv = self.dv[b].name[0]
+            wh = self.wh[b].name[0]
+            ht = self.ht[b]
+            xx = ""
+            if b in info:
+                xx = " " + str(info[b])
+            lbl.append(f"{b}: {av}/{dv}/{wh}/{ht}{xx}")
+            lns.append(f"[{lbl[-1]}]")
+        for b in range(self.n):
+            for p in self.parents(b):
+                lns.append(f"[{lbl[b]}] --> [{lbl[p]}]")
+        return "\n".join(lns)
+
+    def asciify(self, info=dict()):
+        rendered = subprocess.run(
+            ["graph-easy"], input=self.graph_easy(info), text=True, capture_output=True
+        )
+        rendered.check_returncode()
+        return rendered.stdout
+
+    def debug_print(self, info=dict()):
+        print(self.asciify(info))
+
+    def __repr__(self):
+        return self.asciify()
 
 
 class PartialView(View):

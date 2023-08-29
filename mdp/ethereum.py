@@ -7,6 +7,8 @@ class EthereumWhitepaper(Protocol):
     def __init__(self, *args, horizon=7):
         assert isinstance(horizon, int)
         assert horizon >= 0
+        if horizon < 2:
+            print("WARNING: Ethereum uncles are only feasible if horizon >= 2")
 
         self.horizon = horizon
 
@@ -24,19 +26,36 @@ class EthereumWhitepaper(Protocol):
         parents = [p for (_, p) in sorted(prio)]
         return parents[-1], set(parents[:-1])
 
-    def head_and_leaves(self, v: View, b: Block) -> Block:
+    def head(self, v: View, b: Block) -> Block:
         leaves = [x for x in v.descendants(b) | {b} if len(v.children(x)) == 0]
         prio = [(v.height(x), x) for x in leaves]
         leaves = [x for (_, x) in sorted(prio)]
-        return leaves[-1], set(leaves[:-1])
+        return leaves[-1]
+
+    def uncle_candidates(self, v: View, head: Block) -> set[Block]:
+        hist = [head]
+        for _ in range(self.horizon):
+            p = self.predecessor(v, hist[-1])
+            if p is not None:
+                hist.append(p)
+            else:
+                break
+
+        uncle_candidates = set()
+        # intentionally skip first two to make parent_and_uncles non-ambiguous
+        for a in hist[2:]:
+            for c in v.children(a):
+                if c not in hist:
+                    uncle_candidates.add(c)
+
+        assert all([v.height(u) < v.height(head) for u in uncle_candidates])
+
+        return uncle_candidates
 
     def mining(self, v: View, b: Block) -> set[Block]:
-        head, leaves = self.head_and_leaves(v, b)
+        head = self.head(v, b)
 
-        height_head = v.height(head)
-        uncles = {x for x in leaves if v.height(x) < height_head}
-
-        return {head} | uncles
+        return {head} | self.uncle_candidates(v, head)
 
     def predecessor(self, v: View, b: Block) -> Optional[Block]:
         parent, _ = self.parent_and_uncles(v, b)
@@ -45,7 +64,7 @@ class EthereumWhitepaper(Protocol):
     def preference(self, v: View, *args, old: Block, new: Block) -> Block:
         # preferred block is lagging self.horizon behind tip of chain (head)
 
-        head, _ = self.head_and_leaves(v, old)
+        head = self.head(v, old)
         if v.height(new) > v.height(head):
             head = new
 
@@ -79,19 +98,18 @@ class EthereumByzantium(EthereumWhitepaper):
         return f"ethereum-bz-{self.horizon}"
 
     def mining(self, v: View, b: Block) -> set[Block]:
-        head, leaves = self.head_and_leaves(v, b)
+        head = self.head(v, b)
 
-        height_head = v.height(head)
-        uncles = [x for x in leaves if v.height(x) < height_head]
-        if len(uncles) > 2:
-            uncles = uncles[0:2]
+        uncles = self.uncle_candidates(v, head)
+        while len(uncles) > 2:
+            uncles.pop()
 
         return {head} | set(uncles)
 
     def preference(self, v: View, *args, old: Block, new: Block) -> Block:
         # preferred block is lagging self.horizon behind tip of chain (head)
 
-        head, _ = self.head_and_leaves(v, old)
+        head = self.head(v, old)
         if len(v.ancestors(new)) > len(v.ancestors(head)):
             head = new
 
