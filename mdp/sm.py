@@ -540,7 +540,52 @@ class SelfishMining(Model):
         # find common history
         common_history = self.common_history()
         assert len(common_history) > 0
+
         common_ancestor = common_history[-1]
+
+        # define which blocks to keep: only reachable blocks
+        reachable = set()
+        for entrypoint in [e.attacker_prefers(), e.defender_prefers()]:
+            reachable.add(entrypoint)
+            reachable |= e.descendants(entrypoint)
+            for d in reachable.copy():
+                reachable |= e.ancestors(d)
+
+        truncate = e.ancestors(common_ancestor)
+        keep = reachable - truncate
+
+        # we cannot remove some parents; either all or none
+        def should_also_keep(keep):
+            sak = set()
+            for b in keep:
+                parents = e.parents(b)
+                removed = [p in keep for p in parents]
+                if all(removed) or not any(removed):
+                    continue
+                else:
+                    sak |= parents
+            return sak - keep
+
+        assert should_also_keep(keep) == set()
+
+        # we cannot have two roots
+        def roots(keep):
+            acc = set()
+            for b in keep:
+                parents = e.parents(b) & keep
+                if len(parents) == 0:
+                    acc.add(b)
+            return acc
+
+        while len(roots(keep)) > 1:
+            # TODO maybe we can skip ahead to smallest block in roots(keep)
+            # instead of shrinking common_history one by one?
+            common_history.pop(-1)
+            common_ancestor = common_history[-1]
+            truncate = e.ancestors(common_ancestor)
+            keep = reachable - truncate
+
+        assert len(roots(keep)) == 1
 
         # calculate rewards
         rew_atk = 0.0
@@ -567,21 +612,12 @@ class SelfishMining(Model):
         else:
             progress = 0
 
-        # truncate common history, keep only reachable blocks
-        keep = set()
-        for entrypoint in [e.attacker_prefers(), e.defender_prefers()]:
-            keep.add(entrypoint)
-            keep |= e.ancestors(entrypoint)
-            keep |= e.descendants(entrypoint)
-        keep -= e.ancestors(common_ancestor)
-        keep = sorted(list(keep))
-
-        # we'll apply keep filter and canonical ordering in one go!
+        # apply the keep filter and (optionally) make canonical
         if self.merge_isomorphic:
             canonkeep = e.canonically_ordered(list(keep))
             e.reorder_and_filter(canonkeep)
         else:
-            e.reorder_and_filter(keep)
+            e.reorder_and_filter(sorted(list(keep)))
 
         return Transition(
             state=self.editor.save(),
