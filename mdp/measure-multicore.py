@@ -4,12 +4,12 @@ from ethereum import EthereumWhitepaper, EthereumByzantium
 from parallel import Parallel
 from sm import SelfishMining, mappable_params
 from time import time
+import joblib
 import os
+import random
 
 protocols = [
     Bitcoin(),
-    EthereumByzantium(horizon=1),
-    EthereumWhitepaper(horizon=1),
     EthereumByzantium(horizon=2),
     EthereumWhitepaper(horizon=2),
     EthereumByzantium(horizon=3),
@@ -27,6 +27,7 @@ def model_fn(p, ms=7):
 
 models = []
 for p in protocols:
+    models.append(model_fn(p, 5))
     models.append(model_fn(p, 6))
     models.append(model_fn(p, 7))
 
@@ -34,17 +35,16 @@ print(f"Benchmarking the parallel generation of {len(models)} SM models.")
 print()
 
 
-print(
-    f"There are {os.cpu_count()} cores available on this machine. "
-    "I'll increase the number of cores used step-by-step until I reach "
-    "diminishing returns."
-)
+print(f"This machine has {os.cpu_count()} cores. ")
 print()
 
 
-def per_core(*args, verbose=False):
+def per_core(*args, verbose=False, shuffle=True):
+    jobs = models
+    if shuffle:
+        jobs = random.sample(jobs, len(jobs))
     start = time()
-    for m in models:
+    for m in jobs:
         if verbose:
             startm = time()
             print(f"Compile {m} ", end="", flush=True)
@@ -56,4 +56,22 @@ def per_core(*args, verbose=False):
     return sec
 
 
-per_core(verbose=True)
+results = [per_core(verbose=True, shuffle=False)]
+
+print()
+print(f"1 core:  {results[-1]:.2f} seconds (one unit of work)")
+
+
+def multicore(n_jobs):
+    start = time()
+    _ = joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(per_core)() for _ in range(n_jobs)
+    )
+    sec = time() - start
+    return sec / n_jobs
+
+
+for i in range(2, os.cpu_count() + 1):
+    print(f"{i} cores: ", end="", flush=True)
+    results.append(multicore(i))
+    print(f"{results[-1]:.2f} seconds (per unit of work)")
