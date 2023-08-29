@@ -35,7 +35,7 @@ print(f"Benchmarking the parallel generation of {len(models)} SM models.")
 print()
 
 
-print(f"This machine has {os.cpu_count()} cores. ")
+print(f"This machine has {os.cpu_count()} cores.")
 print()
 
 
