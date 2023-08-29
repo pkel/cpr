@@ -486,17 +486,20 @@ class SelfishMining(Model):
         *args,
         alpha: float,
         gamma: float,
-        maximum_size: int,
+        maximum_height: int = 0,
+        maximum_size: int = 0,
         force_consider_own: bool = True,
         merge_isomorphic: bool = True,
     ):
         assert isinstance(protocol, Protocol)
         assert alpha >= 0 and alpha <= 1
         assert gamma >= 0 and gamma <= 1
-        assert maximum_size > 0
+        assert maximum_height > 0 or maximum_size > 0, "infinite state space"
+        assert maximum_size > 0 or force_consider_own, "infinite state space"
         self.protocol = protocol
         self.alpha = alpha
         self.gamma = gamma
+        self.maximum_height = maximum_height
         self.maximum_size = maximum_size
         self.force_consider_own = force_consider_own
         self.merge_isomorphic = merge_isomorphic
@@ -508,6 +511,7 @@ class SelfishMining(Model):
             f"SelfishMining({self.protocol.name}, "
             f"alpha={self.alpha}, "
             f"gamma={self.gamma}, "
+            f"maximum_height={self.maximum_height}, "
             f"maximum_size={self.maximum_size}, "
             f"force_consider_own={self.force_consider_own})"
         )
@@ -635,14 +639,18 @@ class SelfishMining(Model):
         return lst
 
     def actions(self, s: State) -> list[Action]:
-        actions = []
+        actions = [Continue()]
         e = self.editor
         e.load(s)
 
         # truncation: allow mining only up to a certain point
         ms = self.maximum_size
-        if ms < 1 or e.n < ms:
-            actions.append(Continue())
+        if ms > 0 and e.n >= ms:
+            actions = []
+
+        mh = self.maximum_height
+        if mh > 0 and max(e.ht) >= mh:
+            actions = []
 
         # release/consider when it makes sense
         for i, _ in enumerate(e.to_release()):

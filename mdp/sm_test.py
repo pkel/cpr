@@ -3,7 +3,7 @@ from bitcoin import Bitcoin
 from ethereum import EthereumWhitepaper, EthereumByzantium
 from compiler import Compiler
 from parallel import Parallel
-from sm import Editor, Miner, SelfishMining
+from sm import Editor, Miner, SelfishMining, mappable_params
 import pprint
 import psutil
 
@@ -24,10 +24,8 @@ if __name__ == "__main__":
     test_editor()
 
 
-def compile(proto, verbose=False, alpha=0.33, gamma=0.5, maximum_size=6, **kwargs):
-    model = SelfishMining(
-        proto, alpha=alpha, gamma=gamma, maximum_size=maximum_size, **kwargs
-    )
+def compile(proto, verbose=False, **kwargs):
+    model = SelfishMining(proto, **mappable_params, **kwargs)
     c = Compiler(model)
     while c.explore():
         if verbose:
@@ -51,11 +49,12 @@ if __name__ == "__main__":
     # compile(Bitcoin, verbose=True)
     compile(Bitcoin(), maximum_size=4, force_consider_own=False)
     compile(Bitcoin(), maximum_size=4)
-    compile(Bitcoin())
-    for h in range(0, 3):
-        compile(EthereumWhitepaper(horizon=h))
-        compile(EthereumByzantium(horizon=h))
-    for k in range(2, 5):
-        compile(Parallel(k=k))
+    compile(Bitcoin(), maximum_height=4)
+    for k in range(2, 4):
+        compile(Parallel(k=k), maximum_height=3)
+        compile(Parallel(k=k), maximum_size=6)
+    for h in range(2, 4):
+        compile(EthereumWhitepaper(horizon=h), maximum_height=3)
+        compile(EthereumByzantium(horizon=h), maximum_size=6)
 
     #  compile(EthereumByzantium(horizon=2), maximum_size=12, verbose=True)
