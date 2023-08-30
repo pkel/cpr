@@ -8,6 +8,9 @@ class Bitcoin(Protocol):
     def name(self):
         return "bitcoin"
 
+    def __repr__(self):
+        return "Bitcoin()"
+
     def mining(self, v: View, b: Block) -> set[Block]:
         return {b}
 

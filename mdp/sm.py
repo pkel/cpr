@@ -508,7 +508,7 @@ class SelfishMining(Model):
 
     def __repr__(self):
         return (
-            f"SelfishMining({self.protocol.name}, "
+            f"sm.SelfishMining({self.protocol}, "
             f"alpha={self.alpha}, "
             f"gamma={self.gamma}, "
             f"maximum_height={self.maximum_height}, "

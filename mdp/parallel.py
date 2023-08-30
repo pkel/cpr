@@ -13,6 +13,9 @@ class Parallel(Protocol):
     def name(self):
         return f"parallel-{self.k}"
 
+    def __repr__(self):
+        return f"Parallel(k={self.k})"
+
     def mining(self, v: View, b: Block) -> set[Block]:
         children = v.children(b)
         if len(children) >= self.k:

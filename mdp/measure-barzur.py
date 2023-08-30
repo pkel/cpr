@@ -38,8 +38,8 @@ print(our_mdp)
 # Now, reproduce this with bar-zur model
 
 start = time()
-model = barzur20aft.Bitcoin(maximum_fork_length=mh, **barzur20aft.mappable_params)
-their_mdp = Compiler(model).mdp()
+their_model = barzur20aft.Bitcoin(maximum_fork_length=mh, **barzur20aft.mappable_params)
+their_mdp = Compiler(their_model).mdp()
 delta = time() - start
 
 print()
@@ -156,7 +156,11 @@ fname = "measure-barzur.pkl"
 print()
 print(f"storing results in {fname}")
 
-results = dict(their=their_mdp, our=our_mdp, data=df)
+results = dict(
+    their=dict(mdp=their_mdp, model=their_model),
+    our=dict(mdp=our_mdp, model=our_model),
+    data=df,
+)
 
 with open(fname, "wb") as pkl:
     pickle.dump(results, pkl)

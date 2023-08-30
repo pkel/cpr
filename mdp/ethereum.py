@@ -13,7 +13,7 @@ class EthereumWhitepaper(Protocol):
         self.horizon = horizon
 
     def __repr__(self):
-        return f"{EthereumWhitepaper(horizon = {self.horizon})}"
+        return f"{EthereumWhitepaper(horizon={self.horizon})}"
 
     @property
     def name(self):
@@ -91,7 +91,7 @@ class EthereumWhitepaper(Protocol):
 
 class EthereumByzantium(EthereumWhitepaper):
     def __repr__(self):
-        return f"{EthereumByzantium(horizon = {self.horizon})}"
+        return f"{EthereumByzantium(horizon={self.horizon})}"
 
     @property
     def name(self):

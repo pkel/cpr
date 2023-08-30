@@ -42,6 +42,14 @@ class Bitcoin(Model):
         self.gamma = gamma
         self.mfl = maximum_fork_length
 
+    def __repr__(self):
+        return (
+            f"barzur20aft.Bitcoin("
+            f"alpha={self.alpha}, "
+            f"gamma={self.gamma}, "
+            f"maximum_fork_length={self.mfl})"
+        )
+
     def start(self) -> list[tuple[BState, float]]:
         s = BState(a=0, h=0, fork=IRRELEVANT)
         return [(s, 1)]
