@@ -18,14 +18,20 @@ print(f"Loading our bitcoin models from {fname} ...")
 with open(fname, "rb") as pkl:
     our = pickle.load(pkl)
 
-our = [(model.maximum_height, t, model, mdp) for t, model, mdp in our]
+our = [
+    (model.maximum_height, t, model, mdp)
+    for t, model, mdp in our
+    if mdp.n_transitions < 1000000
+]
 our = sorted(our)
 
 mh, our_time, our_model, our_mdp = our[-1]
 
+del our
+
 print(
-    f"The biggest our model has maximum_height {mh} and "
-    f"the MDP took {our_time:.0f} seconds to compile:"
+    f"Our biggest MDP with less than 1m transitions has maximum_height {mh} "
+    f"and took {our_time:.0f} seconds to compile:"
 )
 print(our_mdp)
 
