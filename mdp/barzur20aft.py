@@ -6,7 +6,7 @@
 # Technologies (AFT ’20), October 21–23, 2020, New York, NY, USA. ACM, New
 # York, NY, USA, 19 pages. https://doi.org/10.1145/3419614.3423264
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from model import Action, Model, Transition
 import mdp
 
@@ -223,4 +223,37 @@ def ptmdp(old: mdp.MDP, *args, horizon: int):
         start=old.start,
     )
     new.check()
+    return new
+
+
+mappable_params = dict(alpha=0.125, gamma=0.25)
+
+
+def map_params(m: mdp.MDP, *args, alpha: float, gamma: float):
+    a = mappable_params["alpha"]
+    g = mappable_params["gamma"]
+    mapping = dict()
+    mapping[1] = 1
+    mapping[a] = alpha
+    mapping[1 - a] = 1 - alpha
+    mapping[(1 - a) * g] = (1 - alpha) * gamma
+    mapping[(1 - a) * (1 - g)] = (1 - alpha) * (1 - gamma)
+
+    assert len(set(mapping.keys())) == 5, "mappable_params are not mappable"
+
+    # map probabilities
+    tab = []
+    for actions in m.tab:
+        new_actions = dict()
+        for act, transitions in actions.items():
+            new_transitions = []
+            for t in transitions:
+                new_t = replace(t, probability=mapping[t.probability])
+                new_transitions.append(new_t)
+            new_actions[act] = new_transitions
+        tab.append(new_actions)
+
+    new = replace(m, tab=tab)
+
+    assert new.check()
     return new

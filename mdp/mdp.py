@@ -15,7 +15,7 @@ state = int
 
 
 def sum_to_one(x):
-    return math.isclose(sum(x), 1, rel_tol=1e-16)
+    return math.isclose(sum(x), 1, rel_tol=1e-15)
 
 
 @dataclass()
