@@ -82,9 +82,7 @@ def jobs():
             break
 
 
-results = joblib.Parallel(
-    n_jobs=n_jobs, batch_size=1, pre_dispatch=1, return_as="generator"
-)(jobs())
+results = joblib.Parallel(n_jobs=n_jobs, batch_size=1, return_as="generator")(jobs())
 
 meta = []
 
