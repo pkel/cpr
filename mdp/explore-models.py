@@ -142,7 +142,7 @@ def consume():
             df = pandas.DataFrame(meta)
             print(df)
             with gzip.open("explored-models/models.pkl.gz", "wb") as pkl:
-                pickle.dump(meta, pkl)
+                pickle.dump(df, pkl)
 
             print()
             print("ignore the following warning")
