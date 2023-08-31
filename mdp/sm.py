@@ -128,8 +128,9 @@ class Editor(View):
             for p in self._parents[b]:
                 assert p < b, "topological order"
         # height
+        assert all(x >= 0 for x in self.ht)
         for b in range(self.n):
-            ph = -1
+            ph = -1  # parent height
             for p in self._parents[b]:
                 ph = max(ph, self.ht[p])
             assert ph + 1 == self.ht[b], f"height {ph + 1} == {self.ht[b]}"
@@ -156,6 +157,19 @@ class Editor(View):
 
     def height(self, b):
         return self.ht[b]
+
+    def reinit_height(self):
+        assert False, "don't think this is used somewhere"
+        roots = {i for i in range(self.n) if len(self.parents(i)) == 0}
+        h = 0
+        level = roots
+        while len(level) > 0:
+            next_level = set()
+            for i in level:
+                next_level |= self.children(i)
+                self.ht[i] = h
+            h += 1
+            level = next_level
 
     def append(self, parents: set[int], miner: Miner):
         assert isinstance(miner, Miner)
@@ -229,7 +243,7 @@ class Editor(View):
             self.wh.append(old_wh[old])
             self.ht.append(old_ht[old])
 
-        # genesis height zero
+        # adjust height such that genesis has height zero
         delta_height = min(self.ht)
         self.ht = [x - delta_height for x in self.ht]
 
@@ -454,8 +468,8 @@ class Editor(View):
 
 class PartialView(View):
     def __init__(self, view: View, filter=lambda _: True):
-        # check argument; first block is always visible
-        assert filter(0)
+        # check argument; one block should be visible
+        assert any(filter(i) for i in range(view.n))
 
         self.view = view
         self.filter = filter
@@ -570,8 +584,6 @@ class SelfishMining(Model):
                     sak |= parents
             return sak - keep
 
-        assert should_also_keep(keep) == set()
-
         # we cannot have two roots
         def roots(keep):
             acc = set()
@@ -581,9 +593,9 @@ class SelfishMining(Model):
                     acc.add(b)
             return acc
 
-        while len(roots(keep)) > 1:
-            # TODO maybe we can skip ahead to smallest block in roots(keep)
-            # instead of shrinking common_history one by one?
+        while len(roots(keep)) > 1 or len(should_also_keep(keep)) > 0:
+            # TODO maybe we can skip ahead instead of shrinking common_history
+            # one by one?
             common_history.pop(-1)
             common_ancestor = common_history[-1]
             truncate = e.ancestors(common_ancestor)
@@ -594,8 +606,18 @@ class SelfishMining(Model):
         # calculate rewards
         rew_atk = 0.0
         rew_def = 0.0
+
+        # enforce assumption that rewards do not depend on past history
+        def reward_view(x):
+            rb = e.ancestors(x) | {x}  # subset of relevant blocks
+            next_x = self.protocol.predecessor(e, x)
+            if next_x is not None:
+                rb -= {next_x} | e.ancestors(next_x)
+
+            return PartialView(e, lambda x: x in rb)
+
         for x in common_history[:-1]:
-            for r in self.protocol.reward(e, x):
+            for r in self.protocol.reward(reward_view(x), x):
                 if r.miner == Miner.Attacker:
                     rew_atk += r.amount
                 elif r.miner == Miner.Defender:
@@ -788,3 +810,59 @@ def map_params(m: MDP, *args, alpha: float, gamma: float):
 
     assert new.check()
     return new
+
+
+# Example (1)
+# common ancestor: 5
+# to be truncated: right of block 5, marked ✗
+#
+# problem 1: 4 will lose one of it's parents, which is usually not possible in
+# a blockchain.
+#
+# problem 2: 1 will become a new root, which might confuse parts of my code
+#
+# problem 3: we certainly have to keep around 4, it might end up getting an
+# uncle reward. 1 won't get a reward, but that's protocol related. The SM model
+# cannot know.
+#
+# solution approach: first, we limit the attacker/defender view to descendants
+# of the preferred block. 4 and 1 will not be visible, hence fiddling with
+# their ancestors will cause no (hopefully) problems. Second, we update the
+# height of all (affected) blocks. Here, 4 and 1 will get height 0 and 1.
+# Keeping the blocks around will allow signing rewards.
+# Third, we cross fingers that multiple roots do not break things. We still
+# have the check for exactly one common ancestor, so we should be fine.
+#
+# This highlights that the reward function can only consider the block given as
+# argument and these ancestors which are offside the further history. With the
+# current API it is in principle possible that 7 hands out rewards for 3 or 1.
+# When we truncate 3 or 1 (we actually do) then these rewards would get lost.
+# I'll add a safeguard to the reward function that restrict what can be
+# reached.
+#
+# Amendment. Limiting attacker/defender view does not work. It breaks bitcoin.
+# Forcing truncation and recomputing height does not work either. It causes
+# permanent chain splits. So, since I already spent too much time on this, I'll
+# just not truncate in the problematic cases.
+#
+#                    +------------+
+#                    | 8: C/U/W/5 |
+#                    +------------+
+#                      |
+#                      |
+#                      v
+# +------------+     +------------+     +------------+     +--------------+     +--------------+     +--------------+ # noqa: E501
+# | 7: I/K/F/5 | --> | 6: C/K/R/4 | --> | 5: P/P/R/3 | --> | 3: C/K/R/2 ✗ | --> | 2: C/K/R/1 ✗ | --> | 0: C/K/R/0 ✗ | # noqa: E501
+# +------------+     +------------+     +------------+     +--------------+     +--------------+     +--------------+ # noqa: E501
+#   |                                                        ^                                         ^              # noqa: E501
+#   |                                                        |                                         |              # noqa: E501
+#   v                                                        |                                         |              # noqa: E501
+# +------------+                                             |                                         |              # noqa: E501
+# | 4: I/K/F/3 | --------------------------------------------+                                         |              # noqa: E501
+# +------------+                                                                                       |              # noqa: E501
+#   |                                                                                                  |              # noqa: E501
+#   |                                                                                                  |              # noqa: E501
+#   v                                                                                                  |              # noqa: E501
+# +------------+                                                                                       |              # noqa: E501
+# | 1: I/K/F/1 | --------------------------------------------------------------------------------------+              # noqa: E501
+# +------------+
