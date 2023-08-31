@@ -9,6 +9,7 @@ import logging
 import gzip
 import pandas
 import pickle
+import traceback
 
 
 # We set a time budget for exploring our models
@@ -52,15 +53,20 @@ def job(key, model_fn, i):
     start = time()
     stop = start + time_budget
 
-    model = model_fn(i)
-    compiler = Compiler(model_fn(i))
-    while compiler.explore(steps=1000):
-        if time() > stop:
-            return key, i, model, "time", None
-        if compiler._mdp.n_transitions > max_transitions:
-            return key, i, model, "size", None
+    try:
+        model = model_fn(i)
+        compiler = Compiler(model_fn(i))
+        while compiler.explore(steps=1000):
+            if time() > stop:
+                return key, i, model, "time", None
+            if compiler._mdp.n_transitions > max_transitions:
+                return key, i, model, "size", None
 
-    mdp = compiler.mdp()
+        mdp = compiler.mdp()
+
+    except AssertionError as e:
+        tb = traceback.format_exc()
+        return key, i, model, "error", (e, tb)
 
     delta = time() - start
 
@@ -75,7 +81,7 @@ def jobs():
 
             scheduled[key] += 1
             i = scheduled[key]
-            log.info(f"schedule {key}-{i}")
+            log.debug(f"schedule {key}-{i}")
             yield joblib.delayed(job)(key, model_fn, i)
 
         if all(done.values()):
@@ -89,11 +95,18 @@ meta = []
 
 def consume():
     for key, i, model, t, mdp in results:
-        if mdp is None:
+        if not isinstance(t, float):
             if t == "time":
                 log.info(f"abort {key}-{i}: time limit exceeded")
-            if t == "size":
+            elif t == "size":
                 log.info(f"abort {key}-{i}: transition limit exceeded")
+            elif t == "error":
+                msg, tb = mdp
+                log.error(f"error in {key}-{i}: {msg}")
+                with open(f"explored-models/{key}-{i}.err", "w") as f:
+                    f.write(tb)
+            else:
+                raise ValueError(t)
             done[key] = True
         else:
             log.info(f"compiled {key}-{i} in {t:.2f} seconds: {mdp}")

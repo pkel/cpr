@@ -1,2 +1,3 @@
 *.pkl
 *.pkl.gz
+explored-models/*.err
