@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import math
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Transition:
     destination: int
     probability: float
