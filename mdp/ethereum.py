@@ -45,6 +45,10 @@ class EthereumWhitepaper(Protocol):
         # intentionally skip first two to make parent_and_uncles non-ambiguous
         for a in hist[2:]:
             for c in v.children(a):
+                if self.predecessor(v, c) != a:
+                    # child c actually has a different parent, maybe a fork
+                    # See Example (1) at end of file.
+                    continue
                 if c not in hist:
                     uncle_candidates.add(c)
 
@@ -135,3 +139,19 @@ class EthereumByzantium(EthereumWhitepaper):
             d = h - v.height(u)
             rew.append(Reward(v.miner(u), (max_d - d) / max_d))
         return rew
+
+
+# Example (1)
+# -----------
+# head: 6
+# hist: [6, 3, 2]
+# child of hist member that is not a valid uncle: 5
+# +------------+     +------------+     +------------+     +------------+
+# | 5: I/K/F/3 | --> | 4: I/K/F/2 | --> | 1: I/K/F/1 | --> | 0: C/K/R/0 |
+# +------------+     +------------+     +------------+     +------------+
+#   |                                                        ^
+#   +-------------------------------------+                  |
+#                                         v                  |
+# +------------+     +------------+     +------------+       |
+# | 6: C/K/R/3 | --> | 3: C/K/R/2 | --> | 2: P/P/R/1 | ------+
+# +------------+     +------------+     +------------+
