@@ -1,3 +1,4 @@
 *.pkl
 *.pkl.gz
-explored-models/*.err
+explored-models
+explored-models.bak

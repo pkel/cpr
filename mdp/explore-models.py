@@ -53,14 +53,17 @@ def job(key, model_fn, i):
     start = time()
     stop = start + time_budget
 
+    model = model_fn(i)
+
     try:
-        model = model_fn(i)
         compiler = Compiler(model_fn(i))
         while compiler.explore(steps=1000):
             if time() > stop:
                 return key, i, model, "time", None
             if compiler._mdp.n_transitions > max_transitions:
                 return key, i, model, "size", None
+            if done[key]:  # other model (with lower i) aborted
+                return key, i, model, "done", None
 
         mdp = compiler.mdp()
 
@@ -105,6 +108,8 @@ def consume():
                 log.error(f"error in {key}-{i}: {msg}")
                 with open(f"explored-models/{key}-{i}.err", "w") as f:
                     f.write(tb)
+            elif t == "done":
+                pass  # marked as done before
             else:
                 raise ValueError(t)
             done[key] = True
