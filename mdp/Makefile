@@ -11,9 +11,9 @@ backup: backup_measure-barzur.pkl
 backup: backup_measure-ours.pkl
 
 clear:
-	rm -r explored-models
-	rm measure-barzur.pkl
-	rm measure-ours.pkl
+	rm -rf explored-models
+	rm -f measure-barzur.pkl
+	rm -f measure-ours.pkl
 
 explored-models:
 	mkdir $@
