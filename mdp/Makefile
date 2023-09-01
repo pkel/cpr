@@ -8,10 +8,12 @@ backup_%:
 
 backup: backup_explored-models
 backup: backup_measure-barzur.pkl
+backup: backup_measure-ours.pkl
 
 clear:
 	rm -r explored-models
 	rm measure-barzur.pkl
+	rm measure-ours.pkl
 
 explored-models:
 	mkdir $@
@@ -19,3 +21,6 @@ explored-models:
 
 measure-barzur.pkl: explored-models
 	python measure-barzur.py
+
+measure-ours.pkl: explored-models
+	python measure-ours.py

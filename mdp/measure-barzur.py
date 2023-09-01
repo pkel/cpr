@@ -4,7 +4,6 @@ from tqdm import tqdm
 import barzur20aft
 import gzip
 import joblib
-import numpy
 import pandas
 import pickle
 import random
@@ -51,68 +50,17 @@ print(their_mdp)
 # Next, generate and solve the PT-MDPs for various alphas/gammas
 
 
-def value_iteration(mdp, *args, n_iter=0, value_eps=0, discount=1, verbose=False):
-    value = numpy.zeros(mdp.n_states, dtype=float)
-    policy = numpy.zeros(mdp.n_states, dtype=int)
-
-    i = 1
-    while True:
-        value_next = numpy.zeros(mdp.n_states, dtype=float)
-        policy_next = numpy.zeros(mdp.n_states, dtype=int)
-
-        for src, actions in enumerate(mdp.tab):
-            best_v = 0.0
-            best_a = -1  # no action possible
-            for act, lst in actions.items():
-                if act < 0:
-                    continue
-                this_v = 0.0
-                for t in lst:
-                    this_v += t.probability * (
-                        t.reward + discount * value[t.destination]
-                    )
-                if this_v >= best_v:  # intentionally to not stick with action -1
-                    best_v = this_v
-                    best_a = act
-            value_next[src] = best_v
-            policy_next[src] = best_a
-            assert best_a >= 0 or len(actions) == 0
-
-        value_delta = numpy.abs(value_next - value).max()
-        policy_change = (policy_next != policy).sum() / len(policy) * 100
-        if verbose:
-            print(
-                f"\riteration {i}: value delta {value_delta:g}, "
-                f"policy change {policy_change:.2f}%",
-                end="",
-            )
-        value = value_next
-        policy = policy_next
-
-        if n_iter > 0 and i >= n_iter:
-            break
-        elif value_delta <= value_eps:
-            break
-        else:
-            i += 1
-
-    if verbose:
-        print()  # new line to finish verbose progress bar
-
-    return value, policy, i
-
-
 def measure(mdp, map_params, value_eps=0.01, alpha=0.25, gamma=0.25, horizon=100):
     start = time()
     mapped_mdp = map_params(mdp, alpha=alpha, gamma=gamma)
     ptmdp = barzur20aft.ptmdp(mapped_mdp, horizon=horizon)
-    value, policy, i = value_iteration(ptmdp, value_eps=value_eps)
+    res = ptmdp.value_iteration(value_eps=value_eps)
 
     rew = 0.0
     for state, prob in mdp.start.items():
-        rew += prob * value[state]
+        rew += prob * res["value"][state]
 
-    return dict(start_value=rew, iter=i, time=time() - start)
+    return dict(vi_start_value=rew, vi_iter=res["iter"], vi_time=time() - start)
 
 
 def job(**kwargs):
