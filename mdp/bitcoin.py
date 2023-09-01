@@ -39,4 +39,5 @@ class Bitcoin(Protocol):
         return self.height(v, b)
 
     def reward(self, v: View, b: Block) -> list[Reward]:
+        assert len(v.parents(b)) > 0, "genesis reward not defined"
         return [Reward(v.miner(b), 1)]

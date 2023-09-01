@@ -86,6 +86,8 @@ class EthereumWhitepaper(Protocol):
         return v.height(b)
 
     def reward(self, v: View, b: Block) -> list[Reward]:
+        assert len(v.parents(b)) > 0, "genesis reward not defined"
+
         rew = [Reward(v.miner(b), 1)]
         _, uncles = self.parent_and_uncles(v, b)
         for u in uncles:
@@ -131,6 +133,8 @@ class EthereumByzantium(EthereumWhitepaper):
         return len(v.ancestors(b))
 
     def reward(self, v: View, b: Block) -> list[Reward]:
+        assert len(v.parents(b)) > 0, "genesis reward not defined"
+
         _, uncles = self.parent_and_uncles(v, b)
         rew = [Reward(v.miner(b), 1 + 0.3125 * len(uncles))]
         h = v.height(b)

@@ -616,7 +616,9 @@ class SelfishMining(Model):
 
             return PartialView(e, lambda x: x in rb)
 
-        for x in common_history[:-1]:
+        # common_history[0] == old_ca == 0
+        assert common_history[0] == 0
+        for x in common_history[1:]:
             for r in self.protocol.reward(reward_view(x), x):
                 if r.miner == Miner.Attacker:
                     rew_atk += r.amount
