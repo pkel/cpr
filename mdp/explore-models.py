@@ -16,7 +16,7 @@ import traceback
 time_budget = 3600  # seconds = 1 hour
 
 # We also cap the number of transitions
-max_transitions = 1_000
+max_transitions = 1_000_000
 
 # Parallel cores to use; see measure-multicore.py
 n_jobs = 6
