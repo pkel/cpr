@@ -1,6 +1,6 @@
 now=$(shell date -Im)
 
-all: measure-barzur.pkl
+all: measure-barzur.pkl measure-ours.pkl
 
 backup_%:
 	mkdir -p backup/${now}
