@@ -28,6 +28,10 @@ class BState:  # Bitcoin State
     h: int  # number of blocks in the public chain since last fork
     fork: int  # one of the above IRRELEVANT RELEVANT ACTIVE
 
+    def __post_init__(self):
+        assert self.a >= 0
+        assert self.h >= 0
+
 
 class Bitcoin(Model):
     def __init__(self, *args, alpha: float, gamma: float, maximum_fork_length: int):
@@ -111,7 +115,7 @@ class Bitcoin(Model):
             assert snew.a <= self.mfl
 
             # defender mines on top of attacker's chain
-            # NOTE The paper assigns probability alpha * (1 - gamma) on p.8
+            # NOTE The paper assigns probability alpha * gamma on p.8
             # right which must be a typo.
             snew = BState(a=s.a - s.h, h=1, fork=RELEVANT)
             t.append(
@@ -145,6 +149,7 @@ class Bitcoin(Model):
         return [t]
 
     def apply_override(self, s: BState) -> list[Transition]:
+        assert s.a > s.h
         snew = BState(a=s.a - s.h - 1, h=0, fork=s.fork)
         t = Transition(
             state=snew,
