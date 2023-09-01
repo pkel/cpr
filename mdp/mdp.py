@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
+from time import time
 import math
 import numpy
+import scipy
 
 
 @dataclass(frozen=True, order=True)
@@ -83,6 +85,8 @@ class MDP:
     def value_iteration(self, *args, n_iter=0, value_eps=0, discount=1, verbose=False):
         assert n_iter > 0 or value_eps > 0 or verbose, "infinite iteration"
 
+        start = time()
+
         value = numpy.zeros((2, self.n_states), dtype=float)
         policy = numpy.zeros((2, self.n_states), dtype=int)
 
@@ -128,4 +132,104 @@ class MDP:
         if verbose:
             print()  # new line to finish verbose progress bar
 
-        return dict(value=value[next,], policy=policy[next,], iter=i)
+        return dict(
+            vi_policy=policy[next,],
+            vi_value=value[next,],
+            vi_iter=i,
+            vi_time=time() - start,
+        )
+
+    def steady_state(self, policy):
+        start = time()
+
+        n = self.n_states
+        row = []
+        col = []
+        val = []
+
+        # tutorial: https://math.stackexchange.com/a/2452452
+
+        for src, actions in enumerate(self.tab):
+            # markov chain itself
+            for t in actions[policy[src]]:
+                row.append(src)
+                col.append(t.destination)
+                val.append(t.probability)
+
+            # -1 on the diagonal
+            row.append(src)
+            col.append(src)
+            val.append(-1)
+
+            # all-ones column
+            row.append(src)
+            col.append(n)
+            val.append(1)
+
+        Q = scipy.sparse.csr_matrix((val, (row, col)), shape=(n, n + 1))
+        QTQ = Q.dot(Q.transpose())
+        bQT = numpy.ones(n)
+
+        v = scipy.sparse.linalg.spsolve(QTQ, bQT)
+
+        assert len(v) == n
+        assert math.isclose(sum(v), 1)
+
+        return dict(ss=v, ss_time=time() - start)
+
+    def reward_per_progress(self, policy, n_iter=0, eps=0, verbose=False):
+        res = self.steady_state(policy)
+        ss = res.pop("ss")
+
+        start = time()
+
+        n = self.n_states
+        reward = numpy.zeros((2, n), dtype=float)
+        progress = numpy.zeros((2, n), dtype=float)
+        prev_rpp = float("-inf")
+
+        i = 1
+        while True:
+            prev = i % 2
+            next = (prev + 1) % 2
+
+            for src, actions in enumerate(self.tab):
+                act = policy[src]
+
+                if act < 0:
+                    # no action possible in this state
+                    assert len(actions) == 0
+                    continue
+
+                for t in actions[act]:
+                    reward[next, src] += t.probability * (
+                        t.reward + reward[prev, t.destination]
+                    )
+                    progress[next, src] += t.probability * (
+                        t.progress + progress[prev, t.destination]
+                    )
+
+            steady_reward = numpy.multiply(ss, reward[next,])
+            steady_progress = numpy.multiply(ss, progress[next,])
+            next_rpp = sum(steady_reward) / sum(steady_progress)
+            delta = numpy.abs(prev_rpp - next_rpp)
+
+            if verbose:
+                print(f"\riteration {i}: rpp={next_rpp} delta={delta}", end="")
+
+            if n_iter > 0 and i >= n_iter:
+                break
+            elif eps > 0 and delta < eps:
+                break
+            else:
+                i += 1
+                prev_rpp = next_rpp
+
+        if verbose:
+            print()  # new line to finish verbose progress bar
+
+        res["rpp"] = next_rpp
+        res["rpp_iter"] = i
+        res["rpp_time"] = time() - start
+
+        return res
