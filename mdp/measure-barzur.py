@@ -51,16 +51,16 @@ print(their_mdp)
 
 
 def measure(mdp, map_params, value_eps=0.01, alpha=0.25, gamma=0.25, horizon=100):
-    start = time()
     mapped_mdp = map_params(mdp, alpha=alpha, gamma=gamma)
     ptmdp = barzur20aft.ptmdp(mapped_mdp, horizon=horizon)
-    res = ptmdp.value_iteration(value_eps=value_eps)
 
-    rew = 0.0
-    for state, prob in mdp.start.items():
-        rew += prob * res["value"][state]
+    vi = ptmdp.value_iteration(value_eps=value_eps)
+    policy = vi.pop("vi_policy")
+    vi.pop("vi_value")
 
-    return dict(vi_start_value=rew, vi_iter=res["iter"], vi_time=time() - start)
+    rpp = mapped_mdp.reward_per_progress(policy, eps=0.001)
+
+    return vi | rpp
 
 
 def job(**kwargs):

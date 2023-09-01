@@ -151,10 +151,17 @@ class MDP:
 
         for src, actions in enumerate(self.tab):
             # markov chain itself
-            for t in actions[policy[src]]:
+            act = policy[src]
+            if act >= 0:
+                for t in actions[act]:
+                    row.append(src)
+                    col.append(t.destination)
+                    val.append(t.probability)
+            else:
+                # no action possible; terminal state
                 row.append(src)
-                col.append(t.destination)
-                val.append(t.probability)
+                col.append(src)
+                val.append(1.0)
 
             # -1 on the diagonal
             row.append(src)
@@ -172,14 +179,17 @@ class MDP:
 
         v = scipy.sparse.linalg.spsolve(QTQ, bQT)
 
+        if numpy.isnan(v[0]):
+            # matrix singular, cannot solve system
+            return dict(ss=None, ss_time=time() - start, ss_error="singularity")
+
         assert len(v) == n
-        assert math.isclose(sum(v), 1)
+        assert math.isclose(sum(v), 1), sum(v)
 
         return dict(ss=v, ss_time=time() - start)
 
     def reward_per_progress(self, policy, n_iter=0, eps=0, verbose=False):
         res = self.steady_state(policy)
-        ss = res.pop("ss")
 
         start = time()
 
@@ -188,12 +198,26 @@ class MDP:
         progress = numpy.zeros((2, n), dtype=float)
         prev_rpp = float("-inf")
 
+        ss = res.pop("ss")
+
+        if ss is None:
+            # steady state could not be computed, use start states instead
+            ss = numpy.zeros(n, dtype=float)
+            for state, prob in self.start.items():
+                ss[state] = prob
+            assert math.isclose(sum(ss), 1), sum(ss)
+
+            # no steady state -?-> oscillation.
+            if n_iter <= 0:
+                n_iter = 100
+
         i = 1
         while True:
             prev = i % 2
             next = (prev + 1) % 2
 
             for src, actions in enumerate(self.tab):
+                # TODO we could use the subset of reachable states here
                 act = policy[src]
 
                 if act < 0:
@@ -209,9 +233,7 @@ class MDP:
                         t.progress + progress[prev, t.destination]
                     )
 
-            steady_reward = numpy.multiply(ss, reward[next,])
-            steady_progress = numpy.multiply(ss, progress[next,])
-            next_rpp = sum(steady_reward) / sum(steady_progress)
+            next_rpp = sum(numpy.multiply(ss, reward[next,] / progress[next,]))
             delta = numpy.abs(prev_rpp - next_rpp)
 
             if verbose:
