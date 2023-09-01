@@ -2,38 +2,40 @@ from compiler import Compiler
 from time import time
 from tqdm import tqdm
 import barzur20aft
+import gzip
 import joblib
 import numpy
 import pandas
 import pickle
-import sm
 import random
+import sm
 
 
 # We start from my already explored Bitcoin/SM models.
 
-fname = "measure-bitcoin.pkl"
-print(f"Loading our bitcoin models from {fname} ...")
+fname = "explored-models/models.pkl.gz"
+print(f"Loading model list from {fname} and select suitable MDP.")
 
-with open(fname, "rb") as pkl:
-    our = pickle.load(pkl)
+with gzip.open(fname, "rb") as f:
+    our_models = pickle.load(f)
 
-our = [
-    (model.maximum_height, t, model, mdp)
-    for t, model, mdp in our
-    if mdp.n_transitions < 1000000
-]
-our = sorted(our)
+filter = 'protocol == "bitcoin" and n_transitions < 1_000_000'
+our_idx = our_models.query(filter).maximum_height.idxmax()
+our = our_models.iloc[our_idx]
 
-mh, our_time, our_model, our_mdp = our[-1]
+print()
+print(our)
 
-del our
+fname = f"explored-models/{our.key}.pkl.gz"
+print()
+print(f"load model from {fname}")
 
-print(
-    f"Our biggest MDP with less than 1m transitions has maximum_height {mh} "
-    f"and took {our_time:.0f} seconds to compile:"
-)
-print(our_mdp)
+with gzip.open(fname, "rb") as f:
+    our = pickle.load(f)
+
+our_model = our["model"]
+our_mdp = our["mdp"]
+mh = our_model.maximum_height
 
 # Now, reproduce this with bar-zur model
 
