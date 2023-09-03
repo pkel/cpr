@@ -139,37 +139,86 @@ class MDP:
             vi_time=time() - start,
         )
 
-    def steady_state(self, policy):
-        start = time()
+    def markov_chain(self, policy):
+        # find subset of states used by policy
+        reachable = set()
+        todo = set()
 
-        n = self.n_states
+        for s, prob in self.start.items():
+            if prob > 0:
+                todo.add(s)
+
+        while len(todo) > 0:
+            s = todo.pop()
+            assert s not in reachable
+            reachable.add(s)
+
+            act = policy[s]
+            if act < 0:
+                # no action possible; terminal state
+                continue
+            for t in self.tab[s][act]:
+                if t.probability == 0.0:
+                    continue
+                if t.destination in reachable:
+                    continue
+                else:
+                    todo.add(t.destination)
+
+        # map markov chain state <-> markov decision process state
+        # mc_state[mdp state] = <mc state>
+        mc_state = {mdp: mc for mc, mdp in enumerate(sorted(list(reachable)))}
+
+        # build matrices for transition probability, reward, and progress
+        n = len(reachable)
         row = []
         col = []
-        val = []
+        prb = []
+        rew = []
+        prg = []
+        for mdp_s, mc_s in mc_state.items():
+            act = policy[mdp_s]
+            if act >= 0:
+                for t in self.tab[mdp_s][act]:
+                    if t.probability == 0.0:
+                        continue
+
+                    row.append(mc_s)
+                    col.append(mc_state[t.destination])
+                    prb.append(t.probability)
+                    rew.append(t.reward)
+                    prg.append(t.progress)
+            else:
+                # no action possible; terminal state
+                row.append(mc_s)
+                col.append(mc_s)
+                prb.append(1.0)
+                rew.append(0)
+                prg.append(0)
+        return dict(
+            prb=scipy.sparse.coo_matrix((prb, (row, col)), shape=(n, n)),
+            rew=scipy.sparse.coo_matrix((rew, (row, col)), shape=(n, n)),
+            prg=scipy.sparse.coo_matrix((prg, (row, col)), shape=(n, n)),
+        )
+
+    def steady_state(self, prb):
+        start = time()
+
+        n = prb.shape[0]
+        val = list(prb.data)
+        row = list(prb.row)
+        col = list(prb.col)
 
         # tutorial: https://math.stackexchange.com/a/2452452
 
-        for src, actions in enumerate(self.tab):
-            # markov chain itself
-            act = policy[src]
-            if act >= 0:
-                for t in actions[act]:
-                    row.append(src)
-                    col.append(t.destination)
-                    val.append(t.probability)
-            else:
-                # no action possible; terminal state
-                row.append(src)
-                col.append(src)
-                val.append(1.0)
-
+        for s in range(n):
             # -1 on the diagonal
-            row.append(src)
-            col.append(src)
+            row.append(s)
+            col.append(s)
             val.append(-1)
 
             # all-ones column
-            row.append(src)
+            row.append(s)
             col.append(n)
             val.append(1)
 
@@ -179,62 +228,94 @@ class MDP:
 
         v = scipy.sparse.linalg.spsolve(QTQ, bQT)
 
+        res = dict()
+
         if numpy.isnan(v[0]):
-            # matrix singular, cannot solve system
-            return dict(ss=None, ss_time=time() - start, ss_error="singularity")
+            # matrix singular, cannot solve system exactly
+            # steady state is ambiguous or does not exists
+            lsqr = scipy.sparse.linalg.lsqr(QTQ, bQT)
+            itop = lsqr[1]
+            if itop == 1:
+                # v is an approximate solution; steady state is ambiguous
+                pass
+            else:
+                # v is least squares approximization; steady state not exists
+                # But: finite markov chains always have a steady state!
+                assert False, "something is off"
+
+            v = lsqr[0]
+            assert math.isclose(sum(v), 1, rel_tol=1e-5)
+            v = v / sum(v)
+
+            res["ss_lsqr_iter"] = lsqr[2]
 
         assert len(v) == n
         assert math.isclose(sum(v), 1), sum(v)
 
-        return dict(ss=v, ss_time=time() - start)
+        res["ss"] = v
+        res["ss_n"] = n
+        res["ss_nonzero"] = len(v.nonzero()[0])
+        res["ss_time"] = time() - start
+
+        return res
 
     def reward_per_progress(self, policy, n_iter=0, eps=0, verbose=False):
-        res = self.steady_state(policy)
+        mc = self.markov_chain(policy)
+        prb = mc["prb"]
+        rew = mc["rew"]
+        prg = mc["prg"]
+
+        res = self.steady_state(prb)
 
         start = time()
 
-        n = self.n_states
+        n = prb.shape[0]
         reward = numpy.zeros((2, n), dtype=float)
         progress = numpy.zeros((2, n), dtype=float)
         prev_rpp = float("-inf")
 
         ss = res.pop("ss")
 
-        if ss is None:
-            # steady state could not be computed, use start states instead
-            ss = numpy.zeros(n, dtype=float)
-            for state, prob in self.start.items():
-                ss[state] = prob
-            assert math.isclose(sum(ss), 1), sum(ss)
+        prb = prb.tocsr()
+        rew = rew.tocsr()
+        prg = prg.tocsr()
 
-            # no steady state -?-> oscillation.
-            if n_iter <= 0:
-                n_iter = 100
+        if prg.sum() == 0:
+            # no progress Markov Chain
+            assert rew.sum() == 0
+
+            res["rpp"] = 0
+            res["rpp_iter"] = 0
+            res["rpp_time"] = time() - start
+            return res
 
         i = 1
         while True:
             prev = i % 2
             next = (prev + 1) % 2
 
-            for src, actions in enumerate(self.tab):
-                # TODO we could use the subset of reachable states here
-                act = policy[src]
+            for src in range(n):
+                reward[next, src] = 0.0
+                progress[next, src] = 0.0
 
-                if act < 0:
-                    # no action possible in this state
-                    assert len(actions) == 0
-                    continue
-
-                for t in actions[act]:
-                    reward[next, src] += t.probability * (
-                        t.reward + reward[prev, t.destination]
+                # back propagation of reward and progress
+                for dst in prb[src,].nonzero()[1]:
+                    assert prb[src, dst] > 0.0
+                    reward[next, src] += prb[src, dst] * (
+                        rew[src, dst] + reward[prev, dst]
                     )
-                    progress[next, src] += t.probability * (
-                        t.progress + progress[prev, t.destination]
+                    progress[next, src] += prb[src, dst] * (
+                        prg[src, dst] + progress[prev, dst]
                     )
 
-            next_rpp = sum(numpy.multiply(ss, reward[next,] / progress[next,]))
-            delta = numpy.abs(prev_rpp - next_rpp)
+            ss_reward = ss.dot(reward[next,].T)
+            ss_progress = ss.dot(progress[next,].T)
+            if ss_progress == 0.0:
+                next_rpp = float("-inf")
+                delta = float("inf")
+            else:
+                next_rpp = ss_reward / ss_progress
+                delta = numpy.abs(prev_rpp - next_rpp)
 
             if verbose:
                 print(f"\riteration {i}: rpp={next_rpp} delta={delta}", end="")

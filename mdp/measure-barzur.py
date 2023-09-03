@@ -10,6 +10,8 @@ import random
 import sm
 
 
+n_jobs = 6
+
 # We start from my already explored Bitcoin/SM models.
 
 fname = "explored-models/models.pkl.gz"
@@ -56,9 +58,13 @@ def measure(mdp, map_params, value_eps=0.01, alpha=0.25, gamma=0.25, horizon=100
 
     vi = ptmdp.value_iteration(value_eps=value_eps)
     policy = vi.pop("vi_policy")
-    vi.pop("vi_value")
+    value = vi.pop("vi_value")
 
-    rpp = mapped_mdp.reward_per_progress(policy, eps=0.001)
+    vi["vi_start_value"] = 0.0
+    for s, prob in ptmdp.start.items():
+        vi["vi_start_value"] += value[s] * prob
+
+    rpp = mapped_mdp.reward_per_progress(policy, eps=0.001, n_iter=20)
 
     return vi | rpp
 
@@ -88,7 +94,7 @@ def job_gen():
 jobs = list(job_gen())
 jobs = random.sample(jobs, len(jobs))
 
-res_gen = joblib.Parallel(n_jobs=6, return_as="generator")(jobs)
+res_gen = joblib.Parallel(n_jobs=n_jobs, return_as="generator")(jobs)
 
 print()
 print("Start solving the MDPs for various parameter combinations:")
