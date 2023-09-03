@@ -4,6 +4,7 @@ from ethereum import EthereumWhitepaper, EthereumByzantium
 from parallel import Parallel
 from sm import SelfishMining, mappable_params
 from time import time
+import argparse
 import joblib
 import logging
 import gzip
@@ -12,14 +13,25 @@ import pickle
 import traceback
 
 
-# We set a time budget for exploring our models
-time_budget = 3600  # seconds = 1 hour
-
-# We also cap the number of transitions
-max_transitions = 1_000_000
-
-# Parallel cores to use; see measure-multicore.py
-n_jobs = 6
+argp = argparse.ArgumentParser()
+argp.add_argument("-j", "--n_jobs", type=int, default=6, metavar="INT")
+argp.add_argument(
+    "-t",
+    "--n_transitions",
+    type=int,
+    default=1_000_000,
+    metavar="INT",
+    help="maximum number of transitions per model",
+)
+argp.add_argument(
+    "-b",
+    "--time_budget",
+    type=int,
+    default=3600,
+    metavar="INT",
+    help="maximum exploration time per model",
+)
+args = argp.parse_args()
 
 # Verbose output
 log = logging.getLogger("explore-states.py")
@@ -51,7 +63,7 @@ done = {k: False for k in models.keys()}
 
 def job(key, model_fn, i):
     start = time()
-    stop = start + time_budget
+    stop = start + args.time_budget
 
     model = model_fn(i)
 
@@ -60,7 +72,7 @@ def job(key, model_fn, i):
         while compiler.explore(steps=1000):
             if time() > stop:
                 return key, i, model, "time", None
-            if compiler._mdp.n_transitions > max_transitions:
+            if compiler._mdp.n_transitions > args.n_transitions:
                 return key, i, model, "size", None
             if done[key]:  # other model (with lower i) aborted
                 return key, i, model, "done", None
@@ -91,7 +103,9 @@ def jobs():
             break
 
 
-results = joblib.Parallel(n_jobs=n_jobs, batch_size=1, return_as="generator")(jobs())
+results = joblib.Parallel(n_jobs=args.n_jobs, batch_size=1, return_as="generator")(
+    jobs()
+)
 
 meta = []
 

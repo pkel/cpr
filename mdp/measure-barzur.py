@@ -1,6 +1,7 @@
 from compiler import Compiler
 from time import time
 from tqdm import tqdm
+import argparse
 import barzur20aft
 import gzip
 import joblib
@@ -9,8 +10,17 @@ import pickle
 import random
 import sm
 
-
-n_jobs = 6
+argp = argparse.ArgumentParser()
+argp.add_argument("-j", "--n_jobs", type=int, default=6, metavar="INT")
+argp.add_argument(
+    "-t",
+    "--n_transitions",
+    type=int,
+    default=1_000_000,
+    metavar="INT",
+    help="filter models for maximum transition count",
+)
+args = argp.parse_args()
 
 # We start from my already explored Bitcoin/SM models.
 
@@ -20,7 +30,7 @@ print(f"Loading model list from {fname} and select suitable MDP.")
 with gzip.open(fname, "rb") as f:
     our_models = pickle.load(f)
 
-filter = 'protocol == "bitcoin" and n_transitions < 1_000_000'
+filter = f'protocol == "bitcoin" and n_transitions < {args.n_transitions}'
 our_idx = our_models.query(filter).maximum_height.idxmax()
 our = our_models.iloc[our_idx]
 
@@ -94,7 +104,7 @@ def job_gen():
 jobs = list(job_gen())
 jobs = random.sample(jobs, len(jobs))
 
-res_gen = joblib.Parallel(n_jobs=n_jobs, return_as="generator")(jobs)
+res_gen = joblib.Parallel(n_jobs=args.n_jobs, return_as="generator")(jobs)
 
 print()
 print("Start solving the MDPs for various parameter combinations:")
