@@ -36,6 +36,11 @@ class Continue(Action):
     pass
 
 
+@dataclass(frozen=True)
+class Communicate(Action):
+    pass
+
+
 class Editor(View):
     def __init__(self, *args, first_miner: Miner):
         self.n = 1
@@ -663,24 +668,36 @@ class SelfishMining(Model):
         return lst
 
     def actions(self, s: State) -> list[Action]:
-        actions = [Continue()]
         e = self.editor
         e.load(s)
 
-        # truncation: allow mining only up to a certain point
+        # we allow mining only up to a certain point
+        truncate = False
         ms = self.maximum_size
         if ms > 0 and e.n >= ms:
-            actions = []
+            truncate = True
 
         mh = self.maximum_height
         if mh > 0 and max(e.ht) >= mh:
-            actions = []
+            truncate = True
 
-        # release/consider when it makes sense
-        for i, _ in enumerate(e.to_release()):
-            actions.append(Release(i))
-        for i, _ in enumerate(e.to_consider()):
-            actions.append(Consider(i))
+        if truncate:
+            # we forbid mining and allow communication only if there is
+            # something to communicate. This forces the attacker to consider
+            # and release all blocks before reaching a terminal state.
+            if len(e.just_released()) + len(e.just_mined_by_defender()) > 0:
+                actions = [Communicate()]
+            else:
+                actions = []
+
+        else:
+            # continue is generally feasible
+            actions = [Continue()]
+            # release/consider when it makes sense
+            for i, _ in enumerate(e.to_release()):
+                actions.append(Release(i))
+            for i, _ in enumerate(e.to_consider()):
+                actions.append(Consider(i))
 
         return actions
 
@@ -691,6 +708,8 @@ class SelfishMining(Model):
             return self.apply_consider(a.i, s)
         if isinstance(a, Continue):
             return self.apply_continue(s)
+        if isinstance(a, Communicate):
+            return self.apply_communicate(s)
         assert isinstance(a, Action)
         assert False, "unknown action"
 
@@ -727,10 +746,18 @@ class SelfishMining(Model):
         lst = []
         for gamma in [True, False]:
             for alpha in [True, False]:
-                lst.append(self._apply_continue(s, gamma, alpha))
+                lst.append(self._apply_continue(s, gamma, alpha, False))
         return lst
 
-    def _apply_continue(self, s: State, gamma: bool, alpha: bool):
+    def apply_communicate(self, s: State) -> list[Transition]:
+        lst = []
+        for gamma in [True, False]:
+            lst.append(self._apply_continue(s, gamma, None, True))
+        return lst
+
+    def _apply_continue(
+        self, s: State, gamma: bool, alpha: bool, communication_only: bool
+    ):
         e = self.editor
         e.load(s)
         prob = 1.0
@@ -755,29 +782,30 @@ class SelfishMining(Model):
                 new=b,
             )
             e.set_defender_prefers(pref)
-        # mine next block
-        if alpha:  # attacker mines next block
-            prob *= self.alpha
-            parents = self.protocol.mining(
-                e.attacker_view(),
-                e.attacker_prefers(),
-            )
-            b = e.append(parents, Miner.Attacker)
-            if self.force_consider_own:
-                e.set_considered(b)
-                pref = self.protocol.preference(
+        if not communication_only:
+            # mine next block
+            if alpha:  # attacker mines next block
+                prob *= self.alpha
+                parents = self.protocol.mining(
                     e.attacker_view(),
-                    old=e.attacker_prefers(),
-                    new=b,
+                    e.attacker_prefers(),
                 )
-                e.set_attacker_prefers(pref)
-        else:
-            prob *= 1 - self.alpha
-            parents = self.protocol.mining(
-                e.defender_view(),
-                e.defender_prefers(),
-            )
-            e.append(parents, Miner.Defender)
+                b = e.append(parents, Miner.Attacker)
+                if self.force_consider_own:
+                    e.set_considered(b)
+                    pref = self.protocol.preference(
+                        e.attacker_view(),
+                        old=e.attacker_prefers(),
+                        new=b,
+                    )
+                    e.set_attacker_prefers(pref)
+            else:
+                prob *= 1 - self.alpha
+                parents = self.protocol.mining(
+                    e.defender_view(),
+                    e.defender_prefers(),
+                )
+                e.append(parents, Miner.Defender)
         return self.transition(probability=prob)
 
 
@@ -789,12 +817,14 @@ def map_params(m: MDP, *args, alpha: float, gamma: float):
     g = mappable_params["gamma"]
     mapping = dict()
     mapping[1] = 1
+    mapping[g] = gamma
+    mapping[1 - g] = 1 - gamma
     mapping[a * g] = alpha * gamma
     mapping[(1 - a) * g] = (1 - alpha) * gamma
     mapping[a * (1 - g)] = alpha * (1 - gamma)
     mapping[(1 - a) * (1 - g)] = (1 - alpha) * (1 - gamma)
 
-    assert len(set(mapping.keys())) == 5, "mappable_params are not mappable"
+    assert len(set(mapping.keys())) == 7, "mappable_params are not mappable"
 
     # map probabilities
     tab = []
