@@ -645,6 +645,8 @@ class SelfishMining(Model):
         else:
             progress = 0
 
+        assert (rew_atk == 0 and rew_def == 0) or progress > 0
+
         # apply the keep filter and (optionally) make canonical
         if self.merge_isomorphic:
             canonkeep = e.canonically_ordered(list(keep))
@@ -813,6 +815,9 @@ mappable_params = dict(alpha=0.125, gamma=0.25)
 
 
 def map_params(m: MDP, *args, alpha: float, gamma: float):
+    assert alpha >= 0 and alpha <= 1
+    assert gamma >= 0 and gamma <= 1
+
     a = mappable_params["alpha"]
     g = mappable_params["gamma"]
     mapping = dict()

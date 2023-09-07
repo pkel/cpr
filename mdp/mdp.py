@@ -82,8 +82,20 @@ class MDP:
         # check reachability of states TODO
         return True
 
-    def value_iteration(self, *args, n_iter=0, value_eps=0, discount=1, verbose=False):
-        assert n_iter > 0 or value_eps > 0 or verbose, "infinite iteration"
+    def value_iteration(
+        self, *args, max_iter=0, discount=1, eps=0, stop_delta=None, verbose=False
+    ):
+        assert discount <= 1 and discount > 0
+        assert eps is not None or stop_delta is not None
+        assert eps is None or eps >= 0
+        assert stop_delta is None or stop_delta >= 0
+
+        # abort condition of eps-optimal policy
+        # https://github.com/aimacode/aima-java/blob/7ecee83 [...]/ValueIteration.java
+        if stop_delta is None:
+            stop_delta = eps * (1 - discount) / discount
+
+        assert max_iter > 0 or stop_delta > 0 or verbose, "infinite iteration"
 
         start = time()
 
@@ -122,9 +134,9 @@ class MDP:
                     end="",
                 )
 
-            if n_iter > 0 and i >= n_iter:
+            if max_iter > 0 and i >= max_iter:
                 break
-            elif value_delta <= value_eps:
+            elif value_delta <= stop_delta:
                 break
             else:
                 i += 1
@@ -133,9 +145,13 @@ class MDP:
             print()  # new line to finish verbose progress bar
 
         return dict(
+            vi_discount=discount,
+            vi_delta=value_delta,
+            vi_stop_delta=stop_delta,
             vi_policy=policy[next,],
             vi_value=value[next,],
             vi_iter=i,
+            vi_max_iter=max_iter,
             vi_time=time() - start,
         )
 
@@ -259,7 +275,7 @@ class MDP:
 
         return res
 
-    def reward_per_progress(self, policy, n_iter=0, eps=0, verbose=False):
+    def reward_per_progress(self, policy, max_iter=0, eps=0, verbose=False):
         mc = self.markov_chain(policy)
         prb = mc["prb"]
         rew = mc["rew"]
@@ -320,7 +336,7 @@ class MDP:
             if verbose:
                 print(f"\riteration {i}: rpp={next_rpp} delta={delta}", end="")
 
-            if n_iter > 0 and i >= n_iter:
+            if max_iter > 0 and i >= max_iter:
                 break
             elif eps > 0 and delta < eps:
                 break

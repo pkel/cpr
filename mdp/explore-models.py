@@ -62,6 +62,8 @@ done = {k: False for k in models.keys()}
 
 
 def job(key, model_fn, i):
+    global done
+
     start = time()
     stop = start + args.time_budget
 

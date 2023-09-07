@@ -62,11 +62,21 @@ print(their_mdp)
 # Next, generate and solve the PT-MDPs for various alphas/gammas
 
 
-def measure(mdp, map_params, value_eps=0.01, alpha=0.25, gamma=0.25, horizon=100):
+def measure(mdp, map_params, *args, eps, alpha=0.25, gamma=0.25, horizon=100):
+    # Modify standard stopping condition (see mdp.py) assuming
+    # 1 - 1/horizon = discount.
+    # Also PTO values will be in the range 0 .. horizon.
+    # Evaluation metric reward per progress is in 0 .. 1.
+    # We want eps-optimality in eval space and thus scale the stop_delta
+    # accordingly.
+    discount = 1 - 1 / horizon
+    delta = (eps * horizon) * (1 - discount) / discount
+
     mapped_mdp = map_params(mdp, alpha=alpha, gamma=gamma)
     ptmdp = barzur20aft.ptmdp(mapped_mdp, horizon=horizon)
 
-    vi = ptmdp.value_iteration(value_eps=value_eps)
+    vi = ptmdp.value_iteration(stop_delta=delta, eps=None, discount=1)
+
     policy = vi.pop("vi_policy")
     value = vi.pop("vi_value")
 
@@ -74,7 +84,7 @@ def measure(mdp, map_params, value_eps=0.01, alpha=0.25, gamma=0.25, horizon=100
     for s, prob in ptmdp.start.items():
         vi["vi_start_value"] += value[s] * prob
 
-    rpp = mapped_mdp.reward_per_progress(policy, eps=0.001, n_iter=20)
+    rpp = mapped_mdp.reward_per_progress(policy, eps=eps, max_iter=20)
 
     return vi | rpp
 
@@ -86,12 +96,13 @@ def job(**kwargs):
 
 
 def job_gen():
-    for h in [50, 100, 200]:
-        for g in [0, 0.5, 1]:
-            for a in range(0, 50, 5):
-                yield joblib.delayed(job)(
-                    alpha=a / 100, gamma=g, horizon=h, value_eps=0.01
-                )
+    for e in [0.005, 0.001]:
+        for h in [25, 50, 100]:
+            for g in range(0, 101, 25):
+                for a in range(0, 50, 5):
+                    yield joblib.delayed(job)(
+                        alpha=a / 100, gamma=g / 100, horizon=h, eps=e
+                    )
 
 
 #  shortcut for testing:

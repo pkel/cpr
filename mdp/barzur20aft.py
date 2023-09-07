@@ -243,6 +243,9 @@ mappable_params = dict(alpha=0.125, gamma=0.25)
 
 
 def map_params(m: mdp.MDP, *args, alpha: float, gamma: float):
+    assert alpha >= 0 and alpha <= 1
+    assert gamma >= 0 and gamma <= 1
+
     a = mappable_params["alpha"]
     g = mappable_params["gamma"]
     mapping = dict()
