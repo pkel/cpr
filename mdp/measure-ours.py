@@ -3,6 +3,7 @@ import argparse
 import barzur20aft
 import gzip
 import joblib
+import numpy
 import pandas
 import pickle
 import random
@@ -58,9 +59,18 @@ def measure(mdp, *args, eps, alpha=0.25, gamma=0.25, horizon=100):
     for s, prob in ptmdp.start.items():
         vi["vi_start_value"] += value[s] * prob
 
-    rpp = mapped_mdp.reward_per_progress(policy, eps=eps, max_iter=20)
+    best_state = numpy.argmax(value)
+    vi["vi_max_value"] = value[best_state]
 
-    return vi | rpp
+    mc = mapped_mdp.markov_chain(policy, start_state=best_state)
+    ss = mapped_mdp.steady_state(mc["prb"])
+    ss_vec = ss.pop("ss")
+
+    rpp = mapped_mdp.reward_per_progress(
+        policy, **mc, ss=ss_vec, eps=eps, min_iter=0, max_iter=20
+    )
+
+    return vi | ss | rpp
 
 
 def job(row, **kwargs):
@@ -73,7 +83,7 @@ def job(row, **kwargs):
 def job_gen():
     for h in [100]:
         for g in [0, 50, 100]:
-            for a in range(0, 50, 5):
+            for a in range(5, 50, 5):
                 for _, row in models.iterrows():
                     yield joblib.delayed(job)(
                         row, alpha=a / 100, gamma=g / 100, horizon=h, eps=0.001

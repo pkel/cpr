@@ -155,14 +155,17 @@ class MDP:
             vi_time=time() - start,
         )
 
-    def markov_chain(self, policy):
+    def markov_chain(self, policy, start_state=None):
         # find subset of states used by policy
         reachable = set()
         todo = set()
 
-        for s, prob in self.start.items():
-            if prob > 0:
-                todo.add(s)
+        if start_state is None:
+            for s, prob in self.start.items():
+                if prob > 0:
+                    todo.add(s)
+        else:
+            todo.add(start_state)
 
         while len(todo) > 0:
             s = todo.pop()
@@ -275,22 +278,25 @@ class MDP:
 
         return res
 
-    def reward_per_progress(self, policy, max_iter=0, eps=0, verbose=False):
-        mc = self.markov_chain(policy)
-        prb = mc["prb"]
-        rew = mc["rew"]
-        prg = mc["prg"]
-
-        res = self.steady_state(prb)
-
+    def reward_per_progress(
+        self,
+        *args,
+        prb=None,
+        rew=None,
+        prg=None,
+        ss=None,
+        min_iter=0,
+        max_iter=0,
+        eps=0,
+        verbose=False,
+    ):
         start = time()
 
         n = prb.shape[0]
         reward = numpy.zeros((2, n), dtype=float)
         progress = numpy.zeros((2, n), dtype=float)
-        prev_rpp = float("-inf")
 
-        ss = res.pop("ss")
+        prev_rpp = float("-inf")
 
         prb = prb.tocsr()
         rew = rew.tocsr()
@@ -300,9 +306,7 @@ class MDP:
             # no progress Markov Chain
             assert rew.sum() == 0
 
-            res["rpp"] = 0
-            res["rpp_iter"] = 0
-            res["rpp_time"] = time() - start
+            res = dict(rpp=0, rpp_iter=0, rpp_time=time() - start)
             return res
 
         i = 1
@@ -327,7 +331,7 @@ class MDP:
             ss_reward = ss.dot(reward[next,].T)
             ss_progress = ss.dot(progress[next,].T)
             if ss_progress == 0.0:
-                next_rpp = float("-inf")
+                next_rpp = 0.0
                 delta = float("inf")
             else:
                 next_rpp = ss_reward / ss_progress
@@ -338,7 +342,7 @@ class MDP:
 
             if max_iter > 0 and i >= max_iter:
                 break
-            elif eps > 0 and delta < eps:
+            elif eps > 0 and delta < eps and i >= min_iter:
                 break
             else:
                 i += 1
@@ -347,8 +351,6 @@ class MDP:
         if verbose:
             print()  # new line to finish verbose progress bar
 
-        res["rpp"] = next_rpp
-        res["rpp_iter"] = i
-        res["rpp_time"] = time() - start
+        res = dict(rpp=next_rpp, rpp_iter=i, rpp_time=time() - start)
 
         return res

@@ -269,7 +269,11 @@ def map_params(m: mdp.MDP, *args, alpha: float, gamma: float):
             new_actions[act] = new_transitions
         tab.append(new_actions)
 
-    new = replace(m, tab=tab)
+    start = dict()
+    for state, prob in m.start.items():
+        start[state] = mapping[prob]
+
+    new = replace(m, start=start, tab=tab)
 
     assert new.check()
     return new

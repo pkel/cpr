@@ -655,7 +655,7 @@ class SelfishMining(Model):
             e.reorder_and_filter(sorted(list(keep)))
 
         return Transition(
-            state=self.editor.save(),
+            state=e.save(),
             probability=probability,
             progress=progress,
             reward=rew_atk,
@@ -695,11 +695,12 @@ class SelfishMining(Model):
         else:
             # continue is generally feasible
             actions = [Continue()]
-            # release/consider when it makes sense
-            for i, _ in enumerate(e.to_release()):
-                actions.append(Release(i))
-            for i, _ in enumerate(e.to_consider()):
-                actions.append(Consider(i))
+
+        # release/consider when it makes sense
+        for i, _ in enumerate(e.to_release()):
+            actions.append(Release(i))
+        for i, _ in enumerate(e.to_consider()):
+            actions.append(Consider(i))
 
         return actions
 
@@ -748,17 +749,25 @@ class SelfishMining(Model):
         lst = []
         for gamma in [True, False]:
             for alpha in [True, False]:
-                lst.append(self._apply_continue(s, gamma, alpha, False))
+                lst.append(
+                    self._apply_continue(
+                        s, gamma=gamma, alpha=alpha, communication_only=False
+                    )
+                )
         return lst
 
     def apply_communicate(self, s: State) -> list[Transition]:
         lst = []
         for gamma in [True, False]:
-            lst.append(self._apply_continue(s, gamma, None, True))
+            lst.append(
+                self._apply_continue(
+                    s, gamma=gamma, alpha=None, communication_only=True
+                )
+            )
         return lst
 
     def _apply_continue(
-        self, s: State, gamma: bool, alpha: bool, communication_only: bool
+        self, s: State, *args, gamma: bool, alpha: bool, communication_only: bool
     ):
         e = self.editor
         e.load(s)
@@ -822,6 +831,8 @@ def map_params(m: MDP, *args, alpha: float, gamma: float):
     g = mappable_params["gamma"]
     mapping = dict()
     mapping[1] = 1
+    mapping[a] = alpha
+    mapping[1 - a] = 1 - alpha
     mapping[g] = gamma
     mapping[1 - g] = 1 - gamma
     mapping[a * g] = alpha * gamma
@@ -829,7 +840,7 @@ def map_params(m: MDP, *args, alpha: float, gamma: float):
     mapping[a * (1 - g)] = alpha * (1 - gamma)
     mapping[(1 - a) * (1 - g)] = (1 - alpha) * (1 - gamma)
 
-    assert len(set(mapping.keys())) == 7, "mappable_params are not mappable"
+    assert len(set(mapping.keys())) == 9, "mappable_params are not mappable"
 
     # map probabilities
     tab = []
@@ -843,7 +854,11 @@ def map_params(m: MDP, *args, alpha: float, gamma: float):
             new_actions[act] = new_transitions
         tab.append(new_actions)
 
-    new = replace(m, tab=tab)
+    start = dict()
+    for state, prob in m.start.items():
+        start[state] = mapping[prob]
+
+    new = replace(m, start=start, tab=tab)
 
     assert new.check()
     return new
