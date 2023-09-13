@@ -65,12 +65,19 @@ def measure(mdp, *args, eps, alpha=0.25, gamma=0.25, horizon=100):
     mc = mapped_mdp.markov_chain(policy, start_state=best_state)
     ss = mapped_mdp.steady_state(mc["prb"])
     ss_vec = ss.pop("ss")
+    mdp_states = mc.pop("mdp_states")
 
     rpp = mapped_mdp.reward_per_progress(
         policy, **mc, ss=ss_vec, eps=eps, min_iter=0, max_iter=20
     )
 
-    return vi | ss | rpp
+    # steady-state weighted revenue in PTO space
+    ptss_vec = numpy.zeros(policy.shape, dtype=float)
+    for mc_state, mdp_state in enumerate(mdp_states):
+        ptss_vec[mdp_state] = ss_vec[mc_state]
+    ptrev = value.dot(ptss_vec)
+
+    return vi | ss | rpp | dict(ptrev=ptrev)
 
 
 def job(row, **kwargs):

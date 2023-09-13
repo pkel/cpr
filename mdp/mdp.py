@@ -185,8 +185,10 @@ class MDP:
                     todo.add(t.destination)
 
         # map markov chain state <-> markov decision process state
+        # mdp_state[mc state] = <mdp state>
+        mdp_state = sorted(list(reachable))
         # mc_state[mdp state] = <mc state>
-        mc_state = {mdp: mc for mc, mdp in enumerate(sorted(list(reachable)))}
+        mc_state = {mdp: mc for mc, mdp in enumerate(mdp_state)}
 
         # build matrices for transition probability, reward, and progress
         n = len(reachable)
@@ -218,6 +220,7 @@ class MDP:
             prb=scipy.sparse.coo_matrix((prb, (row, col)), shape=(n, n)),
             rew=scipy.sparse.coo_matrix((rew, (row, col)), shape=(n, n)),
             prg=scipy.sparse.coo_matrix((prg, (row, col)), shape=(n, n)),
+            mdp_states=mdp_state,
         )
 
     def steady_state(self, prb):
