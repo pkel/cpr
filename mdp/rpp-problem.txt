@@ -1,0 +1,43 @@
+I think the last source of error is in the calculation of reward per progress.
+
+To rule this out I propose:
+  1. Use the new policy_evaluation(reachable_only=True) on PTO mdp for small
+     theta, note down number of iterations.
+  2. Do backpropagation in the ARR mdp for that many steps.
+  3. Calculate steady state in the ARR mdp
+  4. Devide steady-state weighted reward by steady-state weighted progress
+
+commit 4cafeadfc0daed9f390bcbec6011f3174924b382 (HEAD -> mdp-gen, origin/mdp-gen)
+Author: Patrik Keller <git@pkel.dev>
+Date:   Thu Sep 14 13:33:58 2023 +0200
+
+    mdp. draft policy_iteration
+
+    Results confirm value iteration. Speed is about the same for both
+    algorithms. PI is a bit faster for small traditional problems, VI is
+    a bit faster for own model.
+
+    Most importantly, changing to policy iteration does not solve the old
+    problem that PTO produces higher revenue for own model than traditional
+    model, while reward per progress is lower (sub-honest) in our model for
+    e.g. alpha=.33, gamma=0.75.
+
+commit a5a5a0928e4c2464cf5978fe26129c0a7dbf1d7a
+Author: Patrik Keller <git@pkel.dev>
+Date:   Wed Sep 13 21:06:19 2023 +0200
+
+    mdp. investigate unexpected results
+
+    Traditional and proposed models do not agree for gamma 0.5 ... 0.9,
+    alpha 0.25 ... 0.35. PTO revenue is higher for our model. Reward per
+    progress is higher in the traditional model. Actually, PTO-optimal
+    policy against proposed model performs worse than honest wrt. reward per
+    progress.
+
+    In this commit I added steady-state weighted PTO revenues to the
+    pipeline. First results on small problems look like PTO transformation,
+    value iteration, steady state calculation, and reward per progress
+    calculation do what they should for the traditional model. I guess most
+    likely option now is that the proposed model violates some assumptions
+    of PTO.
+
