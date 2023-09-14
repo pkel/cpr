@@ -155,7 +155,7 @@ class MDP:
             vi_time=time() - start,
         )
 
-    def markov_chain(self, policy, start_state=None):
+    def reachable_states(self, policy, *args, start_state=None):
         # find subset of states used by policy
         reachable = set()
         todo = set()
@@ -183,6 +183,11 @@ class MDP:
                     continue
                 else:
                     todo.add(t.destination)
+
+        return reachable
+
+    def markov_chain(self, policy, *args, start_state):
+        reachable = self.reachable_states(policy, start_state=start_state)
 
         # map markov chain state <-> markov decision process state
         # mdp_state[mc state] = <mdp state>
