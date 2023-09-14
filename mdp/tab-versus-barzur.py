@@ -26,9 +26,6 @@ data = data.assign(gamma_percent=(data.gamma * 100).map(int))
 defvar["horizon"] = data.horizon.max()
 defvar["eps"] = data.eps.min()
 
-# eps is in reward_per_progress space
-defvar["vieps"] = defvar["eps"] * defvar["horizon"]
-
 data = data.query("gamma in [0., 0.5, 1]")
 
 models = dict(our="Proposed", their="Traditional")

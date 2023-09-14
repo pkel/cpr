@@ -1,5 +1,8 @@
 now=$(shell date -Im)
 
+# transition limit
+T=1000000
+
 all: measure-barzur.pkl measure-ours.pkl
 
 backup_%:
@@ -17,7 +20,7 @@ clear:
 
 explored-models:
 	mkdir $@
-	python explore-models.py
+	python explore-models.py -t $(T)
 
 measure-barzur.pkl: explored-models
 	python measure-barzur.py

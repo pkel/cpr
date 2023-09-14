@@ -64,19 +64,10 @@ print(their_mdp)
 
 
 def measure(mdp, map_params, *args, eps, alpha=0.25, gamma=0.25, horizon=100):
-    # Modify standard stopping condition (see mdp.py) assuming
-    # 1 - 1/horizon = discount.
-    # Also PTO values will be in the range 0 .. horizon.
-    # Evaluation metric reward per progress is in 0 .. 1.
-    # We want eps-optimality in eval space and thus scale the stop_delta
-    # accordingly.
-    discount = 1 - 1 / horizon
-    delta = (eps * horizon) * (1 - discount) / discount
-
     mapped_mdp = map_params(mdp, alpha=alpha, gamma=gamma)
     ptmdp = barzur20aft.ptmdp(mapped_mdp, horizon=horizon)
 
-    vi = ptmdp.value_iteration(stop_delta=delta, eps=None, discount=1)
+    vi = ptmdp.value_iteration(stop_delta=eps, eps=None, discount=1)
 
     policy = vi.pop("vi_policy")
     value = vi.pop("vi_value")
@@ -113,7 +104,7 @@ def job(**kwargs):
 
 
 def job_gen():
-    for e in [0.005, 0.001]:
+    for e in [0.01]:
         for h in [25, 50, 100]:
             for g in range(0, 101, 25):
                 for a in range(5, 50, 5):
