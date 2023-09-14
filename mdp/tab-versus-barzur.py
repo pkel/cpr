@@ -31,7 +31,7 @@ defvar["vieps"] = defvar["eps"] * defvar["horizon"]
 
 data = data.query("gamma in [0., 0.5, 1]")
 
-models = dict(our="Proposed Model", their="Bar-Zur et al. '20")
+models = dict(our="Proposed", their="Traditional")
 data = data.assign(model_hum=data.model.map(lambda x: models[x]))
 
 print("plot figure into tab-versus-barzur.pdf")
@@ -41,18 +41,19 @@ g = sns.relplot(
     kind="line",
     x="alpha",
     y="vi_max_value",
-    col="gamma_percent",
+    col="gamma",
     hue="model_hum",
     style="model_hum",
+    markers=True,
     palette=sns.color_palette("colorblind", 2),
     height=3,
     aspect=1 / 1,
     facet_kws=dict(legend_out=False),
 )
 sns.move_legend(
-    g, "lower center", bbox_to_anchor=(0.5, -0.04), ncol=2, title=None, frameon=False
+    g, "lower left", bbox_to_anchor=(0.08, 0.6), ncol=1, title="Model", frameon=False
 )
-g.set_titles(r"$\gamma={col_name}\,\%$")
+g.set_titles(r"$\gamma={col_name}$")
 g.set(xlabel=r"$\alpha$", ylabel="Revenue")
 # fig, ax = plt.subplots()
 # for g in sorted(data.gamma.unique()):
