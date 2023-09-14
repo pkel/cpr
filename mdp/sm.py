@@ -426,17 +426,30 @@ class Editor(View):
         canon = pynauty.canon_label(g)
         # NOTE: Is this a list of new labels or a list of old labels?
         # Pynauty doc says: "A list with each node relabelled"
+        # For me this hints at a list of new labels:
+        # canon[<id in g>] = <canon id>
         # Nauty doc says: "The canonical label is given in the form of a list
-        # of the vertices of g in canonical order"
-        # So, if Pynauty does no fiddle with the result, it should be a list of
-        # old labels.
+        # of the vertices of g in canonical order". So, if Pynauty does not
+        # fiddle with the result, it should be a list of old labels:
+        # canon[<canon id>] = <id in g>
 
         # map the canonical labels back to block ids
-        canon_blocks = [blocks[i] for i in canon]
-        # This is a canonically sorted list of blocks
+        canon_blocks = [blocks[g_id] for canon_id, g_id in enumerate(canon)]
 
+        # Alternative interpretation:
+        # canon_blocks = [blocks[canon_id] for canon_id, g_id in enumerate(canon)]
+        # When I use it, less states are merged. Results look the same expect
+        # that the models grow bigger. So it seems that the above
+        # interpretation is right!
+
+        # Anyhow, it is important to note that we only use these canonical
+        # labels to reindex the blocks in our state. By reordering alone we
+        # cannot invalidate the state transitions. Merging two states that
+        # should not be merged is not impossible.
+
+        # canon_blocks is a canonically sorted list of blocks.
         # To maintain the invariant that block ids are topologically ordered
-        # we reorder the topologically.
+        # we reorder them topologically.
         return self.topologically_ordered(canon_blocks)
 
     def graph_easy(self, info=dict()):
