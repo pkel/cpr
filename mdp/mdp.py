@@ -228,7 +228,7 @@ class MDP:
             mdp_states=mdp_state,
         )
 
-    def steady_state(self, prb):
+    def _steady_state_mc(self, prb):
         start = time()
 
         n = prb.shape[0]
@@ -266,7 +266,7 @@ class MDP:
                 # v is an approximate solution; steady state is ambiguous
                 pass
             else:
-                # v is least squares approximization; steady state not exists
+                # v is least squares approximation; steady state does not exist
                 # But: finite markov chains always have a steady state!
                 assert False, "something is off"
 
@@ -286,79 +286,70 @@ class MDP:
 
         return res
 
-    def reward_per_progress(
-        self,
-        *args,
-        prb=None,
-        rew=None,
-        prg=None,
-        ss=None,
-        min_iter=0,
-        max_iter=0,
-        eps=0,
-        verbose=False,
-    ):
+    def steady_state(self, policy, *args, start_state):
         start = time()
 
-        n = prb.shape[0]
-        reward = numpy.zeros((2, n), dtype=float)
-        progress = numpy.zeros((2, n), dtype=float)
+        mc = self.markov_chain(policy, start_state=start_state)
+        mc_ss = self._steady_state_mc(mc["prb"])
 
-        prev_rpp = float("-inf")
+        # map steady state from mc state space back to mdp state space
+        mdp_ss = numpy.zeros(self.n_states, dtype=float)
+        for mc_state, mdp_state in enumerate(mc["mdp_states"]):
+            mdp_ss[mdp_state] = mc_ss["ss"][mc_state]
 
-        prb = prb.tocsr()
-        rew = rew.tocsr()
-        prg = prg.tocsr()
+        return dict(
+            ss=mdp_ss,
+            ss_reachable=len(mc_ss["ss"]),
+            ss_nonzero=mc_ss["ss_nonzero"],
+            ss_time=time() - start,
+        )
 
-        if prg.sum() == 0:
-            # no progress Markov Chain
-            assert rew.sum() == 0
+    def policy_evaluation(
+        self,
+        policy,
+        *args,
+        theta,
+        discount=1,
+        around_state=None,
+        max_iter=None,
+    ):
+        rew = numpy.zeros((2, self.n_states), dtype=float)
+        prg = numpy.zeros((2, self.n_states), dtype=float)
 
-            res = dict(rpp=0, rpp_iter=0, rpp_time=time() - start)
-            return res
+        if around_state is None:
+            included_states = self.reachable_states(policy, start_state=around_state)
+        else:
+            included_states = range(self.n_states)
 
         i = 1
         while True:
             prev = i % 2
             next = (prev + 1) % 2
 
-            for src in range(n):
-                reward[next, src] = 0.0
-                progress[next, src] = 0.0
-
-                # back propagation of reward and progress
-                for dst in prb[src,].nonzero()[1]:
-                    assert prb[src, dst] > 0.0
-                    reward[next, src] += prb[src, dst] * (
-                        rew[src, dst] + reward[prev, dst]
+            for src in included_states:
+                a = policy[src]
+                if a < 0:
+                    continue
+                r = 0.0
+                p = 0.0
+                for t in self.tab[src][a]:
+                    r += t.probability * (
+                        t.reward + discount * rew[prev, t.destination]
                     )
-                    progress[next, src] += prb[src, dst] * (
-                        prg[src, dst] + progress[prev, dst]
+                    p += t.probability * (
+                        t.progress + discount * prg[prev, t.destination]
                     )
+                rew[next, src] = r
+                prg[next, src] = p
 
-            ss_reward = ss.dot(reward[next,].T)
-            ss_progress = ss.dot(progress[next,].T)
-            if ss_progress == 0.0:
-                next_rpp = 0.0
-                delta = float("inf")
-            else:
-                next_rpp = ss_reward / ss_progress
-                delta = numpy.abs(prev_rpp - next_rpp)
+            delta = numpy.abs(rew[next,] - rew[prev,]).max()
 
-            if verbose:
-                print(f"\riteration {i}: rpp={next_rpp} delta={delta}", end="")
-
-            if max_iter > 0 and i >= max_iter:
+            if delta < theta:
                 break
-            elif eps > 0 and delta < eps and i >= min_iter:
+
+            if max_iter is not None and i >= max_iter:
                 break
-            else:
-                i += 1
-                prev_rpp = next_rpp
 
-        if verbose:
-            print()  # new line to finish verbose progress bar
+            i += 1
 
-        res = dict(rpp=next_rpp, rpp_iter=i, rpp_time=time() - start)
-
-        return res
+        return dict(pe_reward=rew[next,], pe_progress=prg[next,], pe_iter=i)

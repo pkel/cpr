@@ -5,11 +5,11 @@ import argparse
 import barzur20aft
 import gzip
 import joblib
-import numpy
 import pandas
 import pickle
 import random
 import sm
+import util
 
 argp = argparse.ArgumentParser()
 argp.add_argument("-j", "--n_jobs", type=int, default=6, metavar="INT")
@@ -65,36 +65,7 @@ print(their_mdp)
 
 def measure(mdp, map_params, *args, eps, alpha=0.25, gamma=0.25, horizon=100):
     mapped_mdp = map_params(mdp, alpha=alpha, gamma=gamma)
-    ptmdp = barzur20aft.ptmdp(mapped_mdp, horizon=horizon)
-
-    vi = ptmdp.value_iteration(stop_delta=eps, eps=None, discount=1)
-
-    policy = vi.pop("vi_policy")
-    value = vi.pop("vi_value")
-
-    vi["vi_start_value"] = 0.0
-    for s, prob in ptmdp.start.items():
-        vi["vi_start_value"] += value[s] * prob
-
-    best_state = numpy.argmax(value)
-    vi["vi_max_value"] = value[best_state]
-
-    mc = mapped_mdp.markov_chain(policy, start_state=best_state)
-    ss = mapped_mdp.steady_state(mc["prb"])
-    ss_vec = ss.pop("ss")
-    mdp_states = mc.pop("mdp_states")
-
-    rpp = mapped_mdp.reward_per_progress(
-        policy, **mc, ss=ss_vec, eps=eps, min_iter=0, max_iter=20
-    )
-
-    # steady-state weighted revenue in PTO space
-    ptss_vec = numpy.zeros(policy.shape, dtype=float)
-    for mc_state, mdp_state in enumerate(mdp_states):
-        ptss_vec[mdp_state] = ss_vec[mc_state]
-    ptrev = value.dot(ptss_vec)
-
-    return vi | ss | rpp | dict(ptrev=ptrev)
+    return util.optimize_and_evaluate(mapped_mdp, horizon=horizon, eps=eps)
 
 
 def job(**kwargs):
