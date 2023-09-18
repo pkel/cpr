@@ -38,7 +38,7 @@ g = sns.relplot(
     data,
     kind="line",
     x="alpha",
-    y="vi_max_value",
+    y="rpp",
     col="gamma",
     hue="model_hum",
     style="model_hum",
