@@ -1,5 +1,4 @@
 from bitcoin import Bitcoin
-
 from ethereum import EthereumWhitepaper, EthereumByzantium
 from compiler import Compiler
 from parallel import Parallel

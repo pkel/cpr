@@ -1,4 +1,4 @@
-import barzur20aft
+import aft20barzur
 import numpy
 from time import time
 
@@ -7,7 +7,7 @@ def optimize_and_evaluate(mdp, *args, eps, horizon):
     start = time()
 
     # map input problem to PTO space
-    ptmdp = barzur20aft.ptmdp(mdp, horizon=horizon)
+    ptmdp = aft20barzur.ptmdp(mdp, horizon=horizon)
 
     # find optimal policy
     vi = ptmdp.value_iteration(stop_delta=eps, eps=None, discount=1)

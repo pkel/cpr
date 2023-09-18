@@ -3,11 +3,11 @@ import pickle
 import seaborn as sns
 
 print()
-print("open measure-barzur.pkl")
+print("open measure-validation.pkl")
 
-with open("measure-barzur.pkl", "rb") as pkl:
+with open("measure-validation.pkl", "rb") as pkl:
     load = pickle.load(pkl)
-    their = load["their"]
+    fc20 = load["fc20"]
     our = load["our"]
     data = load["data"]
 
@@ -16,9 +16,9 @@ defvar["maximumHeight"] = our["model"].maximum_height
 defvar["ourStates"] = our["mdp"].n_states
 defvar["ourActions"] = our["mdp"].n_actions
 defvar["ourTransitions"] = our["mdp"].n_transitions
-defvar["theirStates"] = their["mdp"].n_states
-defvar["theirActions"] = their["mdp"].n_actions
-defvar["theirTransitions"] = their["mdp"].n_transitions
+defvar["fcStates"] = fc20["mdp"].n_states
+defvar["fcActions"] = fc20["mdp"].n_actions
+defvar["fcTransitions"] = fc20["mdp"].n_transitions
 
 data = data.query("horizon == horizon.max() and eps == eps.min()")
 data = data.assign(gamma_percent=(data.gamma * 100).map(int))
@@ -28,11 +28,11 @@ defvar["eps"] = data.eps.min()
 
 data = data.query("gamma in [0., 0.5, 1]")
 
-models = dict(our="Proposed", their="Traditional")
+models = dict(our="Proposed", fc20="Traditional")
 data = data.assign(model_hum=data.model.map(lambda x: models[x]))
 
-print("plot figure into tab-versus-barzur.pdf")
-pp = PdfPages("tab-versus-barzur.pdf")
+print("plot figure into tab-validation.pdf")
+pp = PdfPages("tab-validation.pdf")
 g = sns.relplot(
     data,
     kind="line",
@@ -61,10 +61,10 @@ g.set(xlabel=r"$\alpha$", ylabel="Revenue")
 pp.savefig()
 pp.close()
 
-print("write tex variables to tab-versus-barzur.tex")
-with open("tab-versus-barzur.tex", "w") as f:
+print("write tex variables to tab-validation.tex")
+with open("tab-validation.tex", "w") as f:
     print("%%", file=f)
-    print("%% file generated from tab-versus-barzur.pdf", file=f)
+    print("%% file generated from tab-validation.pdf", file=f)
     print("%%", file=f)
 
     for cmd, val in defvar.items():

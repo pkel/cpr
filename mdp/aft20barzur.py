@@ -33,7 +33,7 @@ class BState:  # Bitcoin State
         assert self.h >= 0
 
 
-class Bitcoin(Model):
+class BitcoinSM(Model):
     def __init__(self, *args, alpha: float, gamma: float, maximum_fork_length: int):
         if alpha < 0 or alpha >= 0.5:
             raise ValueError("alpha must be between 0 and 1")
@@ -48,7 +48,7 @@ class Bitcoin(Model):
 
     def __repr__(self):
         return (
-            f"barzur20aft.Bitcoin("
+            f"aft20barzur.BitcoinSM("
             f"alpha={self.alpha}, "
             f"gamma={self.gamma}, "
             f"maximum_fork_length={self.mfl})"

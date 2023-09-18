@@ -1,8 +1,9 @@
 from compiler import Compiler
 from time import time
 from tqdm import tqdm
+import aft20barzur
 import argparse
-import barzur20aft
+import fc16sapirshtein
 import gzip
 import joblib
 import pandas
@@ -49,16 +50,23 @@ our_model = our["model"]
 our_mdp = our["mdp"]
 mh = our_model.maximum_height
 
-# Now, reproduce this with bar-zur model
+# Now, reproduce this with traditional models
 
 start = time()
-their_model = barzur20aft.Bitcoin(maximum_fork_length=mh, **barzur20aft.mappable_params)
-their_mdp = Compiler(their_model).mdp()
+fc16_model = fc16sapirshtein.BitcoinSM(
+    maximum_fork_length=mh, **fc16sapirshtein.mappable_params
+)
+aft20_model = aft20barzur.BitcoinSM(
+    maximum_fork_length=mh, **aft20barzur.mappable_params
+)
+fc16_mdp = Compiler(fc16_model).mdp()
+aft20_mdp = Compiler(aft20_model).mdp()
 delta = time() - start
 
 print()
-print(f"Building a similar, traditional MDP took {delta:.1f} seconds:")
-print(their_mdp)
+print(f"Building a similar, traditional MDPs took {delta:.1f} seconds:")
+print("fc16 ", fc16_mdp)
+print("aft20", aft20_mdp)
 
 # Next, generate and solve the PT-MDPs for various alphas/gammas
 
@@ -69,9 +77,14 @@ def measure(mdp, map_params, *args, eps, alpha=0.25, gamma=0.25, horizon=100):
 
 
 def job(**kwargs):
-    a = measure(their_mdp, barzur20aft.map_params, **kwargs)
-    b = measure(our_mdp, sm.map_params, **kwargs)
-    return [kwargs | dict(model="their") | a, kwargs | dict(model="our") | b]
+    a = measure(fc16_mdp, fc16sapirshtein.map_params, **kwargs)
+    b = measure(aft20_mdp, aft20barzur.map_params, **kwargs)
+    c = measure(our_mdp, sm.map_params, **kwargs)
+    return [
+        kwargs | dict(model="fc16") | a,
+        kwargs | dict(model="aft20") | b,
+        kwargs | dict(model="our") | c,
+    ]
 
 
 def job_gen():
@@ -108,12 +121,13 @@ df = pandas.DataFrame(rows)
 print()
 print(df)
 
-fname = "measure-barzur.pkl"
+fname = "measure-validation.pkl"
 print()
 print(f"storing results in {fname}")
 
 results = dict(
-    their=dict(mdp=their_mdp, model=their_model),
+    fc16=dict(mdp=fc16_mdp, model=fc16_model),
+    aft20=dict(mdp=aft20_mdp, model=aft20_model),
     our=dict(mdp=our_mdp, model=our_model),
     data=df,
 )

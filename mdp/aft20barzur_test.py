@@ -1,4 +1,4 @@
-import barzur20aft
+import aft20barzur
 from compiler import Compiler
 import pprint
 import psutil
@@ -13,7 +13,7 @@ def peek(c):
 
 
 def compile(*args, verbose=False, **kwargs):
-    model = barzur20aft.Bitcoin(*args, **kwargs)
+    model = aft20barzur.BitcoinSM(*args, **kwargs)
     c = Compiler(model)
     while c.explore(steps=10000):
         if verbose:
@@ -41,4 +41,4 @@ if __name__ == "__main__":
     for i in range(10, 20):
         compile(alpha=0.25, gamma=0.5, maximum_fork_length=i)
 
-    ptmdp = barzur20aft.ptmdp(mdp, horizon=1000)
+    ptmdp = aft20barzur.ptmdp(mdp, horizon=1000)
