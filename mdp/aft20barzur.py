@@ -6,6 +6,9 @@
 # Technologies (AFT ’20), October 21–23, 2020, New York, NY, USA. ACM, New
 # York, NY, USA, 19 pages. https://doi.org/10.1145/3419614.3423264
 
+# Checked against author's implementation:
+# https://github.com/roibarzur/pto-selfish-mining/blob/89c408638c9c875457d596dcd30fe82114160422/blockchain_mdps/bitcoin_model.py
+
 from dataclasses import dataclass, replace
 from model import Action, Model, Transition
 import mdp
@@ -70,6 +73,7 @@ class BitcoinSM(Model):
             # NOTE, the paper once says a >= h (p.8 right) and once says a == h
             # (p.8 left). I think MATCH can be a good choice even if a > h for
             # high gamma. Thus I do a >= h here.
+            # In the author implementation they do a >= h as well.
             actions.append(MATCH)
         # giving up is always possible
         actions.append(ADOPT)
@@ -117,6 +121,7 @@ class BitcoinSM(Model):
             # defender mines on top of attacker's chain
             # NOTE The paper assigns probability alpha * gamma on p.8
             # right which must be a typo.
+            # The author implementation does is like here.
             snew = BState(a=s.a - s.h, h=1, fork=RELEVANT)
             t.append(
                 Transition(
@@ -130,6 +135,7 @@ class BitcoinSM(Model):
             # defender mines on top of public chain
             # NOTE The paper assigns probability alpha * (1 - gamma) on p.8
             # right which must be a typo.
+            # The author implementation does is like here.
             snew = BState(a=s.h, h=s.h + 1, fork=RELEVANT)
             t.append(
                 Transition(
@@ -144,13 +150,13 @@ class BitcoinSM(Model):
         return t
 
     def apply_adopt(self, s: BState) -> list[Transition]:
-        snew = BState(a=0, h=0, fork=s.fork)
+        snew = BState(a=0, h=0, fork=IRRELEVANT)
         t = Transition(state=snew, probability=1.0, reward=0, progress=s.h)
         return [t]
 
     def apply_override(self, s: BState) -> list[Transition]:
         assert s.a > s.h
-        snew = BState(a=s.a - s.h - 1, h=0, fork=s.fork)
+        snew = BState(a=s.a - s.h - 1, h=0, fork=IRRELEVANT)
         t = Transition(
             state=snew,
             probability=1,
