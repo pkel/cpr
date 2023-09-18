@@ -7,7 +7,7 @@ print("open measure-validation.pkl")
 
 with open("measure-validation.pkl", "rb") as pkl:
     load = pickle.load(pkl)
-    fc20 = load["fc20"]
+    fc16 = load["fc16"]
     our = load["our"]
     data = load["data"]
 
@@ -16,9 +16,9 @@ defvar["maximumHeight"] = our["model"].maximum_height
 defvar["ourStates"] = our["mdp"].n_states
 defvar["ourActions"] = our["mdp"].n_actions
 defvar["ourTransitions"] = our["mdp"].n_transitions
-defvar["fcStates"] = fc20["mdp"].n_states
-defvar["fcActions"] = fc20["mdp"].n_actions
-defvar["fcTransitions"] = fc20["mdp"].n_transitions
+defvar["fcStates"] = fc16["mdp"].n_states
+defvar["fcActions"] = fc16["mdp"].n_actions
+defvar["fcTransitions"] = fc16["mdp"].n_transitions
 
 data = data.query("horizon == horizon.max() and eps == eps.min()")
 data = data.assign(gamma_percent=(data.gamma * 100).map(int))
@@ -28,7 +28,8 @@ defvar["eps"] = data.eps.min()
 
 data = data.query("gamma in [0., 0.5, 1]")
 
-models = dict(our="Proposed", fc20="Traditional")
+models = dict(our="Proposed", fc16="Traditional")
+data = data.query("model in ['our', 'fc16']")
 data = data.assign(model_hum=data.model.map(lambda x: models[x]))
 
 print("plot figure into tab-validation.pdf")
