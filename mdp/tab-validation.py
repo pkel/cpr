@@ -28,8 +28,10 @@ defvar["eps"] = data.eps.min()
 
 data = data.query("gamma in [0., 0.5, 1]")
 
-models = dict(our="Proposed", fc16="Traditional")
-data = data.query("model in ['our', 'fc16']")
+models = dict(
+    our="Proposed", fc16="Sapirshtein et al., FC '16", aft20="Bar-Zur et al., AFT '20"
+)
+data = data.query(f"model in {list(models.keys())}")
 data = data.assign(model_hum=data.model.map(lambda x: models[x]))
 
 print("plot figure into tab-validation.pdf")
@@ -43,13 +45,19 @@ g = sns.relplot(
     hue="model_hum",
     style="model_hum",
     markers=True,
-    palette=sns.color_palette("colorblind", 2),
-    height=3,
+    palette=sns.color_palette("colorblind", len(models)),
+    height=2.5,
     aspect=1 / 1,
     facet_kws=dict(legend_out=False),
 )
+g.fig.subplots_adjust(bottom=0.31)
 sns.move_legend(
-    g, "lower left", bbox_to_anchor=(0.08, 0.6), ncol=1, title="Model", frameon=False
+    g,
+    "lower center",
+    bbox_to_anchor=(0.5, 0),
+    ncol=len(models),
+    title=None,
+    frameon=False,
 )
 g.set_titles(r"$\gamma={col_name}$")
 g.set(xlabel=r"$\alpha$", ylabel="Revenue")
