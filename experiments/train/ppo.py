@@ -112,8 +112,10 @@ def alpha_schedule(eval=False):
             info["range"] = False
             alpha_schedule = alphas
 
-        def alpha_schedule():
-            return random.choice(alphas)
+        else:
+
+            def alpha_schedule():
+                return random.choice(alphas)
 
     elif isinstance(config.main.alpha, cfg_model.Range):
         if eval:
