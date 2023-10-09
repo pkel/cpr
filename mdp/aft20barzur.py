@@ -121,7 +121,7 @@ class BitcoinSM(Model):
             # defender mines on top of attacker's chain
             # NOTE The paper assigns probability alpha * gamma on p.8
             # right which must be a typo.
-            # The author implementation does is like here.
+            # The author implementation does it like here.
             snew = BState(a=s.a - s.h, h=1, fork=RELEVANT)
             t.append(
                 Transition(
@@ -135,8 +135,8 @@ class BitcoinSM(Model):
             # defender mines on top of public chain
             # NOTE The paper assigns probability alpha * (1 - gamma) on p.8
             # right which must be a typo.
-            # The author implementation does is like here.
-            snew = BState(a=s.h, h=s.h + 1, fork=RELEVANT)
+            # The author implementation does it like here.
+            snew = BState(a=s.a, h=s.h + 1, fork=RELEVANT)
             t.append(
                 Transition(
                     state=snew,
