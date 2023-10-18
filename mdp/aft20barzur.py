@@ -219,6 +219,7 @@ def ptmdp(old: mdp.MDP, *args, horizon: int):
                             probability=term_prob * t.probability,
                             reward=t.reward,
                             progress=t.progress,
+                            effect=t.effect,
                         )
                     )
                     new_transitions.append(
@@ -227,6 +228,7 @@ def ptmdp(old: mdp.MDP, *args, horizon: int):
                             probability=(1 - term_prob) * t.probability,
                             reward=t.reward,
                             progress=t.progress,
+                            effect=t.effect,
                         )
                     )
                     n_transitions += 2

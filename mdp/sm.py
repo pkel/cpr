@@ -1,7 +1,7 @@
 from enum import IntEnum
 from dataclasses import dataclass, replace
 from mdp import MDP
-from model import Model, Transition
+from model import Effect, Model, Transition
 from protocol import Protocol, View
 import numpy
 import pynauty
@@ -548,40 +548,67 @@ class SelfishMining(Model):
             f"force_consider_own={self.force_consider_own})"
         )
 
-    def common_history(self):
+    def history(self, block):
         e = self.editor
-        hist_a = []
-        hist_b = []
-        a = e.attacker_prefers()
-        b = e.defender_prefers()
-        while a is not None:
-            hist_a.insert(0, a)
-            a = self.protocol.predecessor(e, a)
-        while b is not None:
-            hist_b.insert(0, b)
-            b = self.protocol.predecessor(e, b)
+        hist = []
+        while block is not None:
+            hist.insert(0, block)
+            block = self.protocol.predecessor(e, block)
+        return hist
+
+    def common_history(self, hist_a, hist_b):
         assert hist_a[0] == hist_b[0], "old ca"
-        hist_c = []
-        while len(hist_a) > 0 and len(hist_b) > 0:
-            x = hist_a.pop(0)
-            if x == hist_b.pop(0):
-                hist_c.append(x)
+
+        i = 0
+        common = []
+        max_i = min(len(hist_a), len(hist_b))
+        while i < max_i:
+            x = hist_a[i]
+            if x == hist_b[i]:
+                common.append(x)
             else:
                 break
-        return hist_c
+            i += 1
+        return common
 
-    def transition(self, *args, probability):
+    def transition(self, *args, probability, defender_preferred_before, block_mined):
         e = self.editor
 
-        # find common history
-        common_history = self.common_history()
-        assert len(common_history) > 0
+        atk_pref = e.attacker_prefers()
+        def_pref = e.defender_prefers()
+
+        # histories
+        atk_hist = self.history(atk_pref)
+        def_hist = self.history(def_pref)
+        def_hist_old = self.history(defender_preferred_before)
+
+        # measure rewriting (defender old vs new)
+        assert len(def_hist) >= len(def_hist_old)
+        unchanged_history = self.common_history(def_hist_old, def_hist)
+        assert len(unchanged_history) > 0, "genesis cannot be rewritten"
+        rewrite_length = len(def_hist_old) - len(unchanged_history)
+        assert rewrite_length >= 0
+
+        rewrite_prg_beg = self.protocol.progress(e, unchanged_history[-1])
+        rewrite_prg_end = self.protocol.progress(e, defender_preferred_before)
+        rewrite_prg = rewrite_prg_end - rewrite_prg_beg
+        assert rewrite_prg >= 0.0
+        assert rewrite_prg == 0.0 or rewrite_length > 0.0
+
+        def_prg_was = rewrite_prg_end
+        def_prg_now = self.protocol.progress(e, def_pref)
+        def_prg_delta = def_prg_now - def_prg_was
+        assert def_prg_delta >= 0.0
+
+        # find common history (attacker vs defender)
+        common_history = self.common_history(atk_hist, def_hist)
+        assert len(common_history) > 0, "genesis should be agreed upon"
 
         common_ancestor = common_history[-1]
 
         # define which blocks to keep: only reachable blocks
         reachable = set()
-        for entrypoint in [e.attacker_prefers(), e.defender_prefers()]:
+        for entrypoint in [atk_pref, def_pref]:
             reachable.add(entrypoint)
             reachable |= e.descendants(entrypoint)
             for d in reachable.copy():
@@ -667,11 +694,23 @@ class SelfishMining(Model):
         else:
             e.reorder_and_filter(sorted(list(keep)))
 
+        effect = Effect(
+            blocks_mined=1.0 if block_mined else 0.0,
+            common_atk_reward=rew_atk,
+            common_def_reward=rew_def,
+            common_progress=progress,
+            defender_rewrite_length=rewrite_length,
+            defender_rewrite_progress=rewrite_prg,
+            defender_progress=def_prg_delta,
+        )
+
         return Transition(
             state=e.save(),
             probability=probability,
-            progress=progress,
-            reward=rew_atk,
+            effect=effect,
+            # Default to long-term revenue MDP:
+            reward=effect.common_atk_reward,
+            progress=effect.common_progress,
         )
 
     def start(self) -> list[tuple[State, float]]:
@@ -732,17 +771,23 @@ class SelfishMining(Model):
     def apply_release(self, i: int, s: State) -> list[Transition]:
         e = self.editor
         e.load(s)
+        dpb = e.defender_prefers()
         # which block will be released?
         b = e.to_release()[i]
         # mark b as released
         e.set_released(b)
         # this transition is deterministic
-        lst = [self.transition(probability=1)]
+        lst = [
+            self.transition(
+                probability=1, defender_preferred_before=dpb, block_mined=False
+            )
+        ]
         return lst
 
     def apply_consider(self, i: int, s: State) -> list[Transition]:
         e = self.editor
         e.load(s)
+        dpb = e.defender_prefers()
         # which block will be considered?
         b = e.to_consider()[i]
         # mark b as considered
@@ -755,7 +800,11 @@ class SelfishMining(Model):
         )
         e.set_attacker_prefers(pref)
         # this transition is deterministic
-        lst = [self.transition(probability=1)]
+        lst = [
+            self.transition(
+                probability=1, defender_preferred_before=dpb, block_mined=False
+            )
+        ]
         return lst
 
     def apply_continue(self, s: State) -> list[Transition]:
@@ -784,6 +833,7 @@ class SelfishMining(Model):
     ):
         e = self.editor
         e.load(s)
+        dpb = e.defender_prefers()
         prob = 1.0
         # blocks just released by attacker
         from_attacker = e.just_released()
@@ -830,7 +880,11 @@ class SelfishMining(Model):
                     e.defender_prefers(),
                 )
                 e.append(parents, Miner.Defender)
-        return self.transition(probability=prob)
+        return self.transition(
+            probability=prob,
+            defender_preferred_before=dpb,
+            block_mined=not communication_only,
+        )
 
 
 mappable_params = dict(alpha=0.125, gamma=0.25)

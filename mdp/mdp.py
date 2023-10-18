@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
+from model import Effect
 from time import time
+from typing import Optional
 import math
 import numpy
 import scipy
@@ -7,10 +9,11 @@ import scipy
 
 @dataclass(frozen=True, order=True)
 class Transition:
-    destination: int
-    probability: float
-    reward: float
-    progress: float
+    probability: float  # how likely is the transition?
+    destination: int  # where do we transition to?
+    reward: float  # MDP reward
+    progress: float  # PTO progress
+    effect: Optional[Effect] = None  # additional information
 
 
 action = int

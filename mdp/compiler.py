@@ -76,12 +76,9 @@ class Compiler:
             probability=to.probability,
             reward=to.reward,
             progress=to.progress,
+            effect=to.effect,
         )
         self._mdp.add_transition(state_id, action_id, t)
-
-    def record_transition(self, *args, src, act, dst, prb, rew, prg):
-        t = Transition(destination=dst, probability=prb, reward=rew, progress=prg)
-        self._mdp.add_transition(src, act, t)
 
     def mdp(self):
         # exploration might be incomplete

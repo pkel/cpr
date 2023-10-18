@@ -17,6 +17,8 @@ scikit-optimize
 seaborn
 
 networkx
+
+--no-binary=pynauty
 pynauty
 
 -e .
