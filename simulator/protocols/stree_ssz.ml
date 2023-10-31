@@ -13,8 +13,145 @@ module Make (Parameters : Tailstorm_ssz.Parameters) = struct
       (if unit_observation then "unit" else "raw")
   ;;
 
-  module Tailstorm_ssz = Tailstorm_ssz.Make (Parameters)
-  module Observation = Tailstorm_ssz.Observation
+  module Observation = struct
+    type t =
+      { public_blocks : int (** number of public blocks after common ancestor *)
+      ; private_blocks : int (** number of private blocks after common ancestor *)
+      ; diff_blocks : int (** private_blocks - public_blocks *)
+      ; public_votes : int
+            (** number of public votes confirming the public leading block *)
+      ; private_votes_inclusive : int
+            (** number of votes confirming the private leading block *)
+      ; private_votes_exclusive : int
+            (** number of private votes confirming the private leading block *)
+      ; public_depth : int (** public vote tree depth *)
+      ; private_depth_inclusive : int
+            (** private vote tree depth, including public votes *)
+      ; private_depth_exclusive : int
+            (** private vote tree depth, excluding private votes *)
+      ; event : [ `ProofOfWork | `Network ] (* What is currently going on? *)
+      }
+    [@@deriving fields]
+
+    module Normalizers = struct
+      open Parameters
+      open Ssz_tools.NormalizeObs
+
+      let public_blocks = UnboundedInt { non_negative = true; scale = 1 }
+      let private_blocks = UnboundedInt { non_negative = true; scale = 1 }
+      let diff_blocks = UnboundedInt { non_negative = false; scale = 1 }
+      let public_votes = UnboundedInt { non_negative = true; scale = k }
+      let private_votes_inclusive = UnboundedInt { non_negative = true; scale = k - 1 }
+      let private_votes_exclusive = UnboundedInt { non_negative = true; scale = k - 1 }
+      let public_depth = UnboundedInt { non_negative = true; scale = k }
+      let private_depth_inclusive = UnboundedInt { non_negative = true; scale = k - 1 }
+      let private_depth_exclusive = UnboundedInt { non_negative = true; scale = k - 1 }
+      let event = Discrete [ `ProofOfWork; `Network ]
+    end
+
+    let length = List.length Fields.names
+
+    let low, high =
+      let low, high = Float.Array.make length 0., Float.Array.make length 0. in
+      let set spec i _field =
+        let l, h = Ssz_tools.NormalizeObs.range ~unit:unit_observation spec in
+        Float.Array.set low i l;
+        Float.Array.set high i h;
+        i + 1
+      in
+      let _ =
+        let open Normalizers in
+        Fields.fold
+          ~init:0
+          ~public_blocks:(set public_blocks)
+          ~private_blocks:(set private_blocks)
+          ~diff_blocks:(set diff_blocks)
+          ~public_votes:(set public_votes)
+          ~private_votes_inclusive:(set private_votes_inclusive)
+          ~private_votes_exclusive:(set private_votes_exclusive)
+          ~public_depth:(set public_depth)
+          ~private_depth_inclusive:(set private_depth_inclusive)
+          ~private_depth_exclusive:(set private_depth_exclusive)
+          ~event:(set event)
+      in
+      low, high
+    ;;
+
+    let to_floatarray t =
+      let a = Float.Array.make length Float.nan in
+      let set spec i field =
+        Float.Array.set
+          a
+          i
+          (Fieldslib.Field.get field t
+          |> Ssz_tools.NormalizeObs.to_float ~unit:unit_observation spec);
+        i + 1
+      in
+      let _ =
+        let open Normalizers in
+        Fields.fold
+          ~init:0
+          ~public_blocks:(set public_blocks)
+          ~private_blocks:(set private_blocks)
+          ~diff_blocks:(set diff_blocks)
+          ~public_votes:(set public_votes)
+          ~private_votes_inclusive:(set private_votes_inclusive)
+          ~private_votes_exclusive:(set private_votes_exclusive)
+          ~public_depth:(set public_depth)
+          ~private_depth_inclusive:(set private_depth_inclusive)
+          ~private_depth_exclusive:(set private_depth_exclusive)
+          ~event:(set event)
+      in
+      a
+    ;;
+
+    let of_floatarray =
+      let get spec _ i =
+        ( (fun a ->
+            Float.Array.get a i
+            |> Ssz_tools.NormalizeObs.of_float ~unit:unit_observation spec)
+        , i + 1 )
+      in
+      let open Normalizers in
+      fst
+        (Fields.make_creator
+           0
+           ~public_blocks:(get public_blocks)
+           ~private_blocks:(get private_blocks)
+           ~diff_blocks:(get diff_blocks)
+           ~public_votes:(get public_votes)
+           ~private_votes_inclusive:(get private_votes_inclusive)
+           ~private_votes_exclusive:(get private_votes_exclusive)
+           ~public_depth:(get public_depth)
+           ~private_depth_inclusive:(get private_depth_inclusive)
+           ~private_depth_exclusive:(get private_depth_exclusive)
+           ~event:(get event))
+    ;;
+
+    let to_string t =
+      let conv to_s field =
+        Printf.sprintf
+          "%s: %s"
+          (Fieldslib.Field.name field)
+          (to_s (Fieldslib.Field.get field t))
+      in
+      let int = conv string_of_int in
+      let event = conv Ssz_tools.event_to_string in
+      Fields.to_list
+        ~public_blocks:int
+        ~private_blocks:int
+        ~diff_blocks:int
+        ~public_votes:int
+        ~private_votes_inclusive:int
+        ~private_votes_exclusive:int
+        ~public_depth:int
+        ~private_depth_inclusive:int
+        ~private_depth_exclusive:int
+        ~event
+      |> String.concat "\n"
+    ;;
+  end
+
   module Action = Ssz_tools.Action8
 
   module Agent (V : View with type data = data) = struct
@@ -128,7 +265,7 @@ module Make (Parameters : Tailstorm_ssz.Parameters) = struct
       ; public_depth
       ; private_depth_inclusive
       ; private_depth_exclusive
-      ; event = (state.event :> [ `Append | `Network | `ProofOfWork ])
+      ; event = state.event
       }
     ;;
 
