@@ -1,0 +1,41 @@
+commit aee6e3
+teide is a vm on 6/12 core host
+
+Benchmarking the parallel generation of 24 SM models.
+
+This machine has 9 cores.
+
+Compile SelfishMining(bitcoin, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.08 s]
+Compile SelfishMining(bitcoin, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [0.19 s]
+Compile SelfishMining(bitcoin, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [0.42 s]
+Compile SelfishMining(ethereum-bz-2, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.25 s]
+Compile SelfishMining(ethereum-bz-2, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [1.04 s]
+Compile SelfishMining(ethereum-bz-2, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [3.56 s]
+Compile SelfishMining(ethereum-wp-2, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.24 s]
+Compile SelfishMining(ethereum-wp-2, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [1.01 s]
+Compile SelfishMining(ethereum-wp-2, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [3.50 s]
+Compile SelfishMining(ethereum-bz-3, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.26 s]
+Compile SelfishMining(ethereum-bz-3, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [1.21 s]
+Compile SelfishMining(ethereum-bz-3, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [5.26 s]
+Compile SelfishMining(ethereum-wp-3, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.26 s]
+Compile SelfishMining(ethereum-wp-3, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [1.18 s]
+Compile SelfishMining(ethereum-wp-3, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [5.11 s]
+Compile SelfishMining(parallel-2, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.15 s]
+Compile SelfishMining(parallel-2, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [0.53 s]
+Compile SelfishMining(parallel-2, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [1.68 s]
+Compile SelfishMining(parallel-3, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.14 s]
+Compile SelfishMining(parallel-3, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [0.44 s]
+Compile SelfishMining(parallel-3, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [1.38 s]
+Compile SelfishMining(parallel-4, alpha=0.125, gamma=0.25, maximum_size=5, force_consider_own=True) [0.14 s]
+Compile SelfishMining(parallel-4, alpha=0.125, gamma=0.25, maximum_size=6, force_consider_own=True) [0.41 s]
+Compile SelfishMining(parallel-4, alpha=0.125, gamma=0.25, maximum_size=7, force_consider_own=True) [1.09 s]
+
+1 core:  29.53 seconds (one unit of work)
+2 cores: 28.81 seconds (per unit of work)
+3 cores: 19.46 seconds (per unit of work)
+4 cores: 14.65 seconds (per unit of work)
+5 cores: 11.92 seconds (per unit of work)
+6 cores: 10.00 seconds (per unit of work)
+7 cores: 12.24 seconds (per unit of work)
+8 cores: 10.86 seconds (per unit of work)
+9 cores: 9.98 seconds (per unit of work)
