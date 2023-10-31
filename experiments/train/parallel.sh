@@ -23,7 +23,7 @@ learning_rates=(1e-3 3e-4 1e-4)
 iteris=(1) # how often should each config be repeated?
 
 hosts=(
-  9/localhost # on teide, faster than 6? check 2023-03-10_full (6) vs 2023-03-21_learning-rate (9)
+  6/localhost # on teide
   # 16/localhost # on lennie, faster than 12
   # 4/athene
   # 4/iris
