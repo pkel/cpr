@@ -6,14 +6,13 @@ branch=origin/training
 
 protos=(
   nakamoto
-  bk-8
-  tailstorm-8-constant
-  tailstorm-8-discount
+  spar-8
+  stree-8-constant
+  stree-8-discount
 )
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
-alphas=(45 40 35)
-alphas=(30 25 20)
+alphas=(40 45 30 25)
 gammas=(05 50 95)
 shapes=(raw exp cut)
 shapes=(raw)
