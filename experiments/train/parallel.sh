@@ -7,7 +7,7 @@ branch=origin/training
 protos=(
   nakamoto
   spar-8
-  stree-8-constant
+  # stree-8-constant
   stree-8-discount
 )
 # protos=(dummy)
@@ -18,6 +18,7 @@ shapes=(raw exp cut)
 shapes=(raw)
 ent_coefs=(0.01 0.001 0.0001)
 ent_coefs=(0.005 0.01 0.05)
+ent_coefs=(0.01)
 learning_rates=(1e-3 3e-4 1e-4)
 iteris=(1) # how often should each config be repeated?
 
