@@ -59,9 +59,9 @@ module Protocols = struct
   let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
   let ethereum_ssz = ethereum_ssz ~unit_observation:true
   let bk_ssz = bk_ssz ~unit_observation:true
-  let bkll_ssz = bkll_ssz ~unit_observation:true
+  let spar_ssz = spar_ssz ~unit_observation:true
+  let stree_ssz = stree_ssz ~unit_observation:true
   let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
-  let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
 end
 
 (* Run all combinations of protocol, attack, network and block_interval. *)
@@ -78,13 +78,13 @@ let tasks ~n_activations =
         List.concat_map
           (fun incentive_scheme ->
             two_agents (bk_ssz ~k ~incentive_scheme)
-            @ two_agents (bkll_ssz ~k ~incentive_scheme))
+            @ two_agents (spar_ssz ~k ~incentive_scheme))
           [ `Block; `Constant ]
         @ List.concat_map
             (fun incentive_scheme ->
               let subblock_selection = if k > 8 then `Heuristic else `Optimal in
-              two_agents (tailstorm_ssz ~subblock_selection ~incentive_scheme ~k)
-              @ two_agents (tailstormll_ssz ~subblock_selection ~incentive_scheme ~k))
+              two_agents (stree_ssz ~subblock_selection ~incentive_scheme ~k)
+              @ two_agents (tailstorm_ssz ~subblock_selection ~incentive_scheme ~k))
             [ `Constant; `Discount ])
       [ 1; 2; 4; 8; 16; 32 ]
 ;;

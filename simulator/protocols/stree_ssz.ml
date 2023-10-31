@@ -2,7 +2,7 @@ open Cpr_lib
 
 module Make (Parameters : Tailstorm_ssz.Parameters) = struct
   open Parameters
-  module Protocol = Tailstormll.Make (Parameters)
+  module Protocol = Stree.Make (Parameters)
   open Protocol
 
   let key = Format.asprintf "ssz-%s" (if unit_observation then "unitobs" else "rawobs")

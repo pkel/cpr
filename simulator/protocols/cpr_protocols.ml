@@ -1,9 +1,9 @@
 module Nakamoto = Nakamoto
 module Ethereum = Ethereum
 module Bk = Bk
-module Bkll = Bkll
+module Spar = Spar
+module Stree = Stree
 module Tailstorm = Tailstorm
-module Tailstormll = Tailstormll
 open Cpr_lib
 
 (** Original proof-of-work consensus as described by Nakamoto. 2008. *)
@@ -71,11 +71,11 @@ let bk_ssz ~unit_observation:uo ~k ~incentive_scheme =
   AttackSpace (module M)
 ;;
 
-(** {!bk} with alternative leader selection mechanism: k - 1 votes, the k-th proof-of-work
-    authorizes the next block. *)
-let bkll ~k ~incentive_scheme =
+(** {!bk} with pow-based leader selection mechanism. Still k PoW per block;
+    makes k - 1 votes per block. *)
+let spar ~k ~incentive_scheme =
   let module M =
-    Bkll.Make (struct
+    Spar.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
     end)
@@ -83,12 +83,39 @@ let bkll ~k ~incentive_scheme =
   Protocol (module M)
 ;;
 
-(** {!nakamoto_ssz} adapted for {!bkll}. *)
-let bkll_ssz ~unit_observation:uo ~k ~incentive_scheme =
+(** {!nakamoto_ssz} adapted for {!spar}. *)
+let spar_ssz ~unit_observation:uo ~k ~incentive_scheme =
   let module M =
-    Bkll_ssz.Make (struct
+    Spar_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
+      let unit_observation = uo
+    end)
+  in
+  AttackSpace (module M)
+;;
+
+(** {!spar} with tree-structured voting. Similar to {!tailstorm} but with
+    simple pow-based leader election. There are k PoW per block which makes
+    k - 1 votes per block *)
+let stree ~k ~incentive_scheme ~subblock_selection =
+  let module M =
+    Stree.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+      let subblock_selection = subblock_selection
+    end)
+  in
+  Protocol (module M)
+;;
+
+(** {!nakamoto_ssz} adapted for {!stree}. *)
+let stree_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
+  let module M =
+    Stree_ssz.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+      let subblock_selection = subblock_selection
       let unit_observation = uo
     end)
   in
@@ -111,33 +138,6 @@ let tailstorm ~k ~incentive_scheme ~subblock_selection =
 let tailstorm_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Tailstorm_ssz.Make (struct
-      let k = k
-      let incentive_scheme = incentive_scheme
-      let subblock_selection = subblock_selection
-      let unit_observation = uo
-    end)
-  in
-  AttackSpace (module M)
-;;
-
-(** Modified Tailstorm protocol with k - 1 subblocks per (strong) block, all
- * blocks (including strong ones) require a proof-of-work. I append ll because
- * this protocol is to {!tailstorm}, what {!bkll} is to {!bk}. *)
-let tailstormll ~k ~incentive_scheme ~subblock_selection =
-  let module M =
-    Tailstormll.Make (struct
-      let k = k
-      let incentive_scheme = incentive_scheme
-      let subblock_selection = subblock_selection
-    end)
-  in
-  Protocol (module M)
-;;
-
-(** {!nakamoto_ssz} adapted for {!tailstormll}. *)
-let tailstormll_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
-  let module M =
-    Tailstormll_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
@@ -296,34 +296,64 @@ let%test_module "protocol" =
         (bk ~k:32 ~incentive_scheme:`Constant)
     ;;
 
-    let n = "bkll8/easy"
+    let n = "spar8/easy"
 
     let%test_unit [%name n] =
       test
         n
         ~activation_delay:10.
         ~orphan_rate_limit:0.1
-        (bkll ~k:8 ~incentive_scheme:`Constant)
+        (spar ~k:8 ~incentive_scheme:`Constant)
     ;;
 
-    let n = "bkll8/hard"
+    let n = "spar8/hard"
 
     let%test_unit [%name n] =
       test
         n
         ~activation_delay:1.
         ~orphan_rate_limit:0.3
-        (bkll ~k:8 ~incentive_scheme:`Constant)
+        (spar ~k:8 ~incentive_scheme:`Constant)
     ;;
 
-    let n = "bkll32/hard"
+    let n = "spar32/hard"
 
     let%test_unit [%name n] =
       test
         n
         ~activation_delay:1.
         ~orphan_rate_limit:0.1
-        (bkll ~k:32 ~incentive_scheme:`Constant)
+        (spar ~k:32 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "stree8constant/easy"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (stree ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "stree8discount/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (stree ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Discount)
+    ;;
+
+    let n = "stree32hybrid/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (stree ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Hybrid)
     ;;
 
     let n = "tailstorm8constant/easy"
@@ -354,36 +384,6 @@ let%test_module "protocol" =
         ~activation_delay:1.
         ~orphan_rate_limit:0.1
         (tailstorm ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Punish)
-    ;;
-
-    let n = "tailstormll8constant/easy"
-
-    let%test_unit [%name n] =
-      test
-        n
-        ~activation_delay:10.
-        ~orphan_rate_limit:0.1
-        (tailstormll ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
-    ;;
-
-    let n = "tailstormll8discount/hard"
-
-    let%test_unit [%name n] =
-      test
-        n
-        ~activation_delay:1.
-        ~orphan_rate_limit:0.3
-        (tailstormll ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Discount)
-    ;;
-
-    let n = "tailstormll32hybrid/hard"
-
-    let%test_unit [%name n] =
-      test
-        n
-        ~activation_delay:1.
-        ~orphan_rate_limit:0.1
-        (tailstormll ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Hybrid)
     ;;
 
     let n = "tailstormjune8constant/easy"
@@ -477,9 +477,9 @@ let%test_module "policy" =
     let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
     let ethereum_ssz = ethereum_ssz ~unit_observation:true
     let bk_ssz = bk_ssz ~unit_observation:true
-    let bkll_ssz = bkll_ssz ~unit_observation:true
+    let spar_ssz = spar_ssz ~unit_observation:true
+    let stree_ssz = stree_ssz ~unit_observation:true
     let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
-    let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
     let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/ssz/honest"
 
@@ -505,14 +505,34 @@ let%test_module "policy" =
         (bk_ssz ~k:8 ~incentive_scheme:`Block)
     ;;
 
-    let n = "bkll8/ssz/honest"
+    let n = "spar8/ssz/honest"
 
     let%test_unit [%name n] =
       test
         n
         ~policy:"honest"
         ~orphan_rate_limit:0.01
-        (bkll_ssz ~k:8 ~incentive_scheme:`Constant)
+        (spar_ssz ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "stree8constant/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (stree_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "stree8discount/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (stree_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstorm8constant/ssz/honest"
@@ -533,26 +553,6 @@ let%test_module "policy" =
         ~policy:"honest"
         ~orphan_rate_limit:0.01
         (tailstorm_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
-    ;;
-
-    let n = "tailstormll8constant/ssz/honest"
-
-    let%test_unit [%name n] =
-      test
-        n
-        ~policy:"honest"
-        ~orphan_rate_limit:0.01
-        (tailstormll_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
-    ;;
-
-    let n = "tailstormll8discount/ssz/honest"
-
-    let%test_unit [%name n] =
-      test
-        n
-        ~policy:"honest"
-        ~orphan_rate_limit:0.01
-        (tailstormll_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstormjune8constant/ssz/honest"
@@ -634,9 +634,9 @@ let%test_module "random" =
     let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
     let ethereum_ssz = ethereum_ssz ~unit_observation:true
     let bk_ssz = bk_ssz ~unit_observation:true
-    let bkll_ssz = bkll_ssz ~unit_observation:true
+    let spar_ssz = spar_ssz ~unit_observation:true
+    let stree_ssz = stree_ssz ~unit_observation:true
     let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
-    let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
     let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/random"
 
@@ -650,9 +650,21 @@ let%test_module "random" =
 
     let%test_unit [%name n] = test n (bk_ssz ~k:8 ~incentive_scheme:`Block)
 
-    let n = "bkll8/ssz/random"
+    let n = "spar8/ssz/random"
 
-    let%test_unit [%name n] = test n (bkll_ssz ~k:8 ~incentive_scheme:`Constant)
+    let%test_unit [%name n] = test n (spar_ssz ~k:8 ~incentive_scheme:`Constant)
+
+    let n = "stree8constant/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (stree_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "stree8discount/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (stree_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
+    ;;
 
     let n = "tailstorm8constant/ssz/random"
 
@@ -666,22 +678,6 @@ let%test_module "random" =
       test
         n
         (tailstorm_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
-    ;;
-
-    let n = "tailstormll8constant/ssz/random"
-
-    let%test_unit [%name n] =
-      test
-        n
-        (tailstormll_ssz ~subblock_selection:`Optimal ~k:8 ~incentive_scheme:`Constant)
-    ;;
-
-    let n = "tailstormll8discount/ssz/random"
-
-    let%test_unit [%name n] =
-      test
-        n
-        (tailstormll_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstormjune8constant/ssz/random"
@@ -734,9 +730,17 @@ include struct
       lift2 f int (option Bk.incentive_schemes)
     ;;
 
-    let bkll =
-      let f k incentive_scheme = bkll ~k ~incentive_scheme in
-      lift2 f int (option Bkll.incentive_schemes)
+    let spar =
+      let f k incentive_scheme = spar ~k ~incentive_scheme in
+      lift2 f int (option Spar.incentive_schemes)
+    ;;
+
+    let stree =
+      let f k incentive_scheme subblock_selection =
+        stree ~k ~incentive_scheme ~subblock_selection
+      in
+      let open Stree in
+      lift3 f int (option incentive_schemes) (option subblock_selections)
     ;;
 
     let tailstorm =
@@ -744,14 +748,6 @@ include struct
         tailstorm ~k ~incentive_scheme ~subblock_selection
       in
       let open Tailstorm in
-      lift3 f int (option incentive_schemes) (option subblock_selections)
-    ;;
-
-    let tailstormll =
-      let f k incentive_scheme subblock_selection =
-        tailstormll ~k ~incentive_scheme ~subblock_selection
-      in
-      let open Tailstormll in
       lift3 f int (option incentive_schemes) (option subblock_selections)
     ;;
 
@@ -767,9 +763,9 @@ include struct
       | "nakamoto" -> nakamoto
       | "ethereum" -> ethereum
       | "bk" -> bk
-      | "bkll" -> bkll
+      | "spar" -> spar
+      | "stree" -> stree
       | "tailstorm" -> tailstorm
-      | "tailstormll" -> tailstormll
       | "tailstormjune" -> tailstormjune
       | _ -> fail "unknown protocol"
     ;;
@@ -795,7 +791,7 @@ include struct
         [ "nakamoto"
         ; "ethereum-discount"
         ; "bk-2-constant"
-        ; "bkll-5-block"
+        ; "spar-5-block"
         ; "  tailstorm-42-discount-heuristic  "
         ; " X"
         ; "bk"
@@ -806,7 +802,7 @@ include struct
       nakamoto
       eth-heaviest_chain-work-2-discount
       bk-2-constant
-      bkll-5-block
+      spar-5-block
       tailstorm-42-discount-heuristic
       Error: invalid protocol key ' X': unknown protocol
       Error: invalid protocol key 'bk': missing integer option

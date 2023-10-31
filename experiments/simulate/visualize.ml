@@ -119,17 +119,17 @@ module Protocols = struct
   let nakamoto_ssz = nakamoto_ssz ~unit_observation:true
   let ethereum_ssz = ethereum_ssz ~unit_observation:true
   let bk_ssz = bk_ssz ~unit_observation:true
-  let bkll_ssz = bkll_ssz ~unit_observation:true
+  let spar_ssz = spar_ssz ~unit_observation:true
+  let stree_ssz = stree_ssz ~unit_observation:true
   let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
-  let tailstormll_ssz = tailstormll_ssz ~unit_observation:true
 end
 
 let tasks =
   let open Protocols in
   let tailstorm = tailstorm ~subblock_selection:`Optimal
   and tailstorm_ssz = tailstorm_ssz ~subblock_selection:`Optimal
-  and tailstormll = tailstormll ~subblock_selection:`Optimal
-  and tailstormll_ssz = tailstormll_ssz ~subblock_selection:`Optimal
+  and stree = stree ~subblock_selection:`Optimal
+  and stree_ssz = stree_ssz ~subblock_selection:`Optimal
   and nakamoto_ssz ~incentive_scheme:_ = nakamoto_ssz in
   List.concat
     [ tasks_per_attack_space nakamoto_ssz 30 [ `Dummy ]
@@ -137,21 +137,21 @@ let tasks =
     ; tasks_per_attack_space (bk_ssz ~k:8) 100 [ `Constant ]
     ; tasks_per_attack_space (bk_ssz ~k:4) 50 [ `Constant ]
     ; tasks_per_attack_space (bk_ssz ~k:1) 20 [ `Constant ]
-    ; tasks_per_attack_space (bkll_ssz ~k:8) 100 [ `Constant ]
-    ; tasks_per_attack_space (bkll_ssz ~k:4) 50 [ `Constant ]
-    ; tasks_per_attack_space (bkll_ssz ~k:1) 20 [ `Constant ]
+    ; tasks_per_attack_space (spar_ssz ~k:8) 100 [ `Constant ]
+    ; tasks_per_attack_space (spar_ssz ~k:4) 50 [ `Constant ]
+    ; tasks_per_attack_space (spar_ssz ~k:1) 20 [ `Constant ]
+    ; tasks_per_attack_space (stree_ssz ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (stree_ssz ~k:4) 25 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (stree_ssz ~k:1) 20 [ `Constant; `Discount ]
     ; tasks_per_attack_space (tailstorm_ssz ~k:8) 50 [ `Constant; `Discount ]
     ; tasks_per_attack_space (tailstorm_ssz ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_attack_space (tailstorm_ssz ~k:1) 20 [ `Constant; `Discount ]
-    ; tasks_per_attack_space (tailstormll_ssz ~k:8) 50 [ `Constant; `Discount ]
-    ; tasks_per_attack_space (tailstormll_ssz ~k:4) 25 [ `Constant; `Discount ]
-    ; tasks_per_attack_space (tailstormll_ssz ~k:1) 20 [ `Constant; `Discount ]
+    ; tasks_per_protocol (stree ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_protocol (stree ~k:4) 25 [ `Constant; `Discount ]
+    ; tasks_per_protocol (stree ~k:1) 20 [ `Constant; `Discount ]
     ; tasks_per_protocol (tailstorm ~k:8) 50 [ `Constant; `Discount ]
     ; tasks_per_protocol (tailstorm ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_protocol (tailstorm ~k:1) 20 [ `Constant; `Discount ]
-    ; tasks_per_protocol (tailstormll ~k:8) 50 [ `Constant; `Discount ]
-    ; tasks_per_protocol (tailstormll ~k:4) 25 [ `Constant; `Discount ]
-    ; tasks_per_protocol (tailstormll ~k:1) 20 [ `Constant; `Discount ]
     ]
 ;;
 

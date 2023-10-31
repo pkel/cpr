@@ -7,7 +7,7 @@ end
 
 module Make (Parameters : Parameters) = struct
   open Parameters
-  module Protocol = Bkll.Make (Parameters)
+  module Protocol = Spar.Make (Parameters)
   open Protocol
 
   let key = Format.asprintf "ssz-%s" (if unit_observation then "unitobs" else "rawobs")
