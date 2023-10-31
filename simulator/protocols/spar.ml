@@ -7,15 +7,19 @@ module type Parameters = Bk.Parameters
 module Make (Parameters : Parameters) = struct
   open Parameters
 
-  let key = Format.asprintf "bkll-%i-%a" k Options.pp incentive_scheme
+  let key = Format.asprintf "spar-%i-%a" k Options.pp incentive_scheme
 
   let description =
-    Format.asprintf "Bₖ/ll with k=%i and %a rewards" k Options.pp incentive_scheme
+    Format.asprintf
+      "Simple Parallel PoW with k=%i and %a rewards"
+      k
+      Options.pp
+      incentive_scheme
   ;;
 
   let info =
     let open Info in
-    [ string "family" "bkll"
+    [ string "family" "spar"
     ; int "k" k
     ; Options.to_string incentive_scheme |> string "incentive_scheme"
     ]

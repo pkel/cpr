@@ -10,12 +10,13 @@ module Make (Parameters : Parameters) = struct
 
   let key =
     let open Options in
-    Format.asprintf "tailstormll-%i-%a-%a" k pp incentive_scheme pp subblock_selection
+    Format.asprintf "stree-%i-%a-%a" k pp incentive_scheme pp subblock_selection
   ;;
 
   let description =
     Format.asprintf
-      "Tailstorm/ll with k=%i, %a rewards, and %a sub-block selection"
+      "Simple Parallel PoW with tree-style voting, k=%i, %a rewards, and %a sub-block \
+       selection"
       Parameters.k
       Options.pp
       incentive_scheme
@@ -25,7 +26,7 @@ module Make (Parameters : Parameters) = struct
 
   let info =
     let open Info in
-    [ string "family" "tailstormll"
+    [ string "family" "stree"
     ; int "k" k
     ; Options.info "incentive_scheme" incentive_scheme
     ; Options.info "subblock_selection" subblock_selection
