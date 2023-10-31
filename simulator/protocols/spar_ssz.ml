@@ -39,10 +39,9 @@ module Make (Parameters : Parameters) = struct
       let public_blocks = UnboundedInt { non_negative = true; scale = 1 }
       let private_blocks = UnboundedInt { non_negative = true; scale = 1 }
       let diff_blocks = UnboundedInt { non_negative = false; scale = 1 }
-      let public_votes = UnboundedInt { non_negative = true; scale = k }
-      let private_votes_inclusive = UnboundedInt { non_negative = true; scale = k }
-      let private_votes_exclusive = UnboundedInt { non_negative = true; scale = k }
-      let lead = Bool
+      let public_votes = UnboundedInt { non_negative = true; scale = k - 1 }
+      let private_votes_inclusive = UnboundedInt { non_negative = true; scale = k - 1 }
+      let private_votes_exclusive = UnboundedInt { non_negative = true; scale = k - 1 }
       let event = Discrete [ `ProofOfWork; `Network ]
     end
 
