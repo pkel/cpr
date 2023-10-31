@@ -216,6 +216,7 @@ let blockdag (type a) (view : a data Dag.view) : (a block, a) Intf.blockdag =
 
     let compare_pow = compare
     let pow n = (Dag.data n).pow
+    let has_pow n = Option.is_some (Dag.data n).pow
     let max_pow = max_int, max_int
     let min_pow = min_int, 0
 
