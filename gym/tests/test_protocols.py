@@ -192,6 +192,41 @@ def test_stree(capsys):
     check_env(env)
 
 
+def test_sdag(capsys):
+    env = gym.make(
+        "cpr_gym:core-v0",
+        proto=protocols.sdag(
+            k=13,
+            reward="discount",
+            subblock_selection="heuristic",
+            unit_observation=True,
+        ),
+        alpha=0.33,
+        gamma=0.8,
+        defenders=5,
+        max_steps=10000,
+    )
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == (
+        "Simple Parallel PoW with DAG-style voting, k=13, discount rewards, "
+        "and heuristic sub-block selection; "
+        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
+    )
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
+
+    assert info["protocol_k"] == 13
+
+    check_env(env)
+
+
 def test_tailstorm(capsys):
     env = gym.make(
         "cpr_gym:core-v0",

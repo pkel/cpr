@@ -3,6 +3,7 @@ module Ethereum = Ethereum
 module Bk = Bk
 module Spar = Spar
 module Stree = Stree
+module Sdag = Sdag
 module Tailstorm = Tailstorm
 open Cpr_lib
 
@@ -113,6 +114,32 @@ let stree ~k ~incentive_scheme ~subblock_selection =
 let stree_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
   let module M =
     Stree_ssz.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+      let subblock_selection = subblock_selection
+      let unit_observation = uo
+    end)
+  in
+  AttackSpace (module M)
+;;
+
+(** {!spar} with DAG-structured voting. There are k PoW per block which makes
+    k - 1 votes per block *)
+let sdag ~k ~incentive_scheme ~subblock_selection =
+  let module M =
+    Sdag.Make (struct
+      let k = k
+      let incentive_scheme = incentive_scheme
+      let subblock_selection = subblock_selection
+    end)
+  in
+  Protocol (module M)
+;;
+
+(** {!nakamoto_ssz} adapted for {!sdag}. *)
+let sdag_ssz ~unit_observation:uo ~k ~incentive_scheme ~subblock_selection =
+  let module M =
+    Sdag_ssz.Make (struct
       let k = k
       let incentive_scheme = incentive_scheme
       let subblock_selection = subblock_selection
@@ -356,6 +383,36 @@ let%test_module "protocol" =
         (stree ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Hybrid)
     ;;
 
+    let n = "sdag8constant/easy"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:10.
+        ~orphan_rate_limit:0.1
+        (sdag ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "sdag8discount/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.3
+        (sdag ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
+    ;;
+
+    let n = "sdag32constant/hard"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~activation_delay:1.
+        ~orphan_rate_limit:0.1
+        (sdag ~subblock_selection:`Altruistic ~k:32 ~incentive_scheme:`Constant)
+    ;;
+
     let n = "tailstorm8constant/easy"
 
     let%test_unit [%name n] =
@@ -479,6 +536,7 @@ let%test_module "policy" =
     let bk_ssz = bk_ssz ~unit_observation:true
     let spar_ssz = spar_ssz ~unit_observation:true
     let stree_ssz = stree_ssz ~unit_observation:true
+    let sdag_ssz = sdag_ssz ~unit_observation:true
     let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
     let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/ssz/honest"
@@ -533,6 +591,26 @@ let%test_module "policy" =
         ~policy:"honest"
         ~orphan_rate_limit:0.01
         (stree_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
+    ;;
+
+    let n = "sdag8constant/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (sdag_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "sdag8discount/ssz/honest"
+
+    let%test_unit [%name n] =
+      test
+        n
+        ~policy:"honest"
+        ~orphan_rate_limit:0.01
+        (sdag_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstorm8constant/ssz/honest"
@@ -636,6 +714,7 @@ let%test_module "random" =
     let bk_ssz = bk_ssz ~unit_observation:true
     let spar_ssz = spar_ssz ~unit_observation:true
     let stree_ssz = stree_ssz ~unit_observation:true
+    let sdag_ssz = sdag_ssz ~unit_observation:true
     let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
     let tailstormjune_ssz = tailstormjune_ssz ~unit_observation:false
     let n = "nakamoto/random"
@@ -664,6 +743,18 @@ let%test_module "random" =
 
     let%test_unit [%name n] =
       test n (stree_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
+    ;;
+
+    let n = "sdag8constant/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (sdag_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Constant)
+    ;;
+
+    let n = "sdag8discount/ssz/random"
+
+    let%test_unit [%name n] =
+      test n (sdag_ssz ~subblock_selection:`Heuristic ~k:8 ~incentive_scheme:`Discount)
     ;;
 
     let n = "tailstorm8constant/ssz/random"
@@ -743,6 +834,14 @@ include struct
       lift3 f int (option incentive_schemes) (option subblock_selections)
     ;;
 
+    let sdag =
+      let f k incentive_scheme subblock_selection =
+        sdag ~k ~incentive_scheme ~subblock_selection
+      in
+      let open Sdag in
+      lift3 f int (option incentive_schemes) (option subblock_selections)
+    ;;
+
     let tailstorm =
       let f k incentive_scheme subblock_selection =
         tailstorm ~k ~incentive_scheme ~subblock_selection
@@ -765,6 +864,7 @@ include struct
       | "bk" -> bk
       | "spar" -> spar
       | "stree" -> stree
+      | "sdag" -> sdag
       | "tailstorm" -> tailstorm
       | "tailstormjune" -> tailstormjune
       | _ -> fail "unknown protocol"
