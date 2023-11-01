@@ -121,6 +121,7 @@ module Protocols = struct
   let bk_ssz = bk_ssz ~unit_observation:true
   let spar_ssz = spar_ssz ~unit_observation:true
   let stree_ssz = stree_ssz ~unit_observation:true
+  let sdag_ssz = sdag_ssz ~unit_observation:true
   let tailstorm_ssz = tailstorm_ssz ~unit_observation:true
 end
 
@@ -130,6 +131,8 @@ let tasks =
   and tailstorm_ssz = tailstorm_ssz ~subblock_selection:`Optimal
   and stree = stree ~subblock_selection:`Optimal
   and stree_ssz = stree_ssz ~subblock_selection:`Optimal
+  and sdag = sdag ~subblock_selection:`Heuristic
+  and sdag_ssz = sdag_ssz ~subblock_selection:`Heuristic
   and nakamoto_ssz ~incentive_scheme:_ = nakamoto_ssz in
   List.concat
     [ tasks_per_attack_space nakamoto_ssz 30 [ `Dummy ]
@@ -143,12 +146,16 @@ let tasks =
     ; tasks_per_attack_space (stree_ssz ~k:8) 50 [ `Constant; `Discount ]
     ; tasks_per_attack_space (stree_ssz ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_attack_space (stree_ssz ~k:1) 20 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (sdag_ssz ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_attack_space (sdag_ssz ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_attack_space (tailstorm_ssz ~k:8) 50 [ `Constant; `Discount ]
     ; tasks_per_attack_space (tailstorm_ssz ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_attack_space (tailstorm_ssz ~k:1) 20 [ `Constant; `Discount ]
     ; tasks_per_protocol (stree ~k:8) 50 [ `Constant; `Discount ]
     ; tasks_per_protocol (stree ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_protocol (stree ~k:1) 20 [ `Constant; `Discount ]
+    ; tasks_per_protocol (sdag ~k:8) 50 [ `Constant; `Discount ]
+    ; tasks_per_protocol (sdag ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_protocol (tailstorm ~k:8) 50 [ `Constant; `Discount ]
     ; tasks_per_protocol (tailstorm ~k:4) 25 [ `Constant; `Discount ]
     ; tasks_per_protocol (tailstorm ~k:1) 20 [ `Constant; `Discount ]
@@ -161,7 +168,7 @@ let print_dag (type a) oc (sim, confirmed, rewards, legend, vtx_info) =
   let node_attr n =
     let open Simulator in
     [ ( "label"
-      , debug_info ~info:vtx_info n @ [ "reward", Printf.sprintf "%.2f" (reward n) ]
+      , debug_info ~info:vtx_info n @ [ "coinbase", Printf.sprintf "%.2f" (reward n) ]
         |> List.map (function
                | "", s | s, "" -> s
                | k, v -> k ^ ": " ^ v)

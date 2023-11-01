@@ -244,6 +244,28 @@ let () =
        |> python_of_protocol);
   Py_module.set
     m
+    "sdag"
+    (let%map reward = keyword "reward" string ~docstring:"reward function"
+     and k = keyword "k" int ~docstring:"puzzles per block"
+     and subblock_selection =
+       keyword "subblock_selection" string ~docstring:"sub-block selection mechanism"
+     and unit_observation =
+       keyword
+         "unit_observation"
+         bool
+         ~docstring:"Whether to map the observation space to [0,1]^n or not"
+     in
+     let incentive_scheme = Options.of_string_exn Sdag.incentive_schemes reward
+     and subblock_selection =
+       Options.of_string_exn Sdag.subblock_selections subblock_selection
+     in
+     fun () ->
+       Proto
+         (Engine.of_module
+            (sdag_ssz ~unit_observation ~subblock_selection ~incentive_scheme ~k))
+       |> python_of_protocol);
+  Py_module.set
+    m
     "tailstorm"
     (let%map reward = keyword "reward" string ~docstring:"reward function"
      and k = keyword "k" int ~docstring:"puzzles per block"
