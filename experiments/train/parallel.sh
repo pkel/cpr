@@ -2,10 +2,10 @@
 
 set -Eeuo pipefail
 
-branch=origin/training
+branch=origin/dag-voting
 
 protos=(
-  nakamoto
+  # nakamoto
   spar-8
   # stree-8-constant
   stree-8-discount
