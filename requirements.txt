@@ -8,7 +8,7 @@ pytest-forked
 pandas
 pandarallel
 pydantic
-pydantic_yaml
+pydantic_yaml < 1
 numpy
 jupyter
 matplotlib
