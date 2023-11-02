@@ -6,9 +6,11 @@ branch=origin/dag-voting
 
 protos=(
   # nakamoto
-  spar-8
+  # spar-8
   # stree-8-constant
-  stree-8-discount
+  # stree-8-discount
+  sdag-8-constant
+  sdag-8-discount
 )
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
