@@ -11,7 +11,7 @@ protos=(
   # stree-8-discount
   # sdag-8-constant
   # sdag-8-discount
-  spar-4
+  # spar-4
   stree-4-constant
   stree-4-discount
   sdag-4-constant
@@ -21,7 +21,7 @@ protos=(
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
 alphas=(40 35 30 25)
-alphas=(45 40)
+alphas=(40)
 gammas=(05 50 95)
 gammas=(50)
 shapes=(raw exp cut)
