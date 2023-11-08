@@ -2,7 +2,7 @@ main:
   n_envs: 1
   torch_threads: 1
   alpha: .45 # set from command line argument
-  total_timesteps: 20_000_000
+  total_timesteps: 30_000_000
 env:
   gamma: 0.5 # set from command line argument
   defenders: 20
