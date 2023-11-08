@@ -6,27 +6,26 @@ branch=origin/dag-voting
 
 protos=(
   # nakamoto
-  # spar-8
+  spar-8
   # stree-8-constant
-  # stree-8-discount
+  stree-8-discount
   # sdag-8-constant
-  # sdag-8-discount
+  sdag-8-discount
   # spar-4
-  stree-4-constant
-  stree-4-discount
-  sdag-4-constant
-  sdag-4-discount
-  tailstorm-4-discount
+  # stree-4-constant
+  # stree-4-discount
+  # sdag-4-constant
+  # sdag-4-discount
+  # tailstorm-4-discount
 )
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
 alphas=(40 35 30 25)
 alphas=(40)
 gammas=(05 50 95)
-gammas=(50)
+gammas=(95)
 shapes=(raw exp cut)
 shapes=(raw)
-ent_coefs=(0.01 0.001 0.0001)
 ent_coefs=(0.001 0.005 0.01)
 learning_rates=(1e-3 3e-4)
 iteris=(1) # how often should each config be repeated?
