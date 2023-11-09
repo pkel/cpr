@@ -20,15 +20,22 @@ protos=(
 )
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
-alphas=(40 35 30 25)
-alphas=(40)
-gammas=(05 50 95)
+alphas=(45 40 35 30 25) # target for dag-voting
+alphas=(45 35 30 25) # note missing 40
+gammas=(05 50 95) # target for dag-voting
 gammas=(95)
-shapes=(raw exp cut)
 shapes=(raw)
-ent_coefs=(0.001 0.005 0.01)
-learning_rates=(1e-3 3e-4)
-iteris=(1) # how often should each config be repeated?
+ent_coefs=(0.001 0.005 0.01) # target for dag-voting
+ent_coefs=(0.005)
+learning_rates=(1e-3 3e-4) # target for dag-voting
+iteris=(1) # how often should each config be repeated? once for dag-voting
+
+# dag-voting: this makes 18 runs per combination of gamma and alpha or about
+# one day of training. (Without Nakamoto, which I can reuse from Tailstorm.)
+# I started with the point alpha=40 and gamma=95.
+# I'll now do the other alphas for gamma=95, but restricted to ent_coef 0.005.
+# Then gamma=05, all alphas, restricted ent_coef.
+# Then continue with the other ent_coef and gamma=50 if there is time.
 
 hosts=(
   6/localhost # on teide
