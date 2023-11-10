@@ -21,21 +21,22 @@ protos=(
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
 alphas=(45 40 35 30 25) # target for dag-voting
-alphas=(45 35 30 25) # note missing 40
 gammas=(05 50 95) # target for dag-voting
-gammas=(95)
+gammas=(05)
 shapes=(raw)
 ent_coefs=(0.001 0.005 0.01) # target for dag-voting
 ent_coefs=(0.005)
 learning_rates=(1e-3 3e-4) # target for dag-voting
-iteris=(1) # how often should each config be repeated? once for dag-voting
+iteris=(1) # how often should each config be repeated? Once for dag-voting
 
 # dag-voting: this makes 18 runs per combination of gamma and alpha or about
-# one day of training. (Without Nakamoto, which I can reuse from Tailstorm.)
-# I started with the point alpha=40 and gamma=95.
-# I'll now do the other alphas for gamma=95, but restricted to ent_coef 0.005.
-# Then gamma=05, all alphas, restricted ent_coef.
-# Then continue with the other ent_coef and gamma=50 if there is time.
+# 28.5h of training on teide.
+# (Without Nakamoto, which I can reuse from Tailstorm.)
+# Complete: point alpha=40 and gamma=95.
+# Running: other alphas, gamma=95, ent_coef 0.005. ETA: Sat Nov 11, 05:00 (rest till 09:00)
+# Planned: gamma=05, all alphas, ent_coef 0.005. 30 runs; 47.5h. ETA: Mon Nov 13, 08:30
+# Planned: gamma=05, all alpha, other ent_coefs. 60 runs; 95h. ETA: Fri Nov 17, 7:30
+# Planned: gamma=50. 90 runs; 142.4h. ETA: Wed Nov 22, 22:30
 
 hosts=(
   6/localhost # on teide
@@ -133,9 +134,10 @@ parallel -S "$servers" \
   --header : \
   ppo "{#}" "{proto}" --alpha "{alpha}" --gamma "{gamma}" --shape "{shape}" --ent_coef "{ent_coef}" --learning_rate "{learning_rate}" \
   ::: iteri "${iteris[@]}" \
-  ::: proto "${protos[@]}" \
-  ::: alpha "${alphas[@]}" \
-  ::: gamma "${gammas[@]}" \
-  ::: shape "${shapes[@]}" \
   ::: ent_coef "${ent_coefs[@]}" \
-  ::: learning_rate "${learning_rates[@]}"
+  ::: learning_rate "${learning_rates[@]}" \
+  ::: shape "${shapes[@]}" \
+  ::: gamma "${gammas[@]}" \
+  ::: alpha "${alphas[@]}" \
+  ::: proto "${protos[@]}"
+# topmost variable is outermost loop; check no \ on the last line!
