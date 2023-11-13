@@ -21,8 +21,9 @@ protos=(
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
 alphas=(45 40 35 30 25) # target for dag-voting
+alphas=(45 35 30 25) # all but 40
 gammas=(05 50 95) # target for dag-voting
-gammas=(05)
+gammas=(95)
 shapes=(raw)
 ent_coefs=(0.001 0.005 0.01) # target for dag-voting
 ent_coefs=(0.005)
@@ -35,8 +36,8 @@ iteris=(1) # how often should each config be repeated? Once for dag-voting
 # (Without Nakamoto, which I can reuse from Tailstorm.)
 # Complete: alpha=40 and gamma=95.
 # Complete: other alphas, gamma=95, ent_coef 0.005.
-# Running: gamma=05, all alphas, ent_coef 0.005. 30 runs; 47.5h. ETA: Mon Nov 13, 08:30
-# Planned: gamma=05, all alpha, other ent_coefs. 60 runs; 95h. ETA: Fri Nov 17, 7:30
+# Complete: gamma=05, all alphas, ent_coef 0.005. 30 runs; 47.5h. ETA: Mon Nov 13, 08:30
+# Running: gamma=05, all alpha, other ent_coefs. 60 runs; 95h. ETA: Fri Nov 17, 7:30
 # Planned: gamma=95, other alphas, other ent_coefs. 48 runs; 76h. ETA: Mon Nov 20, 11:30
 # Planned: gamma=50. 90 runs; 142.5h. ETA: Sun Nov 26, 10:00
 
