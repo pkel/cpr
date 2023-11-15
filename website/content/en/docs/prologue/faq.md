@@ -27,4 +27,5 @@ no capacity to think about proof-of-stake.
 
 Please don't hesitate. You'll find my mail address in [my GitHub
 profile](https://github.com/pkel). For public communication, consider
-creating a [new issue](https://github.com/pkel/cpr/issues).
+creating a [new GitHub issue](https://github.com/pkel/cpr/issues) or a [new
+GitHub discussion](https://github.com/pkel/cpr/discussions).

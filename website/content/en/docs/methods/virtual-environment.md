@@ -110,8 +110,8 @@ relationship from block $a$ are called ancestors of $a$. Blocks that can
 be reached with the child relationship from block $a$ are called
 descendants of $a$. Blocks can store arbitrary data in named fields.
 Blocks, their parents, and their fields are persistent. That is,
-changing a block creates a copy of the block. Freshly copied blocks do
-not have any descendants.
+modifying a block creates a copy of the block. Freshly modified blocks
+do not have any descendants.
 
 Blocks and the parent relationship form a directed acyclic graph which
 we call block DAG. Within the DAG, blocks without parents are
@@ -156,7 +156,7 @@ In practice, verifying hash-links requires full knowledge of the
 referenced blob. Without knowing the blob, its hash cannot be computed.
 Without knowing the hash, the blob cannot be referred to. It is
 impossible to distinguish between a link that was intentionally
-broken---let's say by replacing the hash with a random number---and a
+broken---let's say by replacing it with a random number---and a
 link to an existing but locally unavailable blob.
 
 For the virtual environment, we introduce the concept of local block
@@ -164,21 +164,22 @@ visibility. Each block can be either visible to a node or not. Blocks
 that are locally visible to a node will stay locally visible to this
 node forever. If a block is locally visible, then all its ancestors are
 also locally visible. This restriction does not apply to block children
-where we local visibility might be partial.
+where local visibility can be incomplete.
 
-In other words, we assume that nodes have partial knowledge about the
+To summarize, we assume that nodes have partial knowledge about the
 block DAG. A node's knowledge grows over time as it learns about new
 blocks in the order imposed by the DAG.
 
-Nodes can create blocks. For this, all parents must be locally visible.
-Freshly created blocks are invisible to all nodes but their creator.
-Nodes can decide to share blocks. Depending on the communication
-assumptions (made elsewhere), the virtual environment makes visible
-shared blocks, including all their ancestors, to the other nodes.
-Typically, blocks which have never been shared, and whose descendants
-have not been shared, will not be visible to any nodes but its creator.
-We say these blocks are withheld by their creator. Usually, honest nodes
-do not withhold blocks but malicious nodes do.
+Nodes can create blocks and append them to the DAG. Naturally, all
+parent blocks must be locally visible to the appending node. Freshly
+created blocks are invisible to all nodes but their creator. Nodes can
+decide to share blocks. If so, the virtual environment makes visible
+shared blocks, including all their ancestors, to the other nodes
+according to the communication assumptions made elsewhere. Typically,
+blocks which have never been shared, and whose descendants have not been
+shared, will not be visible to any nodes but their creator. We say these
+blocks are withheld by their creator. Usually, honest nodes do not
+withhold blocks but malicious nodes do.
 
 We model the determinism of hash-linked lists by allowing nodes to
 re-create blocks. If two nodes create two identical blocks---that is,
@@ -203,7 +204,7 @@ the nodes themselves. Blocks with a proof-of-work are unique, that means
 they cannot be re-created by appending a block with the same parents and
 fields.
 
-Then, the virtual environment chooses which nodes succeed when at
+The virtual environment chooses which nodes succeed when at
 proof-of-work. Whenever a node succeeds, the environment obtains from
 the node a block proposal (parents, fields, and field contents), creates
 the corresponding block, sets the proof-of-work property to true, and

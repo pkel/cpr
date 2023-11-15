@@ -87,7 +87,7 @@ def update(old: Block, new: Block, event: string):
 
 
 def mining(b: Block):
-    return Block(height=b.height + 1, parents=[b], miner=Env.my_id)
+    return Block(height=b.height + 1, parents=[b], miner=my_id)
 ```
 
 ### Difficulty Adjustment
