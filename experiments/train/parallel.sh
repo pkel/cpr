@@ -21,13 +21,10 @@ protos=(
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
 alphas=(45 40 35 30 25) # target for dag-voting
-alphas=(45 35 30 25) # all but 40
 gammas=(05 50 95) # target for dag-voting
-gammas=(95)
+gammas=(50)
 shapes=(raw)
 ent_coefs=(0.001 0.005 0.01) # target for dag-voting
-ent_coefs=(0.005)
-ent_coefs=(0.001 0.01)
 learning_rates=(1e-3 3e-4) # target for dag-voting
 iteris=(1) # how often should each config be repeated? Once for dag-voting
 
@@ -37,9 +34,9 @@ iteris=(1) # how often should each config be repeated? Once for dag-voting
 # Complete: alpha=40 and gamma=95.
 # Complete: other alphas, gamma=95, ent_coef 0.005.
 # Complete: gamma=05, all alphas, ent_coef 0.005. 30 runs; 47.5h. ETA: Mon Nov 13, 08:30
-# Running: gamma=05, all alpha, other ent_coefs. 60 runs; 95h. ETA: Fri Nov 17, 7:30
-# Planned: gamma=95, other alphas, other ent_coefs. 48 runs; 76h. ETA: Mon Nov 20, 11:30
-# Planned: gamma=50. 90 runs; 142.5h. ETA: Sun Nov 26, 10:00
+# Complete: gamma=05, all alpha, other ent_coefs. 60 runs; 95h. ETA: Fri Nov 17, 10:00
+# Running: gamma=95, other alphas, other ent_coefs. 48 runs; 76h. ETA: Mon Nov 20, 14:00
+# Planned: gamma=50. 90 runs; 142.5h. ETA: Sun Nov 26, 12:30
 
 hosts=(
   6/localhost # on teide
