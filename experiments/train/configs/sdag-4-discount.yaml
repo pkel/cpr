@@ -8,19 +8,19 @@ env:
   defenders: 20
   reward: 'sparse_per_progress'
 protocol:
-  name: 'tailstorm'
-  k: 8
-  reward: 'constant'
+  name: 'sdag'
+  k: 4
+  reward: 'discount'
 eval:
   freq: 8
   episodes_per_alpha_per_env: 512
 ppo:
   batch_size: 1024
-  n_steps_multiple: 64
+  n_steps_multiple: 128
   gamma: 1
   learning_rate:
     schedule: linear
     start: 1e-3
     end: 0
   n_layers: 3
-  layer_size: 128
+  layer_size: 256

@@ -13,17 +13,24 @@ class Nakamoto(BaseModel):
     name: Literal["nakamoto"] = "nakamoto"
 
 
-class Bk(BaseModel):
-    name: Literal["bk", "bkll"]
+class Parallel(BaseModel):
+    name: Literal["bk", "spar"]
     k: int
     reward: Literal["constant", "block"] = "constant"
 
 
-class Tailstorm(BaseModel):
-    name: Literal["tailstorm", "tailstormll"]
+class Tree(BaseModel):
+    name: Literal["stree", "tailstorm"]
     k: int
     reward: Literal["constant", "discount", "hybrid", "punish"] = "constant"
     subblock_selection: Literal["altruistic", "heuristic", "optimal"] = "heuristic"
+
+
+class Dag(BaseModel):
+    name: Literal["sdag"]
+    k: int
+    reward: Literal["constant", "discount"] = "constant"
+    subblock_selection: Literal["altruistic", "heuristic"] = "heuristic"
 
 
 class TailstormJune(BaseModel):
@@ -32,7 +39,7 @@ class TailstormJune(BaseModel):
     reward: Literal["block", "constant", "discount", "hybrid", "punish"] = "constant"
 
 
-Protocol = Union[Nakamoto, Bk, Tailstorm, TailstormJune]
+Protocol = Union[Nakamoto, Parallel, Tree, Dag, TailstormJune]
 
 
 ###

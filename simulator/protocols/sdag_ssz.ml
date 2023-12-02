@@ -1,13 +1,13 @@
 open Cpr_lib
 
 module type Parameters = sig
-  include Bk.Parameters
+  include Sdag.Parameters
   include Nakamoto_ssz.Parameters
 end
 
 module Make (Parameters : Parameters) = struct
   open Parameters
-  module Protocol = Bkll.Make (Parameters)
+  module Protocol = Sdag.Make (Parameters)
   open Protocol
 
   let key = Format.asprintf "ssz-%s" (if unit_observation then "unitobs" else "rawobs")
@@ -24,25 +24,25 @@ module Make (Parameters : Parameters) = struct
       ; private_blocks : int (** number of private blocks after common ancestor *)
       ; diff_blocks : int (** private_blocks - public_blocks *)
       ; public_votes : int
-            (** number of public votes confirming the leading public block *)
+            (** number of public votes confirming the public leading block *)
       ; private_votes_inclusive : int
-            (** number of votes confirming the leading private block *)
+            (** number of votes confirming the private leading block *)
       ; private_votes_exclusive : int
-            (** number of private votes confirming the leading private block *)
+            (** number of private votes confirming the private leading block *)
       ; event : [ `ProofOfWork | `Network ] (* What is currently going on? *)
       }
     [@@deriving fields]
 
     module Normalizers = struct
+      open Parameters
       open Ssz_tools.NormalizeObs
 
       let public_blocks = UnboundedInt { non_negative = true; scale = 1 }
       let private_blocks = UnboundedInt { non_negative = true; scale = 1 }
       let diff_blocks = UnboundedInt { non_negative = false; scale = 1 }
       let public_votes = UnboundedInt { non_negative = true; scale = k }
-      let private_votes_inclusive = UnboundedInt { non_negative = true; scale = k }
-      let private_votes_exclusive = UnboundedInt { non_negative = true; scale = k }
-      let lead = Bool
+      let private_votes_inclusive = UnboundedInt { non_negative = true; scale = k - 1 }
+      let private_votes_exclusive = UnboundedInt { non_negative = true; scale = k - 1 }
       let event = Discrete [ `ProofOfWork; `Network ]
     end
 
@@ -227,20 +227,16 @@ module Make (Parameters : Parameters) = struct
     let observe (Observable state) =
       let open Observation in
       let public_votes =
-        children state.public
-        |> List.filter public_visibility
-        |> List.filter is_vote
-        |> List.length
-      and private_votes_inclusive =
-        children state.private_ |> List.filter is_vote |> List.length
+        confirming_votes state.public
+        |> BlockSet.filter public_visibility
+        |> BlockSet.cardinal
+      and private_votes_inclusive = confirming_votes state.private_ |> BlockSet.cardinal
       and private_votes_exclusive =
-        children state.private_
-        |> List.filter is_vote
-        |> List.filter N.appended_by_me
-        |> List.length
+        confirming_votes state.private_
+        |> BlockSet.filter N.appended_by_me
+        |> BlockSet.cardinal
       in
-      let ca = last_block state.common in
-      let ca_height = height ca
+      let ca_height = height state.common
       and private_height = height state.private_
       and public_height = height state.public in
       { private_blocks = private_height - ca_height
@@ -254,48 +250,27 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let apply (Observable state) action =
-      let parent_block x =
-        match parents x with
-        | hd :: _ when is_block hd -> Some hd
-        | _ -> None
-      in
       let release kind =
-        let to_height, nvotes =
-          let to_height = height state.public
-          and nvotes =
-            children state.public
-            |> List.filter public_visibility
-            |> List.filter is_vote
-            |> List.length
-          in
-          match kind with
-          | `Match -> to_height, nvotes
-          | `Override -> if nvotes >= k then to_height + 1, 0 else to_height, nvotes + 1
+        let rec h release_now seq =
+          match seq () with
+          | Seq.Nil -> release_now (* override/match not possible; release all *)
+          | Seq.Cons (x, seq) ->
+            let release_now' = BlockSet.add x release_now in
+            let vote_filter x = public_visibility x || BlockSet.mem x release_now' in
+            if Block.eq
+                 state.public
+                 (N.update_head ~vote_filter ~old:state.public (last_block x))
+            then (
+              (* release_now' is just enough to override; release_now was not enough; *)
+              match kind with
+              | `Override -> release_now'
+              | `Match -> release_now)
+            else h release_now' seq
         in
-        let block =
-          (* find block to be released backwards from private head *)
-          let rec h b =
-            if height b <= to_height then b else parent_block b |> Option.get |> h
-          in
-          h state.private_
-          (* NOTE: if private height is smaller public height, then private head is marked
-             for release. *)
-        in
-        (* include proposal if attacker was able to produce one *)
-        let block, nvotes =
-          if nvotes >= k
-          then (
-            match children block |> List.filter is_block with
-            | proposal :: _ -> proposal, 0
-            | [] -> block, nvotes)
-          else block, nvotes
-        in
-        let votes = children block |> List.filter is_vote in
-        match Compare.first Compare.(by float visible_since) nvotes votes with
-        | Some subset -> block :: subset
-        | None ->
-          (* not enough votes, release all *)
-          block :: votes
+        Dagtools.iterate_descendants ~include_start:true [ state.common ]
+        |> Seq.filter (fun x -> not (public_visibility x))
+        |> h BlockSet.empty
+        |> BlockSet.elements
       in
       let share, private_ =
         match (action : Action.t) with
@@ -337,17 +312,71 @@ module Make (Parameters : Parameters) = struct
       if o.public_blocks > 0 then Adopt_Proceed else Override_Proceed
     ;;
 
-    let selfish o =
-      (* Ad-hoc strategy. This is probably not optimal. *)
+    let release_block o =
+      let open Observation in
+      let open Action in
+      if o.private_blocks < o.public_blocks
+      then Adopt_Proceed
+      else if o.private_blocks > o.public_blocks
+      then Override_Proceed
+      else Wait_Proceed
+    ;;
+
+    let override_block o =
+      let open Observation in
+      let open Action in
+      if o.private_blocks < o.public_blocks
+      then Adopt_Proceed
+      else if o.public_blocks = 0
+      then Wait_Proceed
+      else Override_Proceed
+    ;;
+
+    let override_catchup o =
       let open Observation in
       let open Action in
       if o.private_blocks < o.public_blocks
       then Adopt_Proceed
       else if o.private_blocks = 0 && o.public_blocks = 0
-      then Wait_Prolong
+      then Wait_Proceed
+      else if o.public_blocks = 0
+      then Wait_Proceed
+      else if o.private_votes_inclusive = 0 && o.private_blocks = o.public_blocks + 1
+      then Override_Proceed
+      else if o.public_blocks = o.private_blocks
+              && o.private_votes_inclusive = o.public_votes + 1
+      then Override_Proceed
+      else if o.private_blocks - o.public_blocks > 10
+              (* fork can become really deep for strong attackers. Cut-off shortens time
+                 spent in common ancestor computation. *)
+      then Override_Proceed
+      else Wait_Proceed
+    ;;
+
+    (* copy & paste from tailstorm_ssz.ml *)
+    let minor_delay o =
+      let open Observation in
+      let open Action in
+      if o.public_blocks > o.private_blocks
+      then Adopt_Proceed
       else if o.public_blocks = 0
       then Wait_Proceed
       else Override_Proceed
+    ;;
+
+    (* copy & paste from tailstorm_ssz.ml *)
+    let avoid_loss_alt o =
+      let open Observation in
+      let open Action in
+      let hp = (o.public_blocks * k) + o.public_votes
+      and ap = (o.private_blocks * k) + o.private_votes_inclusive in
+      match o.public_blocks (* h *), o.private_blocks (* a *) with
+      | 0, _ -> Wait_Proceed (* implies h >= 1 for the other branches *)
+      | 1, _ when hp = ap -> Match_Proceed
+      | _, _ when hp > ap -> Adopt_Proceed
+      | _, _ when hp = ap - 1 -> Override_Proceed
+      | h, a when h < a - 10 -> Override_Proceed (* cut-off if fork is long *)
+      | _, _ -> Wait_Proceed
     ;;
   end
 
@@ -356,6 +385,16 @@ module Make (Parameters : Parameters) = struct
     let open Policies in
     empty
     |> add ~info:"emulate honest behaviour" "honest" honest
-    |> add ~info:"ad-hoc selfish policy" "selfish" selfish
+    |> add ~info:"release private block a.s.a.p." "release-block" release_block
+    |> add ~info:"override public block a.s.a.p." "override-block" override_block
+    |> add
+         ~info:"override public head just before defender catches up"
+         "override-catchup"
+         override_catchup
+    |> add ~info:"override public block a.s.a.p." "minor-delay" minor_delay
+    |> add
+         ~info:"override public head just before defender catches up"
+         "avoid-loss"
+         avoid_loss_alt
   ;;
 end

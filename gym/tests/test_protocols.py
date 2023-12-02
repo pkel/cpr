@@ -131,10 +131,10 @@ def test_bk(capsys):
     check_env(env)
 
 
-def test_bkll(capsys):
+def test_spar(capsys):
     env = gym.make(
         "cpr_gym:core-v0",
-        proto=protocols.bkll(k=17, reward="constant", unit_observation=True),
+        proto=protocols.spar(k=17, reward="constant", unit_observation=True),
         alpha=0.33,
         gamma=0.3,
         defenders=4,
@@ -143,7 +143,7 @@ def test_bkll(capsys):
     env.render()
     captured = capsys.readouterr().out.splitlines()[0]
     assert captured == (
-        "Bₖ/ll with k=17 and constant rewards; "
+        "Simple Parallel PoW with k=17 and constant rewards; "
         "SSZ'16-like attack space with unit observations; α=0.33 attacker"
     )
 
@@ -156,6 +156,73 @@ def test_bkll(capsys):
         obs, _, _, info = env.step(env.policy(obs, "selfish"))
 
     assert info["protocol_k"] == 17
+
+    check_env(env)
+
+
+def test_stree(capsys):
+    env = gym.make(
+        "cpr_gym:core-v0",
+        proto=protocols.stree(
+            k=13, reward="discount", subblock_selection="optimal", unit_observation=True
+        ),
+        alpha=0.33,
+        gamma=0.8,
+        defenders=5,
+        max_steps=10000,
+    )
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == (
+        "Simple Parallel PoW with tree-style voting, k=13, discount rewards, "
+        "and optimal sub-block selection; "
+        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
+    )
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
+
+    assert info["protocol_k"] == 13
+
+    check_env(env)
+
+
+def test_sdag(capsys):
+    env = gym.make(
+        "cpr_gym:core-v0",
+        proto=protocols.sdag(
+            k=13,
+            reward="discount",
+            subblock_selection="heuristic",
+            unit_observation=True,
+        ),
+        alpha=0.33,
+        gamma=0.8,
+        defenders=5,
+        max_steps=10000,
+    )
+    env.render()
+    captured = capsys.readouterr().out.splitlines()[0]
+    assert captured == (
+        "Simple Parallel PoW with DAG-style voting, k=13, discount rewards, "
+        "and heuristic sub-block selection; "
+        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
+    )
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, _ = env.step(env.policy(obs, "honest"))
+
+    obs = env.reset()
+    for x in range(600):
+        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
+
+    assert info["protocol_k"] == 13
 
     check_env(env)
 
@@ -188,37 +255,6 @@ def test_tailstorm(capsys):
     obs = env.reset()
     for x in range(600):
         obs, _, _, info = env.step(env.policy(obs, "avoid-loss"))
-
-    assert info["protocol_k"] == 13
-
-    check_env(env)
-
-
-def test_tailstormll(capsys):
-    env = gym.make(
-        "cpr_gym:core-v0",
-        proto=protocols.tailstormll(
-            k=13, reward="discount", subblock_selection="optimal", unit_observation=True
-        ),
-        alpha=0.33,
-        gamma=0.8,
-        defenders=5,
-        max_steps=10000,
-    )
-    env.render()
-    captured = capsys.readouterr().out.splitlines()[0]
-    assert captured == (
-        "Tailstorm/ll with k=13, discount rewards, and optimal sub-block selection; "
-        "SSZ'16-like attack space with unit observations; α=0.33 attacker"
-    )
-
-    obs = env.reset()
-    for x in range(600):
-        obs, _, _, _ = env.step(env.policy(obs, "honest"))
-
-    obs = env.reset()
-    for x in range(600):
-        obs, _, _, info = env.step(env.policy(obs, "override-catchup"))
 
     assert info["protocol_k"] == 13
 
