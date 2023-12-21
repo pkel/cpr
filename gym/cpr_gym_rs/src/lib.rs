@@ -7,6 +7,7 @@ use rand::distributions::Distribution;
 struct Observation {
     reward: u32,
     progress: u32,
+    done: bool,
 }
 
 #[pymethods]
@@ -33,12 +34,13 @@ enum Action {
 
 #[pyclass]
 #[derive(Debug)]
-struct FC16SSZ {
+struct FC16SSZwPT {
     a: u32,
     h: u32,
     fork: Fork,
     rv_mining: Bernoulli,
     rv_network: Bernoulli,
+    rv_termination: Bernoulli,
     actions: Vec<Action>,
 }
 
@@ -49,23 +51,31 @@ macro_rules! sample {
 }
 
 #[pymethods]
-impl FC16SSZ {
+impl FC16SSZwPT {
     #[new]
-    fn new(alpha: f64, gamma: f64) -> Self {
-        let rv_mining = Bernoulli::new(alpha).unwrap();
-        let lucky_start = sample!(rv_mining);
-
-        let mut obj = FC16SSZ {
-            a: if lucky_start { 1 } else { 0 },
-            h: if lucky_start { 0 } else { 1 },
+    fn new(alpha: f64, gamma: f64, horizon: f64) -> Self {
+        let mut obj = FC16SSZwPT {
+            a: 0,
+            h: 0,
             fork: Fork::Irrelevant,
-            rv_mining,
+            rv_mining: Bernoulli::new(alpha).unwrap(),
             rv_network: Bernoulli::new(gamma).unwrap(),
+            rv_termination: Bernoulli::new(1. / horizon).unwrap(),
             actions: vec![],
         };
 
-        obj.set_actions();
+        obj.init();
         obj
+    }
+
+    fn init(&mut self) {
+        let lucky_start = sample!(self.rv_mining);
+
+        self.a = if lucky_start { 1 } else { 0 };
+        self.h = if lucky_start { 0 } else { 1 };
+        self.fork = Fork::Irrelevant;
+
+        self.set_actions();
     }
 
     fn set_actions(&mut self) {
@@ -93,6 +103,7 @@ impl FC16SSZ {
         Observation {
             reward: 0,
             progress: 0,
+            done: false,
         }
     }
 
@@ -103,6 +114,7 @@ impl FC16SSZ {
             Observation {
                 reward: 0,
                 progress: 0,
+                done: false,
             }
         } else {
             self.fork = Fork::Relevant;
@@ -113,12 +125,14 @@ impl FC16SSZ {
                 Observation {
                     reward: h,
                     progress: h,
+                    done: false,
                 }
             } else {
                 self.h += 1;
                 Observation {
                     reward: 0,
                     progress: 0,
+                    done: false,
                 }
             }
         }
@@ -138,6 +152,7 @@ impl FC16SSZ {
         Observation {
             reward: h + 1,
             progress: h + 1,
+            done: false,
         }
     }
 
@@ -154,11 +169,12 @@ impl FC16SSZ {
         Observation {
             reward: 0,
             progress: h,
+            done: false,
         }
     }
 
     fn step(&mut self, a: usize) -> Observation {
-        let obs = match self.actions[a] {
+        let mut obs = match self.actions[a] {
             Action::Wait => match self.fork {
                 Fork::Active => self.apply_active_wait_and_match(),
                 _ => self.apply_non_active_wait(),
@@ -167,6 +183,16 @@ impl FC16SSZ {
             Action::Match => self.apply_active_wait_and_match(),
             Action::Adopt => self.apply_adopt(),
         };
+
+        // probabilistic termination; Bar-Zur @ AFT 20
+        for _ in 0..obs.progress {
+            if sample!(self.rv_termination) {
+                obs.done = true;
+                self.init();
+                return obs;
+            }
+        }
+
         self.set_actions();
         obs
     }
@@ -176,13 +202,13 @@ impl FC16SSZ {
         let h = self.h;
         let f = &self.fork;
         let act = &self.actions;
-        format!("FC16SSZ {{ a: {a}, h: {h}, fork: {f:?}, actions: {act:?} }}")
+        format!("FC16SSZwPT {{ a: {a}, h: {h}, fork: {f:?}, actions: {act:?} }}")
     }
 }
 
 #[pymodule]
 fn cpr_gym_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Observation>()?;
-    m.add_class::<FC16SSZ>()?;
+    m.add_class::<FC16SSZwPT>()?;
     Ok(())
 }
