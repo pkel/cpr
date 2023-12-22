@@ -1,27 +1,19 @@
+use numpy::{array, IntoPyArray, PyArray1};
 use pyo3::prelude::*;
-use rand::distributions::Bernoulli;
-use rand::distributions::Distribution;
+use pyo3::types::PyDict;
+use rand::distributions::{Bernoulli, Distribution};
 
-#[pyclass(get_all)]
-#[derive(Debug)]
-struct Observation {
-    reward: u32,
-    progress: u32,
-    done: bool,
-}
-
-#[pymethods]
-impl Observation {
-    fn __repr__(&self) -> String {
-        format!("{self:?}")
-    }
-}
-
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 enum Fork {
     Irrelevant,
     Relevant,
     Active,
+}
+
+impl Fork {
+    pub fn index(&self) -> usize {
+        *self as usize
+    }
 }
 
 #[derive(Debug)]
@@ -78,6 +70,24 @@ impl FC16SSZwPT {
         self.set_actions();
     }
 
+    fn observe<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+        let mut obs = array![self.a as f64, self.h as f64, self.fork.index() as f64];
+
+        // map 0..inf -> 0..1
+        for item in obs.iter_mut() {
+            *item = *item / (1. + *item);
+        }
+
+        obs.into_pyarray(py)
+    }
+
+    fn reset<'py>(&mut self, py: Python<'py>) -> (&'py PyArray1<f64>, &'py PyDict) {
+        self.init();
+        let obs = self.observe(py);
+        let info = PyDict::new(py); // return python None value?!
+        (obs, info)
+    }
+
     fn set_actions(&mut self) {
         self.actions.clear();
         self.actions.push(Action::Wait);
@@ -92,7 +102,15 @@ impl FC16SSZwPT {
         }
     }
 
-    fn apply_non_active_wait(&mut self) -> Observation {
+    fn n_actions(&self) -> usize {
+        self.actions.len()
+    }
+
+    fn describe_action(&self, a: usize) -> String {
+        format!("{:?}", self.actions[a])
+    }
+
+    fn apply_non_active_wait(&mut self) -> (u32, u32) {
         if sample!(self.rv_mining) {
             self.a += 1;
             self.fork = Fork::Irrelevant;
@@ -100,45 +118,29 @@ impl FC16SSZwPT {
             self.h += 1;
             self.fork = Fork::Relevant;
         }
-        Observation {
-            reward: 0,
-            progress: 0,
-            done: false,
-        }
+        (0, 0)
     }
 
-    fn apply_active_wait_and_match(&mut self) -> Observation {
+    fn apply_active_wait_and_match(&mut self) -> (u32, u32) {
         if sample!(self.rv_mining) {
             self.a += 1;
             self.fork = Fork::Active;
-            Observation {
-                reward: 0,
-                progress: 0,
-                done: false,
-            }
+            (0, 0)
         } else {
             self.fork = Fork::Relevant;
             if sample!(self.rv_network) {
                 let h = self.h;
                 self.a -= h;
                 self.h = 1;
-                Observation {
-                    reward: h,
-                    progress: h,
-                    done: false,
-                }
+                (h, 0)
             } else {
                 self.h += 1;
-                Observation {
-                    reward: 0,
-                    progress: 0,
-                    done: false,
-                }
+                (0, 0)
             }
         }
     }
 
-    fn apply_override(&mut self) -> Observation {
+    fn apply_override(&mut self) -> (u32, u32) {
         let h = self.h;
         if sample!(self.rv_mining) {
             self.a -= h;
@@ -149,14 +151,10 @@ impl FC16SSZwPT {
             self.h = 1;
             self.fork = Fork::Relevant;
         }
-        Observation {
-            reward: h + 1,
-            progress: h + 1,
-            done: false,
-        }
+        (h + 1, h + 1)
     }
 
-    fn apply_adopt(&mut self) -> Observation {
+    fn apply_adopt(&mut self) -> (u32, u32) {
         let h = self.h;
         if sample!(self.rv_mining) {
             self.a = 1;
@@ -166,15 +164,17 @@ impl FC16SSZwPT {
             self.h = 1;
         }
         self.fork = Fork::Irrelevant;
-        Observation {
-            reward: 0,
-            progress: h,
-            done: false,
-        }
+        (0, h)
     }
 
-    fn step(&mut self, a: usize) -> Observation {
-        let mut obs = match self.actions[a] {
+    fn step<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: usize,
+    ) -> (&'py PyArray1<f64>, f64, bool, bool, &'py PyDict) {
+        let a = if a < self.actions.len() { a } else { 0 };
+
+        let (rew, progress) = match self.actions[a] {
             Action::Wait => match self.fork {
                 Fork::Active => self.apply_active_wait_and_match(),
                 _ => self.apply_non_active_wait(),
@@ -184,17 +184,24 @@ impl FC16SSZwPT {
             Action::Adopt => self.apply_adopt(),
         };
 
+        let mut term = false;
+
         // probabilistic termination; Bar-Zur @ AFT 20
-        for _ in 0..obs.progress {
+        for _ in 0..progress {
             if sample!(self.rv_termination) {
-                obs.done = true;
-                self.init();
-                return obs;
+                term = true;
+                break;
             }
         }
 
         self.set_actions();
-        obs
+
+        let rew = rew as f64;
+        let trunc = false;
+        let info = PyDict::new(py); // return python None value?!
+        let obs = self.observe(py);
+
+        (obs, rew, term, trunc, info)
     }
 
     fn __repr__(&self) -> String {
@@ -208,7 +215,6 @@ impl FC16SSZwPT {
 
 #[pymodule]
 fn cpr_gym_rs(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<Observation>()?;
     m.add_class::<FC16SSZwPT>()?;
     Ok(())
 }
