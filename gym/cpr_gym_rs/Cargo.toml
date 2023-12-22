@@ -9,5 +9,6 @@ name = "cpr_gym_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
+numpy = "0.19.0"
 pyo3 = "0.19.0"
 rand = "0.8.5"
