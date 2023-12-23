@@ -1,7 +1,7 @@
-use numpy::{array, IntoPyArray, PyArray1};
+use numpy::{array, IntoPyArray};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use rand::distributions::{Bernoulli, Distribution};
+use std::collections::HashMap;
 
 #[derive(Copy, Clone, Debug)]
 enum Fork {
@@ -70,7 +70,7 @@ impl FC16SSZwPT {
         self.set_actions();
     }
 
-    fn observe<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+    fn observe(&self, py: Python) -> PyObject {
         let mut obs = array![self.a as f64, self.h as f64, self.fork.index() as f64];
 
         // map 0..inf -> 0..1
@@ -78,13 +78,13 @@ impl FC16SSZwPT {
             *item = *item / (1. + *item);
         }
 
-        obs.into_pyarray(py)
+        obs.into_pyarray(py).into()
     }
 
-    fn reset<'py>(&mut self, py: Python<'py>) -> (&'py PyArray1<f64>, &'py PyDict) {
+    fn reset(&mut self, py: Python) -> (PyObject, HashMap<String, PyObject>) {
         self.init();
         let obs = self.observe(py);
-        let info = PyDict::new(py); // return python None value?!
+        let info = HashMap::new(); // return python None value?!
         (obs, info)
     }
 
@@ -167,11 +167,11 @@ impl FC16SSZwPT {
         (0, h)
     }
 
-    fn step<'py>(
+    fn step(
         &mut self,
-        py: Python<'py>,
+        py: Python,
         a: usize,
-    ) -> (&'py PyArray1<f64>, f64, bool, bool, &'py PyDict) {
+    ) -> (PyObject, f64, bool, bool, HashMap<String, PyObject>) {
         let a = if a < self.actions.len() { a } else { 0 };
 
         let (rew, progress) = match self.actions[a] {
@@ -198,18 +198,17 @@ impl FC16SSZwPT {
 
         let rew = rew as f64;
         let trunc = false;
-        let info = PyDict::new(py); // return python None value?!
+        let info = HashMap::new(); // return python None value?!
         let obs = self.observe(py);
 
         (obs, rew, term, trunc, info)
     }
 
     fn __repr__(&self) -> String {
-        let a = self.a;
-        let h = self.h;
-        let f = &self.fork;
-        let act = &self.actions;
-        format!("FC16SSZwPT {{ a: {a}, h: {h}, fork: {f:?}, actions: {act:?} }}")
+        format!(
+            "FC16SSZwPT {{ a: {}, h: {}, fork: {:?}, actions: {:?} }}",
+            self.a, self.h, self.fork, self.actions
+        )
     }
 }
 
