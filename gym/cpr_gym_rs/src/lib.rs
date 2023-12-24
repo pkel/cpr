@@ -84,7 +84,7 @@ impl FC16SSZwPT {
     fn reset(&mut self, py: Python) -> (PyObject, HashMap<String, PyObject>) {
         self.init();
         let obs = self.observe(py);
-        let info = HashMap::new(); // return python None value?!
+        let info = HashMap::new();
         (obs, info)
     }
 
@@ -198,7 +198,7 @@ impl FC16SSZwPT {
 
         let rew = rew as f64;
         let trunc = false;
-        let info = HashMap::new(); // return python None value?!
+        let info = HashMap::new();
         let obs = self.observe(py);
 
         (obs, rew, term, trunc, info)
@@ -213,6 +213,7 @@ impl FC16SSZwPT {
 }
 
 #[pymodule]
+#[pyo3(name = "_rust")]
 fn cpr_gym_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<FC16SSZwPT>()?;
     Ok(())
