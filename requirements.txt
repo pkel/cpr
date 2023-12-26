@@ -23,5 +23,5 @@ pynauty
 
 -e .
 
-stable-baselines3 >= 1.7.0, < 2
-wandb
+stable-baselines3 >= 2.2.*
+rl_zoo3 >= 2.2.*
