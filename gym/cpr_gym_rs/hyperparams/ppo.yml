@@ -1,0 +1,4 @@
+FC16SSZwPT-v0:
+  n_envs: 24
+  n_timesteps: !!float 1e6
+  policy: 'MlpPolicy'

@@ -20,6 +20,7 @@ norecursedirs = [
   '.git',
   '_*',
   'rl',
+  'gym/test_cpr_gym', # not maintained; needs update to gymnasium
 ]
 
 [tool.cibuildwheel]
