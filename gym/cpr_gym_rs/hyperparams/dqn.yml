@@ -1,4 +1,37 @@
+default:
+  buffer_size: 1_000_000 # how many experiences recorded for sampling
+  train_freq: [4, 'step'] # how regularly to update / length of rollout
+  gradient_steps: 1 # how many updates per rollout (at the end of each rollout)
+  learning_rate: 0.0001 # weight of individual update
+  batch_size: 32 # how many experiences to sample for each update
+  learning_starts: 50_000 # steps before learning starts
+  gamma: 0.99 # discount factor
+  target_update_interval: 10_000 # how often to update target network (steps)
+  tau: 1.0 # weight of target network update; 1 implies hard update
+  exploration_fraction: 0.1 # fraction of entire training period over which the exploration rate is reduced
+  exploration_initial_eps: 1.0 # initial value of random action probability
+  exploration_final_eps: 0.05 # final value of random action probability
+  max_grad_norm: 10
+  stats_window_size: 100 #  Rollout logging: number of episodes to average episode length and reward
+  policy: 'MlpPolicy'
+  policy_kwargs:  "dict(net_arch=[64, 64])"
+
 FC16SSZwPT-v0:
   n_envs: 24
-  n_timesteps: !!float 1e6
+  n_timesteps: 50_000_000
+  buffer_size: 5_000_000 # how many experiences recorded for sampling
+  train_freq: 10_000 # how regularly to update / length of rollout in steps
+  gradient_steps: 100 # how many updates per rollout (at the end of each rollout)
+  learning_rate: 0.001 # weight of individual update
+  batch_size: 500 # how many experiences to sample for each update
+  learning_starts: 500_000 # steps before learning starts
+  gamma: 1 # discount factor
+  target_update_interval: 10_000 # how often to update target network (steps)
+  tau: 0.01 # weight of target network update; 1 implies hard update
+  exploration_fraction: 0.1 # fraction of entire training period over which the exploration rate is reduced
+  exploration_initial_eps: 1.0 # initial value of random action probability
+  exploration_final_eps: 0.1 # final value of random action probability
+  max_grad_norm: 10
+  stats_window_size: 10_000 #  Rollout logging: number of episodes to average episode length and reward
   policy: 'MlpPolicy'
+  policy_kwargs:  "dict(net_arch=[64, 64])"
