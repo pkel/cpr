@@ -45,23 +45,23 @@ use petgraph;
 type BlockIx = petgraph::graph::DefaultIx;
 type Block = petgraph::graph::NodeIndex<BlockIx>;
 
-struct NodeData {
+struct NodeWeight<P> {
     av: AView,
     dv: DView,
     nv: NView,
-    height: u32,
+    pd: P, // protocol dependent data
 }
 
-type EdgeData = ();
+type EdgeWeight = ();
 
-type BlockDAG = petgraph::graph::DiGraph<NodeData, EdgeData>;
+type BlockDAG<P> = petgraph::graph::DiGraph<NodeWeight<P>, EdgeWeight>;
 
 pub mod intf;
 
-impl<'a> intf::BlockDAG for &'a BlockDAG {
+impl<'a, P> intf::BlockDAG<P> for &'a BlockDAG<P> {
     type Block = Block;
     type Miner = Party;
-    type BlockIter = petgraph::graph::Neighbors<'a, EdgeData, BlockIx>;
+    type BlockIter = petgraph::graph::Neighbors<'a, EdgeWeight, BlockIx>;
 
     fn parents(&self, b: Block) -> Self::BlockIter {
         self.neighbors_directed(b, petgraph::Direction::Outgoing)
@@ -79,8 +79,8 @@ impl<'a> intf::BlockDAG for &'a BlockDAG {
         }
     }
 
-    fn height(&self, b: Self::Block) -> u32 {
-        self.node_weight(b).unwrap().height
+    fn data(&self, b: Self::Block) -> &P {
+        &self.node_weight(b).unwrap().pd
     }
 }
 
@@ -91,30 +91,30 @@ impl<'a> intf::BlockDAG for &'a BlockDAG {
 // The following block filters define who sees what and what happens next.
 
 // blocks visible to (honest, emulated) attacker node
-fn bflt_a_sees(nd: &NodeData) -> bool {
+fn bflt_a_sees<P>(nd: &NodeWeight<P>) -> bool {
     nd.av != AView::Ignored
 }
 
 // blocks visible to (honest, emulated) defender node
-fn bflt_d_sees(nd: &NodeData) -> bool {
+fn bflt_d_sees<P>(nd: &NodeWeight<P>) -> bool {
     nd.dv != DView::Unknown
 }
 
 // blocks about to be delivered to defender node
-fn bflt_d_avail(nd: &NodeData) -> bool {
+fn bflt_d_avail<P>(nd: &NodeWeight<P>) -> bool {
     nd.dv == DView::Unknown && nd.nv == NView::Released
 }
 // CAUTION: ensure that blocks are delivered in topographical order
 
 // blocks available to the attacker for consideration
-fn bflt_a_avail(nd: &NodeData) -> bool {
+fn bflt_a_avail<P>(nd: &NodeWeight<P>) -> bool {
     nd.av == AView::Ignored
 }
 // CAUTION: ensure that blocks are considered in topographical order
 
 // The BlockDAG is subject to some invariants, which I check below.
 
-fn dag_check(dag: BlockDAG) {
+fn dag_check<P>(dag: BlockDAG<P>) {
     assert!(dag.node_count() > 0, "dag is empty");
     assert!(
         petgraph::algo::connected_components(&dag) == 1,
@@ -137,13 +137,13 @@ fn dag_check(dag: BlockDAG) {
         }
 
         // check topological visibility
-        let a_closure = |p| -> _ { bflt_a_sees(dag.node_weight(p).unwrap()) };
-        let d_closure = |p| -> _ { bflt_d_sees(dag.node_weight(p).unwrap()) };
+        let f = |p| -> _ { bflt_a_sees(dag.node_weight(p).unwrap()) };
         if bflt_a_sees(nd) {
-            assert!(dag.neighbors(n).all(a_closure), "topological visibility")
+            assert!(dag.neighbors(n).all(f), "topological visibility")
         }
+        let f = |p| -> _ { bflt_d_sees(dag.node_weight(p).unwrap()) };
         if bflt_d_sees(nd) {
-            assert!(dag.neighbors(n).all(d_closure), "topological visibility")
+            assert!(dag.neighbors(n).all(f), "topological visibility")
         }
     }
 
