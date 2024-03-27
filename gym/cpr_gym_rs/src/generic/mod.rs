@@ -61,14 +61,15 @@ pub mod intf;
 impl<'a, P> intf::BlockDAG<P> for &'a BlockDAG<P> {
     type Block = Block;
     type Miner = Party;
-    type BlockIter = petgraph::graph::Neighbors<'a, EdgeWeight, BlockIx>;
 
-    fn parents(&self, b: Block) -> Self::BlockIter {
+    fn parents(&self, b: Block) -> Vec<Block> {
         self.neighbors_directed(b, petgraph::Direction::Outgoing)
+            .collect()
     }
 
-    fn children(&self, b: Block) -> Self::BlockIter {
+    fn children(&self, b: Block) -> Vec<Block> {
         self.neighbors_directed(b, petgraph::Direction::Incoming)
+            .collect()
     }
 
     fn miner(&self, b: Block) -> Party {
@@ -79,7 +80,7 @@ impl<'a, P> intf::BlockDAG<P> for &'a BlockDAG<P> {
         }
     }
 
-    fn data(&self, b: Self::Block) -> &P {
+    fn data(&self, b: Block) -> &P {
         &self.node_weight(b).unwrap().pd
     }
 }
@@ -137,16 +138,61 @@ fn dag_check<P>(dag: BlockDAG<P>) {
         }
 
         // check topological visibility
-        let f = |p| -> _ { bflt_a_sees(dag.node_weight(p).unwrap()) };
         if bflt_a_sees(nd) {
+            let f = |p| -> _ { bflt_a_sees(dag.node_weight(p).unwrap()) };
             assert!(dag.neighbors(n).all(f), "topological visibility")
         }
-        let f = |p| -> _ { bflt_d_sees(dag.node_weight(p).unwrap()) };
         if bflt_d_sees(nd) {
+            let f = |p| -> _ { bflt_d_sees(dag.node_weight(p).unwrap()) };
             assert!(dag.neighbors(n).all(f), "topological visibility")
         }
     }
 
     assert!(aentry == 1, "ill-defined attacker entry point");
     assert!(dentry == 1, "ill-defined defender entry point");
+}
+
+// Implement partial view on the DAG for the emulated nodes
+
+struct View<'a, P> {
+    dag: &'a BlockDAG<P>,
+    party: Party,
+}
+
+impl<'a, P> intf::BlockDAG<P> for &'a View<'a, P> {
+    type Block = Block;
+    type Miner = Party;
+
+    fn parents(&self, b: Block) -> Vec<Block> {
+        // TODO parents should always be visible, so we could assert visibility here instead
+        let bflt = if self.party == Party::Attacker {
+            bflt_a_sees
+        } else {
+            bflt_d_sees
+        };
+        self.dag
+            .neighbors_directed(b, petgraph::Direction::Outgoing)
+            .filter(|&x| bflt(self.dag.node_weight(x).unwrap()))
+            .collect()
+    }
+
+    fn children(&self, b: Block) -> Vec<Block> {
+        let bflt = if self.party == Party::Attacker {
+            bflt_a_sees
+        } else {
+            bflt_d_sees
+        };
+        self.dag
+            .neighbors_directed(b, petgraph::Direction::Incoming)
+            .filter(|&x| bflt(self.dag.node_weight(x).unwrap()))
+            .collect()
+    }
+
+    fn miner(&self, b: Block) -> Party {
+        self.dag.miner(b)
+    }
+
+    fn data(&self, b: Block) -> &P {
+        self.dag.data(b)
+    }
 }
