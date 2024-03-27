@@ -1,5 +1,11 @@
 // There are two parties to the game: the defenders and the attacker.
-//
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum Party {
+    Attacker,
+    Defender,
+}
+
 // Each block corresponds to one vertex in a directed acyclic graph (DAG).
 //
 // The defender has a restricted view on the DAG. Blocks are known or unknown. If a block is known
@@ -35,9 +41,48 @@ enum NView {
 // network's view on a block
 
 use petgraph;
-type NodeData = (AView, DView, NView); // TODO maybe compress into single u8
+
+type BlockIx = petgraph::graph::DefaultIx;
+type Block = petgraph::graph::NodeIndex<BlockIx>;
+
+struct NodeData {
+    av: AView,
+    dv: DView,
+    nv: NView,
+    height: u32,
+}
+
 type EdgeData = ();
+
 type BlockDAG = petgraph::graph::DiGraph<NodeData, EdgeData>;
+
+pub mod intf;
+
+impl<'a> intf::BlockDAG for &'a BlockDAG {
+    type Block = Block;
+    type Miner = Party;
+    type BlockIter = petgraph::graph::Neighbors<'a, EdgeData, BlockIx>;
+
+    fn parents(&self, b: Block) -> Self::BlockIter {
+        self.neighbors_directed(b, petgraph::Direction::Outgoing)
+    }
+
+    fn children(&self, b: Block) -> Self::BlockIter {
+        self.neighbors_directed(b, petgraph::Direction::Incoming)
+    }
+
+    fn miner(&self, b: Block) -> Party {
+        if self.node_weight(b).unwrap().nv == NView::Honest {
+            Party::Defender
+        } else {
+            Party::Attacker
+        }
+    }
+
+    fn height(&self, b: Self::Block) -> u32 {
+        self.node_weight(b).unwrap().height
+    }
+}
 
 // Both parties act honestly, that is according to the protocol specification, but on a subset of
 // information. Why is this okay? I argue that any other misbehaviour leaves behind some evidence
@@ -46,24 +91,24 @@ type BlockDAG = petgraph::graph::DiGraph<NodeData, EdgeData>;
 // The following block filters define who sees what and what happens next.
 
 // blocks visible to (honest, emulated) attacker node
-fn bflt_a_sees((av, _dv, _nv): NodeData) -> bool {
-    av != AView::Ignored
+fn bflt_a_sees(nd: &NodeData) -> bool {
+    nd.av != AView::Ignored
 }
 
 // blocks visible to (honest, emulated) defender node
-fn bflt_d_sees((_av, dv, _nv): NodeData) -> bool {
-    dv != DView::Unknown
+fn bflt_d_sees(nd: &NodeData) -> bool {
+    nd.dv != DView::Unknown
 }
 
 // blocks about to be delivered to defender node
-fn bflt_d_avail((_av, dv, nv): NodeData) -> bool {
-    dv == DView::Unknown && nv == NView::Released
+fn bflt_d_avail(nd: &NodeData) -> bool {
+    nd.dv == DView::Unknown && nd.nv == NView::Released
 }
 // CAUTION: ensure that blocks are delivered in topographical order
 
 // blocks available to the attacker for consideration
-fn bflt_a_avail((av, _dv, _nv): NodeData) -> bool {
-    av == AView::Ignored
+fn bflt_a_avail(nd: &NodeData) -> bool {
+    nd.av == AView::Ignored
 }
 // CAUTION: ensure that blocks are considered in topographical order
 
@@ -81,20 +126,19 @@ fn dag_check(dag: BlockDAG) {
     let mut dentry = 0;
 
     for n in dag.node_indices() {
-        let nd = *dag.node_weight(n).unwrap();
-        let (av, dv, nv) = nd;
+        let nd = dag.node_weight(n).unwrap();
 
         // count entry points, there should be one each
-        if av == AView::AEntry {
+        if nd.av == AView::AEntry {
             aentry += 1
         }
-        if dv == DView::DEntry {
+        if nd.dv == DView::DEntry {
             dentry += 1
         }
 
         // check topological visibility
-        let a_closure = |p| -> _ { bflt_a_sees(*dag.node_weight(p).unwrap()) };
-        let d_closure = |p| -> _ { bflt_d_sees(*dag.node_weight(p).unwrap()) };
+        let a_closure = |p| -> _ { bflt_a_sees(dag.node_weight(p).unwrap()) };
+        let d_closure = |p| -> _ { bflt_d_sees(dag.node_weight(p).unwrap()) };
         if bflt_a_sees(nd) {
             assert!(dag.neighbors(n).all(a_closure), "topological visibility")
         }

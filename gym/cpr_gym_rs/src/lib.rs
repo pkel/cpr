@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 
 mod fc16;
 mod generic;
+mod proto;
 
 #[pymodule]
 #[pyo3(name = "_rust")]
