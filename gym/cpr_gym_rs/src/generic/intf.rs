@@ -3,17 +3,16 @@
 pub trait BlockDAG<Data> {
     type Block: Copy;
     type Miner: Copy;
-    type BlockIter: Iterator<Item = Self::Block>;
 
     // BlockDAG navigation: backward
-    fn parents(&self, b: Self::Block) -> Self::BlockIter;
+    fn parents(&self, b: Self::Block) -> Vec<Self::Block>;
     // What blocks does `b` refer to?
     // In practice, `b` would include the hashes of the blocks referred to.
     // Sometimes we ambiguously say *confirms* instead of *refers to*. Other times, we say
     // *confirms* when we mean to include transitive references.
 
     // BlockDAG navigation: forward
-    fn children(&self, b: Self::Block) -> Self::BlockIter;
+    fn children(&self, b: Self::Block) -> Vec<Self::Block>;
     // What blocks refer to `b`?
 
     fn miner(&self, b: Self::Block) -> Self::Miner;
@@ -26,19 +25,14 @@ pub trait BlockDAG<Data> {
 
 pub trait Protocol {
     type Data; // protocol-dependent block data
-    type BlockIter<D: BlockDAG<Self::Data>>: Iterator<Item = D::Block>;
 
     // genesis block
     fn init(&self) -> Self::Data;
 
     // honest behaviour: mining
-    fn mining<D: BlockDAG<Self::Data>>(
-        &self,
-        d: D,
-        ep: D::Block,
-    ) -> (Self::BlockIter<D>, Self::Data);
+    fn mining<D: BlockDAG<Self::Data>>(&self, d: D, ep: D::Block) -> (Vec<D::Block>, Self::Data);
     // Given entrypoint `ep`, how do honest nodes extend the chain?
-    // The returned iterator feeds into the parents of the newly mined block.
+    // The returned vec feeds into the parents of the newly mined block.
 
     // // honest behaviour: preference update
     fn update<D: BlockDAG<Self::Data>>(&self, d: D, ep: D::Block, b: D::Block) -> D::Block;
@@ -59,8 +53,7 @@ pub trait Protocol {
     // // Block `b` is guaranteed to be part of a linear history of some tip.
 
     // // incentive scheme
-    type RewardAlloc<D: BlockDAG<Self::Data>>: Iterator<Item = (D::Miner, f32)>;
-    fn reward<D: BlockDAG<Self::Data>>(&self, d: D, b: D::Block) -> Self::RewardAlloc<D>;
+    fn reward<D: BlockDAG<Self::Data>>(&self, d: D, b: D::Block) -> Vec<(D::Miner, f32)>;
     // // Given block `b`, what rewards where allocated since `pred(b)`?
     // // Block `b` is guaranteed to be part of a linear history of some tip.
 }
