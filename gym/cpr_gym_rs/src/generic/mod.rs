@@ -100,18 +100,6 @@ fn bflt_d_sees<P>(nd: &NodeWeight<P>) -> bool {
     nd.dv != DView::Unknown
 }
 
-// blocks about to be delivered to defender node
-fn bflt_d_avail<P>(nd: &NodeWeight<P>) -> bool {
-    nd.dv == DView::Unknown && nd.nv == NView::Released
-}
-// CAUTION: ensure that blocks are delivered in topographical order
-
-// blocks available to the attacker for consideration
-fn bflt_a_avail<P>(nd: &NodeWeight<P>) -> bool {
-    nd.av == AView::Ignored
-}
-// CAUTION: ensure that blocks are considered in topographical order
-
 // The BlockDAG is subject to some invariants, which I check below.
 
 fn dag_check<ProtoData>(g: Graph<ProtoData>) {
@@ -153,38 +141,12 @@ fn dag_check<ProtoData>(g: Graph<ProtoData>) {
 
 // Partial views on the DAG
 
-struct AttackerView<ProtoData> {
-    g: Graph<ProtoData>,
+struct PartialView<'a, ProtoData> {
+    g: &'a Graph<ProtoData>,                    // unfiltered graph
+    p: fn(&'a Graph<ProtoData>, Block) -> bool, // filter property
 }
 
-impl<ProtoData> BlockDAG<Block, Party, ProtoData> for AttackerView<ProtoData> {
-    fn parents(&self, b: Block) -> Vec<Block> {
-        // parents are always visible, so we do not filter
-        self.g.parents(b)
-    }
-
-    fn children(&self, b: Block) -> Vec<Block> {
-        let f = |x: &Block| self.g.node_weight(*x).unwrap().av != AView::Ignored;
-        self.g
-            .neighbors_directed(b, petgraph::Direction::Incoming)
-            .filter(f)
-            .collect()
-    }
-
-    fn miner(&self, b: Block) -> Party {
-        self.g.miner(b)
-    }
-
-    fn data(&self, b: Block) -> &ProtoData {
-        self.g.data(b)
-    }
-}
-
-struct DefenderView<ProtoData> {
-    g: Graph<ProtoData>,
-}
-
-impl<ProtoData> BlockDAG<Block, Party, ProtoData> for DefenderView<ProtoData> {
+impl<'a, ProtoData> BlockDAG<Block, Party, ProtoData> for PartialView<'a, ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
         // parents are always visible, so we do not filter
         self.g.parents(b)
@@ -194,7 +156,7 @@ impl<ProtoData> BlockDAG<Block, Party, ProtoData> for DefenderView<ProtoData> {
         let f = |x: &Block| self.g.node_weight(*x).unwrap().dv != DView::Unknown;
         self.g
             .neighbors_directed(b, petgraph::Direction::Incoming)
-            .filter(f)
+            .filter(|&x| (self.p)(self.g, x))
             .collect()
     }
 
@@ -205,6 +167,16 @@ impl<ProtoData> BlockDAG<Block, Party, ProtoData> for DefenderView<ProtoData> {
     fn data(&self, b: Block) -> &ProtoData {
         self.g.data(b)
     }
+}
+
+fn attacker_view<'a, P>(g: &'a Graph<P>) -> PartialView<'a, P> {
+    let p = |g: &Graph<P>, x: Block| g.node_weight(x).unwrap().av != AView::Ignored;
+    PartialView { g, p }
+}
+
+fn defender_view<'a, P>(g: &'a Graph<P>) -> PartialView<'a, P> {
+    let p = |g: &Graph<P>, x: Block| g.node_weight(x).unwrap().dv != DView::Unknown;
+    PartialView { g, p }
 }
 
 // Action Space
@@ -247,7 +219,7 @@ struct AvailableActions {
     consider: Vec<Block>,
 }
 
-fn available_actions<P>(g: Graph<P>) -> AvailableActions {
+fn available_actions<P>(g: &Graph<P>) -> AvailableActions {
     let mut release = vec![];
     let mut consider = vec![];
 
@@ -277,11 +249,28 @@ fn available_actions<P>(g: Graph<P>) -> AvailableActions {
     AvailableActions { release, consider }
 }
 
-// Initial DAG
+// randomness
 
-fn init<P, D>(p: P) -> Graph<D>
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
+
+// environment logic
+
+struct Env<P, D>
 where
-    P: Protocol<Graph<D>, Block, Party, D>,
+    P: Protocol<Block, Party, D>,
+{
+    g: Graph<D>,
+    p: P,
+    a: AvailableActions,
+    alpha: f64,
+    gamma: f64,
+    rng: StdRng,
+}
+
+fn new_graph<P, D>(p: &P) -> Graph<D>
+where
+    P: Protocol<Block, Party, D>,
 {
     let mut g = Graph::new();
     let genesis = NodeWeight {
@@ -292,4 +281,243 @@ where
     };
     g.add_node(genesis);
     g
+}
+
+impl<P, D> BlockDAG<Block, Party, D> for Env<P, D>
+where
+    P: Protocol<Block, Party, D>,
+{
+    fn parents(&self, b: Block) -> Vec<Block> {
+        self.g.parents(b)
+    }
+    fn children(&self, b: Block) -> Vec<Block> {
+        self.g.children(b)
+    }
+    fn data(&self, b: Block) -> &D {
+        self.g.data(b)
+    }
+    fn miner(&self, b: Block) -> Party {
+        self.g.miner(b)
+    }
+}
+
+impl<P, D> Env<P, D>
+where
+    P: Protocol<Block, Party, D>,
+{
+    fn init_graph(&mut self) {
+        let genesis = NodeWeight {
+            av: AView::AEntry,
+            dv: DView::DEntry,
+            nv: NView::Honest,
+            pd: self.p.init(),
+        };
+        self.g.add_node(genesis);
+    }
+
+    fn reset(&mut self) {
+        self.g.clear();
+        self.init_graph();
+        self.a = available_actions(&self.g);
+    }
+
+    fn new(p: P, alpha: f64, gamma: f64) -> Self {
+        let g = new_graph(&p);
+        let a = available_actions(&g);
+        Env {
+            g,
+            p,
+            a,
+            alpha,
+            gamma,
+            rng: StdRng::from_entropy(),
+        }
+        // TODO consider seeding
+    }
+
+    fn weight(&self, b: Block) -> &NodeWeight<D> {
+        self.g.node_weight(b).unwrap()
+    }
+
+    fn mut_weight(&mut self, b: Block) -> &mut NodeWeight<D> {
+        self.g.node_weight_mut(b).unwrap()
+    }
+
+    fn entrypoint(&self, m: Party) -> Block {
+        if m == Party::Defender {
+            self.g
+                .node_indices()
+                .find(|&p| self.weight(p).dv == DView::DEntry)
+                .unwrap()
+        } else {
+            self.g
+                .node_indices()
+                .find(|&p| self.weight(p).av == AView::AEntry)
+                .unwrap()
+        }
+    }
+
+    fn deliver(&mut self, b: Block) {
+        assert!(self.weight(b).dv == DView::Unknown, "repeated delivery");
+        assert!(
+            self.parents(b)
+                .into_iter()
+                .all(|p| { self.weight(p).dv != DView::Unknown }),
+            "missing dependencies"
+        );
+        // turn visible
+        self.mut_weight(b).dv = DView::Known;
+        // apply update
+        let ep = self.entrypoint(Party::Defender);
+        self.mut_weight(ep).dv = DView::Known; // downgrade from DEntry
+        let view = defender_view(&self.g);
+        let ep = self.p.update(&view, ep, b);
+        self.mut_weight(ep).dv = DView::DEntry; // upgrade from Known
+    }
+
+    fn consider(&mut self, b: Block) {
+        assert!(self.weight(b).av == AView::Ignored, "repeated consider");
+        assert!(
+            self.parents(b)
+                .into_iter()
+                .all(|p| { self.weight(p).av != AView::Ignored }),
+            "missing dependencies"
+        );
+        // turn visible
+        self.mut_weight(b).av = AView::Considered;
+        // apply update
+        let ep = self.entrypoint(Party::Attacker);
+        self.mut_weight(ep).av = AView::Considered; // downgrade from DEntry
+        let view = defender_view(&self.g);
+        let ep = self.p.update(&view, ep, b);
+        self.mut_weight(ep).av = AView::AEntry; // upgrade from Known
+    }
+
+    fn release(&mut self, b: Block) {
+        assert!(self.weight(b).nv == NView::Withheld, "unsuitable block");
+        assert!(
+            self.parents(b)
+                .into_iter()
+                .all(|p| { self.weight(p).nv != NView::Withheld }),
+            "missing dependencies"
+        );
+        // mark released
+        self.mut_weight(b).nv = NView::Released;
+    }
+
+    fn just_released(&self) -> Vec<Block> {
+        self.g
+            .node_indices()
+            .filter(|&x| {
+                let nd = self.weight(x);
+                nd.dv == DView::Unknown && nd.nv == NView::Released
+            })
+            .collect()
+    }
+
+    fn just_mined_by_defender(&self) -> Vec<Block> {
+        self.g
+            .node_indices()
+            .filter(|&x| {
+                let nd = self.weight(x);
+                nd.dv == DView::Unknown && nd.nv == NView::Honest
+            })
+            .collect()
+    }
+
+    fn continue_(&mut self) {
+        self.communicate();
+        // mining depends on network assumptions
+        if self.attacker_mines_next_block() {
+            self.mine_attacker()
+        } else {
+            self.mine_defender()
+        }
+    }
+
+    fn attacker_communicates_fast(&mut self) -> bool {
+        let x: f64 = self.rng.gen();
+        x <= self.gamma
+    }
+
+    fn attacker_mines_next_block(&mut self) -> bool {
+        let x: f64 = self.rng.gen();
+        x <= self.alpha
+    }
+
+    fn communicate(&mut self) {
+        // blocks just released by attacker
+        let from_attacker = self.just_released();
+        // blocks just mined by defender
+        let from_defender = self.just_mined_by_defender();
+        assert!(from_defender.len() <= 1, "abnormal honest mining");
+        // communication depends on network assumption
+        if self.attacker_communicates_fast() {
+            for b in from_attacker {
+                // TODO enforce topological order
+                self.deliver(b)
+            }
+            for b in from_defender {
+                self.deliver(b)
+            }
+        } else {
+            for b in from_defender {
+                // TODO enforce topological order
+                self.deliver(b)
+            }
+            for b in from_attacker {
+                self.deliver(b)
+            }
+        }
+    }
+
+    fn mine_defender(&mut self) {
+        let view = defender_view(&self.g);
+        let ep = self.entrypoint(Party::Defender);
+        let (parents, pd) = self.p.mining(&view, ep);
+        let nw = NodeWeight {
+            av: AView::Ignored,
+            dv: DView::Unknown,
+            nv: NView::Honest,
+            pd,
+        };
+        let b = self.g.add_node(nw);
+        for p in parents {
+            self.g.update_edge(b, p, ());
+        }
+    }
+
+    fn mine_attacker(&mut self) {
+        let view = attacker_view(&self.g);
+        let ep = self.entrypoint(Party::Attacker);
+        let (parents, pd) = self.p.mining(&view, ep);
+        let nw = NodeWeight {
+            av: AView::Ignored,
+            dv: DView::Unknown,
+            nv: NView::Withheld,
+            pd,
+        };
+        let b = self.g.add_node(nw);
+        for p in parents {
+            self.g.update_edge(b, p, ());
+        }
+    }
+
+    fn step(&mut self, a: i32) {
+        // decode action
+        if a < 0 {
+            // lookup in available action
+            let b = self.a.release[usize::try_from(-a).unwrap()];
+            self.release(b)
+        } else if a > 0 {
+            // lookup in available action
+            let b = self.a.release[usize::try_from(a - 1).unwrap()];
+            self.consider(b)
+        } else {
+            // a == 0
+            self.continue_()
+        }
+        self.a = available_actions(&self.g)
+        // TODO implement termination
+    }
 }
