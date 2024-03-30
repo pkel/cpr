@@ -149,36 +149,50 @@ fn dag_check<ProtoData>(dag: BlockDAG<ProtoData>) {
     assert!(dentry == 1, "ill-defined defender entry point");
 }
 
-// Implement partial view on the DAG for the emulated nodes
+// Partial views on the DAG
 
-struct View<'a, ProtoData> {
+struct AttackerView<'a, ProtoData> {
     dag: &'a BlockDAG<ProtoData>,
-    party: Party,
 }
 
-impl<'a, ProtoData> intf::BlockDAG<Block, Party, ProtoData> for &'a View<'a, ProtoData> {
+impl<'a, ProtoData> intf::BlockDAG<Block, Party, ProtoData> for &'a AttackerView<'a, ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
-        // TODO parents should always be visible, so we could assert visibility here instead
-        let bflt = if self.party == Party::Attacker {
-            bflt_a_sees
-        } else {
-            bflt_d_sees
-        };
-        self.dag
-            .neighbors_directed(b, petgraph::Direction::Outgoing)
-            .filter(|&x| bflt(self.dag.node_weight(x).unwrap()))
-            .collect()
+        // parents are always visible, so we do not filter
+        self.dag.parents(b)
     }
 
     fn children(&self, b: Block) -> Vec<Block> {
-        let bflt = if self.party == Party::Attacker {
-            bflt_a_sees
-        } else {
-            bflt_d_sees
-        };
+        let f = |x: &Block| self.dag.node_weight(*x).unwrap().av != AView::Ignored;
         self.dag
             .neighbors_directed(b, petgraph::Direction::Incoming)
-            .filter(|&x| bflt(self.dag.node_weight(x).unwrap()))
+            .filter(f)
+            .collect()
+    }
+
+    fn miner(&self, b: Block) -> Party {
+        self.dag.miner(b)
+    }
+
+    fn data(&self, b: Block) -> &ProtoData {
+        self.dag.data(b)
+    }
+}
+
+struct DefenderView<'a, ProtoData> {
+    dag: &'a BlockDAG<ProtoData>,
+}
+
+impl<'a, ProtoData> intf::BlockDAG<Block, Party, ProtoData> for &'a DefenderView<'a, ProtoData> {
+    fn parents(&self, b: Block) -> Vec<Block> {
+        // parents are always visible, so we do not filter
+        self.dag.parents(b)
+    }
+
+    fn children(&self, b: Block) -> Vec<Block> {
+        let f = |x: &Block| self.dag.node_weight(*x).unwrap().dv != DView::Unknown;
+        self.dag
+            .neighbors_directed(b, petgraph::Direction::Incoming)
+            .filter(f)
             .collect()
     }
 

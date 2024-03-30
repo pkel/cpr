@@ -1,10 +1,6 @@
 // Protocol Specification Interface
 
-pub trait BlockDAG<Block, Miner, Data>
-where
-    Block: Copy,
-    Miner: Copy,
-{
+pub trait BlockDAG<Block, Miner, Data> {
     // BlockDAG navigation: backward
     fn parents(&self, b: Block) -> Vec<Block>;
     // What blocks does `b` refer to?
@@ -27,8 +23,6 @@ where
 pub trait Protocol<DAG, Block, Miner, Data>
 where
     DAG: BlockDAG<Block, Miner, Data>,
-    Block: Copy, // Q/rust: why is this not derived from the line above?
-    Miner: Copy,
 {
     // genesis block
     fn init(&self) -> Data;
@@ -38,26 +32,26 @@ where
     // Given entrypoint `ep`, how do honest nodes extend the chain?
     // The returned vec feeds into the parents of the newly mined block.
 
-    // // honest behaviour: preference update
+    // honest behaviour: preference update
     fn update(&self, d: DAG, ep: Block, b: Block) -> Block;
-    // // Given entrypoint `ep` and novel block `b`, how do honest nodes update their entrypoint?
+    // Given entrypoint `ep` and novel block `b`, how do honest nodes update their entrypoint?
 
-    // // linear history: tip of chain
+    // linear history: tip of chain
     fn tip(&self, d: DAG, ep: Block) -> Block;
-    // // Given entrypoint `ep`, what is considered the latest block in the linear chain of blocks?
+    // Given entrypoint `ep`, what is considered the latest block in the linear chain of blocks?
 
-    // // linear history: walking backwards
+    // linear history: walking backwards
     fn pred(&self, d: DAG, b: Block) -> Option<Block>;
-    // // Given block `b`, what's the parent of `b` in the linear chain of blocks?
+    // Given block `b`, what's the parent of `b` in the linear chain of blocks?
 
-    // // difficulty adjustment
+    // difficulty adjustment
     fn progress(&self, d: DAG, b: Block) -> f32;
-    // // Given block `b`, what's the mining contribution since `pred(b)`?
-    // // DAA's goal tries to maintain a constant mining contribution rate per time.
-    // // Block `b` is guaranteed to be part of a linear history of some tip.
+    // Given block `b`, what's the mining contribution since `pred(b)`?
+    // DAA's goal tries to maintain a constant mining contribution rate per time.
+    // Block `b` is guaranteed to be part of a linear history of some tip.
 
-    // // incentive scheme
+    // incentive scheme
     fn reward(&self, d: DAG, b: Block) -> Vec<(Miner, f32)>;
-    // // Given block `b`, what rewards where allocated since `pred(b)`?
-    // // Block `b` is guaranteed to be part of a linear history of some tip.
+    // Given block `b`, what rewards where allocated since `pred(b)`?
+    // Block `b` is guaranteed to be part of a linear history of some tip.
 }
