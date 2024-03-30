@@ -54,14 +54,11 @@ struct NodeWeight<P> {
 
 type EdgeWeight = ();
 
-type BlockDAG<P> = petgraph::graph::DiGraph<NodeWeight<P>, EdgeWeight>;
+type BlockDAG<ProtoData> = petgraph::graph::DiGraph<NodeWeight<ProtoData>, EdgeWeight>;
 
 pub mod intf;
 
-impl<'a, P> intf::BlockDAG<P> for &'a BlockDAG<P> {
-    type Block = Block;
-    type Miner = Party;
-
+impl<'a, ProtoData> intf::BlockDAG<Block, Party, ProtoData> for &'a BlockDAG<ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
         self.neighbors_directed(b, petgraph::Direction::Outgoing)
             .collect()
@@ -80,7 +77,7 @@ impl<'a, P> intf::BlockDAG<P> for &'a BlockDAG<P> {
         }
     }
 
-    fn data(&self, b: Block) -> &P {
+    fn data(&self, b: Block) -> &ProtoData {
         &self.node_weight(b).unwrap().pd
     }
 }
@@ -115,7 +112,7 @@ fn bflt_a_avail<P>(nd: &NodeWeight<P>) -> bool {
 
 // The BlockDAG is subject to some invariants, which I check below.
 
-fn dag_check<P>(dag: BlockDAG<P>) {
+fn dag_check<ProtoData>(dag: BlockDAG<ProtoData>) {
     assert!(dag.node_count() > 0, "dag is empty");
     assert!(
         petgraph::algo::connected_components(&dag) == 1,
@@ -154,15 +151,12 @@ fn dag_check<P>(dag: BlockDAG<P>) {
 
 // Implement partial view on the DAG for the emulated nodes
 
-struct View<'a, P> {
-    dag: &'a BlockDAG<P>,
+struct View<'a, ProtoData> {
+    dag: &'a BlockDAG<ProtoData>,
     party: Party,
 }
 
-impl<'a, P> intf::BlockDAG<P> for &'a View<'a, P> {
-    type Block = Block;
-    type Miner = Party;
-
+impl<'a, ProtoData> intf::BlockDAG<Block, Party, ProtoData> for &'a View<'a, ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
         // TODO parents should always be visible, so we could assert visibility here instead
         let bflt = if self.party == Party::Attacker {
@@ -192,7 +186,7 @@ impl<'a, P> intf::BlockDAG<P> for &'a View<'a, P> {
         self.dag.miner(b)
     }
 
-    fn data(&self, b: Block) -> &P {
+    fn data(&self, b: Block) -> &ProtoData {
         self.dag.data(b)
     }
 }

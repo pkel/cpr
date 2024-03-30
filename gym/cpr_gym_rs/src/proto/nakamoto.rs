@@ -6,14 +6,17 @@ struct Data {
     height: u32,
 }
 
-impl Protocol for Nakamoto {
-    type Data = Data;
-
+impl<DAG, Block, Miner> Protocol<DAG, Block, Miner, Data> for Nakamoto
+where
+    DAG: BlockDAG<Block, Miner, Data>,
+    Block: Copy,
+    Miner: Copy,
+{
     fn init(&self) -> Data {
         Data { height: 0 }
     }
 
-    fn mining<D: BlockDAG<Data>>(&self, d: D, ep: D::Block) -> (Vec<D::Block>, Data) {
+    fn mining(&self, d: DAG, ep: Block) -> (Vec<Block>, Data) {
         let parents = vec![ep];
         let data = Data {
             height: d.data(ep).height + 1,
@@ -21,7 +24,7 @@ impl Protocol for Nakamoto {
         (parents, data)
     }
 
-    fn update<D: BlockDAG<Data>>(&self, d: D, ep: D::Block, b: D::Block) -> D::Block {
+    fn update(&self, d: DAG, ep: Block, b: Block) -> Block {
         if d.data(b).height > d.data(ep).height {
             b
         } else {
@@ -29,11 +32,11 @@ impl Protocol for Nakamoto {
         }
     }
 
-    fn tip<D: BlockDAG<Data>>(&self, d: D, ep: D::Block) -> D::Block {
+    fn tip(&self, d: DAG, ep: Block) -> Block {
         ep
     }
 
-    fn pred<D: BlockDAG<Data>>(&self, d: D, b: D::Block) -> Option<D::Block> {
+    fn pred(&self, d: DAG, b: Block) -> Option<Block> {
         let p = d.parents(b);
         if p.len() > 0 {
             Some(d.parents(b)[0])
@@ -42,11 +45,11 @@ impl Protocol for Nakamoto {
         }
     }
 
-    fn progress<D: BlockDAG<Data>>(&self, d: D, b: D::Block) -> f32 {
+    fn progress(&self, d: DAG, b: Block) -> f32 {
         1.
     }
 
-    fn reward<D: BlockDAG<Data>>(&self, d: D, b: D::Block) -> Vec<(D::Miner, f32)> {
+    fn reward(&self, d: DAG, b: Block) -> Vec<(Miner, f32)> {
         vec![(d.miner(b), 1.)]
     }
 }
