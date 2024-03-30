@@ -58,9 +58,9 @@ type EdgeWeight = ();
 type Graph<ProtoData> = petgraph::graph::DiGraph<NodeWeight<ProtoData>, EdgeWeight>;
 
 pub mod intf;
-use intf::BlockDAG;
+use intf::{BlockDAG, Protocol};
 
-impl<'a, ProtoData> BlockDAG<Block, Party, ProtoData> for &'a Graph<ProtoData> {
+impl<ProtoData> BlockDAG<Block, Party, ProtoData> for Graph<ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
         self.neighbors_directed(b, petgraph::Direction::Outgoing)
             .collect()
@@ -153,11 +153,11 @@ fn dag_check<ProtoData>(g: Graph<ProtoData>) {
 
 // Partial views on the DAG
 
-struct AttackerView<'a, ProtoData> {
-    g: &'a Graph<ProtoData>,
+struct AttackerView<ProtoData> {
+    g: Graph<ProtoData>,
 }
 
-impl<'a, ProtoData> BlockDAG<Block, Party, ProtoData> for &'a AttackerView<'a, ProtoData> {
+impl<ProtoData> BlockDAG<Block, Party, ProtoData> for AttackerView<ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
         // parents are always visible, so we do not filter
         self.g.parents(b)
@@ -180,11 +180,11 @@ impl<'a, ProtoData> BlockDAG<Block, Party, ProtoData> for &'a AttackerView<'a, P
     }
 }
 
-struct DefenderView<'a, ProtoData> {
-    g: &'a Graph<ProtoData>,
+struct DefenderView<ProtoData> {
+    g: Graph<ProtoData>,
 }
 
-impl<'a, ProtoData> BlockDAG<Block, Party, ProtoData> for &'a DefenderView<'a, ProtoData> {
+impl<ProtoData> BlockDAG<Block, Party, ProtoData> for DefenderView<ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
         // parents are always visible, so we do not filter
         self.g.parents(b)
@@ -247,7 +247,7 @@ struct AvailableActions {
     consider: Vec<Block>,
 }
 
-fn available_actions<P>(g: &Graph<P>) -> AvailableActions {
+fn available_actions<P>(g: Graph<P>) -> AvailableActions {
     let mut release = vec![];
     let mut consider = vec![];
 
@@ -259,7 +259,7 @@ fn available_actions<P>(g: &Graph<P>) -> AvailableActions {
         if nw.nv == NView::Withheld
             && g.parents(b)
                 .into_iter()
-                .all(|p| g.node_weight(b).unwrap().nv != NView::Withheld)
+                .all(|p| g.node_weight(p).unwrap().nv != NView::Withheld)
         {
             release.push(b);
         }
@@ -268,11 +268,28 @@ fn available_actions<P>(g: &Graph<P>) -> AvailableActions {
         if nw.av == AView::Ignored
             && g.parents(b)
                 .into_iter()
-                .all(|p| g.node_weight(b).unwrap().av != AView::Ignored)
+                .all(|p| g.node_weight(p).unwrap().av != AView::Ignored)
         {
             consider.push(b);
         }
     }
 
     AvailableActions { release, consider }
+}
+
+// Initial DAG
+
+fn init<P, D>(p: P) -> Graph<D>
+where
+    P: Protocol<Graph<D>, Block, Party, D>,
+{
+    let mut g = Graph::new();
+    let genesis = NodeWeight {
+        av: AView::AEntry,
+        dv: DView::DEntry,
+        nv: NView::Honest,
+        pd: p.init(),
+    };
+    g.add_node(genesis);
+    g
 }

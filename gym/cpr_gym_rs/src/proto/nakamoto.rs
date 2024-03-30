@@ -32,7 +32,7 @@ where
         }
     }
 
-    fn tip(&self, d: DAG, ep: Block) -> Block {
+    fn tip(&self, _d: DAG, ep: Block) -> Block {
         ep
     }
 
@@ -45,7 +45,7 @@ where
         }
     }
 
-    fn progress(&self, d: DAG, b: Block) -> f32 {
+    fn progress(&self, _d: DAG, _b: Block) -> f32 {
         1.
     }
 
