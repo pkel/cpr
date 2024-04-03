@@ -583,19 +583,44 @@ where
         let min_action = self.a.release.len().try_into().unwrap();
         let max_action = self.a.consider.len().try_into().unwrap();
 
-        // probabilistic termination
-        // we use common chain progress, analogous to fc16.rs; others are possible TODO
+        // probabilistic termination and rewards
+        // We follow closely fc16.rs to model long-term revenue.
+        // Others metrics are possible: TODO
+        // [ ] relative reward
+        //     progress := attacker + defender reward
+        //     reward := attacker reward
+        // [ ] short term revenue
+        //     progress := blocks mined
+        //     reward := attacker reward
+        // [x] long term revenue
+        //     progress := protocol-defined progress on common chain
+        //     reward := attacker reward
+        // [ ] history rewriting
+        //     progress := blocks mined or blocks on defender chain
+        //     reward := number of blocks rewritten in defender chain
         let h = self.common_history();
-        let mut progress = 0.;
-        for b in h.into_iter().rev() {
-            if b == old_ca {
-                break;
-            }
-            progress += self.p.progress(&self.g, b)
-        }
-        let term = self.env_terminates(progress);
+        let (term, progress, reward);
+        {
+            let mut prg = 0.;
+            let mut rew_atk = 0.;
+            let mut rew_def = 0.;
+            for b in h.into_iter().rev() {
+                if b == old_ca {
+                    break;
+                }
+                prg += self.p.progress(&self.g, b);
 
-        // calculate rewards TODO
+                for (m, x) in self.p.reward(&self.g, b) {
+                    match m {
+                        Party::Attacker => rew_atk += x,
+                        Party::Defender => rew_def += x,
+                    }
+                }
+            }
+            progress = prg;
+            reward = rew_atk;
+            term = self.env_terminates(progress);
+        }
 
         // return
         (min_action, max_action, term)
