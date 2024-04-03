@@ -155,7 +155,6 @@ impl<'a, ProtoData> BlockDAG<Block, Party, ProtoData> for PartialView<'a, ProtoD
     }
 
     fn children(&self, b: Block) -> Vec<Block> {
-        let f = |x: &Block| self.g.node_weight(*x).unwrap().dv != DView::Unknown;
         self.g
             .neighbors_directed(b, petgraph::Direction::Incoming)
             .filter(|&x| (self.p)(self.g, x))
@@ -535,7 +534,7 @@ where
     fn history(&self, b: Block) -> Vec<Block> {
         let mut v = VecDeque::new();
         while let Some(p) = self.p.pred(&self.g, b) {
-            v.push_front(b);
+            v.push_front(p);
         }
         v.into()
     }
