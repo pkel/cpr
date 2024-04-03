@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 // There are two parties to the game: the defenders and the attacker.
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -263,8 +265,9 @@ where
     g: Graph<D>,
     p: P,
     a: AvailableActions,
-    alpha: f64,
-    gamma: f64,
+    alpha: f32,
+    gamma: f32,
+    horizon: f32,
     rng: StdRng,
 }
 
@@ -321,7 +324,7 @@ where
         self.a = available_actions(&self.g);
     }
 
-    fn new(p: P, alpha: f64, gamma: f64) -> Self {
+    fn new(p: P, alpha: f32, gamma: f32, horizon: f32) -> Self {
         let g = new_graph(&p);
         let a = available_actions(&g);
         Env {
@@ -330,6 +333,7 @@ where
             a,
             alpha,
             gamma,
+            horizon,
             rng: StdRng::from_entropy(),
         }
         // TODO consider seeding
@@ -436,13 +440,38 @@ where
     }
 
     fn attacker_communicates_fast(&mut self) -> bool {
-        let x: f64 = self.rng.gen();
+        let x: f32 = self.rng.gen();
         x <= self.gamma
     }
 
     fn attacker_mines_next_block(&mut self) -> bool {
-        let x: f64 = self.rng.gen();
+        let x: f32 = self.rng.gen();
         x <= self.alpha
+    }
+
+    // Bar-Zur et al. write at AFT '20 on page 5:
+    //
+    // "In order to create a memoryless termination probability we utilize independent coin tosses.
+    // For every one unit of accumulated [progress], the MDP tosses a coin: Terminate the process
+    // with probability 1 - 1/H or continue with probability 1 - 1/H . Intuitively, since each unit
+    // of accumulated [progress] causes termination with probability 1/H the accumulated [progress]
+    // resembles a geometric distribution and therefore in expectation would be H once termination
+    // occurs.
+    //
+    // "4.3.2 The Auxiliary MDP. For an ARR-MDP we denote its auxiliary MDP by PT-MDP . PT-MDP has
+    // the same state space as ARR-MDP , with an additional terminal state with zero reward. PT-MDP
+    // is parametrized by some chosen parameter H . At every time step t, the agent in PT-MDP has a
+    // probability of 1 - (1 - 1/H)^[progress] , to transition to the terminal state. If
+    // termination has not occurred, then the transition occurs as in ARR-MDP. Intuitively, the
+    // process continues only if all independent coin tosses (there are [progress] of them)
+    // indicate to continue.
+    //
+    // In their setting, progress is discrete. We have floats here, but I think this distinction is
+    // not important.
+    fn env_terminates(&mut self, progress: f32) -> bool {
+        let x: f32 = self.rng.gen();
+        let prob = 1. - (1. - 1. / self.horizon).powf(progress);
+        x <= prob
     }
 
     fn communicate(&mut self) {
@@ -503,21 +532,72 @@ where
         }
     }
 
-    fn step(&mut self, a: i32) {
-        // decode action
+    fn history(&self, b: Block) -> Vec<Block> {
+        let mut v = VecDeque::new();
+        while let Some(p) = self.p.pred(&self.g, b) {
+            v.push_front(b);
+        }
+        v.into()
+    }
+
+    fn common_history(&self) -> Vec<Block> {
+        let a = self.history(self.entrypoint(Party::Attacker));
+        let d = self.history(self.entrypoint(Party::Defender));
+        assert!(a.len() > 0, "empty history");
+        assert!(d.len() > 0, "empty history");
+        assert!(a[0] == d[0]);
+
+        let mut common = Vec::new();
+        let max_len = std::cmp::min(a.len(), d.len());
+        for i in 0..max_len {
+            let x = a[i];
+            if x == d[i] {
+                common.push(x)
+            } else {
+                break;
+            }
+        }
+        common
+    }
+
+    fn step(&mut self, a: i32) -> (i32, i32, bool) {
+        // derive pre-action state
+        let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
+
+        // decode action & apply
         if a < 0 {
-            // lookup in available action
+            // lookup in available actions
             let b = self.a.release[usize::try_from(-a).unwrap()];
             self.release(b)
         } else if a > 0 {
-            // lookup in available action
-            let b = self.a.release[usize::try_from(a - 1).unwrap()];
+            // lookup in available actions
+            let b = self.a.consider[usize::try_from(a - 1).unwrap()];
             self.consider(b)
         } else {
             // a == 0
             self.continue_()
         }
-        self.a = available_actions(&self.g)
-        // TODO implement termination
+
+        // enumerate next set of actions
+        self.a = available_actions(&self.g);
+        let min_action = self.a.release.len().try_into().unwrap();
+        let max_action = self.a.consider.len().try_into().unwrap();
+
+        // probabilistic termination
+        // we use common chain progress, analogous to fc16.rs; others are possible TODO
+        let h = self.common_history();
+        let mut progress = 0.;
+        for b in h.into_iter().rev() {
+            if b == old_ca {
+                break;
+            }
+            progress += self.p.progress(&self.g, b)
+        }
+        let term = self.env_terminates(progress);
+
+        // calculate rewards TODO
+
+        // return
+        (min_action, max_action, term)
     }
 }
