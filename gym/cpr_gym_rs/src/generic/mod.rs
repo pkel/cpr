@@ -257,6 +257,10 @@ use rand::{Rng, SeedableRng};
 
 // environment logic
 
+use numpy::ndarray::Array2;
+
+type Action = i8;
+
 struct Env<P, D>
 where
     P: Protocol<Block, Party, D>,
@@ -268,13 +272,13 @@ where
     gamma: f32,
     horizon: f32,
     rng: StdRng,
+    obs: Array2<u8>,
 }
 
-fn new_graph<P, D>(p: &P) -> Graph<D>
+fn init_graph<P, D>(g: &mut Graph<D>, p: &P)
 where
     P: Protocol<Block, Party, D>,
 {
-    let mut g = Graph::new();
     let genesis = NodeWeight {
         av: AView::AEntry,
         dv: DView::DEntry,
@@ -282,7 +286,6 @@ where
         pd: p.init(),
     };
     g.add_node(genesis);
-    g
 }
 
 impl<P, D> BlockDAG<Block, Party, D> for Env<P, D>
@@ -307,26 +310,11 @@ impl<P, D> Env<P, D>
 where
     P: Protocol<Block, Party, D>,
 {
-    fn init_graph(&mut self) {
-        let genesis = NodeWeight {
-            av: AView::AEntry,
-            dv: DView::DEntry,
-            nv: NView::Honest,
-            pd: self.p.init(),
-        };
-        self.g.add_node(genesis);
-    }
-
-    fn reset(&mut self) {
-        self.g.clear();
-        self.init_graph();
-        self.a = available_actions(&self.g);
-    }
-
-    fn new(p: P, alpha: f32, gamma: f32, horizon: f32) -> Self {
-        let g = new_graph(&p);
+    fn new(p: P, alpha: f32, gamma: f32, horizon: f32, max_blocks: usize) -> Self {
+        let mut g = Graph::new();
+        init_graph(&mut g, &p);
         let a = available_actions(&g);
-        Env {
+        let mut self_ = Env {
             g,
             p,
             a,
@@ -334,8 +322,113 @@ where
             gamma,
             horizon,
             rng: StdRng::from_entropy(),
+            obs: Array2::zeros((max_blocks, max_blocks + 3)),
+        };
+        self_.observe();
+        self_
+    }
+
+    fn reset(&mut self) {
+        self.g.clear();
+        init_graph(&mut self.g, &self.p);
+        self.a = available_actions(&self.g);
+        self.observe();
+    }
+
+    fn describe_action(&self, a: Action) -> String {
+        if a < 0 {
+            // -1,-2,... becomes Release/0,1,...
+            format!("Release/{}", 1 - a)
+        } else if a > 0 {
+            // 1,2,... becomes Consider/0,1,...
+            format!("Consider/{}", a - 1)
+        } else {
+            // 0 becomes Continue
+            "Continue".to_string()
         }
-        // TODO consider seeding
+    }
+
+    fn describe(&self) -> String {
+        format!(
+            "Generic {{ alpha: {}, gamma: {}, horizon: {:?}, max_blocks: {} }}",
+            self.alpha,
+            self.gamma,
+            self.horizon,
+            self.obs.len()
+        )
+    }
+
+    fn step(&mut self, a: Action) -> (f64, bool, bool) {
+        // derive pre-action state
+        let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
+
+        // decode action & apply
+        if a < 0 {
+            // lookup in available actions
+            let idx = std::cmp::min(usize::try_from(1 - a).unwrap(), self.a.release.len() - 1);
+            self.release(self.a.release[idx])
+        } else if a > 0 {
+            // lookup in available actions
+            let idx = std::cmp::min(usize::try_from(a - 1).unwrap(), self.a.consider.len() - 1);
+            self.consider(self.a.consider[idx])
+        } else {
+            // a == 0
+            self.continue_()
+        }
+
+        // enumerate next set of actions
+        self.a = available_actions(&self.g);
+        let max_release: i32 = self.a.release.len().try_into().unwrap();
+        let max_consider: i32 = self.a.consider.len().try_into().unwrap();
+        assert!(<Action>::try_from(-max_release).is_ok());
+        assert!(<Action>::try_from(max_consider).is_ok());
+
+        // probabilistic termination and rewards
+        // We follow closely fc16.rs to model long-term revenue.
+        // Others metrics are possible: TODO
+        // [ ] relative reward
+        //     progress := attacker + defender reward
+        //     reward := attacker reward
+        // [ ] short term revenue
+        //     progress := blocks mined
+        //     reward := attacker reward
+        // [x] long term revenue
+        //     progress := protocol-defined progress on common chain
+        //     reward := attacker reward
+        // [ ] history rewriting
+        //     progress := blocks mined or blocks on defender chain
+        //     reward := number of blocks rewritten in defender chain
+        let h = self.common_history();
+        let (terminate, progress, reward);
+        {
+            let mut prg = 0.;
+            let mut rew_atk = 0.;
+            let mut rew_def = 0.;
+            for b in h.into_iter().rev() {
+                if b == old_ca {
+                    break;
+                }
+                prg += self.p.progress(&self.g, b);
+
+                for (m, x) in self.p.reward(&self.g, b) {
+                    match m {
+                        Party::Attacker => rew_atk += x,
+                        Party::Defender => rew_def += x,
+                    }
+                }
+            }
+            let _ignore = rew_def;
+            progress = prg;
+            reward = rew_atk;
+            terminate = self.env_terminates(progress);
+        }
+
+        // update observation buffer
+        self.observe();
+
+        // return
+        let truncate = false; // TODO, truncate if obs buffer is too small
+        (<f64>::try_from(reward).unwrap(), terminate, truncate)
     }
 
     fn weight(&self, b: Block) -> &NodeWeight<D> {
@@ -344,6 +437,26 @@ where
 
     fn mut_weight(&mut self, b: Block) -> &mut NodeWeight<D> {
         self.g.node_weight_mut(b).unwrap()
+    }
+
+    fn observe(&mut self) {
+        // reset buffer
+        self.obs.fill(0);
+        // fill buffer
+        for src in self.g.node_indices() {
+            // adjacency
+            for dst in self.parents(src) {
+                self.obs[[src.index(), dst.index() + 3]] = 1;
+            }
+            // color / weight
+            let w = self.weight(src);
+            let av = w.av as u8;
+            let dv = w.dv as u8;
+            let nv = w.nv as u8;
+            self.obs[[src.index(), 0]] = av;
+            self.obs[[src.index(), 1]] = dv;
+            self.obs[[src.index(), 2]] = nv;
+        }
     }
 
     fn entrypoint(&self, m: Party) -> Block {
@@ -557,71 +670,5 @@ where
             }
         }
         common
-    }
-
-    fn step(&mut self, a: i32) -> (i32, i32, bool) {
-        // derive pre-action state
-        let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
-
-        // decode action & apply
-        if a < 0 {
-            // lookup in available actions
-            let b = self.a.release[usize::try_from(-a).unwrap()];
-            self.release(b)
-        } else if a > 0 {
-            // lookup in available actions
-            let b = self.a.consider[usize::try_from(a - 1).unwrap()];
-            self.consider(b)
-        } else {
-            // a == 0
-            self.continue_()
-        }
-
-        // enumerate next set of actions
-        self.a = available_actions(&self.g);
-        let min_action = self.a.release.len().try_into().unwrap();
-        let max_action = self.a.consider.len().try_into().unwrap();
-
-        // probabilistic termination and rewards
-        // We follow closely fc16.rs to model long-term revenue.
-        // Others metrics are possible: TODO
-        // [ ] relative reward
-        //     progress := attacker + defender reward
-        //     reward := attacker reward
-        // [ ] short term revenue
-        //     progress := blocks mined
-        //     reward := attacker reward
-        // [x] long term revenue
-        //     progress := protocol-defined progress on common chain
-        //     reward := attacker reward
-        // [ ] history rewriting
-        //     progress := blocks mined or blocks on defender chain
-        //     reward := number of blocks rewritten in defender chain
-        let h = self.common_history();
-        let (term, progress, reward);
-        {
-            let mut prg = 0.;
-            let mut rew_atk = 0.;
-            let mut rew_def = 0.;
-            for b in h.into_iter().rev() {
-                if b == old_ca {
-                    break;
-                }
-                prg += self.p.progress(&self.g, b);
-
-                for (m, x) in self.p.reward(&self.g, b) {
-                    match m {
-                        Party::Attacker => rew_atk += x,
-                        Party::Defender => rew_def += x,
-                    }
-                }
-            }
-            progress = prg;
-            reward = rew_atk;
-            term = self.env_terminates(progress);
-        }
-
-        // return
-        (min_action, max_action, term)
     }
 }
