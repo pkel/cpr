@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 // There are two parties to the game: the defenders and the attacker.
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum Party {
+pub enum Party {
     Attacker,
     Defender,
 }
@@ -46,7 +46,7 @@ use petgraph;
 
 type NodeIx = petgraph::graph::DefaultIx;
 type Node = petgraph::graph::NodeIndex<NodeIx>;
-type Block = Node;
+pub type Block = Node;
 
 struct NodeWeight<P> {
     av: AView,
@@ -104,13 +104,13 @@ fn bflt_d_sees<P>(nd: &NodeWeight<P>) -> bool {
 
 // The BlockDAG is subject to some invariants, which I check below.
 
-fn dag_check<ProtoData>(g: Graph<ProtoData>) {
+fn dag_check<ProtoData>(g: &Graph<ProtoData>) -> bool {
     assert!(g.node_count() > 0, "dag is empty");
     assert!(
-        petgraph::algo::connected_components(&g) == 1,
+        petgraph::algo::connected_components(g) == 1,
         "dag not connected"
     );
-    assert!(!petgraph::algo::is_cyclic_directed(&g), "not a dag");
+    assert!(!petgraph::algo::is_cyclic_directed(g), "not a dag");
 
     let mut aentry = 0;
     let mut dentry = 0;
@@ -139,6 +139,8 @@ fn dag_check<ProtoData>(g: Graph<ProtoData>) {
 
     assert!(aentry == 1, "ill-defined attacker entry point");
     assert!(dentry == 1, "ill-defined defender entry point");
+
+    true
 }
 
 // Partial views on the DAG
@@ -259,9 +261,9 @@ use rand::{Rng, SeedableRng};
 
 use numpy::ndarray::Array2;
 
-type Action = i8;
+pub type Action = i8;
 
-struct Env<P, D>
+pub struct Env<P, D>
 where
     P: Protocol<Block, Party, D>,
 {
@@ -272,7 +274,7 @@ where
     gamma: f32,
     horizon: f32,
     rng: StdRng,
-    obs: Array2<u8>,
+    pub obs: Array2<u8>,
 }
 
 fn init_graph<P, D>(g: &mut Graph<D>, p: &P)
@@ -310,7 +312,7 @@ impl<P, D> Env<P, D>
 where
     P: Protocol<Block, Party, D>,
 {
-    fn new(p: P, alpha: f32, gamma: f32, horizon: f32, max_blocks: usize) -> Self {
+    pub fn new(p: P, alpha: f32, gamma: f32, horizon: f32, max_blocks: usize) -> Self {
         let mut g = Graph::new();
         init_graph(&mut g, &p);
         let a = available_actions(&g);
@@ -328,14 +330,14 @@ where
         self_
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.g.clear();
         init_graph(&mut self.g, &self.p);
         self.a = available_actions(&self.g);
         self.observe();
     }
 
-    fn describe_action(&self, a: Action) -> String {
+    pub fn describe_action(&self, a: Action) -> String {
         if a < 0 {
             // -1,-2,... becomes Release/0,1,...
             format!("Release/{}", 1 - a)
@@ -348,7 +350,7 @@ where
         }
     }
 
-    fn describe(&self) -> String {
+    pub fn describe(&self) -> String {
         format!(
             "Generic {{ alpha: {}, gamma: {}, horizon: {:?}, max_blocks: {} }}",
             self.alpha,
@@ -358,7 +360,7 @@ where
         )
     }
 
-    fn step(&mut self, a: Action) -> (f64, bool, bool) {
+    pub fn step(&mut self, a: Action) -> (f64, bool, bool) {
         // derive pre-action state
         let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
 
@@ -440,6 +442,8 @@ where
     }
 
     fn observe(&mut self) {
+        // observation is triggered often; check the dag invariants here
+        assert!(dag_check(&self.g));
         // reset buffer
         self.obs.fill(0);
         // fill buffer
@@ -670,5 +674,38 @@ where
             }
         }
         common
+    }
+}
+
+// We need a slightly different interface for Python-interop
+
+use numpy::IntoPyArray;
+use pyo3::prelude::*;
+use std::collections::HashMap;
+
+impl<P, D> Env<P, D>
+where
+    P: Protocol<Block, Party, D>,
+{
+    pub fn py_reset(&mut self, py: Python) -> (PyObject, HashMap<String, PyObject>) {
+        self.reset();
+        // TODO/perf avoid obs cloning?
+        (self.obs.clone().into_pyarray(py).into(), HashMap::new())
+    }
+
+    pub fn py_step(
+        &mut self,
+        py: Python,
+        a: Action,
+    ) -> (PyObject, f64, bool, bool, HashMap<String, PyObject>) {
+        let (rew, term, trunc) = self.step(a);
+        // TODO/perf avoid obs cloning?
+        (
+            self.obs.clone().into_pyarray(py).into(),
+            rew,
+            term,
+            trunc,
+            HashMap::new(),
+        )
     }
 }

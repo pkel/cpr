@@ -1,12 +1,13 @@
-use crate::generic::intf::{BlockDAG, Protocol};
+use crate::generic::intf;
+use crate::generic::intf::BlockDAG;
 
-struct Nakamoto {}
+pub struct Protocol {}
 
-struct Data {
+pub struct Data {
     height: u32,
 }
 
-impl<Block, Miner> Protocol<Block, Miner, Data> for Nakamoto
+impl<Block, Miner> intf::Protocol<Block, Miner, Data> for Protocol
 where
     Block: Copy,
     Miner: Copy,

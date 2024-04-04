@@ -1,1 +1,1 @@
-mod nakamoto;
+pub mod nakamoto;
