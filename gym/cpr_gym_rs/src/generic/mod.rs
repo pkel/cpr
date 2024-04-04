@@ -217,7 +217,7 @@ fn defender_view<'a, P>(g: &'a Graph<P>) -> PartialView<'a, P> {
 // - positive integers:  i means `Consider i`
 // - zero:               0 means `Continue`
 
-pub type Action = i8;
+pub type Action = i8; // -128, ..., 0, ..., 127
 
 #[derive(Clone, Copy, Debug)]
 enum ActionHum {
@@ -226,7 +226,7 @@ enum ActionHum {
     Continue,
 }
 
-fn _encode_action(a: ActionHum) -> Action {
+fn encode_action(a: ActionHum) -> Action {
     match a {
         ActionHum::Release(x) => -1 - <i8>::try_from(x).unwrap(),
         ActionHum::Consider(x) => 1 + <i8>::try_from(x).unwrap(),
@@ -236,9 +236,11 @@ fn _encode_action(a: ActionHum) -> Action {
 
 fn decode_action(a: Action) -> ActionHum {
     if a < 0 {
-        ActionHum::Release((1 - a).try_into().unwrap())
+        let one_to_128: u8 = (-a).try_into().unwrap();
+        ActionHum::Release(one_to_128 - 1)
     } else if a > 0 {
-        ActionHum::Consider((a - 1).try_into().unwrap())
+        let one_to_127: u8 = a.try_into().unwrap();
+        ActionHum::Consider(one_to_127 - 1)
     } else {
         ActionHum::Continue
     }
@@ -250,12 +252,17 @@ struct AvailableActions {
 }
 
 fn action_range(a: &AvailableActions) -> (Action, Action) {
-    let n_release = a.release.len();
-    let n_consider = a.consider.len();
-    (
-        -<i8>::try_from(n_release).unwrap(),
-        n_consider.try_into().unwrap(),
-    )
+    let n_release: u8 = a.release.len().try_into().unwrap();
+    let n_consider: u8 = a.consider.len().try_into().unwrap();
+    let mut min = 0;
+    let mut max = 0;
+    if n_release > 0 {
+        min = encode_action(ActionHum::Release(n_release - 1))
+    }
+    if n_consider > 0 {
+        max = encode_action(ActionHum::Consider(n_consider - 1))
+    }
+    (min, max)
 }
 
 fn available_actions<P>(g: &Graph<P>) -> AvailableActions {
@@ -390,18 +397,29 @@ where
         action_range(&self.a)
     }
 
+    pub fn guarded_action(&self, a: Action) -> Action {
+        let (min, max) = self.action_range();
+        if a < min {
+            min
+        } else if a > max {
+            max
+        } else {
+            a
+        }
+    }
+
     fn step(&mut self, a: Action) -> (f64, bool, bool) {
         // derive pre-action state
         let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
 
         // decode action & apply
-        match decode_action(a) {
+        match decode_action(self.guarded_action(a)) {
             ActionHum::Release(i) => {
-                let idx = std::cmp::min(self.a.release.len() - 1, i.into());
+                let idx: usize = i.into();
                 self.release(self.a.release[idx])
             }
             ActionHum::Consider(i) => {
-                let idx = std::cmp::min(self.a.consider.len() - 1, i.into());
+                let idx: usize = i.into();
                 self.consider(self.a.consider[idx])
             }
             ActionHum::Continue => self.continue_(),
