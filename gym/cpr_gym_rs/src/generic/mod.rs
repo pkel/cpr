@@ -375,7 +375,7 @@ where
         // TODO: possible actions
     }
 
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         self.g.clear();
         init_graph(&mut self.g, &self.p);
         self.a = available_actions(&self.g);
@@ -390,7 +390,7 @@ where
         action_range(&self.a)
     }
 
-    pub fn step(&mut self, a: Action) -> (f64, bool, bool) {
+    fn step(&mut self, a: Action) -> (f64, bool, bool) {
         // derive pre-action state
         let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
 
@@ -457,8 +457,10 @@ where
         // update observation buffer
         self.observe();
 
+        // truncate when observation buffer reaches limit
+        let truncate = self.g.node_count() >= self.obs.dim().0;
+
         // return
-        let truncate = false; // TODO, truncate if obs buffer is too small
         (<f64>::try_from(reward).unwrap(), terminate, truncate)
     }
 
