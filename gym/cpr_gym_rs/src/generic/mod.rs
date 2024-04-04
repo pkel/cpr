@@ -217,9 +217,45 @@ fn defender_view<'a, P>(g: &'a Graph<P>) -> PartialView<'a, P> {
 // - positive integers:  i means `Consider i`
 // - zero:               0 means `Continue`
 
+pub type Action = i8;
+
+#[derive(Clone, Copy, Debug)]
+enum ActionHum {
+    Release(u8),
+    Consider(u8),
+    Continue,
+}
+
+fn _encode_action(a: ActionHum) -> Action {
+    match a {
+        ActionHum::Release(x) => -1 - <i8>::try_from(x).unwrap(),
+        ActionHum::Consider(x) => 1 + <i8>::try_from(x).unwrap(),
+        ActionHum::Continue => 0,
+    }
+}
+
+fn decode_action(a: Action) -> ActionHum {
+    if a < 0 {
+        ActionHum::Release((1 - a).try_into().unwrap())
+    } else if a > 0 {
+        ActionHum::Consider((a - 1).try_into().unwrap())
+    } else {
+        ActionHum::Continue
+    }
+}
+
 struct AvailableActions {
     release: Vec<Block>,
     consider: Vec<Block>,
+}
+
+fn action_range(a: &AvailableActions) -> (Action, Action) {
+    let n_release = a.release.len();
+    let n_consider = a.consider.len();
+    (
+        -<i8>::try_from(n_release).unwrap(),
+        n_consider.try_into().unwrap(),
+    )
 }
 
 fn available_actions<P>(g: &Graph<P>) -> AvailableActions {
@@ -260,8 +296,6 @@ use rand::{Rng, SeedableRng};
 // environment logic
 
 use numpy::ndarray::Array2;
-
-pub type Action = i8;
 
 pub struct Env<P, D>
 where
@@ -330,6 +364,17 @@ where
         self_
     }
 
+    pub fn describe(&self) -> String {
+        format!(
+            "Generic {{ alpha: {}, gamma: {}, horizon: {:?}, obs_bytes: {} }}",
+            self.alpha,
+            self.gamma,
+            self.horizon,
+            self.obs.len()
+        )
+        // TODO: possible actions
+    }
+
     pub fn reset(&mut self) {
         self.g.clear();
         init_graph(&mut self.g, &self.p);
@@ -338,26 +383,11 @@ where
     }
 
     pub fn describe_action(&self, a: Action) -> String {
-        if a < 0 {
-            // -1,-2,... becomes Release/0,1,...
-            format!("Release/{}", 1 - a)
-        } else if a > 0 {
-            // 1,2,... becomes Consider/0,1,...
-            format!("Consider/{}", a - 1)
-        } else {
-            // 0 becomes Continue
-            "Continue".to_string()
-        }
+        format!("{:?}", decode_action(a))
     }
 
-    pub fn describe(&self) -> String {
-        format!(
-            "Generic {{ alpha: {}, gamma: {}, horizon: {:?}, max_blocks: {} }}",
-            self.alpha,
-            self.gamma,
-            self.horizon,
-            self.obs.len()
-        )
+    pub fn action_range(&self) -> (Action, Action) {
+        action_range(&self.a)
     }
 
     pub fn step(&mut self, a: Action) -> (f64, bool, bool) {
@@ -365,17 +395,16 @@ where
         let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
 
         // decode action & apply
-        if a < 0 {
-            // lookup in available actions
-            let idx = std::cmp::min(usize::try_from(1 - a).unwrap(), self.a.release.len() - 1);
-            self.release(self.a.release[idx])
-        } else if a > 0 {
-            // lookup in available actions
-            let idx = std::cmp::min(usize::try_from(a - 1).unwrap(), self.a.consider.len() - 1);
-            self.consider(self.a.consider[idx])
-        } else {
-            // a == 0
-            self.continue_()
+        match decode_action(a) {
+            ActionHum::Release(i) => {
+                let idx = std::cmp::min(self.a.release.len() - 1, i.into());
+                self.release(self.a.release[idx])
+            }
+            ActionHum::Consider(i) => {
+                let idx = std::cmp::min(self.a.consider.len() - 1, i.into());
+                self.consider(self.a.consider[idx])
+            }
+            ActionHum::Continue => self.continue_(),
         }
 
         // enumerate next set of actions
@@ -650,8 +679,10 @@ where
 
     fn history(&self, b: Block) -> Vec<Block> {
         let mut v = VecDeque::new();
-        while let Some(p) = self.p.pred(&self.g, b) {
-            v.push_front(p);
+        let mut ptr = Some(b);
+        while let Some(block) = ptr {
+            v.push_front(block);
+            ptr = self.p.pred(&self.g, block)
         }
         v.into()
     }

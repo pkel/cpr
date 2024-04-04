@@ -61,6 +61,12 @@ impl GenericEnv {
         }
     }
 
+    fn action_range(&self) -> (Action, Action) {
+        match &self.env {
+            BoxedEnv::Nakamoto(env) => env.action_range(),
+        }
+    }
+
     fn describe_action(&self, a: Action) -> String {
         match &self.env {
             BoxedEnv::Nakamoto(env) => env.describe_action(a),
