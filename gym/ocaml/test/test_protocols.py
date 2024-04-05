@@ -1,6 +1,6 @@
 import gym
 from cpr_gym import protocols
-from stable_baselines3.common.env_checker import check_env
+from gym.utils.env_checker import check_env
 
 
 def test_version():

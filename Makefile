@@ -54,7 +54,6 @@ dependencies:
 _venv: setup.py requirements.txt
 	${python} -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
-	_venv/bin/python -m pip install 'wheel<0.39' 'setuptools<67'
 	_venv/bin/pip install -r requirements.txt
 	touch _venv
 
