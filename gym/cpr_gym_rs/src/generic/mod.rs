@@ -598,7 +598,9 @@ where
         self.communicate();
         // mining depends on network assumptions
         if self.attacker_mines_next_block() {
-            self.mine_attacker()
+            // we simplify the RL problem, forcing the attacker to consider own blocks
+            let b = self.mine_attacker();
+            self.consider(b)
         } else {
             self.mine_defender()
         }
@@ -681,7 +683,7 @@ where
         }
     }
 
-    fn mine_attacker(&mut self) {
+    fn mine_attacker(&mut self) -> Block {
         let view = attacker_view(&self.g);
         let ep = self.entrypoint(Party::Attacker);
         let (parents, pd) = self.p.mining(&view, ep);
@@ -695,6 +697,7 @@ where
         for p in parents {
             self.g.update_edge(b, p, ());
         }
+        b
     }
 
     fn history(&self, b: Block) -> Vec<Block> {

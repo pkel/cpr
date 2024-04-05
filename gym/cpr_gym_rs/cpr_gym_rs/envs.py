@@ -29,9 +29,10 @@ class Generic(gymnasium.Env):
             p, alpha=alpha, gamma=gamma, horizon=horizon, max_blocks=max_blocks
         )
 
-        self.action_space = gymnasium.spaces.Box(
-            shape=(1,), low=-127, high=127, dtype=numpy.int8
-        )
+        self.action_space = gymnasium.spaces.Discrete(
+            255, start=-127
+        )  # does not work with sb3 DQN/MLP
+        self.action_space = gymnasium.spaces.Discrete(255)  # TODO seed
 
         obs, _info = self.rs_env.reset()
 
@@ -44,4 +45,4 @@ class Generic(gymnasium.Env):
         return self.rs_env.reset()
 
     def step(self, action):
-        return self.rs_env.step(action[0])
+        return self.rs_env.step(action - 127)

@@ -7,3 +7,13 @@ FC16SSZwPT-v0:
   n_epochs: 10 # how often to process each rollout buffer
   ent_coef: 0.05 # entropy, exploration term
   policy: 'MlpPolicy'
+
+Nakamoto-v0:
+  n_timesteps: 4_000_000
+  n_envs: 12 # = size of rollout buffer / n_steps
+  n_steps: 128 # = size of rollout buffer / n_envs
+  learning_rate: 0.0001 # weight of each update
+  batch_size: 128 # number of steps to consider per update
+  n_epochs: 1 # how often to process each rollout buffer
+  ent_coef: 0.05 # entropy, exploration term
+  policy: 'MlpPolicy'
