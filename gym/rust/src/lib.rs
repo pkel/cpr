@@ -19,7 +19,7 @@ enum Protocol {
 // investigating this is currently not worth the effort.
 
 enum BoxedEnv {
-    Nakamoto(Env<nakamoto::Protocol, nakamoto::Data>),
+    Nakamoto(Env<nakamoto::Protocol, nakamoto::Data, nakamoto::BaseObserver>),
 }
 // Boxed here means boxed type, not boxed data.
 
@@ -31,15 +31,15 @@ struct GenericEnv {
 #[pymethods]
 impl GenericEnv {
     #[new]
-    fn new(p: Protocol, alpha: f32, gamma: f32, horizon: f32, max_blocks: usize) -> Self {
+    fn new(p: Protocol, alpha: f32, gamma: f32, horizon: f32) -> Self {
         match p {
             Protocol::Nakamoto => GenericEnv {
                 env: BoxedEnv::Nakamoto(Env::new(
                     nakamoto::Protocol {},
+                    nakamoto::BaseObserver {},
                     alpha,
                     gamma,
                     horizon,
-                    max_blocks,
                 )),
             },
         }

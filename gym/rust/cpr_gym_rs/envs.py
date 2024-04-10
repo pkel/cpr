@@ -22,12 +22,10 @@ class FC16SSZwPT(gymnasium.Env):
 class Generic(gymnasium.Env):
     protocols = {"nakamoto": lambda: _rust.Protocol.Nakamoto}
 
-    def __init__(self, protocol, *args, alpha, gamma, horizon, max_blocks, **kwargs):
+    def __init__(self, protocol, *args, alpha, gamma, horizon, **kwargs):
         p = Generic.protocols[protocol](*args, **kwargs)
 
-        self.rs_env = _rust.GenericEnv(
-            p, alpha=alpha, gamma=gamma, horizon=horizon, max_blocks=max_blocks
-        )
+        self.rs_env = _rust.GenericEnv(p, alpha=alpha, gamma=gamma, horizon=horizon)
 
         self.action_space = gymnasium.spaces.Discrete(
             255, start=-127
@@ -37,7 +35,7 @@ class Generic(gymnasium.Env):
         obs, _info = self.rs_env.reset()
 
         self.observation_space = gymnasium.spaces.Box(
-            shape=obs.shape, low=0, high=2, dtype=numpy.uint8
+            shape=obs.shape, low=float("-inf"), high=float("inf"), dtype=numpy.float32
         )
 
     def reset(self, *args, seed=None, options=None):

@@ -60,7 +60,7 @@ type EdgeWeight = ();
 type Graph<ProtoData> = petgraph::graph::DiGraph<NodeWeight<ProtoData>, EdgeWeight>;
 
 pub mod intf;
-use intf::{BlockDAG, Protocol};
+use intf::{BlockDAG, FeatureExtractor, Protocol};
 
 impl<ProtoData> BlockDAG<Block, Party, ProtoData> for Graph<ProtoData> {
     fn parents(&self, b: Block) -> Vec<Block> {
@@ -302,23 +302,23 @@ use rand::{Rng, SeedableRng};
 
 // environment logic
 
-use numpy::ndarray::Array2;
-
-pub struct Env<P, D>
+pub struct Env<P, D, O>
 where
     P: Protocol<Block, Party, D>,
+    O: FeatureExtractor<Block, Party, D>,
 {
     g: Graph<D>,
     p: P,
+    o: O,
     a: AvailableActions,
     alpha: f32,
     gamma: f32,
     horizon: f32,
     rng: StdRng,
-    pub obs: Array2<u8>,
+    ca: Block, // cached common ancestor
 }
 
-fn init_graph<P, D>(g: &mut Graph<D>, p: &P)
+fn init_graph<P, D>(g: &mut Graph<D>, p: &P) -> Block
 where
     P: Protocol<Block, Party, D>,
 {
@@ -328,12 +328,13 @@ where
         nv: NView::Honest,
         pd: p.init(),
     };
-    g.add_node(genesis);
+    g.add_node(genesis)
 }
 
-impl<P, D> BlockDAG<Block, Party, D> for Env<P, D>
+impl<P, D, O> BlockDAG<Block, Party, D> for Env<P, D, O>
 where
     P: Protocol<Block, Party, D>,
+    O: FeatureExtractor<Block, Party, D>,
 {
     fn parents(&self, b: Block) -> Vec<Block> {
         self.g.parents(b)
@@ -349,44 +350,41 @@ where
     }
 }
 
-impl<P, D> Env<P, D>
+impl<P, D, O> Env<P, D, O>
 where
     P: Protocol<Block, Party, D>,
+    O: FeatureExtractor<Block, Party, D>,
 {
-    pub fn new(p: P, alpha: f32, gamma: f32, horizon: f32, max_blocks: usize) -> Self {
+    pub fn new(p: P, o: O, alpha: f32, gamma: f32, horizon: f32) -> Self {
         let mut g = Graph::new();
-        init_graph(&mut g, &p);
+        let genesis = init_graph(&mut g, &p);
         let a = available_actions(&g);
-        let mut self_ = Env {
+        Env {
             g,
             p,
+            o,
             a,
             alpha,
             gamma,
             horizon,
             rng: StdRng::from_entropy(),
-            obs: Array2::zeros((max_blocks, max_blocks + 3)),
-        };
-        self_.observe();
-        self_
+            ca: genesis,
+        }
     }
 
     pub fn describe(&self) -> String {
         format!(
-            "Generic {{ alpha: {}, gamma: {}, horizon: {:?}, obs_bytes: {} }}",
-            self.alpha,
-            self.gamma,
-            self.horizon,
-            self.obs.len()
+            "Generic {{ alpha: {}, gamma: {}, horizon: {:?} }}",
+            self.alpha, self.gamma, self.horizon,
         )
         // TODO: possible actions
     }
 
     fn reset(&mut self) {
         self.g.clear();
-        init_graph(&mut self.g, &self.p);
+        let genesis = init_graph(&mut self.g, &self.p);
         self.a = available_actions(&self.g);
-        self.observe();
+        self.ca = genesis;
     }
 
     pub fn describe_action(&self, a: Action) -> String {
@@ -409,8 +407,11 @@ where
     }
 
     fn step(&mut self, a: Action) -> (f64, bool, bool) {
+        // check the dag invariants
+        assert!(dag_check(&self.g));
+
         // derive pre-action state
-        let old_ca = *self.common_history().last().unwrap(); // TODO/perf: persist in self
+        let old_ca = self.ca;
 
         // decode action & apply
         match decode_action(self.guarded_action(a)) {
@@ -448,12 +449,13 @@ where
         //     progress := blocks mined or blocks on defender chain
         //     reward := number of blocks rewritten in defender chain
         let h = self.common_history();
+
         let (terminate, progress, reward);
         {
             let mut prg = 0.;
             let mut rew_atk = 0.;
             let mut rew_def = 0.;
-            for b in h.into_iter().rev() {
+            for &b in h.iter().rev() {
                 if b == old_ca {
                     break;
                 }
@@ -472,11 +474,11 @@ where
             terminate = self.env_terminates(progress);
         }
 
-        // update observation buffer
-        self.observe();
+        // cache common ancestor; observation and next step rely on this
+        self.ca = *h.last().unwrap();
 
-        // truncate when observation buffer reaches limit
-        let truncate = self.g.node_count() >= self.obs.dim().0;
+        // we do not need truncation
+        let truncate = false;
 
         // return
         (<f64>::try_from(reward).unwrap(), terminate, truncate)
@@ -488,28 +490,6 @@ where
 
     fn mut_weight(&mut self, b: Block) -> &mut NodeWeight<D> {
         self.g.node_weight_mut(b).unwrap()
-    }
-
-    fn observe(&mut self) {
-        // observation is triggered often; check the dag invariants here
-        assert!(dag_check(&self.g));
-        // reset buffer
-        self.obs.fill(0);
-        // fill buffer
-        for src in self.g.node_indices() {
-            // adjacency
-            for dst in self.parents(src) {
-                self.obs[[src.index(), dst.index() + 3]] = 1;
-            }
-            // color / weight
-            let w = self.weight(src);
-            let av = w.av as u8;
-            let dv = w.dv as u8;
-            let nv = w.nv as u8;
-            self.obs[[src.index(), 0]] = av;
-            self.obs[[src.index(), 1]] = dv;
-            self.obs[[src.index(), 2]] = nv;
-        }
     }
 
     fn entrypoint(&self, m: Party) -> Block {
@@ -737,14 +717,21 @@ use numpy::IntoPyArray;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
-impl<P, D> Env<P, D>
+impl<P, D, O> Env<P, D, O>
 where
     P: Protocol<Block, Party, D>,
+    O: FeatureExtractor<Block, Party, D>,
 {
+    fn py_observe(&self, py: Python) -> PyObject {
+        let atk = self.entrypoint(Party::Attacker);
+        let def = self.entrypoint(Party::Defender);
+        let obs: Vec<f32> = self.o.observe(&self.g, atk, def, self.ca);
+        obs.into_pyarray(py).into()
+    }
+
     pub fn py_reset(&mut self, py: Python) -> (PyObject, HashMap<String, PyObject>) {
         self.reset();
-        // TODO/perf avoid obs cloning?
-        (self.obs.clone().into_pyarray(py).into(), HashMap::new())
+        (self.py_observe(py), HashMap::new())
     }
 
     pub fn py_step(
@@ -753,13 +740,6 @@ where
         a: Action,
     ) -> (PyObject, f64, bool, bool, HashMap<String, PyObject>) {
         let (rew, term, trunc) = self.step(a);
-        // TODO/perf avoid obs cloning?
-        (
-            self.obs.clone().into_pyarray(py).into(),
-            rew,
-            term,
-            trunc,
-            HashMap::new(),
-        )
+        (self.py_observe(py), rew, term, trunc, HashMap::new())
     }
 }

@@ -53,3 +53,25 @@ where
         vec![(d.miner(b), 1.)]
     }
 }
+
+pub struct BaseObserver {}
+
+impl<Block, Miner> intf::FeatureExtractor<Block, Miner, Data> for BaseObserver
+where
+    Block: Copy,
+    Miner: Copy,
+{
+    fn observe<DAG: BlockDAG<Block, Miner, Data>>(
+        &self,
+        d: &DAG,
+        atk: Block,
+        def: Block,
+        ca: Block,
+    ) -> Vec<f32> {
+        // TODO derive third observable of fc16.rs
+        let ch = d.data(ca).height; // height common ancestor
+        let ah = d.data(atk).height - ch; // height attacker preferred block
+        let dh = d.data(def).height - ch; // height defender preferred block
+        vec![ah as f32, dh as f32]
+    }
+}

@@ -52,3 +52,16 @@ pub trait Protocol<Block, Miner, Data> {
     // Given block `b`, what rewards where allocated since `pred(b)`?
     // Block `b` is guaranteed to be part of a linear history of some tip.
 }
+
+pub trait FeatureExtractor<Block, Miner, Data> {
+    // Interface for specifying protocol-dependent feature extractors (WIP)
+
+    // BlockDAG with attacker and defender entrypoints and common ancestor in linear history.
+    fn observe<DAG: BlockDAG<Block, Miner, Data>>(
+        &self,
+        d: &DAG,
+        atk: Block,
+        def: Block,
+        ca: Block,
+    ) -> Vec<f32>;
+}

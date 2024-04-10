@@ -16,7 +16,7 @@ def test_FC16SSZwPT():
 
 def test_nakamoto():
     proto = _rust.Protocol.Nakamoto
-    env = _rust.GenericEnv(proto, alpha=0.5, gamma=0.5, horizon=25, max_blocks=128)
+    env = _rust.GenericEnv(proto, alpha=0.5, gamma=0.5, horizon=25)
     for _ in range(1000):
         mina, maxa = env.action_range()
         a = randint(mina, maxa)

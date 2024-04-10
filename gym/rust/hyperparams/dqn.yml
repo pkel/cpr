@@ -39,12 +39,12 @@ FC16SSZwPT-v0:
 Nakamoto-v0:
   n_envs: 24
   n_timesteps: 50_000_000
-  buffer_size: 1_000_000 # how many experiences recorded for sampling
+  buffer_size: 5_000_000 # how many experiences recorded for sampling
   train_freq: 10_000 # how regularly to update / length of rollout in steps
   gradient_steps: 100 # how many updates per rollout (at the end of each rollout)
   learning_rate: 0.001 # weight of individual update
   batch_size: 500 # how many experiences to sample for each update
-  learning_starts: 100_000 # steps before learning starts
+  learning_starts: 500_000 # steps before learning starts
   gamma: 1 # discount factor
   target_update_interval: 10_000 # how often to update target network (steps)
   tau: 0.01 # weight of target network update; 1 implies hard update
