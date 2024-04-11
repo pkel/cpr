@@ -216,8 +216,15 @@ fn defender_view<'a, P>(g: &'a Graph<P>) -> PartialView<'a, P> {
 // - negative integers: -i means `Release  i`
 // - positive integers:  i means `Consider i`
 // - zero:               0 means `Continue`
+//
+// We cap i <= 255, i.e. unsigned 8bit.
+//
+// When sampling from these random actions uniformly it will happen that the Continue is drowned in
+// (mostly invalid) Release and Consider actions. We avoid this by mapping the integer actions to
+// real numbers between -1 and 1, giving actions close to 0 more weight.
+// The exposed action space is (-1, 1).
 
-pub type Action = i8; // -128, ..., 0, ..., 127
+pub type Action = f32; // (-1., 1.)
 
 #[derive(Clone, Copy, Debug)]
 enum ActionHum {
@@ -226,21 +233,44 @@ enum ActionHum {
     Continue,
 }
 
-fn encode_action(a: ActionHum) -> Action {
+fn _encode_action(a: ActionHum) -> Action {
     match a {
-        ActionHum::Release(x) => -1 - <i8>::try_from(x).unwrap(),
-        ActionHum::Consider(x) => 1 + <i8>::try_from(x).unwrap(),
-        ActionHum::Continue => 0,
+        ActionHum::Release(x) => {
+            let x = -<f32>::from(x);
+            x / (1. + x.abs())
+        }
+        ActionHum::Consider(x) => {
+            let x = <f32>::from(x);
+            x / (1. + x.abs())
+        }
+        ActionHum::Continue => 0.,
     }
 }
 
 fn decode_action(a: Action) -> ActionHum {
-    if a < 0 {
-        let one_to_128: u8 = (-a).try_into().unwrap();
-        ActionHum::Release(one_to_128 - 1)
-    } else if a > 0 {
-        let one_to_127: u8 = a.try_into().unwrap();
-        ActionHum::Consider(one_to_127 - 1)
+    assert!(a >= -1., "invalid action: {a} outside [-1, 1]");
+    assert!(a <= 1., "invalid action: {a} outside [-1, 1]");
+
+    if a == -1. {
+        return ActionHum::Release(<u8>::MAX);
+    }
+
+    if a == 1. {
+        return ActionHum::Consider(<u8>::MAX);
+    }
+
+    let x = if a >= 0. { -a / (a - 1.) } else { a / (a + 1.) };
+
+    let x = x.round();
+
+    if x < 255. {
+        ActionHum::Release(<u8>::MAX)
+    } else if x < 0. {
+        ActionHum::Release(x as u8)
+    } else if x > 255. {
+        ActionHum::Consider(<u8>::MAX)
+    } else if x > 0. {
+        ActionHum::Consider(x as u8)
     } else {
         ActionHum::Continue
     }
@@ -249,20 +279,6 @@ fn decode_action(a: Action) -> ActionHum {
 struct AvailableActions {
     release: Vec<Block>,
     consider: Vec<Block>,
-}
-
-fn action_range(a: &AvailableActions) -> (Action, Action) {
-    let n_release: u8 = a.release.len().try_into().unwrap();
-    let n_consider: u8 = a.consider.len().try_into().unwrap();
-    let mut min = 0;
-    let mut max = 0;
-    if n_release > 0 {
-        min = encode_action(ActionHum::Release(n_release - 1))
-    }
-    if n_consider > 0 {
-        max = encode_action(ActionHum::Consider(n_consider - 1))
-    }
-    (min, max)
 }
 
 fn available_actions<P>(g: &Graph<P>) -> AvailableActions {
@@ -391,18 +407,31 @@ where
         format!("{:?}", decode_action(a))
     }
 
-    pub fn action_range(&self) -> (Action, Action) {
-        action_range(&self.a)
-    }
-
-    pub fn guarded_action(&self, a: Action) -> Action {
-        let (min, max) = self.action_range();
-        if a < min {
-            min
-        } else if a > max {
-            max
-        } else {
-            a
+    fn guarded_action(&self, a: ActionHum) -> ActionHum {
+        match a {
+            ActionHum::Continue => ActionHum::Continue,
+            ActionHum::Release(i) => {
+                let l = self.a.release.len();
+                if l < 1 {
+                    ActionHum::Continue
+                } else if usize::from(i) >= l {
+                    let i: u8 = (l - 1).try_into().unwrap();
+                    ActionHum::Release(i)
+                } else {
+                    a
+                }
+            }
+            ActionHum::Consider(i) => {
+                let l = self.a.consider.len();
+                if l < 1 {
+                    ActionHum::Continue
+                } else if usize::from(i) >= l {
+                    let i: u8 = (l - 1).try_into().unwrap();
+                    ActionHum::Consider(i)
+                } else {
+                    a
+                }
+            }
         }
     }
 
@@ -414,7 +443,7 @@ where
         let old_ca = self.ca;
 
         // decode action & apply
-        match decode_action(self.guarded_action(a)) {
+        match self.guarded_action(decode_action(a)) {
             ActionHum::Release(i) => {
                 let idx: usize = i.into();
                 self.release(self.a.release[idx])
@@ -428,10 +457,6 @@ where
 
         // enumerate next set of actions
         self.a = available_actions(&self.g);
-        let max_release: i32 = self.a.release.len().try_into().unwrap();
-        let max_consider: i32 = self.a.consider.len().try_into().unwrap();
-        assert!(<Action>::try_from(-max_release).is_ok());
-        assert!(<Action>::try_from(max_consider).is_ok());
 
         // probabilistic termination and rewards
         // We follow closely fc16.rs to model long-term revenue.

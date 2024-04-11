@@ -26,10 +26,9 @@ class Generic(gymnasium.Env):
 
         self.rs_env = _rust.GenericEnv(p, alpha=alpha, gamma=gamma, horizon=horizon)
 
-        self.action_space = gymnasium.spaces.Discrete(
-            255, start=-127
-        )  # does not work with sb3 DQN/MLP
-        self.action_space = gymnasium.spaces.Discrete(255)  # TODO seed
+        self.action_space = gymnasium.spaces.Box(
+            shape=(1,), low=-1.0, high=1.0, dtype="float32"
+        )
 
         low = self.rs_env.low()
         high = self.rs_env.high()
@@ -43,4 +42,4 @@ class Generic(gymnasium.Env):
         return self.rs_env.reset()
 
     def step(self, action):
-        return self.rs_env.step(action - 127)
+        return self.rs_env.step(action[0])
