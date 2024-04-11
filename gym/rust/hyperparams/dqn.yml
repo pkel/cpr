@@ -38,7 +38,7 @@ FC16SSZwPT-v0:
 
 Nakamoto-v0:
   n_envs: 24
-  n_timesteps: 50_000_000
+  n_timesteps: 10_000_000
   buffer_size: 5_000_000 # how many experiences recorded for sampling
   train_freq: 10_000 # how regularly to update / length of rollout in steps
   gradient_steps: 100 # how many updates per rollout (at the end of each rollout)
