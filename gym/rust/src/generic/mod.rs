@@ -691,8 +691,8 @@ where
     }
 
     fn common_history(&self) -> Vec<Block> {
-        let a = self.history(self.entrypoint(Party::Attacker));
-        let d = self.history(self.entrypoint(Party::Defender));
+        let a = self.history(self.p.tip(&self.g, self.entrypoint(Party::Attacker)));
+        let d = self.history(self.p.tip(&self.g, self.entrypoint(Party::Defender)));
         assert!(a.len() > 0, "empty history");
         assert!(d.len() > 0, "empty history");
         assert!(a[0] == d[0]);
