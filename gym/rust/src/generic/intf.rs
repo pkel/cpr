@@ -63,5 +63,13 @@ pub trait FeatureExtractor<Block, Miner, Data> {
         atk: Block,
         def: Block,
         ca: Block,
+        known_to_all_defenders: &dyn Fn(Block) -> bool,
+        mined_by_defender: &dyn Fn(Block) -> bool,
     ) -> Vec<f32>;
+
+    // Lower bound of observation space
+    fn low(&self) -> Vec<f32>;
+
+    // Upper bound of observation space
+    fn high(&self) -> Vec<f32>;
 }

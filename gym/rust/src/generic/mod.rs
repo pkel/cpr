@@ -725,8 +725,18 @@ where
     fn py_observe(&self, py: Python) -> PyObject {
         let atk = self.entrypoint(Party::Attacker);
         let def = self.entrypoint(Party::Defender);
-        let obs: Vec<f32> = self.o.observe(&self.g, atk, def, self.ca);
+        let ktad = |b: Block| -> bool { self.weight(b).dv != DView::Unknown };
+        let mbd = |b: Block| -> bool { self.weight(b).nv == NView::Honest };
+        let obs: Vec<f32> = self.o.observe(&self.g, atk, def, self.ca, &ktad, &mbd);
         obs.into_pyarray(py).into()
+    }
+
+    pub fn py_low(&self, py: Python) -> PyObject {
+        self.o.low().into_pyarray(py).into()
+    }
+
+    pub fn py_high(&self, py: Python) -> PyObject {
+        self.o.high().into_pyarray(py).into()
     }
 
     pub fn py_reset(&mut self, py: Python) -> (PyObject, HashMap<String, PyObject>) {

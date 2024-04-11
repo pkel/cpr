@@ -61,6 +61,18 @@ impl GenericEnv {
         }
     }
 
+    fn low(&self, py: Python) -> PyObject {
+        match &self.env {
+            BoxedEnv::Nakamoto(env) => env.py_low(py),
+        }
+    }
+
+    fn high(&self, py: Python) -> PyObject {
+        match &self.env {
+            BoxedEnv::Nakamoto(env) => env.py_high(py),
+        }
+    }
+
     fn action_range(&self) -> (Action, Action) {
         match &self.env {
             BoxedEnv::Nakamoto(env) => env.action_range(),

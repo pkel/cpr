@@ -1,5 +1,4 @@
 import gymnasium
-import numpy
 from . import _rust
 
 
@@ -32,10 +31,11 @@ class Generic(gymnasium.Env):
         )  # does not work with sb3 DQN/MLP
         self.action_space = gymnasium.spaces.Discrete(255)  # TODO seed
 
-        obs, _info = self.rs_env.reset()
+        low = self.rs_env.low()
+        high = self.rs_env.high()
 
         self.observation_space = gymnasium.spaces.Box(
-            shape=obs.shape, low=float("-inf"), high=float("inf"), dtype=numpy.float32
+            shape=low.shape, low=low, high=high
         )
 
     def reset(self, *args, seed=None, options=None):
