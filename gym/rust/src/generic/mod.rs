@@ -263,7 +263,7 @@ fn decode_action(a: Action) -> ActionHum {
 
     let x = x.round();
 
-    if x < 255. {
+    if x < -255. {
         ActionHum::Release(<u8>::MAX)
     } else if x < 0. {
         ActionHum::Release(x as u8)
@@ -331,7 +331,8 @@ where
     gamma: f32,
     horizon: f32,
     rng: StdRng,
-    ca: Block, // cached common ancestor
+    ca: Block,        // cached common ancestor
+    hist: Vec<Block>, // linear history on defender's chain
 }
 
 fn init_graph<P, D>(g: &mut Graph<D>, p: &P) -> Block
@@ -368,6 +369,7 @@ where
 
 pub enum InfoV {
     F32(f32),
+    USize(usize),
 }
 
 pub type Info = Vec<(&'static str, InfoV)>;
@@ -391,6 +393,7 @@ where
             horizon,
             rng: StdRng::from_entropy(),
             ca: genesis,
+            hist: vec![genesis],
         }
     }
 
@@ -407,6 +410,7 @@ where
         let genesis = init_graph(&mut self.g, &self.p);
         self.a = available_actions(&self.g);
         self.ca = genesis;
+        self.hist = vec![genesis];
     }
 
     pub fn describe_action(&self, a: Action) -> String {
@@ -442,13 +446,11 @@ where
     }
 
     fn step(&mut self, a: Action) -> (f64, bool, bool, Info) {
-        // check the dag invariants
+        // check dag invariants
         assert!(dag_check(&self.g));
 
-        // derive pre-action state
-        let old_ca = self.ca;
-
         // decode action & apply
+        let mut time = 0;
         match self.guarded_action(decode_action(a)) {
             ActionHum::Release(i) => {
                 let idx: usize = i.into();
@@ -458,15 +460,26 @@ where
                 let idx: usize = i.into();
                 self.consider(self.a.consider[idx])
             }
-            ActionHum::Continue => self.continue_(),
+            ActionHum::Continue => {
+                self.continue_();
+                time = 1
+            }
         }
+        let time = time;
 
         // enumerate next set of actions
         self.a = available_actions(&self.g);
 
+        // cache common ancestor; observation and next step rely on this
+        let h = self.common_history();
+        self.ca = *h.last().unwrap();
+        // TODO: remove common chain stuff, as it is irrelevant now.
+        // We might still need it though to expose fc16.rs-like observations.
+
         // probabilistic termination and rewards
-        // We follow closely fc16.rs to model long-term revenue.
-        // Others metrics are possible: TODO
+        //
+        // We follow closely fc16.rs and model long-term revenue.
+        // Others metrics are possible. TODO
         // [ ] relative reward
         //     progress := attacker + defender reward
         //     reward := attacker reward
@@ -474,49 +487,100 @@ where
         //     progress := blocks mined
         //     reward := attacker reward
         // [x] long term revenue
-        //     progress := protocol-defined progress on common chain
+        //     progress := protocol-defined progress # TODO rename to difficulty contribution
         //     reward := attacker reward
-        //     TODO/problem: common chain growth can be zero for some policies (e.g. Continue only)
-        //     thus PTO assumption does not hold.
         // [ ] history rewriting
-        //     progress := blocks mined or blocks on defender chain
-        //     reward := number of blocks rewritten in defender chain
-        let h = self.common_history();
+        //     progress := blocks mined or blocks
+        //     reward := number of blocks rewritten
 
-        let (terminate, progress, reward);
-        {
-            let mut prg = 0.;
-            let mut rew_atk = 0.;
-            let mut rew_def = 0.;
-            for &b in h.iter().rev() {
-                if b == old_ca {
-                    break;
-                }
-                prg += self.p.progress(&self.g, b);
+        let (rewrite, prg, attacker_rew, defender_rew) = self.track_defender_chain();
 
-                for (m, x) in self.p.reward(&self.g, b) {
-                    match m {
-                        Party::Attacker => rew_atk += x,
-                        Party::Defender => rew_def += x,
-                    }
-                }
-            }
-            let _ignore = rew_def;
-            progress = prg;
-            reward = rew_atk;
-            terminate = self.env_terminates(progress);
-        }
+        // PTO assumption: non-negative progress
+        // negative progress implies that defender accepted a lower progress chain.
+        assert!(prg >= 0., "negative progress, invalid protocol?");
+        let term = self.env_terminates(prg);
 
-        // cache common ancestor; observation and next step rely on this
-        self.ca = *h.last().unwrap();
+        // we do not use truncation currently
+        let trunc = false;
 
-        // we do not need truncation
-        let truncate = false;
-
-        let info = vec![("progress", InfoV::F32(progress))];
+        let info = vec![
+            ("progress", InfoV::F32(prg)),
+            ("reward_attacker", InfoV::F32(attacker_rew)),
+            ("reward_defender", InfoV::F32(defender_rew)),
+            ("rewrite", InfoV::USize(rewrite)),
+            ("time", InfoV::USize(time)),
+        ];
 
         // return
-        (<f64>::try_from(reward).unwrap(), terminate, truncate, info)
+        (<f64>::try_from(attacker_rew).unwrap(), term, trunc, info)
+    }
+
+    fn track_defender_chain(&mut self) -> (usize, f32, f32, f32) {
+        // The PTO paper makes an assumption (A. 3 on p. 4) that any policy implies a strictly
+        // positive expected difficulty contribution. This restricts how we can compute progress in
+        // the simulator.
+        //  - ok: one progress per block mined, represents time in the short term, i.e. before
+        //    difficulty adjustment
+        //  - ok: accumulated progress on defender chain, represents time in the long term, i.e.
+        //    after difficulty adjustment.
+        //  - not ok: accumulated progress on attacker or common chain as these depend on the
+        //    policy. The "always continue" policy implies that attacker and common chain do not
+        //    grow.
+        // With that in mind I do here some tracking of the defender's linear history.
+        // get defender's current and old history
+
+        let cur = self.history(self.p.tip(&self.g, self.entrypoint(Party::Defender)));
+        let old = &self.hist;
+
+        // walk through histories: setup
+        let cur_len = cur.len();
+        let old_len = old.len();
+        assert!(cur[0] == old[0], "genesis must not change");
+        assert!(cur_len >= old_len, "shrinking history; protocol bug?",);
+
+        // walk through histories: ignore common prefix
+        let mut i = 0;
+        while i < old_len && cur[i] == old[i] {
+            i += 1;
+        }
+        let first = i;
+
+        // walk through histories: track current progress and reward
+        let mut prg = 0.;
+        let mut rew_atk = 0.;
+        let mut rew_def = 0.;
+        let mut i = first;
+        while i < cur_len {
+            prg += self.p.progress(&self.g, cur[i]);
+            for (m, x) in self.p.reward(&self.g, cur[i]) {
+                match m {
+                    Party::Attacker => rew_atk += x,
+                    Party::Defender => rew_def += x,
+                }
+            }
+            i += 1;
+        }
+
+        // walk through histories: track updated history entries and subtract old progress and
+        // reward
+        let mut upd = 0;
+        let mut i = first;
+        while i < old_len {
+            upd += 1;
+            prg -= self.p.progress(&self.g, old[i]);
+            for (m, x) in self.p.reward(&self.g, old[i]) {
+                match m {
+                    Party::Attacker => rew_atk -= x,
+                    Party::Defender => rew_def -= x,
+                }
+            }
+            i += 1;
+        }
+
+        // store defender's new history for next iteration
+        self.hist = cur;
+
+        (upd, prg, rew_atk, rew_def)
     }
 
     fn weight(&self, b: Block) -> &NodeWeight<D> {
@@ -718,9 +782,9 @@ where
     fn history(&self, b: Block) -> Vec<Block> {
         let mut v = VecDeque::new();
         let mut ptr = Some(b);
-        while let Some(block) = ptr {
-            v.push_front(block);
-            ptr = self.p.pred(&self.g, block)
+        while let Some(i) = ptr {
+            v.push_front(i);
+            ptr = self.p.pred(&self.g, i)
         }
         v.into()
     }
@@ -755,7 +819,8 @@ use std::collections::HashMap;
 impl IntoPy<PyObject> for InfoV {
     fn into_py(self, py: Python) -> PyObject {
         match self {
-            InfoV::F32(f) => f.into_py(py),
+            InfoV::F32(x) => x.into_py(py),
+            InfoV::USize(x) => x.into_py(py),
         }
     }
 }

@@ -43,3 +43,6 @@ class Generic(gymnasium.Env):
 
     def step(self, action):
         return self.rs_env.step(action[0])
+
+    def describe_action(self, action):
+        return self.rs_env.describe_action(action[0])
