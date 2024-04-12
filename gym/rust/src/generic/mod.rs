@@ -366,6 +366,12 @@ where
     }
 }
 
+pub enum InfoV {
+    F32(f32),
+}
+
+pub type Info = Vec<(&'static str, InfoV)>;
+
 impl<P, D, O> Env<P, D, O>
 where
     P: Protocol<Block, Party, D>,
@@ -435,7 +441,7 @@ where
         }
     }
 
-    fn step(&mut self, a: Action) -> (f64, bool, bool) {
+    fn step(&mut self, a: Action) -> (f64, bool, bool, Info) {
         // check the dag invariants
         assert!(dag_check(&self.g));
 
@@ -470,6 +476,8 @@ where
         // [x] long term revenue
         //     progress := protocol-defined progress on common chain
         //     reward := attacker reward
+        //     TODO/problem: common chain growth can be zero for some policies (e.g. Continue only)
+        //     thus PTO assumption does not hold.
         // [ ] history rewriting
         //     progress := blocks mined or blocks on defender chain
         //     reward := number of blocks rewritten in defender chain
@@ -505,8 +513,10 @@ where
         // we do not need truncation
         let truncate = false;
 
+        let info = vec![("progress", InfoV::F32(progress))];
+
         // return
-        (<f64>::try_from(reward).unwrap(), terminate, truncate)
+        (<f64>::try_from(reward).unwrap(), terminate, truncate, info)
     }
 
     fn weight(&self, b: Block) -> &NodeWeight<D> {
@@ -742,6 +752,14 @@ use numpy::IntoPyArray;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
+impl IntoPy<PyObject> for InfoV {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            InfoV::F32(f) => f.into_py(py),
+        }
+    }
+}
+
 impl<P, D, O> Env<P, D, O>
 where
     P: Protocol<Block, Party, D>,
@@ -754,6 +772,14 @@ where
         let mbd = |b: Block| -> bool { self.weight(b).nv == NView::Honest };
         let obs: Vec<f32> = self.o.observe(&self.g, atk, def, self.ca, &ktad, &mbd);
         obs.into_pyarray(py).into()
+    }
+
+    fn py_info(&self, py: Python, i: Info) -> HashMap<String, PyObject> {
+        let mut hm = HashMap::new();
+        for (k, v) in i {
+            hm.insert(k.into(), v.into_py(py));
+        }
+        hm
     }
 
     pub fn py_low(&self, py: Python) -> PyObject {
@@ -774,7 +800,13 @@ where
         py: Python,
         a: Action,
     ) -> (PyObject, f64, bool, bool, HashMap<String, PyObject>) {
-        let (rew, term, trunc) = self.step(a);
-        (self.py_observe(py), rew, term, trunc, HashMap::new())
+        let (rew, term, trunc, info) = self.step(a);
+        (
+            self.py_observe(py),
+            rew,
+            term,
+            trunc,
+            self.py_info(py, info),
+        )
     }
 }
