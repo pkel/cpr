@@ -492,6 +492,18 @@ where
         // [ ] history rewriting
         //     progress := blocks mined or blocks
         //     reward := number of blocks rewritten
+        //
+        // TODO with the recent change to track the defender chain instead of the common chain I
+        // think we might have introduced a new problem.
+        //   - We're operating with probabilistic termination
+        //   - Certain states, e.g. withholding a strictly longer chain, are risk-free in the real
+        //     world but not in this model
+        //   - The agent might be forced to play it safe and release block early
+        //   - This puts more emphasis on the honest strategy.
+        //   - Especially on short horizons.
+        // I think a viable work-around is to force release of all block during termination. That
+        // way, the final rewards are computed on the complete BlockDAG. The agent does not have to
+        // worry about withholding beneficial information beyond the end of the episode.
 
         let (rewrite, prg, attacker_rew, defender_rew) = self.track_defender_chain();
 
