@@ -492,25 +492,51 @@ where
         // [ ] history rewriting
         //     progress := blocks mined or blocks
         //     reward := number of blocks rewritten
-        //
-        // TODO with the recent change to track the defender chain instead of the common chain I
-        // think we might have introduced a new problem.
-        //   - We're operating with probabilistic termination
-        //   - Certain states, e.g. withholding a strictly longer chain, are risk-free in the real
-        //     world but not in this model
-        //   - The agent might be forced to play it safe and release block early
-        //   - This puts more emphasis on the honest strategy.
-        //   - Especially on short horizons.
-        // I think a viable work-around is to force release of all block during termination. That
-        // way, the final rewards are computed on the complete BlockDAG. The agent does not have to
-        // worry about withholding beneficial information beyond the end of the episode.
 
-        let (rewrite, prg, attacker_rew, defender_rew) = self.track_defender_chain();
+        let (mut rewrite, mut prg, mut attacker_rew, mut defender_rew) =
+            self.track_defender_chain();
 
         // PTO assumption: non-negative progress
         // negative progress implies that defender accepted a lower progress chain.
         assert!(prg >= 0., "negative progress, invalid protocol?");
         let term = self.env_terminates(prg);
+
+        // Force full information on termination
+        //
+        // Without this mechanism:
+        //   - We track the defender chain not the common chain
+        //   - We operate with probabilistic termination
+        //   - Certain states, e.g. withholding a strictly longer chain, are risk-free in the real
+        //     world but not in this model
+        //   - The agent might be forced to play it safe and release block early in the model
+        //   - This puts more emphasis on the honest strategy
+        //   - Especially on short horizons
+        //
+        // With this mechanism the final episode rewards are computed on the complete BlockDAG. The
+        // agent does not have to worry about withholding beneficial information beyond the end of
+        // the episode.
+        //
+        // I observe that a hand-coded selfish mining policy against Nakamoto yields significantly
+        // higher rewards after introducing this mechanism.
+        if term {
+            self.shutdown();
+
+            // track changes on defender chain
+            let (rewrite_t, prg_t, attacker_rew_t, defender_rew_t) = self.track_defender_chain();
+
+            // accumulate reward metrics
+            rewrite += rewrite_t;
+            prg += prg_t;
+            attacker_rew += attacker_rew_t;
+            defender_rew += defender_rew_t
+
+            // NOTE this creates yet another progress metric. `prg` includes `prg_t` but `prg_t` is
+            // not counted towards probabilistic termination. Probabilistic termination is based on
+            // `prg - prg_t`. `prg_t` is zero most of the times but not during the last step of the
+            // episode.
+            //
+            // I think this is fine but cannot fully rule out unintended effects.
+        }
 
         // we do not use truncation currently
         let trunc = false;
@@ -694,6 +720,39 @@ where
             self.consider(b)
         } else {
             self.mine_defender()
+        }
+    }
+
+    // release all withheld blocks & communicate one last time
+    fn shutdown(&mut self) {
+        let mut from_attacker = vec![];
+        let mut from_defender = vec![];
+
+        for b in self.g.node_indices() {
+            let nw = self.weight(b);
+            let nv = nw.nv;
+            let dv = nw.dv;
+
+            if nv == NView::Withheld {
+                self.release(b);
+                from_attacker.push(b)
+            }
+
+            if nv == NView::Honest && dv == DView::Unknown {
+                from_defender.push(b)
+            }
+        }
+
+        // only one defender block should be on the wire at any time
+        assert!(from_defender.len() <= 1, "env logic broken?");
+
+        // order of delivery depends on network assumptions
+        if self.attacker_communicates_fast() {
+            from_attacker.into_iter().for_each(|b| self.deliver(b));
+            from_defender.into_iter().for_each(|b| self.deliver(b));
+        } else {
+            from_defender.into_iter().for_each(|b| self.deliver(b));
+            from_attacker.into_iter().for_each(|b| self.deliver(b));
         }
     }
 
