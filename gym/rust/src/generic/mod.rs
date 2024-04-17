@@ -798,7 +798,7 @@ where
         // communication depends on network assumption
         if self.attacker_communicates_fast() {
             for b in from_attacker {
-                // TODO enforce topological order
+                // topological order follows from increasing block indices
                 self.deliver(b)
             }
             for b in from_defender {
@@ -806,7 +806,7 @@ where
             }
         } else {
             for b in from_defender {
-                // TODO enforce topological order
+                // topological order follows from increasing block indices
                 self.deliver(b)
             }
             for b in from_attacker {
