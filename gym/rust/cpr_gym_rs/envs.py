@@ -46,3 +46,12 @@ class Generic(gymnasium.Env):
 
     def describe_action(self, action):
         return self.rs_env.describe_action(action[0])
+
+    def encode_action_release(self, idx):
+        return [self.rs_env.encode_action_release(idx)]
+
+    def encode_action_consider(self, idx):
+        return [self.rs_env.encode_action_consider(idx)]
+
+    def encode_action_continue(self):
+        return [self.rs_env.encode_action_continue()]

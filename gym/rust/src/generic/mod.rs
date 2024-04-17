@@ -227,27 +227,27 @@ fn defender_view<'a, P>(g: &'a Graph<P>) -> PartialView<'a, P> {
 pub type Action = f32; // (-1., 1.)
 
 #[derive(Clone, Copy, Debug)]
-enum ActionHum {
+pub enum ActionHum {
     Release(u8),
     Consider(u8),
     Continue,
 }
 
-fn _encode_action(a: ActionHum) -> Action {
+pub fn encode_action(a: ActionHum) -> Action {
     match a {
         ActionHum::Release(x) => {
-            let x = -<f32>::from(x);
+            let x = -<f32>::from(x) - 1.;
             x / (1. + x.abs())
         }
         ActionHum::Consider(x) => {
-            let x = <f32>::from(x);
+            let x = <f32>::from(x) + 1.;
             x / (1. + x.abs())
         }
         ActionHum::Continue => 0.,
     }
 }
 
-fn decode_action(a: Action) -> ActionHum {
+pub fn decode_action(a: Action) -> ActionHum {
     assert!(a >= -1., "invalid action: {a} outside [-1, 1]");
     assert!(a <= 1., "invalid action: {a} outside [-1, 1]");
 
@@ -263,14 +263,16 @@ fn decode_action(a: Action) -> ActionHum {
 
     let x = x.round();
 
-    if x < -255. {
+    if x < -256. {
         ActionHum::Release(<u8>::MAX)
     } else if x < 0. {
-        ActionHum::Release(x as u8)
-    } else if x > 255. {
+        // -256 <= x <= 1
+        ActionHum::Release((-x - 1.) as u8)
+    } else if x > 256. {
         ActionHum::Consider(<u8>::MAX)
     } else if x > 0. {
-        ActionHum::Consider(x as u8)
+        // 1 <= x <= 256
+        ActionHum::Consider((x - 1.) as u8)
     } else {
         ActionHum::Continue
     }
@@ -411,10 +413,6 @@ where
         self.a = available_actions(&self.g);
         self.ca = genesis;
         self.hist = vec![genesis];
-    }
-
-    pub fn describe_action(&self, a: Action) -> String {
-        format!("{:?}", decode_action(a))
     }
 
     fn guarded_action(&self, a: ActionHum) -> ActionHum {

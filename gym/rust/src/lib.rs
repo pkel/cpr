@@ -30,6 +30,8 @@ struct GenericEnv {
 
 #[pymethods]
 impl GenericEnv {
+    // Core functionality
+
     #[new]
     fn new(p: Protocol, alpha: f32, gamma: f32, horizon: f32) -> Self {
         match p {
@@ -61,6 +63,8 @@ impl GenericEnv {
         }
     }
 
+    // Observation boundary
+
     fn low(&self, py: Python) -> PyObject {
         match &self.env {
             BoxedEnv::Nakamoto(env) => env.py_low(py),
@@ -73,11 +77,25 @@ impl GenericEnv {
         }
     }
 
-    fn describe_action(&self, a: Action) -> String {
-        match &self.env {
-            BoxedEnv::Nakamoto(env) => env.describe_action(a),
-        }
+    // Action encoding and decoding
+
+    fn encode_action_release(&self, i: u8) -> Action {
+        generic::encode_action(generic::ActionHum::Release(i))
     }
+
+    fn encode_action_consider(&self, i: u8) -> Action {
+        generic::encode_action(generic::ActionHum::Consider(i))
+    }
+
+    fn encode_action_continue(&self) -> Action {
+        generic::encode_action(generic::ActionHum::Continue)
+    }
+
+    fn describe_action(&self, a: Action) -> String {
+        format!("{:?}", generic::decode_action(a))
+    }
+
+    // String representation
 
     fn __repr__(&self) -> String {
         match &self.env {
@@ -85,6 +103,8 @@ impl GenericEnv {
         }
     }
 }
+
+// Public Python module
 
 #[pymodule]
 #[pyo3(name = "_rust")]
