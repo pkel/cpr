@@ -443,7 +443,7 @@ where
         }
     }
 
-    fn step(&mut self, a: Action) -> (f64, bool, bool, Info) {
+    fn step(&mut self, a: Action) -> (f32, bool, bool, Info) {
         // check dag invariants
         assert!(dag_check(&self.g));
 
@@ -547,8 +547,11 @@ where
             ("time", InfoV::USize(time)),
         ];
 
+        // scale reward
+        let rew = attacker_rew / self.alpha / self.horizon;
+
         // return
-        (<f64>::try_from(attacker_rew).unwrap(), term, trunc, info)
+        (<f32>::try_from(rew).unwrap(), term, trunc, info)
     }
 
     fn track_defender_chain(&mut self) -> (usize, f32, f32, f32) {
@@ -971,7 +974,7 @@ where
         &mut self,
         py: Python,
         a: Action,
-    ) -> (PyObject, f64, bool, bool, HashMap<String, PyObject>) {
+    ) -> (PyObject, f32, bool, bool, HashMap<String, PyObject>) {
         let (rew, term, trunc, info) = self.step(a);
         (
             self.py_observe(py),

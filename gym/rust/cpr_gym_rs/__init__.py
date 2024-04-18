@@ -4,7 +4,7 @@ from gymnasium.envs.registration import register
 default_assumptions = dict(
     alpha=0.42,
     gamma=0.84,
-    horizon=100,
+    horizon=25,
 )
 
 register(

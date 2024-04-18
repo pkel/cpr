@@ -57,7 +57,7 @@ impl GenericEnv {
         &mut self,
         py: Python,
         a: Action,
-    ) -> (PyObject, f64, bool, bool, HashMap<String, PyObject>) {
+    ) -> (PyObject, f32, bool, bool, HashMap<String, PyObject>) {
         match &mut self.env {
             BoxedEnv::Nakamoto(env) => env.py_step(py, a),
         }
