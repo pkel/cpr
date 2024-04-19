@@ -59,6 +59,8 @@ class Editor(View):
 
     def _save(self):
         n = self.n
+        assert n < 256
+
         buf = numpy.full((n + 4, n), 0, dtype=numpy.uint8)
         for b in range(n):
             for p in self._parents[b]:
