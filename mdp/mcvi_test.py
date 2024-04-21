@@ -10,14 +10,31 @@ from sm import SelfishMining
 pp = pprint.PrettyPrinter(indent=2)
 
 
-def mcvi(model, *args, horizon=100, steps=10000, eps=0.1, report_steps=None, **kwargs):
-    agent = MCVI(model, eps=eps, horizon=horizon, **kwargs)
+def mcvi(
+    model,
+    *args,
+    horizon=100,
+    steps=10000,
+    eps=0.1,
+    eps_honest=0.1,
+    report_steps=None,
+    honest_warmup_steps=0,
+    **kwargs
+):
+    if honest_warmup_steps > 0:
+        agent = MCVI(model, eps=0, eps_honest=1, horizon=horizon, **kwargs)
+    else:
+        agent = MCVI(model, eps=eps, eps_honest=eps_honest, horizon=horizon, **kwargs)
 
     max_start_value = 0
 
     j = 0
     for i in range(steps):
         agent.step()
+
+        if honest_warmup_steps > 0 and (i >= honest_warmup_steps):
+            agent.set_exploration(eps=eps, eps_honest=eps_honest)
+            honest_warmup_steps = 0
 
         j += 1
         if report_steps and j >= report_steps:
@@ -61,14 +78,20 @@ def test_mcvi(*args, **kwargs):
 
 
 if __name__ == "__main__":
-    problem = dict(alpha=0.30, gamma=0.8)
+    problem = dict(alpha=0.42, gamma=0.84)
 
-    if False:
+    if True:
         model_a = SelfishMining(
             Bitcoin(), **problem, maximum_size=50, merge_isomorphic=False
         )
         mcvi(
-            model_a, steps=1000000, report_steps=50, horizon=30, eps=0.1, eps_honest=0.1
+            model_a,
+            steps=1000000,
+            report_steps=50,
+            horizon=30,
+            eps=0.3,
+            eps_honest=0.1,
+            honest_warmup_steps=10000,
         )
     else:
         model_b = aft20barzur.BitcoinSM(**problem, maximum_fork_length=10000)
@@ -76,7 +99,8 @@ if __name__ == "__main__":
             model_b,
             steps=1000000,
             report_steps=10000,
-            horizon=100,
-            eps=0.1,
-            eps_honest=0.1,
+            horizon=30,
+            eps=0.3,
+            eps_honest=0.0,
+            honest_warmup_steps=10000,
         )

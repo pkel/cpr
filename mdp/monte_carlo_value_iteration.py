@@ -16,14 +16,12 @@ class MCVI:
     def __init__(
         self, model: Model, *args, horizon: int, eps: float, eps_honest: float = 0
     ):
-        assert 0 < eps < 1
-        assert 0 <= eps_honest < 1
         assert horizon > 0
 
         self.model = PTO_wrapper(model, horizon=horizon)
         self.horizon = horizon
-        self.eps = eps
-        self.eps_honest = eps_honest
+
+        self.set_exploration(eps=eps, eps_honest=eps_honest)
 
         self.state = None  # current model state
         self.state_id = None  # current integer state
@@ -50,6 +48,19 @@ class MCVI:
         self.mean_progress -= self.mean_progress / self.episode  # statistics
         self.mean_progress += self.ep_progress / self.episode  # statistics
         self.start_new_episode()
+
+    def set_exploration(self, *args, eps=None, eps_honest=None):
+        if eps is None:
+            eps = self.eps
+
+        if eps_honest is None:
+            eps_honest = self.eps_honest
+
+        assert 0 <= eps <= 1
+        assert 0 <= eps_honest <= 1
+
+        self.eps = eps
+        self.eps_honest = eps_honest
 
     def map_state(self, state):
         if state in self.state_map:
