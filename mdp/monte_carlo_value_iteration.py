@@ -26,6 +26,7 @@ class MCVI:
         self.state_map = dict()  # maps model state to integer state
         self._state_value = []  # maps integer state to state-value estimate
         self.start_states = set()  # explored start states (integer)
+        self.state_count = []  # visit counter for integer states; statistics
 
         # init state & state_id
         self.start_new_episode()
@@ -38,12 +39,12 @@ class MCVI:
         self.state = sample(self.model.start(), lambda x: x[1])[0]
         self.state_id = self.map_state(self.state)
         self.start_states |= {self.state_id}
-        self.ep_progress = 0
+        self.ep_progress = 0  # statistics
 
     def reset(self):
         self.episode += 1
-        self.mean_progress -= self.mean_progress / self.episode
-        self.mean_progress += self.ep_progress / self.episode
+        self.mean_progress -= self.mean_progress / self.episode  # statistics
+        self.mean_progress += self.ep_progress / self.episode  # statistics
         self.start_new_episode()
 
     def map_state(self, state):
@@ -53,6 +54,7 @@ class MCVI:
             state_id = len(self.state_map)
             self.state_map[state] = state_id
             self._state_value.append(0)
+            self.state_count.append(0)
             assert self._state_value[state_id] == 0
             return state_id
 
@@ -72,6 +74,8 @@ class MCVI:
     def step(self):
         state = self.state
         state_id = self.state_id
+
+        self.state_count[state_id] += 1  # statistics
 
         # get possible actions
         actions = self.model.actions(state)
@@ -116,12 +120,12 @@ class MCVI:
 
         # apply action & transition
         to = sample(action_transitions[i], lambda x: x.probability)
+        self.state_id = self.map_state(self.state)
+        self.ep_progress += to.progress  # statistics
         if random.random() < self.termination_probability(to.progress):
             self.reset()
         else:
             self.state = to.state
-            self.state_id = self.map_state(self.state)
-            self.ep_progress += to.progress
 
     def termination_probability(self, progress: float):
         return 1.0 - (1.0 - 1.0 / self.horizon) ** progress
