@@ -1,5 +1,5 @@
 from mdp import sum_to_one
-from model import Model
+from model import Model, PTO_wrapper
 import random
 
 
@@ -20,7 +20,7 @@ class MCVI:
         assert 0 <= eps_honest < 1
         assert horizon > 0
 
-        self.model = model
+        self.model = PTO_wrapper(model, horizon=horizon)
         self.horizon = horizon
         self.eps = eps
         self.eps_honest = eps_honest
@@ -84,10 +84,14 @@ class MCVI:
         # get possible actions
         actions = self.model.actions(state)
         n = len(actions)
-        assert n > 0
-        # TODO handle terminal states w/o actions
 
-        # unfold all actions, tracking ...
+        if n < 1:
+            # no action available, terminal state
+            self.reset()
+            assert self._state_value[state_id] == 0
+            return
+
+        # unfold all available actions, tracking ...
         max_i = 0  # index of best action
         max_q = 0  # value of best action
         # ... and caching
@@ -99,13 +103,7 @@ class MCVI:
 
             q = 0  # action value estimate
             for t in transitions:
-                tp = self.termination_probability(t.progress)
-                # When taking the action, the system terminates with
-                # probability tp. When it terminates, the future rewards are
-                # zero. Thus we discount q accordingly.
-                q += (1 - tp) * t.probability * (t.reward + self.state_value(t.state))
-                # NOTE. This looks like the usual discount factor used for
-                # non-episodic / continuous problems! Is it equivalent?
+                q += t.probability * (t.reward + self.state_value(t.state))
 
             action_transitions.append(transitions)
 
@@ -129,12 +127,6 @@ class MCVI:
 
         # apply action & transition
         to = sample(action_transitions[i], lambda x: x.probability)
+        self.state = to.state
         self.state_id = self.map_state(self.state)
         self.ep_progress += to.progress  # statistics
-        if random.random() < self.termination_probability(to.progress):
-            self.reset()
-        else:
-            self.state = to.state
-
-    def termination_probability(self, progress: float):
-        return 1.0 - (1.0 - 1.0 / self.horizon) ** progress

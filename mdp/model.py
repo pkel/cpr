@@ -50,3 +50,57 @@ class Model:
         What would an honest participant do?
         """
         raise NotImplementedError
+
+
+class PTO_wrapper(Model):
+    def __init__(self, model, *args, horizon: int):
+        assert horizon > 0
+        assert isinstance(model, Model)
+        assert not isinstance(model, PTO_wrapper)
+
+        self.unwrapped = model
+        self.terminal = object()
+        self.horizon = horizon
+
+    def start(self):
+        return self.unwrapped.start()
+
+    def actions(self, state):
+        if state is self.terminal:
+            return []
+        else:
+            return self.unwrapped.actions(state)
+
+    def apply(self, action, state):
+        assert state is not self.terminal
+
+        # update original transition list to include termination
+        transitions = []
+        for t in self.unwrapped.apply(action, state):
+            if t.progress == 0.0:
+                transitions.append(t)
+            else:
+                continue_p = (1.0 - (1.0 / self.horizon)) ** t.progress
+                assert 0 < continue_p < 1
+                continue_t = Transition(
+                    probability=t.probability * continue_p,
+                    state=t.state,
+                    reward=t.reward,
+                    progress=t.progress,
+                    effect=t.effect,
+                )
+                transitions.append(continue_t)
+                term_t = Transition(
+                    probability=t.probability * (1.0 - continue_p),
+                    state=self.terminal,
+                    reward=t.reward,
+                    progress=t.progress,
+                    effect=t.effect,
+                )
+                transitions.append(term_t)
+
+        return transitions
+
+    def honest(self, state):
+        assert state is not self.terminal
+        return self.unwrapped.honest(state)

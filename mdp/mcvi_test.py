@@ -13,6 +13,8 @@ pp = pprint.PrettyPrinter(indent=2)
 def mcvi(model, *args, horizon=100, steps=10000, eps=0.1, report_steps=None, **kwargs):
     agent = MCVI(model, eps=eps, horizon=horizon, **kwargs)
 
+    max_start_value = 0
+
     j = 0
     for i in range(steps):
         agent.step()
@@ -25,13 +27,18 @@ def mcvi(model, *args, horizon=100, steps=10000, eps=0.1, report_steps=None, **k
                 agent.state_count, [0.9, 0.95, 0.99, 0.995, 0.999]
             )
             state_freq_q = state_count_q / (i + 1)
+            start_value = agent.start_value()
+            assert start_value >= max_start_value
+            max_start_value = max(start_value, max_start_value)
+
             info = dict(
                 steps=i + 1,
                 episodes=agent.episode,
                 mean_progress=agent.mean_progress,
                 n_states=len(agent.state_map),
-                start_value=agent.start_value(),
-                start_value_norm=agent.start_value() / horizon,
+                start_value=start_value,
+                #  start_value_max = max_start_value,
+                start_value_norm=start_value / horizon,
                 ram_usage_gb=process.memory_info().rss / 1024**3,
                 state_revisit=(i + 1 - len(agent.state_map)) / (i + 1),
                 state_count_q900=state_count_q[0],
@@ -56,12 +63,20 @@ def test_mcvi(*args, **kwargs):
 if __name__ == "__main__":
     problem = dict(alpha=0.30, gamma=0.8)
 
-    model_a = SelfishMining(
-        Bitcoin(), **problem, maximum_size=20, merge_isomorphic=False
-    )
-    # mcvi(model_a, steps=1000000, report_steps=50, horizon=30, eps = 0.1, eps_honest = 0.1)
-
-    model_b = aft20barzur.BitcoinSM(**problem, maximum_fork_length=10000)
-    mcvi(
-        model_b, steps=1000000, report_steps=10000, horizon=30, eps=0.1, eps_honest=0.1
-    )
+    if False:
+        model_a = SelfishMining(
+            Bitcoin(), **problem, maximum_size=50, merge_isomorphic=False
+        )
+        mcvi(
+            model_a, steps=1000000, report_steps=50, horizon=30, eps=0.1, eps_honest=0.1
+        )
+    else:
+        model_b = aft20barzur.BitcoinSM(**problem, maximum_fork_length=10000)
+        mcvi(
+            model_b,
+            steps=1000000,
+            report_steps=10000,
+            horizon=100,
+            eps=0.1,
+            eps_honest=0.1,
+        )
