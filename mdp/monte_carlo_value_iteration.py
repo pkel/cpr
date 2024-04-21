@@ -1,5 +1,5 @@
 from mdp import sum_to_one
-from model import Model, PTO_wrapper
+from model import Model, PTO_wrapper, Transition
 import random
 
 
@@ -23,12 +23,19 @@ class MCVI:
 
         self.set_exploration(eps=eps, eps_honest=eps_honest)
 
-        self.state = None  # current model state
         self.state_id = None  # current integer state
         self.state_map = dict()  # maps model state to integer state
-        self._state_value = []  # maps integer state to state-value estimate
+        self.state_value = []  # maps integer state to state-value estimate
         self.start_states = set()  # explored start states (integer)
         self.state_count = []  # visit counter for integer states; statistics
+        self.n_states_visited = 0  # statistics
+        self._state_actions = (
+            []
+        )  # state id -> (action id -> transition list); memoize model
+        self._state_honest_action = []  # state id -> action id; memoize model
+        self.unexplored_states = (
+            dict()
+        )  # states with an integer id but no entry in _state_actions
 
         # init state & state_id
         self.start_new_episode()
@@ -38,8 +45,9 @@ class MCVI:
         self.mean_progress = horizon
 
     def start_new_episode(self):
-        self.state = sample(self.model.start(), lambda x: x[1])[0]
-        self.state_id = self.map_state(self.state)
+        # TODO Cache this as well?
+        state = sample(self.model.start(), lambda x: x[1])[0]
+        self.state_id = self.map_state(state)
         self.start_states |= {self.state_id}
         self.ep_progress = 0  # statistics
 
@@ -68,38 +76,69 @@ class MCVI:
         else:
             state_id = len(self.state_map)
             self.state_map[state] = state_id
-            self._state_value.append(0)
+            self.state_value.append(0)
             self.state_count.append(0)
-            assert self._state_value[state_id] == 0
+            self._state_actions.append(None)
+            self._state_honest_action.append(None)
+            self.unexplored_states[state_id] = state
             return state_id
 
-    def state_value(self, state):
-        if state in self.state_map:
-            state_id = self.state_map[state]
-            return self._state_value[state_id]
+    def state_actions(self, state_id):
+        if self._state_actions[state_id] is not None:
+            return self._state_actions[state_id]
         else:
-            return 0
+            state = self.unexplored_states[state_id]
+            del self.unexplored_states[state_id]
+            actions = []
+            m_actions = self.model.actions(state)
+            for a in m_actions:
+                transitions = []
+                for t in self.model.apply(a, state):
+                    to_state_id = self.map_state(t.state)
+                    integer_t = Transition(
+                        state=to_state_id,
+                        probability=t.probability,
+                        reward=t.reward,
+                        progress=t.progress,
+                        effect=t.effect,
+                    )
+                    transitions.append(integer_t)
+
+                assert sum_to_one([t.probability for t in transitions])
+                actions.append(transitions)
+
+            if len(actions) > 0:  # non-terminal state
+                h = self.model.honest(state)
+                self._state_honest_action[state_id] = m_actions.index(h)
+
+            # cache and return
+            self._state_actions[state_id] = actions
+            return actions
 
     def start_value(self):
         v = 0
         for s, p in self.model.start():
-            v += p * self.state_value(s)
+            sid = self.map_state(s)
+            v += p * self.state_value[sid]
         return v
 
     def step(self):
-        state = self.state
         state_id = self.state_id
 
-        self.state_count[state_id] += 1  # statistics
+        # statistics
+        if self.state_count[state_id] == 0:
+            # we visit this state for the first time
+            self.n_states_visited += 1
+        self.state_count[state_id] += 1
 
         # get possible actions
-        actions = self.model.actions(state)
+        actions = self.state_actions(state_id)
         n = len(actions)
 
         if n < 1:
             # no action available, terminal state
             self.reset()
-            assert self._state_value[state_id] == 0
+            assert self.state_value[state_id] == 0
             return
 
         # unfold all available actions, tracking ...
@@ -108,13 +147,10 @@ class MCVI:
         # ... and caching
         action_transitions = []  # transition lists for all actions
 
-        for i, action in enumerate(actions):
-            transitions = self.model.apply(action, state)
-            assert sum_to_one([t.probability for t in transitions])
-
+        for i, transitions in enumerate(actions):
             q = 0  # action value estimate
             for t in transitions:
-                q += t.probability * (t.reward + self.state_value(t.state))
+                q += t.probability * (t.reward + self.state_value[t.state])
 
             action_transitions.append(transitions)
 
@@ -123,7 +159,7 @@ class MCVI:
                 max_q = q
 
         # update state-value estimate
-        self._state_value[state_id] = max_q
+        self.state_value[state_id] = max_q
 
         # epsilon greedy policy
         i = max_i
@@ -133,11 +169,9 @@ class MCVI:
             i = random.randrange(n)
         elif x < self.eps + self.eps_honest:
             # explore along honest policy
-            a = self.model.honest(state)
-            i = actions.index(a)
+            i = self._state_honest_action[state_id]
 
         # apply action & transition
         to = sample(action_transitions[i], lambda x: x.probability)
-        self.state = to.state
-        self.state_id = self.map_state(self.state)
+        self.state_id = to.state
         self.ep_progress += to.progress  # statistics
