@@ -11,7 +11,7 @@ pp = pprint.PrettyPrinter(indent=2)
 
 
 def mcvi(model, *args, horizon=100, steps=10000, eps=0.1, report_steps=None, **kwargs):
-    agent = MCVI(model, eps=eps, horizon=horizon)
+    agent = MCVI(model, eps=eps, horizon=horizon, **kwargs)
 
     j = 0
     for i in range(steps):
@@ -54,8 +54,14 @@ def test_mcvi(*args, **kwargs):
 
 
 if __name__ == "__main__":
-    model = SelfishMining(
-        Bitcoin(), alpha=0.30, gamma=1, maximum_size=20, merge_isomorphic=False
+    problem = dict(alpha=0.30, gamma=0.8)
+
+    model_a = SelfishMining(
+        Bitcoin(), **problem, maximum_size=20, merge_isomorphic=False
     )
-    #  model = aft20barzur.BitcoinSM(alpha=0.30, gamma=1, maximum_fork_length=10000)
-    mcvi(model, steps=1000000, report_steps=50, horizon=30)
+    # mcvi(model_a, steps=1000000, report_steps=50, horizon=30, eps = 0.1, eps_honest = 0.1)
+
+    model_b = aft20barzur.BitcoinSM(**problem, maximum_fork_length=10000)
+    mcvi(
+        model_b, steps=1000000, report_steps=10000, horizon=30, eps=0.1, eps_honest=0.1
+    )

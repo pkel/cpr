@@ -13,13 +13,17 @@ def sample(lst, p: lambda x: x[0]):
 
 
 class MCVI:
-    def __init__(self, model: Model, *args, horizon: int, eps: float):
+    def __init__(
+        self, model: Model, *args, horizon: int, eps: float, eps_honest: float = 0
+    ):
         assert 0 < eps < 1
+        assert 0 <= eps_honest < 1
         assert horizon > 0
 
         self.model = model
         self.horizon = horizon
         self.eps = eps
+        self.eps_honest = eps_honest
 
         self.state = None  # current model state
         self.state_id = None  # current integer state
@@ -114,9 +118,14 @@ class MCVI:
 
         # epsilon greedy policy
         i = max_i
-        if random.random() < self.eps:
+        x = random.random()
+        if x < self.eps:
             # explore randomly
             i = random.randrange(n)
+        elif x < self.eps + self.eps_honest:
+            # explore along honest policy
+            a = self.model.honest(state)
+            i = actions.index(a)
 
         # apply action & transition
         to = sample(action_transitions[i], lambda x: x.probability)

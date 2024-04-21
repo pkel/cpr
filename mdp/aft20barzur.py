@@ -79,6 +79,12 @@ class BitcoinSM(Model):
         actions.append(ADOPT)
         return actions
 
+    def honest(self, s: BState) -> list[Action]:
+        if s.a > s.h:
+            return OVERRIDE
+        else:
+            return ADOPT
+
     def apply_wait(self, s: BState) -> list[Transition]:
         t = []
         if s.fork != ACTIVE:

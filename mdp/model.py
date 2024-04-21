@@ -44,3 +44,9 @@ class Model:
         Define state transitions. Action a is applied to state s.
         """
         raise NotImplementedError
+
+    def honest(self, s: State) -> Action:
+        """
+        What would an honest participant do?
+        """
+        raise NotImplementedError

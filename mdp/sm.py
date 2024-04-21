@@ -758,6 +758,17 @@ class SelfishMining(Model):
 
         return actions
 
+    def honest(self, s: State) -> Action:
+        e = self.editor
+        e.load(s)
+
+        # honest policy: release then consider then continue
+        if len(e.to_release()) > 0:
+            return Release(0)
+        if len(e.to_consider()) > 0:
+            return Consider(0)
+        return Continue()
+
     def apply(self, a: Action, s: State) -> list[Transition]:
         if isinstance(a, Release):
             return self.apply_release(a.i, s)
