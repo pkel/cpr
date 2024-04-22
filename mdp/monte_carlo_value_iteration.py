@@ -45,11 +45,18 @@ class MCVI:
         self.mean_progress = horizon
 
     def start_new_episode(self):
+        self.ep_progress = 0  # statistics
+
+        # Do Sutton and Barto's "Exploring Starts" in 50% of the cases.
+        # TODO "Exploring Starts" needs evaluation
+        if random.random() < 0.5 and len(self.state_map) > 0:
+            self.state_id = random.randrange(len(self.state_map))
+            return
+
         # TODO Cache this as well?
         state = sample(self.model.start(), lambda x: x[1])[0]
         self.state_id = self.map_state(state)
         self.start_states |= {self.state_id}
-        self.ep_progress = 0  # statistics
 
     def reset(self):
         self.episode += 1
