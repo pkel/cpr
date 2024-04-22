@@ -36,6 +36,7 @@ class MCVI:
         self.unexplored_states = (
             dict()
         )  # states with an integer id but no entry in _state_actions
+        self.viable_states = set()  # states with honest value and above
 
         # init state & state_id
         self.start_new_episode()
@@ -49,8 +50,8 @@ class MCVI:
 
         # Do Sutton and Barto's "Exploring Starts" in 50% of the cases.
         # TODO "Exploring Starts" needs evaluation
-        if random.random() < 0.5 and len(self.state_map) > 0:
-            self.state_id = random.randrange(len(self.state_map))
+        if random.random() < 0.5 and len(self.viable_states) > 0:
+            self.state_id = random.randrange(len(self.viable_states))
             return
 
         # TODO Cache this as well?
@@ -167,6 +168,11 @@ class MCVI:
 
         # update state-value estimate
         self.state_value[state_id] = max_q
+
+        # heuristic for locating good states
+        # TODO estimate the q for honest behaviour w/o using the model internals
+        if max_q > self.model.unwrapped.alpha * self.horizon * 0.99:
+            self.viable_states |= {state_id}
 
         # epsilon greedy policy
         i = max_i

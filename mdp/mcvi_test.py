@@ -55,6 +55,7 @@ def mcvi(
                 n_states=len(agent.state_map),
                 n_states_visited=agent.n_states_visited,
                 n_states_unexplored=len(agent.unexplored_states),
+                n_states_viable=len(agent.viable_states),
                 start_value=start_value,
                 #  start_value_max = max_start_value,
                 start_value_norm=start_value / horizon,
@@ -91,8 +92,8 @@ if __name__ == "__main__":
             steps=1000000,
             report_steps=50,
             horizon=30,
-            eps=0.3,
-            eps_honest=0.1,
+            eps=0.2,
+            eps_honest=0.2,
             honest_warmup_steps=10000,
         )
     else:
