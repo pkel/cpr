@@ -2,7 +2,7 @@ import aft20barzur
 from monte_carlo_value_iteration import MCVI
 import pprint
 import psutil
-import numpy
+import sys
 
 from bitcoin import Bitcoin
 from sm import SelfishMining
@@ -40,37 +40,28 @@ def mcvi(
         if report_steps and j >= report_steps:
             j = 0
             process = psutil.Process()
-            state_count_q = numpy.quantile(
-                agent.state_count, [0.9, 0.95, 0.99, 0.995, 0.999]
-            )
-            state_freq_q = state_count_q / (i + 1)
+
             start_value = agent.start_value()
-            assert start_value >= max_start_value
+            assert start_value >= max_start_value, "value iteration is monotonic"
             max_start_value = max(start_value, max_start_value)
+
+            # calculate average state size
+            acc = sum((sys.getsizeof(s) for s in agent.states.keys()))
+            avg_size = acc / len(agent.states)
 
             info = dict(
                 steps=i + 1,
-                episodes=agent.episode,
-                mean_progress=agent.mean_progress,
-                n_states=len(agent.state_map),
-                n_states_visited=agent.n_states_visited,
-                n_states_unexplored=len(agent.unexplored_states),
-                n_states_viable=len(agent.viable_states),
+                n_episodes=agent.n_episodes,
+                progress_gamma999=agent.progress_gamma999,
+                n_states=len(agent.states),
+                n_states_exploring_starts=len(agent.exploring_starts),
                 start_value=start_value,
-                #  start_value_max = max_start_value,
                 start_value_norm=start_value / horizon,
                 ram_usage_gb=process.memory_info().rss / 1024**3,
-                state_revisit=(i + 1 - agent.n_states_visited) / (i + 1),
-                state_count_q900=state_count_q[0],
-                state_count_q950=state_count_q[1],
-                state_count_q990=state_count_q[2],
-                state_count_q995=state_count_q[3],
-                state_count_q999=state_count_q[4],
-                state_freq_q900=state_freq_q[0],
-                state_freq_q950=state_freq_q[1],
-                state_freq_q990=state_freq_q[2],
-                state_freq_q995=state_freq_q[3],
-                state_freq_q999=state_freq_q[4],
+                exploration_states_per_step=len(agent.states) / (i + 1),
+                exploration_gamma9999=agent.exploration_gamma9999,
+                state_size_hashed_avg=avg_size,
+                state_size_gamma9999=agent.state_size_gamma9999,
             )
             pp.pprint(info)
 

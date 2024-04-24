@@ -53,13 +53,13 @@ class Model:
 
 
 class PTO_wrapper(Model):
-    def __init__(self, model, *args, horizon: int):
+    def __init__(self, model, *args, horizon: int, terminal_state):
         assert horizon > 0
         assert isinstance(model, Model)
         assert not isinstance(model, PTO_wrapper)
 
         self.unwrapped = model
-        self.terminal = object()
+        self.terminal = terminal_state
         self.horizon = horizon
 
     def start(self):

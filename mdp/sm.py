@@ -75,6 +75,7 @@ class Editor(View):
     def save(self):
         b = self._save()
         assert self.load(b) is None and self._save() == b
+        assert isinstance(b, State)
         return b
 
     def load(self, b):
