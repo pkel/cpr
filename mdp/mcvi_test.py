@@ -81,7 +81,7 @@ if __name__ == "__main__":
         mcvi(
             model_a,
             steps=1000000,
-            report_steps=50,
+            report_steps=1000,
             horizon=30,
             eps=0.2,
             eps_honest=0.2,

@@ -1,9 +1,9 @@
 from enum import IntEnum
 from dataclasses import dataclass, replace
 from mdp import MDP
+import pickle
 from model import Effect, Model, Transition
 from protocol import Protocol, View
-import numpy
 import pynauty
 import subprocess
 
@@ -58,19 +58,16 @@ class Editor(View):
         assert self.check()
 
     def _save(self):
-        n = self.n
-        assert n < 256
-
-        buf = numpy.full((n + 4, n), 0, dtype=numpy.uint8)
-        for b in range(n):
-            for p in self._parents[b]:
-                buf[b, p] = 1
-            buf[-4, b] = self.av[b]
-            buf[-3, b] = self.dv[b]
-            buf[-2, b] = self.wh[b]
-            buf[-1, b] = self.ht[b]
-        # TODO. Boolean adjacency matrix could be compressed with numpy.packbits
-        return buf.tobytes() + numpy.uint8(n).tobytes()
+        data = (
+            self.n,
+            self._parents,
+            self._children,
+            self.av,
+            self.dv,
+            self.wh,
+            self.ht,
+        )
+        return pickle.dumps(data)
 
     def save(self):
         b = self._save()
@@ -79,28 +76,8 @@ class Editor(View):
         return b
 
     def load(self, b):
-        buf = numpy.frombuffer(b, dtype=numpy.uint8)
-        n = int(buf[-1])
-        assert buf.shape == ((n + 4) * n + 1,), buf.shape
-        buf = buf[:-1].reshape((n + 4, n))
-
-        self.n = n
-        self._parents = [set() for _ in range(n)]
-        self._children = [set() for _ in range(n)]
-        self.av = []
-        self.dv = []
-        self.wh = []
-        self.ht = []
-        for b in range(n):
-            for p in range(n):
-                if buf[b, p]:
-                    self._parents[b].add(p)
-                    self._children[p].add(b)
-            self.av.append(AttackerView(buf[-4, b]))
-            self.dv.append(DefenderView(buf[-3, b]))
-            self.wh.append(Withholding(buf[-2, b]))
-            self.ht.append(buf[-1, b])
-
+        data = pickle.loads(b)
+        self.n, self._parents, self._children, self.av, self.dv, self.wh, self.ht = data
         assert self.check()
 
     def check(self):
