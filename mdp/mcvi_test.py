@@ -76,11 +76,11 @@ if __name__ == "__main__":
 
     if True:
         model_a = SelfishMining(
-            Bitcoin(), **problem, maximum_size=50, merge_isomorphic=False
+            Bitcoin(), **problem, maximum_size=10000, merge_isomorphic=False
         )
         mcvi(
             model_a,
-            steps=1000000,
+            steps=10000000,
             report_steps=1000,
             horizon=30,
             eps=0.2,

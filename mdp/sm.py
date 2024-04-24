@@ -690,8 +690,16 @@ class SelfishMining(Model):
             effect=effect,
             # Default to long-term revenue MDP:
             reward=effect.common_atk_reward,
-            progress=effect.common_progress,
+            progress=effect.defender_progress,
         )
+        # Progress must be taken from defender chain, as common chain progress
+        # might be zero for some policies, e.g. p(s) = Continue(). Zero
+        # progress policies significantly slow down exploration.
+        # TODO Now that we take progress from the defender's chain, we should
+        # also calculate rewards on the defender chain. I did this already in
+        # the rust codebase. See commit e68a4f00. This requires a different
+        # episode shutdown mechanism, where the agent is forced to release all
+        # blocks. See commit 6a3b5a4.
 
     def start(self) -> list[tuple[State, float]]:
         lst = []
