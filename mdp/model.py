@@ -45,6 +45,24 @@ class Model:
         """
         raise NotImplementedError
 
+    def shutdown(self, s: State) -> list[Transition]:
+        """
+        Define a fair shutdown mechanism. We call this at the end of each
+        episode.
+
+        Example. For selfish mining we force the agent to release all blocks,
+        then do one last round of communication, before calculating the final
+        rewards. This encourages risk-taking in the light of probabilistic
+        termination.
+        """
+        raise NotImplementedError
+
+    def acc_effect(self, a: Effect, b: Effect) -> Effect:
+        """
+        When merging two steps, what's the accumulated effect?
+        """
+        raise NotImplementedError
+
     def honest(self, s: State) -> Action:
         """
         What would an honest participant do?
@@ -82,6 +100,7 @@ class PTO_wrapper(Model):
             else:
                 continue_p = (1.0 - (1.0 / self.horizon)) ** t.progress
                 assert 0 < continue_p < 1
+                # one transition for continuing
                 continue_t = Transition(
                     probability=t.probability * continue_p,
                     state=t.state,
@@ -90,14 +109,19 @@ class PTO_wrapper(Model):
                     effect=t.effect,
                 )
                 transitions.append(continue_t)
-                term_t = Transition(
-                    probability=t.probability * (1.0 - continue_p),
-                    state=self.terminal,
-                    reward=t.reward,
-                    progress=t.progress,
-                    effect=t.effect,
-                )
-                transitions.append(term_t)
+
+                # multiple transitions for shutdown
+                term_p = 1 - continue_p
+                for st in self.unwrapped.shutdown(t.state):
+                    term_e = self.unwrapped.acc_effect(t.effect, st.effect)
+                    term_t = Transition(
+                        probability=t.probability * term_p * st.probability,
+                        state=self.terminal,
+                        reward=t.reward + st.reward,
+                        progress=t.progress + st.progress,
+                        effect=term_e,
+                    )
+                    transitions.append(term_t)
 
         return transitions
 

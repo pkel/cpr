@@ -701,6 +701,23 @@ class SelfishMining(Model):
         # episode shutdown mechanism, where the agent is forced to release all
         # blocks. See commit 6a3b5a4.
 
+    def acc_effect(self, a, b):
+        # It is not clear how to handle defender_* here, depends on the attack
+        # scenario, I guess!
+        return Effect(
+            blocks_mined=a.blocks_mined + b.blocks_mined,
+            common_atk_reward=a.common_atk_reward + b.common_atk_reward,
+            common_def_reward=a.common_def_reward + b.common_def_reward,
+            common_progress=a.common_progress + b.common_progress,
+            defender_rewrite_length=max(
+                a.defender_rewrite_length, b.defender_rewrite_length
+            ),
+            defender_rewrite_progress=max(
+                a.defender_rewrite_progress, b.defender_rewrite_progress
+            ),
+            defender_progress=a.defender_progress + b.defender_progress,
+        )
+
     def start(self) -> list[tuple[State, float]]:
         lst = []
         self.editor = Editor(first_miner=Miner.Attacker)
@@ -884,6 +901,19 @@ class SelfishMining(Model):
             defender_preferred_before=dpb,
             block_mined=not communication_only,
         )
+
+    def shutdown(self, s: State) -> list[Transition]:
+        e = self.editor
+        e.load(s)
+
+        # Release all blocks
+        for b in range(e.n):
+            if e.wh[b] == Withholding.Withheld:
+                e.wh[b] = Withholding.Released
+        s = e.save()
+
+        # Communicate & return
+        return self.apply_communicate(s)
 
 
 mappable_params = dict(alpha=0.125, gamma=0.25)
