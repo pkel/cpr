@@ -24,7 +24,8 @@ def collision_resistant_hash(x):
 
 class State:
     def __init__(self):
-        self.value = 0
+        self.value = 0  # estimate of future rewards
+        self.progress = 0  # estimate of future progress
         self.count = 0
         self._actions = None  # action idx -> state hash transition list
         self._honest = None  # honest action id
@@ -98,19 +99,14 @@ class MCVI:
             assert 0 <= eps_es <= 1
             self.eps_es = eps_es
 
-    def state_hash_value(self, state_hash):
-        if state_hash in self.states:
-            return self.states[state_hash].value
-        else:
-            assert False, "there should be an initial estimate for all states"
-            return 0
-
-    def start_value(self):
+    def start_value_and_progress(self):
         v = 0
+        p = 0
         for full_state, prob in self.model.start():
             state, state_hash = self.state_and_hash_of_full_state(full_state)
             v += prob * state.value
-        return v
+            p += prob * state.progress
+        return v, p
 
     def step(self):
         full_state = self.full_state
@@ -146,17 +142,23 @@ class MCVI:
         # consider all available actions, tracking ...
         max_i = 0  # index of best action
         max_q = 0  # value of best action
+        max_p = 0  # progress of best action
         for i, transitions in enumerate(actions):
             q = 0  # action value estimate
+            p = 0
             for t in transitions:
-                q += t.probability * (t.reward + self.state_hash_value(t.state))
+                to_state = self.states[t.state]
+                q += t.probability * (t.reward + to_state.value)
+                p += t.probability * (t.progress + to_state.progress)
 
             if q > max_q:
                 max_i = i
                 max_q = q
+                max_p = p
 
-        # update state-value estimate
+        # update state-value and progress estimate
         state.value = max_q
+        state.progress = max_p
 
         # exploring starts heuristic:
         # we try to record such states that have better than honest value

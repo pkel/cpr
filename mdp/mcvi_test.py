@@ -41,7 +41,7 @@ def mcvi(
             j = 0
             process = psutil.Process()
 
-            start_value = agent.start_value()
+            start_value, start_progress = agent.start_value_and_progress()
             assert start_value >= max_start_value, "value iteration is monotonic"
             max_start_value = max(start_value, max_start_value)
 
@@ -58,7 +58,8 @@ def mcvi(
                 n_states_exploring_starts=len(agent.exploring_starts),
                 start_value=start_value,
                 start_value_by_horizon=start_value / horizon,
-                start_value_by_progress=start_value / agent.progress_gamma999,
+                start_value_by_progress=start_value / start_progress,
+                start_progress=start_progress,
                 ram_usage_gb=process.memory_info().rss / 1024**3,
                 exploration_states_per_step=len(agent.states) / (i + 1),
                 exploration_gamma9999=agent.exploration_gamma9999,
