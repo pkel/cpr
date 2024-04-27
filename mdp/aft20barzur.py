@@ -190,6 +190,13 @@ class BitcoinSM(Model):
             return self.apply_wait(s)
         assert False, "invalid action"
 
+    def shutdown(self, s: BState) -> list[Transition]:
+        # Rewards and progress are calculated on common chain. Terminating with
+        # a no-op is already fair.
+        return [Transition(state=s, probability=1, reward=0, progress=0)]
+        # NOTE In principle, we could do and award a full release here, but this
+        # would change the model. Maybe evaluate this separately.
+
 
 def ptmdp(old: mdp.MDP, *args, horizon: int):
     """

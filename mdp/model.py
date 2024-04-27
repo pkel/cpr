@@ -61,7 +61,10 @@ class Model:
         """
         When merging two steps, what's the accumulated effect?
         """
-        raise NotImplementedError
+        if a is None and b is None:
+            return None
+        else:
+            raise NotImplementedError
 
     def honest(self, s: State) -> Action:
         """
@@ -128,3 +131,9 @@ class PTO_wrapper(Model):
     def honest(self, state):
         assert state is not self.terminal
         return self.unwrapped.honest(state)
+
+    def shutdown(self, state):
+        if state is self.terminal:
+            return []
+        else:
+            return self.unwrapped.shutdown(state)

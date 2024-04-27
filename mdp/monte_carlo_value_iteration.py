@@ -29,51 +29,6 @@ class State:
         self._actions = None  # action idx -> state hash transition list
         self._honest = None  # honest action id
 
-    def actions(self, full_state, model):
-        if self._actions is not None:
-            return self._actions
-
-        # TODO since the switch to using state hashes to avoid storing the full
-        # states I have not evaluated whether this caching is worth it. For
-        # fast models it might well be that the caching adds more overhead than
-        # it safes execution time.
-
-        actions = []
-        m_actions = model.actions(full_state)
-        for a in m_actions:
-            transitions = []
-            for t in model.apply(a, full_state):
-                transitions.append(
-                    Transition(
-                        state=collision_resistant_hash(t.state),
-                        probability=t.probability,
-                        reward=t.reward,
-                        progress=t.progress,
-                        effect=t.effect,
-                    )
-                )
-
-            assert sum_to_one([t.probability for t in transitions])
-            actions.append(transitions)
-
-        if len(actions) > 0:
-            # non-terminal state has honest action
-            h = m_actions.index(model.honest(full_state))
-            self._honest = h
-
-        self._actions = actions
-        return actions
-
-    def honest(self, full_state, model):
-        if self._honest is not None:
-            return self._honest
-
-        if self._actions is None:
-            _ = self.actions(full_state, model)
-
-        assert len(self._actions) > 0, "no honest action for terminal state"
-        return self._honest
-
 
 class MCVI:
     def __init__(
@@ -108,6 +63,7 @@ class MCVI:
         self.progress_gamma999 = horizon
         self.exploration_gamma9999 = 1
         self.state_size_gamma9999 = 0
+        self.n_states_visited = 0
 
     def start_new_episode(self):
         # statistics
@@ -146,35 +102,38 @@ class MCVI:
         if state_hash in self.states:
             return self.states[state_hash].value
         else:
+            assert False, "there should be an initial estimate for all states"
             return 0
 
     def start_value(self):
         v = 0
         for full_state, prob in self.model.start():
-            state_hash = collision_resistant_hash(full_state)
-            v += prob * self.state_hash_value(state_hash)
+            state, state_hash = self.state_and_hash_of_full_state(full_state)
+            v += prob * state.value
         return v
 
     def step(self):
         full_state = self.full_state
-        state_hash = collision_resistant_hash(full_state)
+        state, state_hash = self.state_and_hash_of_full_state(full_state)
 
-        if state_hash in self.states:
-            state = self.states[state_hash]
-            self.exploration_gamma9999 *= 0.9999
-        else:
-            state = State()
-            self.states[state_hash] = state
+        # ## Statistics
+
+        if state.count < 1:
+            self.n_states_visited += 1
             self.exploration_gamma9999 *= 0.9999
             self.exploration_gamma9999 += 0.0001
+        else:
+            self.exploration_gamma9999 *= 0.9999
 
         self.state_size_gamma9999 *= 0.9999
         self.state_size_gamma9999 += 0.0001 * sys.getsizeof(full_state)
 
         state.count += 1  # increment visit counter for statistics
 
+        # ## End of statistics
+
         # get possible actions
-        actions = state.actions(full_state, self.model)
+        actions = self.actions(state, full_state)
         n_actions = len(actions)
 
         if n_actions < 1:
@@ -213,15 +172,86 @@ class MCVI:
             i = random.randrange(n_actions)
         elif x < self.eps + self.eps_honest:
             # honest exploration
-            i = state.honest(full_state, self.model)
+            i = self.honest(state, full_state)
         else:
             # greedy step
             i = max_i
 
         # NOTE there is some redundancy here: model.actions() and model.apply()
-        # might have just been called from state.actions() if not cached. So
+        # might have just been called from self.actions() if not cached. So
         # it's not obvious that caching actually helps us!
         a = self.model.actions(full_state)[i]
         to = sample(self.model.apply(a, full_state), lambda x: x.probability)
         self.episode_progress += to.progress  # statistics
         self.full_state = to.state
+
+    def actions(self, state, full_state):
+        if state._actions is not None:
+            return state._actions
+
+        # TODO since the switch to using state hashes to avoid storing the full
+        # states I have not evaluated whether this caching is worth it. For
+        # fast models it might well be that the caching adds more overhead than
+        # it safes execution time.
+
+        actions = []
+        m_actions = self.model.actions(full_state)
+        for a in m_actions:
+            transitions = []
+            for t in self.model.apply(a, full_state):
+                to_state, to_state_hash = self.state_and_hash_of_full_state(t.state)
+                transitions.append(
+                    Transition(
+                        state=to_state_hash,
+                        probability=t.probability,
+                        reward=t.reward,
+                        progress=t.progress,
+                        effect=t.effect,
+                    )
+                )
+
+            assert sum_to_one([t.probability for t in transitions])
+            actions.append(transitions)
+
+        if len(actions) > 0:
+            # non-terminal state has honest action
+            h = m_actions.index(self.model.honest(full_state))
+            state._honest = h
+
+        state._actions = actions
+        return actions
+
+    def honest(self, state, full_state):
+        if state._honest is not None:
+            return state._honest
+
+        if state._actions is None:
+            _ = self.actions(state, full_state)
+
+        assert len(state._actions) > 0, "no honest action for terminal state"
+        return state._honest
+
+    def state_and_hash_of_full_state(self, full_state):
+        state_hash = collision_resistant_hash(full_state)
+
+        if state_hash in self.states:
+            state = self.states[state_hash]
+        else:
+            state = State()
+            self.states[state_hash] = state
+            state.value = self.initial_value_estimate(full_state)
+
+        return state, state_hash
+
+    def initial_value_estimate(self, full_state):
+        # We have a couple of options here.
+        # - conservatively return 0
+        # - return <large number> to generally encourage exploration (not monotonic!)
+        # - guide exploration by evaluating the honest policy
+        # - do a fair shutdown to get a partial estimate of the states potential
+
+        value = 0
+        for t in self.model.shutdown(full_state):
+            value += t.probability * t.reward
+
+        return value
