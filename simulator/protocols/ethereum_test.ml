@@ -21,6 +21,7 @@ module BlockDAG (P : Protocol) = struct
   let parents = Dag.parents view
   let data x = (Dag.data x).value
   let pow x = (Dag.data x).pow_hash
+  let has_pow x = Option.is_some (Dag.data x).pow_hash
   let signature x = (Dag.data x).signed_by
 
   type pow = int

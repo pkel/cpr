@@ -2,28 +2,43 @@
 
 set -Eeuo pipefail
 
-branch=origin/training
+branch=origin/dag-voting
 
 protos=(
   nakamoto
-  bk-8
-  tailstorm-8-constant
-  tailstorm-8-discount
+  # spar-8
+  # stree-8-constant
+  # stree-8-discount
+  # sdag-8-constant
+  # sdag-8-discount
+  # spar-4
+  # stree-4-constant
+  # stree-4-discount
+  # sdag-4-constant
+  # sdag-4-discount
+  # tailstorm-4-discount
 )
 # protos=(dummy)
 alphas=(50 45 40 35 30 25 20)
-alphas=(45 40 35)
-alphas=(30 25 20)
-gammas=(05 50 95)
-shapes=(raw exp cut)
+alphas=(45 40 35 30 25) # target for dag-voting
+gammas=(05 50 95) # target for dag-voting
 shapes=(raw)
-ent_coefs=(0.01 0.001 0.0001)
-ent_coefs=(0.005 0.01 0.05)
-learning_rates=(1e-3 3e-4 1e-4)
-iteris=(1) # how often should each config be repeated?
+ent_coefs=(0.001 0.005 0.01) # target for dag-voting
+learning_rates=(1e-3 3e-4) # target for dag-voting
+iteris=(1) # how often should each config be repeated? Once for dag-voting
+
+# dag-voting: this makes 18 runs per combination of gamma and alpha or about
+# 28.5h of training on teide.
+# Complete: alpha=40 and gamma=95.
+# Complete: other alphas, gamma=95, ent_coef 0.005.
+# Complete: gamma=05, all alphas, ent_coef 0.005. 30 runs; 47.5h. ETA: Mon Nov 13, 08:30
+# Complete: gamma=05, all alpha, other ent_coefs. 60 runs; 95h. ETA: Fri Nov 17, 10:00
+# Complete: gamma=95, other alphas, other ent_coefs. 48 runs; 76h. ETA: Mon Nov 20, 15:00
+# Running: gamma=50. 90 runs; 142.5h. ETA: Sun Nov 26, 15:30
+# Planned: nakamoto protocol; 90 runs; 142.5h. ETA: Sat Dec 2, 16:00
 
 hosts=(
-  9/localhost # on teide, faster than 6? check 2023-03-10_full (6) vs 2023-03-21_learning-rate (9)
+  6/localhost # on teide
   # 16/localhost # on lennie, faster than 12
   # 4/athene
   # 4/iris
@@ -118,9 +133,10 @@ parallel -S "$servers" \
   --header : \
   ppo "{#}" "{proto}" --alpha "{alpha}" --gamma "{gamma}" --shape "{shape}" --ent_coef "{ent_coef}" --learning_rate "{learning_rate}" \
   ::: iteri "${iteris[@]}" \
-  ::: proto "${protos[@]}" \
-  ::: alpha "${alphas[@]}" \
-  ::: gamma "${gammas[@]}" \
-  ::: shape "${shapes[@]}" \
   ::: ent_coef "${ent_coefs[@]}" \
-  ::: learning_rate "${learning_rates[@]}"
+  ::: learning_rate "${learning_rates[@]}" \
+  ::: shape "${shapes[@]}" \
+  ::: gamma "${gammas[@]}" \
+  ::: alpha "${alphas[@]}" \
+  ::: proto "${protos[@]}"
+# topmost variable is outermost loop; check no \ on the last line!

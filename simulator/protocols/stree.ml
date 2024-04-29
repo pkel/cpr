@@ -10,12 +10,13 @@ module Make (Parameters : Parameters) = struct
 
   let key =
     let open Options in
-    Format.asprintf "tailstormll-%i-%a-%a" k pp incentive_scheme pp subblock_selection
+    Format.asprintf "stree-%i-%a-%a" k pp incentive_scheme pp subblock_selection
   ;;
 
   let description =
     Format.asprintf
-      "Tailstorm/ll with k=%i, %a rewards, and %a sub-block selection"
+      "Simple Parallel PoW with tree-style voting, k=%i, %a rewards, and %a sub-block \
+       selection"
       Parameters.k
       Options.pp
       incentive_scheme
@@ -25,7 +26,7 @@ module Make (Parameters : Parameters) = struct
 
   let info =
     let open Info in
-    [ string "family" "tailstormll"
+    [ string "family" "stree"
     ; int "k" k
     ; Options.info "incentive_scheme" incentive_scheme
     ; Options.info "subblock_selection" subblock_selection
@@ -94,11 +95,8 @@ module Make (Parameters : Parameters) = struct
 
     (* smaller is better *)
     let compare_votes_in_block =
-      let get x =
-        let d = data x
-        and hash = pow x |> Option.value ~default:min_pow in
-        d.vote, hash
-      and ty = Compare.(tuple (neg int) compare_pow) in
+      let get x = (data x).vote
+      and ty = Compare.(neg int) in
       Compare.(by ty get)
     ;;
 
@@ -131,7 +129,7 @@ module Make (Parameters : Parameters) = struct
       child.block >= 0
       && child.vote >= 0
       && child.vote < k
-      && pow vertex |> Option.is_some
+      && has_pow vertex
       && child.miner |> Option.is_some
       &&
       match is_vote vertex, parents vertex with
@@ -143,11 +141,11 @@ module Make (Parameters : Parameters) = struct
         (* child is block *)
         let parent = data p in
         let unique_votes = acc_votes parents votes |> BlockSet.cardinal
-        and sorted_votes = Compare.is_sorted ~unique:true compare_votes_in_block votes in
+        and sorted_votes = Compare.is_sorted compare_votes_in_block votes in
         is_block p
         && sorted_votes
-        && List.for_all is_vote votes
         && unique_votes = k - 1
+        && List.for_all (fun x -> is_vote x && Block.eq (last_block x) p) votes
         && child.block = parent.block + 1
         && child.vote = 0
       | _ -> false

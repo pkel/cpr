@@ -15,13 +15,13 @@ let protocols =
        (fun k ->
          List.concat_map
            (fun incentive_scheme ->
-             [ bk ~k ~incentive_scheme; bkll ~k ~incentive_scheme ])
+             [ bk ~k ~incentive_scheme; spar ~k ~incentive_scheme ])
            [ `Block; `Constant ]
          @ List.concat_map
              (fun incentive_scheme ->
                let subblock_selection = if k > 8 then `Heuristic else `Optimal in
-               [ tailstorm ~subblock_selection ~incentive_scheme ~k
-               ; tailstormll ~subblock_selection ~incentive_scheme ~k
+               [ stree ~subblock_selection ~incentive_scheme ~k
+               ; tailstorm ~subblock_selection ~incentive_scheme ~k
                ])
              [ `Constant; `Discount ])
        [ 1; 2; 4; 8; 16; 32; 64 ]

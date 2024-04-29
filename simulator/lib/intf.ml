@@ -17,6 +17,9 @@ module type BlockDAG = sig
   (** proof-of-work hash, some protocols use is as source of entropy *)
   type pow
 
+  (** Was the block attached via proof-of-work? *)
+  val has_pow : block -> bool
+
   (** Get proof-of-work hash of the block, if the block was attached via
       proof-of-work. *)
   val pow : block -> pow option

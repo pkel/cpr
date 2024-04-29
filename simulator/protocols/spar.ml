@@ -7,15 +7,19 @@ module type Parameters = Bk.Parameters
 module Make (Parameters : Parameters) = struct
   open Parameters
 
-  let key = Format.asprintf "bkll-%i-%a" k Options.pp incentive_scheme
+  let key = Format.asprintf "spar-%i-%a" k Options.pp incentive_scheme
 
   let description =
-    Format.asprintf "Bₖ/ll with k=%i and %a rewards" k Options.pp incentive_scheme
+    Format.asprintf
+      "Simple Parallel PoW with k=%i and %a rewards"
+      k
+      Options.pp
+      incentive_scheme
   ;;
 
   let info =
     let open Info in
-    [ string "family" "bkll"
+    [ string "family" "spar"
     ; int "k" k
     ; Options.to_string incentive_scheme |> string "incentive_scheme"
     ]
@@ -93,30 +97,19 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let validity vertex =
-      match pow vertex, data vertex, parents vertex with
-      | Some _, Vote x, [ p ] ->
-        is_block p && x.height = height p && Option.is_some x.miner
-      | Some _, Block b, [ pblock ] when k = 1 ->
-        Option.is_some b.miner
-        &&
-        (match data pblock with
-        | Block p -> p.height + 1 = b.height
-        | _ -> false)
-      | Some _, Block b, pblock :: vote0 :: votes ->
-        Option.is_some b.miner
-        &&
-        (match data pblock with
-        | Block p ->
-          let ordered_votes, _, nvotes =
-            List.fold_left
-              (fun (ok, h, i) x ->
-                let h' = pow x |> Option.get in
-                is_vote x && compare_pow h' h > 0 && ok, h', i + 1)
-              (true, pow vote0 |> Option.get, 1)
-              votes
-          in
-          p.height + 1 = b.height && nvotes = k - 1 && ordered_votes
-        | _ -> false)
+      match data vertex, parents vertex with
+      | Vote v, [ pblock ] ->
+        has_pow vertex
+        && is_block pblock
+        && v.height = height pblock
+        && Option.is_some v.miner
+      | Block b, pblock :: pvotes ->
+        has_pow vertex
+        && is_block pblock
+        && b.height = height pblock + 1
+        && Option.is_some b.miner
+        && List.length pvotes = k - 1
+        && List.for_all (fun x -> is_vote x && Block.eq (last_block x) pblock) pvotes
       | _ -> false
     ;;
 
@@ -206,7 +199,6 @@ module Make (Parameters : Parameters) = struct
     ;;
 
     let puzzle_payload' ~vote_filter preferred =
-      let pow_hash_exn x = pow x |> Option.get in
       let votes = confirming_votes preferred |> List.filter vote_filter in
       if List.length votes >= k - 1
       then (
@@ -218,8 +210,7 @@ module Make (Parameters : Parameters) = struct
                   by (tuple (neg bool) float) (fun x -> appended_by_me x, visible_since x))
                 (k - 1)
                 votes
-             |> Option.get
-             |> List.sort Compare.(by compare_pow pow_hash_exn))
+             |> Option.get)
         in
         { parents; data = Block { height; miner = Some my_id }; sign = false })
       else (

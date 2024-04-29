@@ -31,6 +31,16 @@ let is_sorted ?(unique = false) compare =
   f
 ;;
 
+let minimum compare = function
+  | hd :: tl ->
+    List.fold_left (fun acc el -> if compare acc el < 0 then acc else el) hd tl
+    |> Option.some
+  | _ -> None
+;;
+
+let%test "minimum/Some" = minimum (by int snd) [ 'a', 1; 'b', 0; 'c', 2 ] = Some ('b', 0)
+let%test "minimum/None" = minimum (by int snd) [] = None
+
 let first ?(skip_to = fun _ -> true) compare n l =
   let a = Array.of_list l in
   if Array.length a < n
