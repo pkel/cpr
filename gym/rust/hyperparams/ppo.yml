@@ -1,0 +1,21 @@
+FC16SSZwPT-v0:
+  gamma: 1 # discount factor / we have finite horizon
+  n_timesteps: 4_000_000
+  n_envs: 32 # = size of rollout buffer / n_steps
+  n_steps: 8192 # = size of rollout buffer / n_envs
+  learning_rate: 0.0001 # weight of each update
+  batch_size: 512 # number of steps to consider per update
+  n_epochs: 10 # how often to process each rollout buffer
+  ent_coef: 0.05 # entropy, exploration term
+  policy: 'MlpPolicy'
+
+Nakamoto-v0:
+  gamma: 1 # discount factor / we have finite horizon
+  n_timesteps: 4_000_000
+  n_envs: 16 # = size of rollout buffer / n_steps
+  n_steps: 1024 # = size of rollout buffer / n_envs
+  learning_rate: 0.001 # weight of each update
+  batch_size: 16384 # number of steps to consider per update
+  n_epochs: 1 # how often to process each rollout buffer
+  ent_coef: 0.05 # entropy, exploration term
+  policy: 'MlpPolicy'

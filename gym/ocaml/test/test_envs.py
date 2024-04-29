@@ -2,7 +2,7 @@ import gym
 from cpr_gym import wrappers
 
 import random
-from stable_baselines3.common.env_checker import check_env
+from gym.utils.env_checker import check_env
 
 
 def run_episode(env, policy):

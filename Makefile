@@ -20,10 +20,14 @@ check-format: _venv
 	opam exec dune build @fmt
 	_venv/bin/black --check .
 	_venv/bin/flake8
+	git ls-tree -r HEAD --name-only | grep Cargo.toml | while read -r line ; do \
+		cargo fmt --check --manifest-path "$$line" ; done
 
 format: _venv
 	opam exec dune -- build @fmt --auto-promote || true
 	_venv/bin/black . || true
+	git ls-tree -r HEAD --name-only | grep Cargo.toml | while read -r line ; do \
+		cargo fmt --manifest-path "$$line" ; done
 
 pre-commit: check-format test
 
@@ -54,7 +58,6 @@ dependencies:
 _venv: setup.py requirements.txt
 	${python} -m venv _venv
 	_venv/bin/python -m pip install --upgrade pip
-	_venv/bin/python -m pip install 'wheel<0.39' 'setuptools<67'
 	_venv/bin/pip install -r requirements.txt
 	touch _venv
 
