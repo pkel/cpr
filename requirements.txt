@@ -18,6 +18,9 @@ seaborn
 
 networkx
 
+--no-binary=pynauty
+pynauty
+
 -e .
 
 stable-baselines3 >= 1.7.0, < 2
