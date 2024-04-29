@@ -1,5 +1,5 @@
 import aft20barzur
-from monte_carlo_value_iteration import MCVI
+from rtdp import RTDP
 import pprint
 import psutil
 import sys
@@ -10,7 +10,7 @@ from sm import SelfishMining
 pp = pprint.PrettyPrinter(indent=2)
 
 
-def mcvi(
+def rtdp(
     model,
     *args,
     horizon=100,
@@ -22,9 +22,9 @@ def mcvi(
     **kwargs
 ):
     if honest_warmup_steps > 0:
-        agent = MCVI(model, eps=0, eps_honest=1, horizon=horizon, **kwargs)
+        agent = RTDP(model, eps=0, eps_honest=1, horizon=horizon, **kwargs)
     else:
-        agent = MCVI(model, eps=eps, eps_honest=eps_honest, horizon=horizon, **kwargs)
+        agent = RTDP(model, eps=eps, eps_honest=eps_honest, horizon=horizon, **kwargs)
 
     max_start_value = 0
 
@@ -69,9 +69,9 @@ def mcvi(
             pp.pprint(info)
 
 
-def test_mcvi(*args, **kwargs):
+def test_rtdp(*args, **kwargs):
     model = aft20barzur.BitcoinSM(alpha=0.42, gamma=0.84, maximum_fork_length=10000)
-    mcvi(model, *args, **kwargs)
+    rtdp(model, *args, **kwargs)
 
 
 if __name__ == "__main__":
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         model_a = SelfishMining(
             Bitcoin(), **problem, maximum_size=10000, merge_isomorphic=False
         )
-        mcvi(
+        rtdp(
             model_a,
             steps=10000000,
             report_steps=1000,
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         )
     else:
         model_b = aft20barzur.BitcoinSM(**problem, maximum_fork_length=10000)
-        mcvi(
+        rtdp(
             model_b,
             steps=1000000,
             report_steps=10000,

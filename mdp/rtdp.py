@@ -31,7 +31,7 @@ class State:
         self._honest = None  # honest action id
 
 
-class MCVI:
+class RTDP:
     def __init__(
         self,
         model: Model,
