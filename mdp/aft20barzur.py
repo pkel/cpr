@@ -39,7 +39,7 @@ class BState:  # Bitcoin State
 class BitcoinSM(Model):
     def __init__(self, *args, alpha: float, gamma: float, maximum_fork_length: int):
         if alpha < 0 or alpha >= 0.5:
-            raise ValueError("alpha must be between 0 and 1")
+            raise ValueError("alpha must be between 0 and 0.5")
         if gamma < 0 or gamma > 1:
             raise ValueError("gamma must be between 0 and 1")
         if maximum_fork_length <= 0:

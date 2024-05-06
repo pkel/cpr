@@ -33,7 +33,7 @@ class BState:  # Bitcoin State
 class BitcoinSM(Model):
     def __init__(self, *args, alpha: float, gamma: float, maximum_fork_length: int):
         if alpha < 0 or alpha >= 0.5:
-            raise ValueError("alpha must be between 0 and 1")
+            raise ValueError("alpha must be between 0 and 0.5")
         if gamma < 0 or gamma > 1:
             raise ValueError("gamma must be between 0 and 1")
         if maximum_fork_length <= 0:
@@ -169,6 +169,19 @@ class BitcoinSM(Model):
         if a == WAIT:
             return self.apply_wait(s)
         assert False, "invalid action"
+
+    def honest(self, s: BState) -> list[Action]:
+        if s.a > s.h:
+            return OVERRIDE
+        else:
+            return ADOPT
+
+    def shutdown(self, s: BState) -> list[Transition]:
+        # Rewards and progress are calculated on common chain. Terminating with
+        # a no-op is already fair.
+        return [Transition(state=s, probability=1, reward=0, progress=0)]
+        # NOTE In principle, we could do and award a full release here, but this
+        # would change the model. Maybe evaluate this separately.
 
 
 mappable_params = dict(alpha=0.125, gamma=0.25)
