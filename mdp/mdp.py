@@ -103,6 +103,7 @@ class MDP:
         start = time()
 
         value = numpy.zeros((2, self.n_states), dtype=float)
+        progress = numpy.zeros((2, self.n_states), dtype=float)
         policy = numpy.zeros((2, self.n_states), dtype=int)
 
         i = 1
@@ -112,19 +113,26 @@ class MDP:
 
             for src, actions in enumerate(self.tab):
                 best_v = 0.0
+                best_p = 0.0
                 best_a = -1  # no action possible
                 for act, lst in actions.items():
                     if act < 0:
                         continue
                     this_v = 0.0
+                    this_p = 0.0
                     for t in lst:
                         this_v += t.probability * (
                             t.reward + discount * value[prev, t.destination]
                         )
+                        this_p += t.probability * (
+                            t.progress + discount * progress[prev, t.destination]
+                        )
                     if this_v >= best_v:  # intentionally, to not stick with action -1
                         best_v = this_v
+                        best_p = this_p
                         best_a = act
                 value[next, src] = best_v
+                progress[next, src] = best_p
                 policy[next, src] = best_a
                 assert best_a >= 0 or len(actions) == 0
 
@@ -153,6 +161,7 @@ class MDP:
             vi_stop_delta=stop_delta,
             vi_policy=policy[next,],
             vi_value=value[next,],
+            vi_progress=progress[next,],
             vi_iter=i,
             vi_max_iter=max_iter,
             vi_time=time() - start,

@@ -9,7 +9,6 @@ from sm import SelfishMining
 # solving algorithm
 from rtdp import RTDP
 from compiler import Compiler
-import util
 
 # generic tools
 import argparse
@@ -40,23 +39,36 @@ rows = [
     dict(row=6, protocol="bitcoin", model="aft20", truncated=False, algo="rtdp", ref=5),
 ]
 
-horizon = 50
+horizon = 100
 
 # Algorithms
+# TODO, I think it's interesting to report the number of states explored / visited!
 
 
 def algo_aft20(model):
-    eps = 0.01
+    eps = 0.01  # termination epsilon
 
+    # Compile Full MDP
     mdp = Compiler(model).mdp()
-    res = util.optimize_and_evaluate(mdp, horizon=horizon, eps=eps)
 
-    return dict(rpp=res["rpp"])
+    # Derive PTO MDP
+    mdp = aft20barzur.ptmdp(mdp, horizon=horizon)
+
+    # Solve PTO MDP
+    vi = mdp.value_iteration(stop_delta=eps, eps=None, discount=1)
+
+    value = 0.0
+    progress = 0.0
+    for state, prob in mdp.start.items():
+        value += vi["vi_value"][state] * prob
+        progress += vi["vi_progress"][state] * prob
+
+    return dict(value=value, progress=progress, rpp=value / progress)
 
 
 def algo_rtdp(model):
-    steps = 300000
-    eps = 0.3
+    steps = 1_000_000
+    eps = 0.3  # exploration epsilon
 
     agent = RTDP(model, eps=eps, eps_honest=0, horizon=horizon)
     for i in range(steps):
@@ -64,9 +76,6 @@ def algo_rtdp(model):
 
     value, progress = agent.start_value_and_progress()
     return dict(value=value, progress=progress, rpp=value / progress)
-
-
-# TODO, aft20 algo in util calculates steady state rewards, the rtdp one does not. This is apples to oranges.
 
 
 # How do we instantiate the models and run the algo?
@@ -142,11 +151,14 @@ jobs = random.sample(jobs, len(jobs))
 res_gen = joblib.Parallel(n_jobs=args.n_jobs, return_as="generator")(jobs)
 
 print()
-print("Start solving the MDPs for various parameter combinations:")
+print(f"Run {len(jobs)} jobs on {args.n_jobs} threads ...")
 
 rows = []
 for res in tqdm(res_gen, total=len(jobs)):
     rows.append(res)
+
+    if "error" in res:
+        print(res["traceback"])
 
 df = pandas.DataFrame(rows)
 
