@@ -16,7 +16,7 @@ def tabulate(df, key):
     return (
         df.pivot(
             columns=["attacker", "alpha", "gamma"],
-            index=["row", "protocol", "model", "truncated", "algo", "ref"],
+            index=["row", "protocol", "model", "trunc", "algo", "ref"],
             values=key,
         )
         .reset_index()
@@ -27,6 +27,9 @@ def tabulate(df, key):
 print()
 print("rpp")
 print(tabulate(df, "rpp"))
+print()
+print("n_states")
+print(tabulate(df, "n_states"))
 print()
 print("time")
 print(tabulate(df, "time"))

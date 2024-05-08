@@ -37,8 +37,8 @@ rows = [
     dict(row=4, protocol="bitcoin", model="aft20", trunc=40, algo="rtdp", ref=1),
     dict(row=5, protocol="bitcoin", model="fc16", trunc=0, algo="rtdp", ref=1),
     dict(row=6, protocol="bitcoin", model="aft20", trunc=0, algo="rtdp", ref=1),
-    dict(row=7, protocol="bitcoin", model="generic", trunc=8, algo="aft20", ref=1),
-    dict(row=8, protocol="bitcoin", model="generic", trunc=8, algo="rtdp", ref=1),
+    dict(row=7, protocol="bitcoin", model="generic", trunc=10, algo="aft20", ref=1),
+    dict(row=8, protocol="bitcoin", model="generic", trunc=10, algo="rtdp", ref=1),
     dict(row=9, protocol="bitcoin", model="generic", trunc=0, algo="rtdp", ref=5),
 ]
 
@@ -122,7 +122,7 @@ argp = argparse.ArgumentParser()
 argp.add_argument("-j", "--n_jobs", type=int, default=1, metavar="INT")
 argp.add_argument("-H", "--horizon", type=int, default=30, metavar="INT")
 argp.add_argument("--rtdp_eps", type=float, default=0.25, metavar="FLOAT")
-argp.add_argument("--rtdp_steps", type=int, default=100_000, metavar="INT")
+argp.add_argument("--rtdp_steps", type=int, default=50_000, metavar="INT")
 argp.add_argument("--vi_delta", type=float, default=0.01, metavar="FLOAT")
 args = argp.parse_args()
 
@@ -179,10 +179,6 @@ for res in tqdm(res_gen, total=len(jobs)):
 
 df = pandas.DataFrame(rows)
 
-# Print
-
-print(df)
-
 # Save to disk
 
 fname = "measure-rtdp.pkl"
@@ -195,6 +191,10 @@ results = dict(
 
 with open(fname, "wb") as pkl:
     pickle.dump(results, pkl)
+
+# Print
+
+print(df.drop(columns=["hyperparams"]))
 
 # Error handling
 

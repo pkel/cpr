@@ -730,17 +730,7 @@ class SelfishMining(Model):
         e = self.editor
         e.load(s)
 
-        # we allow mining only up to a certain point
-        truncate = False
-        ms = self.maximum_size
-        if ms > 0 and e.n >= ms:
-            truncate = True
-
-        mh = self.maximum_height
-        if mh > 0 and max(e.ht) >= mh:
-            truncate = True
-
-        if truncate:
+        if self.truncate_now(e):
             # we forbid mining and allow communication only if there is
             # something to communicate. This forces the attacker to consider
             # and release all blocks before reaching a terminal state.
@@ -761,6 +751,17 @@ class SelfishMining(Model):
 
         return actions
 
+    def truncate_now(self, e: Editor) -> bool:
+        ms = self.maximum_size
+        if ms > 0 and e.n >= ms:
+            return True
+
+        mh = self.maximum_height
+        if mh > 0 and max(e.ht) >= mh:
+            return True
+
+        return False
+
     def honest(self, s: State) -> Action:
         e = self.editor
         e.load(s)
@@ -770,10 +771,11 @@ class SelfishMining(Model):
             return Release(0)
         if len(e.to_consider()) > 0:
             return Consider(0)
-        return Continue()
 
-        # TODO Continue might be unavailable, if Communicate is the only remaining
-        # action during truncation; get rid of communicate action
+        if self.truncate_now(e):
+            return Communicate()
+        else:
+            return Continue()
 
     def apply(self, a: Action, s: State) -> list[Transition]:
         if isinstance(a, Release):
