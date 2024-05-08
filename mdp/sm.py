@@ -772,6 +772,9 @@ class SelfishMining(Model):
             return Consider(0)
         return Continue()
 
+        # TODO Continue might be unavailable, if Communicate is the only remaining
+        # action during truncation; get rid of communicate action
+
     def apply(self, a: Action, s: State) -> list[Transition]:
         if isinstance(a, Release):
             return self.apply_release(a.i, s)
