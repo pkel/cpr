@@ -316,6 +316,11 @@ class RTDP:
                 # unexplored state:
                 # assume single action, deterministic transition to terminal
                 # state, handing out the initial state value estimate
+                # TODO I think this is off. First, does it even matter what
+                # value we set? An agent wants to avoid navigating into a
+                # terminal state, at least for high horizons. Second, wouldn't
+                # it be better to shutdown & restart & terminate based on
+                # progress?
 
                 # mdp
                 int_t = mdp.Transition(
