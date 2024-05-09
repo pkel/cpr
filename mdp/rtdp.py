@@ -1,3 +1,4 @@
+import mdp
 from mdp import sum_to_one
 from model import Model, PTO_wrapper, Transition
 import random
@@ -27,8 +28,8 @@ class State:
         self.value = 0  # estimate of future rewards
         self.progress = 0  # estimate of future progress
         self.count = 0
-        self._actions = None  # action idx -> state hash transition list
-        self._honest = None  # honest action id
+        self.actions = None  # action idx -> state hash transition list
+        self.honest = None  # honest action id
 
 
 class RTDP:
@@ -51,6 +52,12 @@ class RTDP:
 
         self.full_state = None  # current state, full model state
         self.states = dict()  # state hash -> State
+
+        # start states
+        self.start_states = list()  # list[tuple[float, hash, full_state]]
+        for full_state, prob in self.model.start():
+            state, state_hash = self.state_and_hash_of_full_state(full_state)
+            self.start_states.append((prob, state_hash, full_state))
 
         # We will record good full states such that we can start exploration
         # there. Sutton and Barton call this 'exploring starts'
@@ -77,7 +84,7 @@ class RTDP:
                 return
 
         # start from an actual start state otherwise
-        self.full_state = sample(self.model.start(), lambda x: x[1])[0]
+        self.full_state = sample(self.start_states, lambda x: x[0])[2]
 
     def reset(self):
         self.n_episodes += 1
@@ -188,8 +195,8 @@ class RTDP:
         self.full_state = to.state
 
     def actions(self, state, full_state):
-        if state._actions is not None:
-            return state._actions
+        if state.actions is not None:
+            return state.actions
 
         # TODO since the switch to using state hashes to avoid storing the full
         # states I have not evaluated whether this caching is worth it. For
@@ -218,20 +225,20 @@ class RTDP:
         if len(actions) > 0:
             # non-terminal state has honest action
             h = m_actions.index(self.model.honest(full_state))
-            state._honest = h
+            state.honest = h
 
-        state._actions = actions
+        state.actions = actions
         return actions
 
     def honest(self, state, full_state):
-        if state._honest is not None:
-            return state._honest
+        if state.honest is not None:
+            return state.honest
 
-        if state._actions is None:
+        if state.actions is None:
             _ = self.actions(state, full_state)
 
-        assert len(state._actions) > 0, "no honest action for terminal state"
-        return state._honest
+        assert len(state.actions) > 0, "no honest action for terminal state"
+        return state.honest
 
     def state_and_hash_of_full_state(self, full_state):
         state_hash = collision_resistant_hash(full_state)
@@ -257,3 +264,78 @@ class RTDP:
             value += t.probability * t.reward
 
         return value
+
+    def mdp_and_policy(self):
+        # The agent operates on a partially explored MDP,
+        # this function extracts this MDP and the best known policy.
+        # During exploration, states are represented by hashes; in the returned
+        # MDP states are represented by a range of integers starting from 0.
+
+        # derive integer ids
+        state_id = dict()
+        for s_id, s_hash in enumerate(self.states.keys()):
+            state_id[s_hash] = s_id
+
+        # iterate states; build mdp & policy
+        # terminal states will have policy None
+        m = mdp.MDP()
+        n_states = len(self.states)
+        policy = [-1] * n_states  # -1 for terminal state
+        terminal_state = n_states
+        for src_hash, src_state in self.states.items():
+            src_id = state_id[src_hash]
+            best_a = -1  # no action available / terminal state
+            best_q = 0.0
+            if src_state.actions is not None:
+                # explored state:
+                for a, transitions in enumerate(src_state.actions):
+                    # policy
+                    q = 0.0
+                    for hash_t in transitions:
+                        # policy
+                        to_state = self.states[hash_t.state]
+                        q += hash_t.probability * (hash_t.reward + to_state.value)
+
+                        # mdp
+                        int_t = mdp.Transition(
+                            destination=state_id[hash_t.state],
+                            probability=hash_t.probability,
+                            reward=hash_t.reward,
+                            progress=hash_t.progress,
+                            effect=hash_t.effect,
+                        )
+                        m.add_transition(src_id, a, int_t)
+
+                    # policy
+                    if q > best_q or best_a < 0:
+                        best_q = q
+                        best_a = a
+
+                policy[src_id] = best_a
+            else:
+                # unexplored state:
+                # assume single action, deterministic transition to terminal
+                # state, handing out the initial state value estimate
+
+                # mdp
+                int_t = mdp.Transition(
+                    destination=terminal_state,
+                    probability=1,
+                    reward=src_state.value,
+                    progress=0.0,
+                    effect=None,
+                )
+                m.add_transition(src_id, 0, int_t)
+
+                # policy
+                policy[src_id] = 0
+
+        # mdp: set start states
+        assert len(m.start) == 0
+        for prob, state_hash, full_state in self.start_states:
+            m.start[state_id[state_hash]] = prob
+
+        assert m.check()
+        assert m.n_states == len(self.states) + 1
+
+        return m, policy

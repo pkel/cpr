@@ -68,6 +68,8 @@ def rtdp(
             )
             pp.pprint(info)
 
+    mdp, policy = agent.mdp_and_policy()
+
 
 def test_rtdp(*args, **kwargs):
     model = aft20barzur.BitcoinSM(alpha=0.42, gamma=0.84, maximum_fork_length=10000)

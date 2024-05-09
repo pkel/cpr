@@ -9,7 +9,7 @@ with open(fname, "rb") as pkl:
 
 df = results["data"]
 
-df = df.assign(rpp=lambda x: x.value / x.progress)
+df = df.assign(start_rpp=lambda x: x.start_value / x.start_progress)
 
 
 def tabulate(df, key):
@@ -24,12 +24,7 @@ def tabulate(df, key):
     )
 
 
-print()
-print("rpp")
-print(tabulate(df, "rpp"))
-print()
-print("n_states")
-print(tabulate(df, "n_states"))
-print()
-print("time")
-print(tabulate(df, "time"))
+for col in ["start_rpp", "mdp_n_states", "pimc_n_states", "time"]:
+    print()
+    print(col)
+    print(tabulate(df, col))

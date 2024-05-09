@@ -37,15 +37,28 @@ rows = [
     dict(row=4, protocol="bitcoin", model="aft20", trunc=40, algo="rtdp", ref=1),
     dict(row=5, protocol="bitcoin", model="fc16", trunc=0, algo="rtdp", ref=1),
     dict(row=6, protocol="bitcoin", model="aft20", trunc=0, algo="rtdp", ref=1),
-    dict(row=7, protocol="bitcoin", model="generic", trunc=10, algo="aft20", ref=1),
-    dict(row=8, protocol="bitcoin", model="generic", trunc=10, algo="rtdp", ref=1),
-    dict(row=9, protocol="bitcoin", model="generic", trunc=0, algo="rtdp", ref=5),
+    #  dict(row=7, protocol="bitcoin", model="generic", trunc=10, algo="aft20", ref=1),
+    #  dict(row=8, protocol="bitcoin", model="generic", trunc=10, algo="rtdp", ref=1),
+    #  dict(row=9, protocol="bitcoin", model="generic", trunc=0, algo="rtdp", ref=5),
 ]
 
 
 # Algorithms
-# TODO it might be instructive to track/report the size of the policy-induced markov chain
-# TODO it might appropriate to derive steady states and report value/progress on that
+
+
+def post_algo(mdp, policy, start_value, start_progress):
+    # TODO it might appropriate to derive steady states and report value/progress
+
+    # get policy-induced markov chain (dict of matrices prb, rew, prg)
+    pimc = mdp.markov_chain(policy, start_state=0)
+
+    return dict(
+        start_value=start_value,
+        start_progress=start_progress,
+        mdp_n_states=mdp.n_states,
+        mdp_n_transitions=mdp.n_transitions,
+        pimc_n_states=pimc["prb"].get_shape()[0],
+    )
 
 
 def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
@@ -57,6 +70,7 @@ def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
 
     # Solve PTO MDP
     vi = mdp.value_iteration(stop_delta=vi_delta, eps=None, discount=1)
+    policy = vi["vi_policy"]
 
     value = 0.0
     progress = 0.0
@@ -64,11 +78,7 @@ def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
         value += vi["vi_value"][state] * prob
         progress += vi["vi_progress"][state] * prob
 
-    return dict(
-        value=value,
-        progress=progress,
-        n_states=mdp.n_states,
-    )
+    return post_algo(mdp, policy, value, progress)
 
 
 def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, **kwargs):
@@ -77,12 +87,10 @@ def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, **kwargs):
     for i in range(rtdp_steps):
         agent.step()
 
+    mdp, policy = agent.mdp_and_policy()
     value, progress = agent.start_value_and_progress()
-    return dict(
-        value=value,
-        progress=progress,
-        n_states=len(agent.states),
-    )
+
+    return post_algo(mdp, policy, value, progress)
 
 
 # How do we instantiate the models and run the algo?
