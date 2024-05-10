@@ -1,3 +1,4 @@
+from collections import deque
 import mdp
 from mdp import sum_to_one
 from model import Model, PTO_wrapper, Transition
@@ -40,7 +41,7 @@ class RTDP:
         horizon: int,
         eps: float,
         eps_honest: float = 0,
-        eps_es: float = 0
+        es: float = 0
     ):
         assert horizon > 0
 
@@ -48,20 +49,28 @@ class RTDP:
         self.model = model
         self.horizon = horizon
 
-        self.set_exploration(eps=eps, eps_honest=eps_honest, eps_es=eps_es)
+        self.set_exploration(eps=eps, eps_honest=eps_honest, es=es)
 
         self.full_state = None  # current state, full model state
         self.states = dict()  # state hash -> State
+
+        # Sutton and Barto propose 'exploring states', that is, starting
+        # exploration / episodes from a random state. This ensures that all
+        # states are visited regularly, independent of the policy; this ensures
+        # their algorithm converges on the optimal policy.
+        # Now, we explicitly do not want to visit all states. Nevertheless we
+        # have the problem that an epsilon-soft policy implies that exploration
+        # is focused on early states.
+        # We overcome this by maintaining a set of good full states which are
+        # worth using as starting states. What is a good state? We just use the
+        # set of recently visited states.
+        self.exploring_starts = deque(maxlen=100 * horizon)  # full states
 
         # start states
         self.start_states = list()  # list[tuple[float, hash, full_state]]
         for full_state, prob in self.model.start():
             state, state_hash = self.state_and_hash_of_full_state(full_state)
             self.start_states.append((prob, state_hash, full_state))
-
-        # We will record good full states such that we can start exploration
-        # there. Sutton and Barton call this 'exploring starts'
-        self.exploring_starts = dict()  # state hash -> full state
 
         # init state & state_id
         self.start_new_episode()
@@ -77,10 +86,10 @@ class RTDP:
         # statistics
         self.episode_progress = 0  # statistics
 
-        # Barton and Sutton's "exploring starts"
-        if self.eps_es > 0 and len(self.exploring_starts) > 0:
-            if random.random < self.eps_es:
-                self.full_state = random.sample(list(self.exploring_starts.values()))
+        # Barto and Sutton's "exploring starts"
+        if self.es > 0 and len(self.exploring_starts) > 0:
+            if random.random() < self.es:
+                self.full_state = random.choice(self.exploring_starts)
                 return
 
         # start from an actual start state otherwise
@@ -93,7 +102,7 @@ class RTDP:
         )
         self.start_new_episode()
 
-    def set_exploration(self, *args, eps=None, eps_honest=None, eps_es=None):
+    def set_exploration(self, *args, eps=None, eps_honest=None, es=None):
         if eps is not None:
             assert 0 <= eps <= 1
             self.eps = eps
@@ -102,9 +111,9 @@ class RTDP:
             assert 0 <= eps_honest <= 1
             self.eps_honest = eps_honest
 
-        if eps_es is not None:
-            assert 0 <= eps_es <= 1
-            self.eps_es = eps_es
+        if es is not None:
+            assert 0 <= es <= 1
+            self.es = es
 
     def start_value_and_progress(self):
         v = 0
@@ -167,15 +176,10 @@ class RTDP:
         state.value = max_q
         state.progress = max_p
 
-        # exploring starts heuristic:
-        # we try to record such states that have better than honest value
-        # TODO estimate the q for honest behaviour w/o using the model internals
-        if max_q > self.model.unwrapped.alpha * self.horizon * 0.99:
-            self.exploring_starts[state_hash] = full_state
-
         # state transition
         # eps-soft behaviour
         x = random.random()
+        greedy = False
         if x < self.eps:
             # random exploration
             i = random.randrange(n_actions)
@@ -184,6 +188,7 @@ class RTDP:
             i = self.honest(state, full_state)
         else:
             # greedy step
+            greedy = True
             i = max_i
 
         # NOTE there is some redundancy here: model.actions() and model.apply()
@@ -193,6 +198,10 @@ class RTDP:
         to = sample(self.model.apply(a, full_state), lambda x: x.probability)
         self.episode_progress += to.progress  # statistics
         self.full_state = to.state
+
+        # exploring starts
+        if greedy:
+            self.exploring_starts.append(to.state)
 
     def actions(self, state, full_state):
         if state.actions is not None:

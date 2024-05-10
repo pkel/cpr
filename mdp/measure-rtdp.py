@@ -93,8 +93,8 @@ def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
     return post_algo(mdp, policy, vi["vi_value"], start_value, start_progress)
 
 
-def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, **kwargs):
-    agent = RTDP(implicit_mdp, eps=rtdp_eps, eps_honest=0, horizon=horizon)
+def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, rtdp_es, **kwargs):
+    agent = RTDP(implicit_mdp, eps=rtdp_eps, eps_honest=0, es=rtdp_es, horizon=horizon)
 
     for i in range(rtdp_steps):
         agent.step()
@@ -141,7 +141,8 @@ def implicit_mdp(*args, model, protocol, trunc, alpha, gamma, **kwargs):
 argp = argparse.ArgumentParser()
 argp.add_argument("-j", "--n_jobs", type=int, default=1, metavar="INT")
 argp.add_argument("-H", "--horizon", type=int, default=30, metavar="INT")
-argp.add_argument("--rtdp_eps", type=float, default=0.25, metavar="FLOAT")
+argp.add_argument("--rtdp_eps", type=float, default=0.1, metavar="FLOAT")
+argp.add_argument("--rtdp_es", type=float, default=0.9, metavar="FLOAT")
 argp.add_argument("--rtdp_steps", type=int, default=50_000, metavar="INT")
 argp.add_argument("--vi_delta", type=float, default=0.01, metavar="FLOAT")
 args = argp.parse_args()
@@ -156,7 +157,9 @@ def measure_unsafe(*_args, algo, **kwargs):
         hp = dict(vi_delta=args.vi_delta)
         return algo_aft20(mdp, **hp, **kwargs) | dict(hyperparams=hp)
     if algo == "rtdp":
-        hp = dict(rtdp_eps=args.rtdp_eps, rtdp_steps=args.rtdp_steps)
+        hp = dict(
+            rtdp_eps=args.rtdp_eps, rtdp_es=args.rtdp_es, rtdp_steps=args.rtdp_steps
+        )
         return algo_rtdp(mdp, **hp, **kwargs) | dict(hyperparams=hp)
 
     raise ValueError(f"unknown algo: {algo}")
