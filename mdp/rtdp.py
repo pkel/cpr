@@ -265,7 +265,7 @@ class RTDP:
 
         return value
 
-    def mdp_and_policy(self):
+    def mdp(self):
         # The agent operates on a partially explored MDP,
         # this function extracts this MDP and the best known policy.
         # During exploration, states are represented by hashes; in the returned
@@ -276,14 +276,16 @@ class RTDP:
         for s_id, s_hash in enumerate(self.states.keys()):
             state_id[s_hash] = s_id
 
-        # iterate states; build mdp & policy
+        # iterate states; build mdp, policy, value estimate
         # terminal states will have policy None
         m = mdp.MDP()
         n_states = len(self.states)
-        policy = [-1] * n_states  # -1 for terminal state
+        policy = [-1] * (n_states + 1)  # -1 for terminal state
         terminal_state = n_states
+        value = [0.0] * (n_states + 1)
         for src_hash, src_state in self.states.items():
             src_id = state_id[src_hash]
+            value[src_id] = src_state.value
             best_a = -1  # no action available / terminal state
             best_q = 0.0
             if src_state.actions is not None:
@@ -343,4 +345,4 @@ class RTDP:
         assert m.check()
         assert m.n_states == len(self.states) + 1
 
-        return m, policy
+        return dict(mdp=m, policy=policy, value=value)

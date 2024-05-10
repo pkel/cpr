@@ -68,7 +68,7 @@ def rtdp(
             )
             pp.pprint(info)
 
-    mdp, policy = agent.mdp_and_policy()
+    _ = agent.mdp()
 
 
 def test_rtdp(*args, **kwargs):

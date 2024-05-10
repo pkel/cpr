@@ -13,6 +13,7 @@ from compiler import Compiler
 # generic tools
 import argparse
 import joblib
+import numpy
 import pandas
 import pickle
 from time import time
@@ -46,18 +47,62 @@ rows = [
 # Algorithms
 
 
-def post_algo(mdp, policy, start_value, start_progress):
-    # TODO it might appropriate to derive steady states and report value/progress
+def post_algo(mdp, policy, value_estimate, start_value, start_progress):
+    value_estimate = numpy.array(value_estimate)
 
+    # Steady States: I thought it would be cool to report on steady states
+    # value and progress. But there is a flaw: in a probabilistically
+    # terminating MDPs, the steady state of a policies are the connected
+    # terminal states. These do not have rewards. So steady states make no
+    # sense, at all!
+    # TODO still, as the start state is not necessarily fair (a policy might
+    # avoid going back to the start state), start values estimates can be
+    # biased.
+
+    # steady state of policy in mdp (via policy-induced markov chain)
+    best_state = numpy.argmax(value_estimate)
+    ss = mdp.steady_state(policy, start_state=best_state)
+    ssvec = ss["ss"]
+    assert sum(ssvec) >= 0.9999
+
+    # alternatively, work on policy-induced markov chain
     # get policy-induced markov chain (dict of matrices prb, rew, prg)
-    pimc = mdp.markov_chain(policy, start_state=0)
+    pimc = mdp.markov_chain(policy, start_state=best_state)
+
+    # steady state
+    pimc_ss = mdp._steady_state_mc(pimc["prb"])
+    pimc_ssvec = pimc_ss["ss"]
+
+    # calculate steady state reward and progress
+    pimc_ssvec  # prob to be in a state
+    pimc[
+        "prb"
+    ]  # one row per source state, probability of transitioning to target state
+    pimc["rew"]  # one row per source state, reward when transitioning to target state
+    pimc["prg"]  # one row per source state, progress when transitioning to target state
+    pimc_erew = (
+        (pimc["prb"] * pimc["rew"]).sum(axis=1).A1
+    )  # expected reward of next step
+    pimc_eprg = (
+        (pimc["prb"] * pimc["prg"]).sum(axis=1).A1
+    )  # expected progress of next step
+    pimc_ss_rew = pimc_erew.dot(pimc_ssvec)  # steady state weighted next reward
+    pimc_ss_prg = pimc_eprg.dot(pimc_ssvec)  # steady state weighted next progress
+
+    # print(pimc['prb'].sum(axis = 1).A1) # sum of ones? YES
 
     return dict(
         start_value=start_value,
         start_progress=start_progress,
         mdp_n_states=mdp.n_states,
         mdp_n_transitions=mdp.n_transitions,
+        ss_n_states_reachable=ss["ss_reachable"],
+        ss_n_states_nonzero=ss["ss_nonzero"],
+        ss_value=value_estimate.dot(ssvec),  # why are these negative an close to zero??
+        ss_time=ss["ss_time"],
         pimc_n_states=pimc["prb"].get_shape()[0],
+        pimc_ss_reward=pimc_ss_rew,
+        pimc_ss_progress=pimc_ss_prg,
     )
 
 
@@ -72,13 +117,13 @@ def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
     vi = mdp.value_iteration(stop_delta=vi_delta, eps=None, discount=1)
     policy = vi["vi_policy"]
 
-    value = 0.0
-    progress = 0.0
+    start_value = 0.0
+    start_progress = 0.0
     for state, prob in mdp.start.items():
-        value += vi["vi_value"][state] * prob
-        progress += vi["vi_progress"][state] * prob
+        start_value += vi["vi_value"][state] * prob
+        start_progress += vi["vi_progress"][state] * prob
 
-    return post_algo(mdp, policy, value, progress)
+    return post_algo(mdp, policy, vi["vi_value"], start_value, start_progress)
 
 
 def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, **kwargs):
@@ -87,10 +132,10 @@ def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, **kwargs):
     for i in range(rtdp_steps):
         agent.step()
 
-    mdp, policy = agent.mdp_and_policy()
-    value, progress = agent.start_value_and_progress()
+    m = agent.mdp()
+    start_value, start_progress = agent.start_value_and_progress()
 
-    return post_algo(mdp, policy, value, progress)
+    return post_algo(m["mdp"], m["policy"], m["value"], start_value, start_progress)
 
 
 # How do we instantiate the models and run the algo?
