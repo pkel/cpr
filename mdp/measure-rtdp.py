@@ -55,54 +55,21 @@ def post_algo(mdp, policy, value_estimate, start_value, start_progress):
     # terminating MDPs, the steady state of a policies are the connected
     # terminal states. These do not have rewards. So steady states make no
     # sense, at all!
-    # TODO still, as the start state is not necessarily fair (a policy might
-    # avoid going back to the start state), start values estimates can be
-    # biased.
-
-    # steady state of policy in mdp (via policy-induced markov chain)
-    best_state = numpy.argmax(value_estimate)
-    ss = mdp.steady_state(policy, start_state=best_state)
-    ssvec = ss["ss"]
-    assert sum(ssvec) >= 0.9999
+    # NOTE as the start state is not necessarily fair (a policy might avoid
+    # going back to the start state), start values estimates can be biased.
+    # NOTE if the horizon is high, this bias should go towards zero?! So let's
+    # stop worrying about that for now.
 
     # alternatively, work on policy-induced markov chain
     # get policy-induced markov chain (dict of matrices prb, rew, prg)
-    pimc = mdp.markov_chain(policy, start_state=best_state)
-
-    # steady state
-    pimc_ss = mdp._steady_state_mc(pimc["prb"])
-    pimc_ssvec = pimc_ss["ss"]
-
-    # calculate steady state reward and progress
-    pimc_ssvec  # prob to be in a state
-    pimc[
-        "prb"
-    ]  # one row per source state, probability of transitioning to target state
-    pimc["rew"]  # one row per source state, reward when transitioning to target state
-    pimc["prg"]  # one row per source state, progress when transitioning to target state
-    pimc_erew = (
-        (pimc["prb"] * pimc["rew"]).sum(axis=1).A1
-    )  # expected reward of next step
-    pimc_eprg = (
-        (pimc["prb"] * pimc["prg"]).sum(axis=1).A1
-    )  # expected progress of next step
-    pimc_ss_rew = pimc_erew.dot(pimc_ssvec)  # steady state weighted next reward
-    pimc_ss_prg = pimc_eprg.dot(pimc_ssvec)  # steady state weighted next progress
-
-    # print(pimc['prb'].sum(axis = 1).A1) # sum of ones? YES
+    pimc = mdp.markov_chain(policy, start_state=0)
 
     return dict(
         start_value=start_value,
         start_progress=start_progress,
         mdp_n_states=mdp.n_states,
         mdp_n_transitions=mdp.n_transitions,
-        ss_n_states_reachable=ss["ss_reachable"],
-        ss_n_states_nonzero=ss["ss_nonzero"],
-        ss_value=value_estimate.dot(ssvec),  # why are these negative an close to zero??
-        ss_time=ss["ss_time"],
         pimc_n_states=pimc["prb"].get_shape()[0],
-        pimc_ss_reward=pimc_ss_rew,
-        pimc_ss_progress=pimc_ss_prg,
     )
 
 
