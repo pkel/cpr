@@ -920,6 +920,10 @@ class SelfishMining(Model):
         # Communicate & return
         return self.apply_communicate(s)
 
+        # TODO; fc16 and aft20 models go back to start here, to allow the rtdp
+        # algorithm to derive correct state value estimates of unexplored
+        # states. Do this here as well!
+
 
 mappable_params = dict(alpha=0.125, gamma=0.25)
 
