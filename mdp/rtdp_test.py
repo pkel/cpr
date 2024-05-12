@@ -1,4 +1,5 @@
 import aft20barzur
+from model import PTO_wrapper
 from rtdp import RTDP
 import pprint
 import psutil
@@ -21,10 +22,12 @@ def rtdp(
     honest_warmup_steps=0,
     **kwargs
 ):
+    model = PTO_wrapper(model, horizon=horizon, terminal_state=b"")
+
     if honest_warmup_steps > 0:
-        agent = RTDP(model, eps=0, eps_honest=1, horizon=horizon, **kwargs)
+        agent = RTDP(model, eps=0, eps_honest=1, **kwargs)
     else:
-        agent = RTDP(model, eps=eps, eps_honest=eps_honest, horizon=horizon, **kwargs)
+        agent = RTDP(model, eps=eps, eps_honest=eps_honest, **kwargs)
 
     max_start_value = 0
 

@@ -1,7 +1,6 @@
-from collections import deque
 import mdp
 from mdp import sum_to_one
-from model import Model, PTO_wrapper, Transition
+from model import Model, Transition
 import random
 import xxhash
 import sys
@@ -29,6 +28,7 @@ class State:
         self.value = 0  # estimate of future rewards
         self.progress = 0  # estimate of future progress
         self.count = 0
+        self.es_last_seen = -1
         self.actions = None  # action idx -> state hash transition list
         self.honest = None  # honest action id
 
@@ -38,16 +38,12 @@ class RTDP:
         self,
         model: Model,
         *args,
-        horizon: int,
         eps: float,
         eps_honest: float = 0,
-        es: float = 0
+        es: float = 0,
+        es_threshold=500_000,
     ):
-        assert horizon > 0
-
-        model = PTO_wrapper(model, horizon=horizon, terminal_state=b"")
         self.model = model
-        self.horizon = horizon
 
         self.set_exploration(eps=eps, eps_honest=eps_honest, es=es)
 
@@ -64,20 +60,23 @@ class RTDP:
         # We overcome this by maintaining a set of good full states which are
         # worth using as starting states. What is a good state? We just use the
         # set of recently visited states.
-        self.exploring_starts = deque(maxlen=100 * horizon)  # full states
+        self.es_buf = dict()  # state hash -> full state
+        self.es_threshold = es_threshold
+
+        self.i = 0
 
         # start states
         self.start_states = list()  # list[tuple[float, hash, full_state]]
         for full_state, prob in self.model.start():
             state, state_hash = self.state_and_hash_of_full_state(full_state)
-            self.start_states.append((prob, state_hash, full_state))
+            self.start_states.append((prob, state_hash, full_state, state))
 
         # init state & state_id
         self.start_new_episode()
 
         # statistics
         self.n_episodes = 0
-        self.progress_gamma999 = horizon
+        self.progress_gamma999 = 0
         self.exploration_gamma9999 = 1
         self.state_size_gamma9999 = 0
         self.n_states_visited = 0
@@ -87,13 +86,23 @@ class RTDP:
         self.episode_progress = 0  # statistics
 
         # Barto and Sutton's "exploring starts"
-        if self.es > 0 and len(self.exploring_starts) > 0:
+        if self.es > 0:
             if random.random() < self.es:
-                self.full_state = random.choice(self.exploring_starts)
-                return
+                candidates = []
+                for state_hash, state in self.states.items():
+                    if state.es_last_seen < 1:
+                        continue
+                    if self.i - state.es_last_seen < self.es_threshold:
+                        candidates.append(self.es_buf[state_hash])
+                    else:
+                        # We won't need these anymore
+                        self.es_buf.pop(state_hash, None)
+                if len(candidates) > 0:
+                    self.set_full_state(random.choice(candidates))
+                    return
 
         # start from an actual start state otherwise
-        self.full_state = sample(self.start_states, lambda x: x[0])[2]
+        self.set_full_state(sample(self.start_states, lambda x: x[0])[2])
 
     def reset(self):
         self.n_episodes += 1
@@ -118,15 +127,19 @@ class RTDP:
     def start_value_and_progress(self):
         v = 0
         p = 0
-        for full_state, prob in self.model.start():
-            state, state_hash = self.state_and_hash_of_full_state(full_state)
+        for prob, _hash, _full, state in self.start_states:
             v += prob * state.value
             p += prob * state.progress
         return v, p
 
+    def set_full_state(self, full_state):
+        self.full_state = full_state
+        self.state, self.state_hash = self.state_and_hash_of_full_state(full_state)
+
     def step(self):
+        self.i += 1
         full_state = self.full_state
-        state, state_hash = self.state_and_hash_of_full_state(full_state)
+        state = self.state
 
         # ## Statistics
 
@@ -152,6 +165,7 @@ class RTDP:
             # no action available, terminal state
             self.reset()
             assert state.value == 0
+            assert state.progress == 0
             return
 
         # value iteration step:
@@ -197,11 +211,12 @@ class RTDP:
         a = self.model.actions(full_state)[i]
         to = sample(self.model.apply(a, full_state), lambda x: x.probability)
         self.episode_progress += to.progress  # statistics
-        self.full_state = to.state
+        self.set_full_state(to.state)
 
-        # exploring starts
+        # ## Exploring starts
         if greedy:
-            self.exploring_starts.append(to.state)
+            self.state.es_last_seen = self.i + 1
+            self.es_buf[self.state_hash] = self.full_state
 
     def actions(self, state, full_state):
         if state.actions is not None:
@@ -348,7 +363,7 @@ class RTDP:
 
         # mdp: set start states
         assert len(m.start) == 0
-        for prob, state_hash, full_state in self.start_states:
+        for prob, state_hash, full_state, state in self.start_states:
             m.start[state_id[state_hash]] = prob
 
         assert m.check()

@@ -7,6 +7,7 @@ from bitcoin import Bitcoin
 from sm import SelfishMining
 
 # solving algorithm
+from model import PTO_wrapper
 from rtdp import RTDP
 from compiler import Compiler
 
@@ -27,17 +28,17 @@ columns = [
     dict(alpha=1 / 4, gamma=1 / 4, attacker="weak"),
     dict(alpha=1 / 3, gamma=1 / 3, attacker="intermediate"),
     dict(
-        alpha=0.45, gamma=0.90, attacker="strong"
+        alpha=0.42, gamma=0.82, attacker="strong"
     ),  # TODO double check whether we can do 1/2
 ]
 
 rows = [
     dict(row=1, protocol="bitcoin", model="fc16", trunc=40, algo="aft20", ref=1),
-    dict(row=2, protocol="bitcoin", model="aft20", trunc=40, algo="aft20", ref=1),
+    #  dict(row=2, protocol="bitcoin", model="aft20", trunc=40, algo="aft20", ref=1),
     dict(row=3, protocol="bitcoin", model="fc16", trunc=40, algo="rtdp", ref=1),
-    dict(row=4, protocol="bitcoin", model="aft20", trunc=40, algo="rtdp", ref=1),
-    dict(row=5, protocol="bitcoin", model="fc16", trunc=0, algo="rtdp", ref=1),
-    dict(row=6, protocol="bitcoin", model="aft20", trunc=0, algo="rtdp", ref=1),
+    #  dict(row=4, protocol="bitcoin", model="aft20", trunc=40, algo="rtdp", ref=1),
+    #  dict(row=5, protocol="bitcoin", model="fc16", trunc=0, algo="rtdp", ref=1),
+    #  dict(row=6, protocol="bitcoin", model="aft20", trunc=0, algo="rtdp", ref=1),
     #  dict(row=7, protocol="bitcoin", model="generic", trunc=10, algo="aft20", ref=1),
     #  dict(row=8, protocol="bitcoin", model="generic", trunc=10, algo="rtdp", ref=1),
     #  dict(row=9, protocol="bitcoin", model="generic", trunc=0, algo="rtdp", ref=5),
@@ -47,7 +48,7 @@ rows = [
 # Algorithms
 
 
-def post_algo(mdp, policy, value_estimate, start_value, start_progress):
+def post_algo(mdp, policy, value_estimate, start_value, start_progress, **kwargs):
     value_estimate = numpy.array(value_estimate)
 
     # Steady States: I thought it would be cool to report on steady states
@@ -70,15 +71,15 @@ def post_algo(mdp, policy, value_estimate, start_value, start_progress):
         mdp_n_states=mdp.n_states,
         mdp_n_transitions=mdp.n_transitions,
         pimc_n_states=pimc["prb"].get_shape()[0],
+        **kwargs,
     )
 
 
 def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
-    # Compile Full MDP
-    mdp = Compiler(implicit_mdp).mdp()
+    implicit_ptmdp = PTO_wrapper(implicit_mdp, horizon=horizon, terminal_state=b"")
 
-    # Derive PTO MDP
-    mdp = aft20barzur.ptmdp(mdp, horizon=horizon)
+    # Compile Full MDP
+    mdp = Compiler(implicit_ptmdp).mdp()
 
     # Solve PTO MDP
     vi = mdp.value_iteration(stop_delta=vi_delta, eps=None, discount=1)
@@ -94,15 +95,38 @@ def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
 
 
 def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, rtdp_es, **kwargs):
-    agent = RTDP(implicit_mdp, eps=rtdp_eps, eps_honest=0, es=rtdp_es, horizon=horizon)
+    implicit_ptmdp = PTO_wrapper(implicit_mdp, horizon=horizon, terminal_state=b"")
 
-    for i in range(rtdp_steps):
+    agent = RTDP(implicit_ptmdp, eps=rtdp_eps, eps_honest=0, es=rtdp_es)
+
+    log = []
+
+    i = 0
+    j = 0
+    while i < rtdp_steps:
+        i += 1
         agent.step()
+
+        # logging
+        j += 1
+        if j >= 1000:
+            j = 0
+            sv, sp = agent.start_value_and_progress()
+            log.append(
+                dict(
+                    step=i,
+                    start_value=sv,
+                    start_progress=sp,
+                    n_states=len(agent.states),
+                )
+            )
 
     m = agent.mdp()
     start_value, start_progress = agent.start_value_and_progress()
 
-    return post_algo(m["mdp"], m["policy"], m["value"], start_value, start_progress)
+    return post_algo(
+        m["mdp"], m["policy"], m["value"], start_value, start_progress, log=log
+    )
 
 
 # How do we instantiate the models and run the algo?
@@ -141,10 +165,10 @@ def implicit_mdp(*args, model, protocol, trunc, alpha, gamma, **kwargs):
 argp = argparse.ArgumentParser()
 argp.add_argument("-j", "--n_jobs", type=int, default=1, metavar="INT")
 argp.add_argument("-H", "--horizon", type=int, default=30, metavar="INT")
-argp.add_argument("--rtdp_eps", type=float, default=0.1, metavar="FLOAT")
+argp.add_argument("--rtdp_eps", type=float, default=0.2, metavar="FLOAT")
 argp.add_argument("--rtdp_es", type=float, default=0.9, metavar="FLOAT")
 argp.add_argument("--rtdp_steps", type=int, default=50_000, metavar="INT")
-argp.add_argument("--vi_delta", type=float, default=0.01, metavar="FLOAT")
+argp.add_argument("--vi_delta", type=float, default=0.001, metavar="FLOAT")
 args = argp.parse_args()
 
 # Single measurement
