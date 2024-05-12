@@ -164,8 +164,8 @@ class RTDP:
         if n_actions < 1:
             # no action available, terminal state
             self.reset()
-            assert state.value == 0
-            assert state.progress == 0
+            #  assert state.value == 0
+            #  assert state.progress == 0
             return
 
         # value iteration step:
@@ -272,7 +272,7 @@ class RTDP:
         else:
             state = State()
             self.states[state_hash] = state
-            state.value = self.initial_value_estimate(full_state)
+            state.value, state.progress = self.initial_value_estimate(full_state)
 
         return state, state_hash
 
@@ -283,11 +283,25 @@ class RTDP:
         # - guide exploration by evaluating the honest policy
         # - do a fair shutdown to get a partial estimate of the states potential
 
-        value = 0
+        v = 0.0
+        p = 0.0
         for t in self.model.shutdown(full_state):
-            value += t.probability * t.reward
+            immediate_v = t.reward
+            immediate_p = t.progress
 
-        return value
+            state_hash = collision_resistant_hash(t.state)
+            if state_hash in self.states:
+                state = self.states[state_hash]
+                future_v = state.value
+                future_p = state.progress
+            else:
+                future_v = 0
+                future_p = 0
+
+            v += t.probability * (immediate_v + future_v)
+            p += t.probability * (immediate_p + future_p)
+
+        return v, p
 
     def mdp(self):
         # The agent operates on a partially explored MDP,

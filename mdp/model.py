@@ -92,6 +92,9 @@ class PTO_wrapper(Model):
         else:
             return self.unwrapped.actions(state)
 
+    def continue_probability_of_progress(self, progress):
+        return (1.0 - (1.0 / self.horizon)) ** progress
+
     def apply(self, action, state):
         assert state is not self.terminal
 
@@ -101,7 +104,7 @@ class PTO_wrapper(Model):
             if t.progress == 0.0:
                 transitions.append(t)
             else:
-                continue_p = (1.0 - (1.0 / self.horizon)) ** t.progress
+                continue_p = self.continue_probability_of_progress(t.progress)
                 assert 0 < continue_p < 1
                 # one transition for continuing
                 continue_t = Transition(
@@ -136,4 +139,25 @@ class PTO_wrapper(Model):
         if state is self.terminal:
             return []
         else:
-            return self.unwrapped.shutdown(state)
+            ts = []
+            for t in self.unwrapped.shutdown(state):
+                continue_p = self.continue_probability_of_progress(t.progress)
+                ts.append(
+                    Transition(
+                        probability=t.probability * continue_p,
+                        state=t.state,
+                        reward=t.reward,
+                        progress=t.progress,
+                        effect=t.effect,
+                    )
+                )
+                ts.append(
+                    Transition(
+                        probability=t.probability * (1 - continue_p),
+                        state=self.terminal,
+                        reward=t.reward,
+                        progress=t.progress,
+                        effect=t.effect,
+                    )
+                )
+            return ts

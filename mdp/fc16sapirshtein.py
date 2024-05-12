@@ -177,25 +177,33 @@ class BitcoinSM(Model):
             return ADOPT
 
     def shutdown(self, s: BState) -> list[Transition]:
-        # Rewards and progress are calculated on common chain. Terminating with
-        # a no-op is already fair.
-        #  return [Transition(state=s, probability=1, reward=0, progress=0)]
-        # NOTE In principle, we could do and award a full release here, but this
-        # would change the model. Maybe evaluate this separately.
-        snew = BState(a=0, h=0, fork=IRRELEVANT)
-        if s.h > s.a:
-            return [Transition(state=snew, probability=1, reward=0, progress=s.h)]
-        if s.a > s.h:
-            return [Transition(state=snew, probability=1, reward=s.a, progress=s.a)]
-        if s.a == s.h:
-            return [
-                Transition(
-                    state=snew, probability=self.gamma, reward=s.a, progress=s.a
-                ),
-                Transition(
-                    state=snew, probability=1 - self.gamma, reward=0, progress=s.h
-                ),
-            ]
+        # Abort attack in favor of attacker; go back to start.
+        ts = []
+        for snew, p in self.start():
+            if s.h > s.a:
+                ts.append(Transition(state=snew, probability=p, reward=0, progress=s.h))
+            elif s.a > s.h:
+                ts.append(
+                    Transition(state=snew, probability=p, reward=s.a, progress=s.a)
+                )
+            elif s.a == s.h:
+                ts.append(
+                    Transition(
+                        state=snew, probability=p * self.gamma, reward=s.a, progress=s.a
+                    )
+                )
+                ts.append(
+                    Transition(
+                        state=snew,
+                        probability=p * (1 - self.gamma),
+                        reward=0,
+                        progress=s.h,
+                    )
+                )
+            else:
+                raise Exception("logic error")
+        assert mdp.sum_to_one([t.probability for t in ts])
+        return ts
 
 
 mappable_params = dict(alpha=0.125, gamma=0.25)

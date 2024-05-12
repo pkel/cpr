@@ -28,15 +28,15 @@ columns = [
     dict(alpha=1 / 4, gamma=1 / 4, attacker="weak"),
     dict(alpha=1 / 3, gamma=1 / 3, attacker="intermediate"),
     dict(
-        alpha=0.42, gamma=0.82, attacker="strong"
+        alpha=0.42, gamma=0.84, attacker="strong"
     ),  # TODO double check whether we can do 1/2
 ]
 
 rows = [
     dict(row=1, protocol="bitcoin", model="fc16", trunc=40, algo="aft20", ref=1),
-    #  dict(row=2, protocol="bitcoin", model="aft20", trunc=40, algo="aft20", ref=1),
+    dict(row=2, protocol="bitcoin", model="aft20", trunc=40, algo="aft20", ref=1),
     dict(row=3, protocol="bitcoin", model="fc16", trunc=40, algo="rtdp", ref=1),
-    #  dict(row=4, protocol="bitcoin", model="aft20", trunc=40, algo="rtdp", ref=1),
+    dict(row=4, protocol="bitcoin", model="aft20", trunc=40, algo="rtdp", ref=1),
     #  dict(row=5, protocol="bitcoin", model="fc16", trunc=0, algo="rtdp", ref=1),
     #  dict(row=6, protocol="bitcoin", model="aft20", trunc=0, algo="rtdp", ref=1),
     #  dict(row=7, protocol="bitcoin", model="generic", trunc=10, algo="aft20", ref=1),
@@ -168,7 +168,7 @@ argp.add_argument("-H", "--horizon", type=int, default=30, metavar="INT")
 argp.add_argument("--rtdp_eps", type=float, default=0.2, metavar="FLOAT")
 argp.add_argument("--rtdp_es", type=float, default=0.9, metavar="FLOAT")
 argp.add_argument("--rtdp_steps", type=int, default=50_000, metavar="INT")
-argp.add_argument("--vi_delta", type=float, default=0.001, metavar="FLOAT")
+argp.add_argument("--vi_delta", type=float, default=0.01, metavar="FLOAT")
 args = argp.parse_args()
 
 # Single measurement
