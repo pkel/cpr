@@ -26,6 +26,8 @@ def tabulate(df, key):
 
 
 for col in [
+    "agent_start_reward",
+    "pe_start_reward",
     "agent_start_rpp",
     "pe_start_rpp",
     "mdp_n_states",

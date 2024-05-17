@@ -25,16 +25,16 @@ from tqdm import tqdm
 # What do we measure? Table headings ...
 
 columns = [
-    dict(alpha=1 / 4, gamma=1 / 4, attacker="weak"),
-    dict(alpha=1 / 3, gamma=1 / 3, attacker="intermediate"),
-    dict(
-        alpha=0.42, gamma=0.84, attacker="strong"
-    ),  # TODO double check whether we can do 1/2
-]
+    dict(alpha=1 / 4, gamma=1 / 4, attacker="a25"),
+    dict(alpha=1 / 3, gamma=1 / 3, attacker="a33"),
+    dict(alpha=0.42, gamma=0.84, attacker="a42"),
+    dict(alpha=0.45, gamma=0.90, attacker="a45"),
+]  # TODO double check whether we can do 1/2
 
 rows = [
     dict(row=1, protocol="bitcoin", model="fc16", trunc=40, algo="aft20", ref=1),
     #  dict(row=2, protocol="bitcoin", model="aft20", trunc=40, algo="aft20", ref=1),
+    dict(row=3, protocol="bitcoin", model="fc16", trunc=40, algo="rtdp/mdp", ref=1),
     dict(row=3, protocol="bitcoin", model="fc16", trunc=40, algo="rtdp", ref=1),
     #  dict(row=4, protocol="bitcoin", model="aft20", trunc=40, algo="rtdp", ref=1),
     #  dict(row=5, protocol="bitcoin", model="fc16", trunc=0, algo="rtdp", ref=1),
@@ -48,9 +48,7 @@ rows = [
 # Algorithms
 
 
-def post_algo(
-    mdp, policy, value_estimate, start_reward, start_progress, pe_theta, **kwargs
-):
+def post_algo(mdp, policy, value_estimate, pe_theta, **kwargs):
     value_estimate = numpy.array(value_estimate)
 
     # Steady States: I thought it would be cool to report on steady states
@@ -76,8 +74,6 @@ def post_algo(
         pe_start_progress += prob * pe["pe_progress"][st]
 
     return dict(
-        agent_start_reward=start_reward,
-        agent_start_progress=start_progress,
         mdp_n_states=mdp.n_states,
         mdp_n_transitions=mdp.n_transitions,
         pimc_n_states=pimc["prb"].get_shape()[0],
@@ -99,19 +95,28 @@ def algo_aft20(implicit_mdp, *args, horizon, vi_delta, **kwargs):
     vi = mdp.value_iteration(stop_delta=vi_delta, eps=None, discount=1)
     policy = vi["vi_policy"]
 
-    start_reward = 0.0
-    start_progress = 0.0
+    start = dict()
+    start["agent_start_reward"] = 0.0
+    start["agent_start_progress"] = 0.0
     for state, prob in mdp.start.items():
-        start_reward += vi["vi_value"][state] * prob
-        start_progress += vi["vi_progress"][state] * prob
+        start["agent_start_reward"] += vi["vi_value"][state] * prob
+        start["agent_start_progress"] += vi["vi_progress"][state] * prob
 
-    return post_algo(
-        mdp, policy, vi["vi_value"], start_reward, start_progress, **kwargs
-    )
+    return post_algo(mdp, policy, vi["vi_value"], **start, **kwargs)
 
 
-def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, rtdp_es, **kwargs):
-    implicit_ptmdp = PTO_wrapper(implicit_mdp, horizon=horizon, terminal_state=b"")
+def algo_rtdp(
+    implicit_mdp,
+    *args,
+    pe_on_mdp=False,
+    horizon,
+    rtdp_steps,
+    rtdp_eps,
+    rtdp_es,
+    **kwargs,
+):
+    terminal = b"terminal"
+    implicit_ptmdp = PTO_wrapper(implicit_mdp, horizon=horizon, terminal_state=terminal)
 
     agent = RTDP(implicit_ptmdp, eps=rtdp_eps, eps_honest=0, es=rtdp_es)
 
@@ -138,16 +143,30 @@ def algo_rtdp(implicit_mdp, *args, horizon, rtdp_steps, rtdp_eps, rtdp_es, **kwa
                 )
             )
 
-    m = agent.mdp()
     start_reward, start_progress = agent.start_value_and_progress()
+    start = dict()
+    start["agent_start_reward"] = start_reward
+    start["agent_start_progress"] = start_progress
+
+    if pe_on_mdp:
+        # prepare eval on full MDP
+        compiler = Compiler(implicit_ptmdp)
+        mdp = compiler.mdp()
+        state_id = compiler.state_map
+        policy = agent.policy(state_id=state_id, terminal_state=terminal)
+        value = agent.value(state_id=state_id, terminal_state=terminal)
+    else:
+        rtdp = agent.mdp()
+        mdp = rtdp["mdp"]
+        policy = rtdp["policy"]
+        value = rtdp["value"]
 
     return post_algo(
-        m["mdp"],
-        m["policy"],
-        m["value"],
-        start_reward,
-        start_progress,
+        mdp,
+        policy,
+        value,
         log=log,
+        **start,
         **kwargs,
     )
 
@@ -210,11 +229,11 @@ def measure_unsafe(*_args, algo, **kwargs):
             rtdp_eps=args.rtdp_eps, rtdp_es=args.rtdp_es, rtdp_steps=args.rtdp_steps
         )
         return algo_rtdp(mdp, **hp, **kwargs) | dict(hyperparams=hp)
-    if algo == "rtdp_on_mdp":
+    if algo == "rtdp/mdp":
         hp = dict(
             rtdp_eps=args.rtdp_eps, rtdp_es=args.rtdp_es, rtdp_steps=args.rtdp_steps
         )
-        return algo_rtdp(mdp, **hp, **kwargs) | dict(hyperparams=hp)
+        return algo_rtdp(mdp, **hp, **kwargs, pe_on_mdp=True) | dict(hyperparams=hp)
 
     raise ValueError(f"unknown algo: {algo}")
 

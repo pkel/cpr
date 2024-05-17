@@ -385,3 +385,74 @@ class RTDP:
         assert m.n_states == len(self.states) + 1
 
         return dict(mdp=m, policy=policy, value=value)
+
+    def _prep_state_id_and_terminal_state(self, state_id, terminal_state):
+        # used in self.policy and self.value
+
+        # derive integer ids or reuse the provided ones
+        if state_id is None:
+            state_id = dict()
+            for s_id, s_hash in enumerate(self.state.keys()):
+                state_id[s_hash] = s_id
+
+        n_states = len(state_id)
+        for s_id in state_id.values():
+            assert s_id < n_states, "non-continuous state_id"
+
+        if terminal_state is None:
+            terminal_state = object()
+
+        if terminal_state not in state_id:
+            state_id[terminal_state] = n_states
+            n_states += 1
+
+        return state_id, terminal_state
+
+    def policy(self, *args, state_id=None, terminal_state=None):
+        # state_id argument: dict[state, int]; the policy will work on these state ids
+
+        state_id, terminal_state = self._prep_state_id_and_terminal_state(
+            state_id, terminal_state
+        )
+        n_states = len(state_id)
+
+        # derive policy
+        policy = [-1] * (n_states)  # -1 for terminal state
+        for src_hash, src_state in self.states.items():
+            src_id = state_id[src_hash]
+            best_a = -1  # no action available / terminal state
+            best_q = 0.0
+            if src_state.actions is not None:
+                # explored state:
+                for a, transitions in enumerate(src_state.actions):
+                    q = 0.0
+                    for hash_t in transitions:
+                        # policy
+                        to_state = self.states[hash_t.state]
+                        q += hash_t.probability * (hash_t.reward + to_state.value)
+
+                    if q > best_q or best_a < 0:
+                        best_q = q
+                        best_a = a
+
+                policy[src_id] = best_a
+            else:
+                # unexplored state:
+                policy[src_id] = 0  # TODO what if this state is terminal?!
+
+        return policy
+
+    def value(self, *args, state_id=None, terminal_state=None):
+        # state_id argument: dict[state, int]; the value estimate will be for these state ids
+
+        state_id, terminal_state = self._prep_state_id_and_terminal_state(
+            state_id, terminal_state
+        )
+        n_states = len(state_id)
+
+        # extract value estimate
+        value = [0.0] * (n_states)
+        for src_hash, src_state in self.states.items():
+            value[state_id[src_hash]] = src_state.value
+
+        return value
