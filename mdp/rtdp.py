@@ -2,7 +2,6 @@ import mdp
 from mdp import sum_to_one
 from model import Model, Transition
 import random
-import xxhash
 import sys
 
 
@@ -13,14 +12,6 @@ def sample(lst, p: lambda x: x[0]):
         weights.append(p(x))
         population.append(x)
     return random.choices(population, weights, k=1)[0]
-
-
-def collision_resistant_hash(x):
-    try:
-        return xxhash.xxh128(x).hexdigest()
-    except TypeError:
-        # x not bytes-like, play it safe
-        return x
 
 
 class State:
@@ -42,10 +33,21 @@ class RTDP:
         eps_honest: float = 0,
         es: float = 0,
         es_threshold=500_000,
+        state_hash_fn=None,  # collision resistant hash appropriate for model
     ):
         self.model = model
 
         self.set_exploration(eps=eps, eps_honest=eps_honest, es=es)
+
+        # If states are significantly big (e.g. 1k) it makes sense to derive
+        # fingerprints, use them as index for the state value estimate,
+        # throwing away the full states asap. This optimization can be turned
+        # on by providing a collision resistant hash function to the agent.
+        # In this implementation I assume it's turned on.
+        if state_hash_fn is None:
+            self.hash_state = lambda x: x
+        else:
+            self.hash_state = state_hash_fn
 
         self.full_state = None  # current state, full model state
         self.states = dict()  # state hash -> State
@@ -265,7 +267,7 @@ class RTDP:
         return state.honest
 
     def state_and_hash_of_full_state(self, full_state):
-        state_hash = collision_resistant_hash(full_state)
+        state_hash = self.hash_state(full_state)
 
         if state_hash in self.states:
             state = self.states[state_hash]
@@ -289,7 +291,7 @@ class RTDP:
             immediate_v = t.reward
             immediate_p = t.progress
 
-            state_hash = collision_resistant_hash(t.state)
+            state_hash = self.hash_state(t.state)
             if state_hash in self.states:
                 state = self.states[state_hash]
                 future_v = state.value
@@ -303,20 +305,19 @@ class RTDP:
 
         return v, p
 
-    def mdp(self):
+    def mdp(self, *args):
         # The agent operates on a partially explored MDP,
         # this function extracts this MDP and the best known policy.
         # During exploration, states are represented by hashes; in the returned
         # MDP states are represented by a range of integers starting from 0.
 
-        # derive integer ids
         state_id = dict()
         for s_id, s_hash in enumerate(self.states.keys()):
             state_id[s_hash] = s_id
 
         # iterate states; build mdp, policy, value estimate
         # terminal states will have policy None
-        m = mdp.MDP()
+        m = mdp.MDP()  # empty mdp
         n_states = len(self.states)
         policy = [-1] * (n_states + 1)  # -1 for terminal state
         terminal_state = n_states

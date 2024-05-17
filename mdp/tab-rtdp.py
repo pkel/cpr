@@ -9,7 +9,8 @@ with open(fname, "rb") as pkl:
 
 df = results["data"]
 
-df = df.assign(start_rpp=lambda x: x.start_value / x.start_progress)
+df = df.assign(agent_start_rpp=lambda x: x.agent_start_reward / x.agent_start_progress)
+df = df.assign(pe_start_rpp=lambda x: x.pe_start_reward / x.pe_start_progress)
 
 
 def tabulate(df, key):
@@ -25,7 +26,8 @@ def tabulate(df, key):
 
 
 for col in [
-    "start_rpp",
+    "agent_start_rpp",
+    "pe_start_rpp",
     "mdp_n_states",
     "pimc_n_states",
     "time",

@@ -340,7 +340,9 @@ class MDP:
 
             for src in included_states:
                 a = policy[src]
-                if a < 0:
+                if a < 0:  # undefined policy
+                    continue
+                if len(self.tab[src]) < 1:  # terminal state
                     continue
                 r = 0.0
                 p = 0.0

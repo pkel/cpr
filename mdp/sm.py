@@ -6,6 +6,7 @@ from model import Effect, Model, Transition
 from protocol import Protocol, View
 import pynauty
 import subprocess
+import xxhash
 
 Miner = IntEnum("Miner", ["Attacker", "Defender"], start=0)
 
@@ -14,6 +15,10 @@ DefenderView = IntEnum("DefenderView", ["Unknown", "Known", "Preferred"], start=
 Withholding = IntEnum("Withholding", ["Foreign", "Withheld", "Released"], start=0)
 
 State = bytes
+
+
+def collision_resistant_hash(s: State):
+    return xxhash.xxh128(s).hexdigest()
 
 
 @dataclass(frozen=True)
