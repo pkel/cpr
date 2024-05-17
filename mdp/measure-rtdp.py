@@ -210,6 +210,11 @@ def measure_unsafe(*_args, algo, **kwargs):
             rtdp_eps=args.rtdp_eps, rtdp_es=args.rtdp_es, rtdp_steps=args.rtdp_steps
         )
         return algo_rtdp(mdp, **hp, **kwargs) | dict(hyperparams=hp)
+    if algo == "rtdp_on_mdp":
+        hp = dict(
+            rtdp_eps=args.rtdp_eps, rtdp_es=args.rtdp_es, rtdp_steps=args.rtdp_steps
+        )
+        return algo_rtdp(mdp, **hp, **kwargs) | dict(hyperparams=hp)
 
     raise ValueError(f"unknown algo: {algo}")
 

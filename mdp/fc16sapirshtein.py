@@ -226,13 +226,13 @@ def map_params(m: mdp.MDP, *args, alpha: float, gamma: float):
     # map probabilities
     tab = []
     for actions in m.tab:
-        new_actions = dict()
-        for act, transitions in actions.items():
+        new_actions = list()
+        for act, transitions in enumerate(actions):
             new_transitions = []
             for t in transitions:
                 new_t = replace(t, probability=mapping[t.probability])
                 new_transitions.append(new_t)
-            new_actions[act] = new_transitions
+            new_actions.append(new_transitions)
         tab.append(new_actions)
 
     start = dict()

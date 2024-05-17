@@ -233,12 +233,12 @@ def ptmdp(old: mdp.MDP, *args, horizon: int):
     n_states = old.n_states + 1
 
     # setup new tab, all empty
-    tab = [dict() for _ in range(n_states)]
+    tab = [list() for _ in range(n_states)]
     n_transitions = 0
 
     # iterate old transitions, split progress > 0 transition in two
     for src, actions in enumerate(old.tab):
-        for act, transitions in actions.items():
+        for act, transitions in enumerate(actions):
             new_transitions = list()
             for t in transitions:
                 if t.progress == 0.0:
@@ -268,7 +268,7 @@ def ptmdp(old: mdp.MDP, *args, horizon: int):
                     )
                     n_transitions += 2
 
-            tab[src][act] = new_transitions
+            tab[src].append(new_transitions)
 
     # construct check and return updated MDP
     new = mdp.MDP(
@@ -303,13 +303,13 @@ def map_params(m: mdp.MDP, *args, alpha: float, gamma: float):
     # map probabilities
     tab = []
     for actions in m.tab:
-        new_actions = dict()
-        for act, transitions in actions.items():
+        new_actions = list()
+        for act, transitions in enumerate(actions):
             new_transitions = []
             for t in transitions:
                 new_t = replace(t, probability=mapping[t.probability])
                 new_transitions.append(new_t)
-            new_actions[act] = new_transitions
+            new_actions.append(new_transitions)
         tab.append(new_actions)
 
     start = dict()
