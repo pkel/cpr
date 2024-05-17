@@ -43,14 +43,7 @@ class Compiler:
         state_id = self.state_map[state]
 
         # explore possible actions
-        for action in self.model.actions(state):
-            # create or reuse action id
-            if action in self.action_map:
-                action_id = self.action_map[action]
-            else:
-                action_id = len(self.action_map)
-                self.action_map[action] = action_id
-
+        for action_id, action in enumerate(self.model.actions(state)):
             # apply action, iterate transitions
             transitions = self.model.apply(action, state)
             assert sum_to_one([t.probability for t in transitions])

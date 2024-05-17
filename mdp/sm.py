@@ -1,11 +1,12 @@
 from enum import IntEnum
 from dataclasses import dataclass, replace
 from mdp import MDP
+import pickle
 from model import Effect, Model, Transition
 from protocol import Protocol, View
-import numpy
 import pynauty
 import subprocess
+import xxhash
 
 Miner = IntEnum("Miner", ["Attacker", "Defender"], start=0)
 
@@ -14,6 +15,10 @@ DefenderView = IntEnum("DefenderView", ["Unknown", "Known", "Preferred"], start=
 Withholding = IntEnum("Withholding", ["Foreign", "Withheld", "Released"], start=0)
 
 State = bytes
+
+
+def collision_resistant_hash(s: State):
+    return xxhash.xxh128(s).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -58,46 +63,26 @@ class Editor(View):
         assert self.check()
 
     def _save(self):
-        n = self.n
-        buf = numpy.full((n + 4, n), 0, dtype=numpy.uint8)
-        for b in range(n):
-            for p in self._parents[b]:
-                buf[b, p] = 1
-            buf[-4, b] = self.av[b]
-            buf[-3, b] = self.dv[b]
-            buf[-2, b] = self.wh[b]
-            buf[-1, b] = self.ht[b]
-        # TODO. Boolean adjacency matrix could be compressed with numpy.packbits
-        return buf.tobytes() + numpy.uint8(n).tobytes()
+        data = (
+            self.n,
+            self._parents,
+            self._children,
+            self.av,
+            self.dv,
+            self.wh,
+            self.ht,
+        )
+        return pickle.dumps(data)
 
     def save(self):
         b = self._save()
         assert self.load(b) is None and self._save() == b
+        assert isinstance(b, State)
         return b
 
     def load(self, b):
-        buf = numpy.frombuffer(b, dtype=numpy.uint8)
-        n = int(buf[-1])
-        assert buf.shape == ((n + 4) * n + 1,), buf.shape
-        buf = buf[:-1].reshape((n + 4, n))
-
-        self.n = n
-        self._parents = [set() for _ in range(n)]
-        self._children = [set() for _ in range(n)]
-        self.av = []
-        self.dv = []
-        self.wh = []
-        self.ht = []
-        for b in range(n):
-            for p in range(n):
-                if buf[b, p]:
-                    self._parents[b].add(p)
-                    self._children[p].add(b)
-            self.av.append(AttackerView(buf[-4, b]))
-            self.dv.append(DefenderView(buf[-3, b]))
-            self.wh.append(Withholding(buf[-2, b]))
-            self.ht.append(buf[-1, b])
-
+        data = pickle.loads(b)
+        self.n, self._parents, self._children, self.av, self.dv, self.wh, self.ht = data
         assert self.check()
 
     def check(self):
@@ -710,7 +695,32 @@ class SelfishMining(Model):
             effect=effect,
             # Default to long-term revenue MDP:
             reward=effect.common_atk_reward,
-            progress=effect.common_progress,
+            progress=effect.defender_progress,
+        )
+        # Progress must be taken from defender chain, as common chain progress
+        # might be zero for some policies, e.g. p(s) = Continue(). Zero
+        # progress policies significantly slow down exploration.
+        # TODO Now that we take progress from the defender's chain, we should
+        # also calculate rewards on the defender chain. I did this already in
+        # the rust codebase. See commit e68a4f00. This requires a different
+        # episode shutdown mechanism, where the agent is forced to release all
+        # blocks. See commit 6a3b5a4.
+
+    def acc_effect(self, a, b):
+        # It is not clear how to handle defender_* here, depends on the attack
+        # scenario, I guess!
+        return Effect(
+            blocks_mined=a.blocks_mined + b.blocks_mined,
+            common_atk_reward=a.common_atk_reward + b.common_atk_reward,
+            common_def_reward=a.common_def_reward + b.common_def_reward,
+            common_progress=a.common_progress + b.common_progress,
+            defender_rewrite_length=max(
+                a.defender_rewrite_length, b.defender_rewrite_length
+            ),
+            defender_rewrite_progress=max(
+                a.defender_rewrite_progress, b.defender_rewrite_progress
+            ),
+            defender_progress=a.defender_progress + b.defender_progress,
         )
 
     def start(self) -> list[tuple[State, float]]:
@@ -725,17 +735,7 @@ class SelfishMining(Model):
         e = self.editor
         e.load(s)
 
-        # we allow mining only up to a certain point
-        truncate = False
-        ms = self.maximum_size
-        if ms > 0 and e.n >= ms:
-            truncate = True
-
-        mh = self.maximum_height
-        if mh > 0 and max(e.ht) >= mh:
-            truncate = True
-
-        if truncate:
+        if self.truncate_now(e):
             # we forbid mining and allow communication only if there is
             # something to communicate. This forces the attacker to consider
             # and release all blocks before reaching a terminal state.
@@ -755,6 +755,32 @@ class SelfishMining(Model):
             actions.append(Consider(i))
 
         return actions
+
+    def truncate_now(self, e: Editor) -> bool:
+        ms = self.maximum_size
+        if ms > 0 and e.n >= ms:
+            return True
+
+        mh = self.maximum_height
+        if mh > 0 and max(e.ht) >= mh:
+            return True
+
+        return False
+
+    def honest(self, s: State) -> Action:
+        e = self.editor
+        e.load(s)
+
+        # honest policy: release then consider then continue
+        if len(e.to_release()) > 0:
+            return Release(0)
+        if len(e.to_consider()) > 0:
+            return Consider(0)
+
+        if self.truncate_now(e):
+            return Communicate()
+        else:
+            return Continue()
 
     def apply(self, a: Action, s: State) -> list[Transition]:
         if isinstance(a, Release):
@@ -886,6 +912,23 @@ class SelfishMining(Model):
             block_mined=not communication_only,
         )
 
+    def shutdown(self, s: State) -> list[Transition]:
+        e = self.editor
+        e.load(s)
+
+        # Release all blocks
+        for b in range(e.n):
+            if e.wh[b] == Withholding.Withheld:
+                e.wh[b] = Withholding.Released
+        s = e.save()
+
+        # Communicate & return
+        return self.apply_communicate(s)
+
+        # TODO; fc16 and aft20 models go back to start here, to allow the rtdp
+        # algorithm to derive correct state value estimates of unexplored
+        # states. Do this here as well!
+
 
 mappable_params = dict(alpha=0.125, gamma=0.25)
 
@@ -911,14 +954,14 @@ def map_params(m: MDP, *args, alpha: float, gamma: float):
 
     # map probabilities
     tab = []
-    for actions in m.tab:
-        new_actions = dict()
-        for act, transitions in actions.items():
+    for state, actions in enumerate(m.tab):
+        new_actions = list()
+        for act, transitions in enumerate(actions):
             new_transitions = []
             for t in transitions:
                 new_t = replace(t, probability=mapping[t.probability])
                 new_transitions.append(new_t)
-            new_actions[act] = new_transitions
+            new_actions.append(new_transitions)
         tab.append(new_actions)
 
     start = dict()
