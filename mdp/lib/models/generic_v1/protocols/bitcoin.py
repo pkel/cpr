@@ -1,9 +1,10 @@
 # The following class(es) will go straight into the paper; references to self.*
 # will be replaced with global variables.
 
+from .interface import ProtocolBase
 
-# goes to listings/%
-class Listing:
+
+class Listing(ProtocolBase):
     def init(self, state):
         state.head = self.genesis
 
@@ -26,12 +27,12 @@ class Listing:
     def history(self, state):
         return history_of(state.head)
 
-    def progress(self, _block):
+    def progress(self, block):
         return 1
 
     def coinbase(self, block):
         return [(self.miner_of(block), 1)]
 
 
-def Protocol(Listing):
+class Protocol(Listing):
     pass

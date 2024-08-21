@@ -1,12 +1,13 @@
 # The following class(es) will go straight into the paper; references to self.*
 # will be replaced with global variables.
 
+from .interface import ProtocolBase
 
-# goes listings/%
-class Listing:
+
+class Listing(ProtocolBase):
     k: int = ...  # protocol parameter
 
-    def mining(self, _state):
+    def mining(self, state):
         return tips(self.G)
 
     def history_of(self, G):  # eprint.iacr.org/2018/104.pdf ; Alg. 1
@@ -30,7 +31,7 @@ class Listing:
     def is_k_cluster(self, G, S):
         return all(len(self.anticone(G, b) & S) <= self.k for b in S)
 
-    def history(self, _state):
+    def history(self, state):
         _blue, history = self.history_of(G)
         return history
 
@@ -74,13 +75,13 @@ class Util(Listing):
 
     ## omitted, boring protocol spec functions
 
-    def init(self, _state):
+    def init(self, state):
         pass
 
-    def update(self, _state, _block):
+    def update(self, state, block):
         pass
 
-    def progress(self, _block):
+    def progress(self, block):
         return 1
 
     def coinbase(self, block):
