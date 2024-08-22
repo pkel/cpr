@@ -1,5 +1,5 @@
 from .. import protocols
-from ..draft import SingleMinerNetwork
+from ..draft import SingleMinerSim
 
-print(SingleMinerNetwork(protocols.Bitcoin).sim(100))
-print(SingleMinerNetwork(protocols.Ghostdag, k=7).sim(100))
+print(SingleMinerSim(protocols.Bitcoin).sim(100))
+print(SingleMinerSim(protocols.Ghostdag, k=7).sim(100))
