@@ -1,10 +1,10 @@
 # The following class(es) will go straight into the paper; references to self.*
 # will be replaced with global variables.
 
-from .interface import ProtocolBase
+from .interface import Protocol as Interface
 
 
-class Listing(ProtocolBase):
+class Listing(Interface):
     def init(self, state):
         state.head = self.genesis
 
@@ -25,7 +25,7 @@ class Listing(ProtocolBase):
             return self.history_of(self.parents(block)[0]) + [block]
 
     def history(self, state):
-        return history_of(state.head)
+        return self.history_of(state.head)
 
     def progress(self, block):
         return 1

@@ -1,22 +1,22 @@
 # The following class(es) will go straight into the paper; references to self.*
 # will be replaced with global variables.
 
-from .interface import ProtocolBase
+from .interface import Protocol as Interface
 
 
-class Listing(ProtocolBase):
+class Listing(Interface):
     k: int = ...  # protocol parameter
 
     def mining(self, state):
-        return tips(self.G)
+        return self.tips(self.G)
 
     def history_of(self, G):  # eprint.iacr.org/2018/104.pdf ; Alg. 1
         if len(G) == 1:
-            return ({genesis}, [genesis])
+            return ({self.genesis}, [self.genesis])
 
         blue, hist = dict(), dict()
-        for b in tips(G):
-            blue[b], hist[b] = history_of(self.past(G, b))
+        for b in self.tips(G):
+            blue[b], hist[b] = self.history_of(self.past(G, b))
         b_max = max((len(blue[b]), hash(b), b) for b in self.tips(G))[2]
         blue = blue[b_max] | {b_max}
         hist = hist[b_max] + [b_max]
@@ -32,7 +32,7 @@ class Listing(ProtocolBase):
         return all(len(self.anticone(G, b) & S) <= self.k for b in S)
 
     def history(self, state):
-        _blue, history = self.history_of(G)
+        _blue, history = self.history_of(self.G)
         return history
 
     # init() and fn update() do nothing
@@ -89,6 +89,6 @@ class Util(Listing):
 
 
 class Protocol(Util):
-    def __init__(self, k: int):
+    def __init__(self, *, k: int):
         super().__init__()
         self.k = k

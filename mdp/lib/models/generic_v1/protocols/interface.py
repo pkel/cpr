@@ -1,6 +1,6 @@
-class ProtocolBase:
+class Protocol:
     """
-    Protocol Specification
+    Protocol Specification Interface
     """
 
     def init(self, state):
