@@ -7,7 +7,7 @@ from .interface import Protocol as Interface
 class Listing(Interface):
     k: int = ...  # protocol parameter
 
-    def mining(self, state):
+    def mining(self):
         return self.tips(self.G)
 
     def history_of(self, G):  # eprint.iacr.org/2018/104.pdf ; Alg. 1
@@ -31,7 +31,7 @@ class Listing(Interface):
     def is_k_cluster(self, G, S):
         return all(len(self.anticone(G, b) & S) <= self.k for b in S)
 
-    def history(self, state):
+    def history(self):
         _blue, history = self.history_of(self.G)
         return history
 
@@ -75,10 +75,10 @@ class Util(Listing):
 
     ## omitted, boring protocol spec functions
 
-    def init(self, state):
+    def init(self):
         pass
 
-    def update(self, state, block):
+    def update(self, block):
         pass
 
     def progress(self, block):

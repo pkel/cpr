@@ -80,8 +80,8 @@ class Miner(Protocol):
         self.protocol.topological_order = self.dag.topological_order
 
         # create and init miner's state as defined in protocol spec
-        self.state = DynObj()
-        self.protocol.init(self.state)
+        self.protocol.state = DynObj()
+        self.protocol.init()
 
     @property
     def visible_dag(self):
@@ -99,13 +99,14 @@ class Miner(Protocol):
 
         # do the actual delivery
         self.visible.add(block)
-        self.protocol.update(self.state, block)
+        self.protocol.update(block)
 
     def mining(self) -> list[int]:
-        return list(self.protocol.mining(self.state))
+        set_or_list = self.protocol.mining()
+        return list(set_or_list)
 
     def history(self) -> list[int]:
-        return self.protocol.history(self.state)
+        return self.protocol.history()
 
 
 from .protocols import Bitcoin, Ghostdag

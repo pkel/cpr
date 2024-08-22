@@ -5,15 +5,15 @@ from .interface import Protocol as Interface
 
 
 class Listing(Interface):
-    def init(self, state):
-        state.head = self.genesis
+    def init(self):
+        self.state.head = self.genesis
 
-    def mining(self, state):
-        return [state.head]
+    def mining(self):
+        return [self.state.head]
 
-    def update(self, state, block):
-        if self.height(block) > self.height(state.head):
-            state.head = block
+    def update(self, block):
+        if self.height(block) > self.height(self.state.head):
+            self.state.head = block
 
     def height(self, block):
         return len(self.history_of(block))
@@ -24,8 +24,8 @@ class Listing(Interface):
         else:
             return self.history_of(self.parents(block)[0]) + [block]
 
-    def history(self, state):
-        return self.history_of(state.head)
+    def history(self):
+        return self.history_of(self.state.head)
 
     def progress(self, block):
         return 1

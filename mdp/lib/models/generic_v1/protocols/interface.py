@@ -3,47 +3,47 @@ class Protocol:
     Protocol Specification Interface
     """
 
-    def init(self, state):
+    def init(self):
         """
         Model:
         Define the miner's initial state, before protocol execution begins.
 
         Technically:
-        This function modifies state by setting its attributes.
+        This function may modify self.state by setting its attributes.
         The function returns None.
         """
         raise NotImplementedError
 
-    def mining(self, state):
+    def mining(self):
         """
         Model:
         Define how the miner extends the blockchain
 
         Technically:
-        The miner's state is read-only.
+        The miner's state (self.state) is read-only.
         The function returns a list of parent blocks.
         The model then attaches a new block with these parents to the DAG.
         """
         raise NotImplementedError
 
-    def update(self, state, block):
+    def update(self, block):
         """
         Model:
         Define how the miner reacts when it learns about a new block.
 
         Technically:
-        The miner's state is read-write.
+        The miner's state (self.state) is read-write.
         The function modifies the state and returns None.
         """
         raise NotImplementedError
 
-    def history(self, state):
+    def history(self):
         """
         Conceptually:
         Define how the miner's linear block history.
 
         Technically:
-        The miner's state is read-only.
+        The miner's state (self.state) is read-only.
         The function returns a list of blocks.
         """
         raise NotImplementedError

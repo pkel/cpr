@@ -8,9 +8,6 @@ class State:
 
 # State() objects allow to create attributes on first assign
 
-state = [State()]
-# each miner has a state object; we have one miner
-
 # blocks are numbers 0, 1, ...
 genesis = 0
 
@@ -46,8 +43,9 @@ import importlib, os, sys
 sys.path.append(os.getcwd())
 
 
-def import_protocol(name):
+def load_protocol(name, state):
     def patch_globals(module):
+        module.state = state
         module.genesis = genesis
         module.parents = parents
         module.children = children
@@ -55,8 +53,8 @@ def import_protocol(name):
         module.topological_order = topological_order
         module.G = G
 
-    protocol = importlib.import_module(f"listings.{name}")
-    patch_globals(protocol)
+    miner = importlib.import_module(f"listings.{name}")
+    patch_globals(miner)
 
     try:
         util = importlib.import_module(f"listings.{name}_util")
@@ -65,45 +63,43 @@ def import_protocol(name):
             if u.startswith("_"):
                 pass
             else:
-                setattr(protocol, u, getattr(util, u))
+                setattr(miner, u, getattr(util, u))
     except ModuleNotFoundError:
         pass
 
-    return protocol
+    miner.init()
+
+    return miner
 
 
-protocol = import_protocol(os.getenv("PROTOCOL", "bitcoin"))
+miner = load_protocol(os.getenv("PROTOCOL", "bitcoin"), State())
 
 ## SIMULATION
 
 
 def step():
-    # the single miner mines a block
-    m = 0
-    # (in multi-miner network, we would sample one of them)
-
-    b = len(G)
-    _parents[b] = protocol.mining(state[0])
+    b = len(G)  # new block
+    _parents[b] = miner.mining()
     _children[b] = set()
     for p in _parents[b]:
         _children[p].add(b)
     G.add(b)
 
     # and separately learns about the new block
-    protocol.update(state[0], b)
+    miner.update(b)
     # (multi-miner net: update the other nodes, maybe after some time delay)
 
 
-def reward_and_progress(miner):
-    history = protocol.history(state[miner])
-    rew = {m: 0 for m in range(len(state))}
+def reward_and_progress():
+    history = miner.history()
+    rew = 0
     prg = 0
     for b in history:
         # accumulate rewards
-        for miner, amount in protocol.coinbase(b):
-            rew[miner] += amount
+        for _, amount in miner.coinbase(b):
+            rew += amount
         # accumulate progress
-        prg += protocol.progress(b)
+        prg += miner.progress(b)
     return (rew, prg)
 
 
@@ -113,12 +109,11 @@ def sim(max_progress):
     prg = 0
     while prg < max_progress:
         step()
-        rew, prg = reward_and_progress(0)
+        rew, prg = reward_and_progress()
 
         i += 1
 
-    return rew[0]  # reward of miner 0
+    return rew  # reward of miner 0
 
 
-protocol.init(state[0])
 print("simulated up to progress", sim(100))
