@@ -78,6 +78,7 @@ class Miner(Protocol):
         self.protocol.parents = self.dag.parents
         self.protocol.G = self.visible_dag
         self.protocol.topological_order = self.dag.topological_order
+        self.protocol.miner_of = self.dag.miner_of
 
         # create and init miner's state as defined in protocol spec
         self.protocol.state = DynObj()
@@ -108,16 +109,39 @@ class Miner(Protocol):
     def history(self) -> list[int]:
         return self.protocol.history()
 
+    def coinbase(self, block):
+        return self.protocol.coinbase(block)
 
-from .protocols import Bitcoin, Ghostdag
+    def progress(self, block):
+        return self.protocol.progress(block)
 
-dag = DAG()
-miner = Miner(dag, Bitcoin)
-miner = Miner(dag, Ghostdag, k=7)
 
-parents = miner.mining()
-b = dag.append(parents, 0)
-print(parents, b)
-print(miner.history())
-miner.deliver(b)
-print(miner.history())
+class SingleMinerNetwork:
+    def __init__(self, protocol: type[Protocol], *args, **kwargs):
+        self.dag = DAG()
+        self.miner = Miner(self.dag, protocol, *args, **kwargs)
+
+    def step(self):
+        parents = self.miner.mining()
+        block = self.dag.append(parents, 0)
+        self.miner.deliver(block)
+
+    def reward_and_progress(self):
+        history = self.miner.history()
+        rew, prg = 0, 0
+        for b in history:
+            for _, amount in self.miner.coinbase(b):
+                rew += amount
+            prg += self.miner.progress(b)
+        return (rew, prg)
+
+    def sim(self, max_progress):
+        i = 0
+        prg = 0
+        while prg < max_progress:
+            self.step()
+            rew, prg = self.reward_and_progress()
+
+            i += 1
+
+        return rew, prg

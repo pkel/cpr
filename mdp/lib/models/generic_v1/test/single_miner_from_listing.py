@@ -113,7 +113,7 @@ def sim(max_progress):
 
         i += 1
 
-    return rew  # reward of miner 0
+    return rew
 
 
 print("simulated up to progress", sim(100))
