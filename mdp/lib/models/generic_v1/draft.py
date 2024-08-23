@@ -17,6 +17,12 @@ class DAG:
         # each block has a miner (except the genesis block)
         self._miner = [None]
 
+    def size(self) -> int:
+        return len(self._parents)
+
+    def all_blocks(self) -> set[int]:
+        return {b for b, _ in enumerate(self._parents)}
+
     def append(self, parents: list[int], miner: int) -> int:
         new_block = len(self._parents)
 
@@ -33,7 +39,7 @@ class DAG:
         # the model guarantees that parents are always visible
         return self._parents[block]
 
-    def children(self, block: int, subgraph: Optional[list[int]]) -> set[int]:
+    def children(self, block: int, subgraph: Optional[list[int]] = None) -> set[int]:
         if subgraph is None:
             return self._children[block]
         else:
@@ -73,17 +79,13 @@ class Miner:
         self.protocol.genesis = self.dag.genesis
         self.protocol.children = self.children
         self.protocol.parents = self.dag.parents
-        self.protocol.G = self.visible_dag
+        self.protocol.G = self.visible
         self.protocol.topological_order = self.dag.topological_order
         self.protocol.miner_of = self.dag.miner_of
 
         # create and init miner's state as defined in protocol spec
         self.protocol.state = DynObj()
         self.protocol.init()
-
-    @property
-    def visible_dag(self):
-        return self.visible
 
     def children(self, block: int):
         return self.dag.children(block, self.visible)
@@ -164,17 +166,6 @@ class DiscreteEventSim:
             self.step()
 
 
-# TODO move this to test suite
-s = DiscreteEventSim()
-out = []
-s.delay(2, out.append, 2)
-s.delay(0, out.append, 0)
-s.delay(9, out.append, 9)
-s.delay(3, out.append, 3)
-s.loop(lambda x: x.clock >= 3)
-assert out == [0, 2, 3]
-
-
 class NetworkSim(DiscreteEventSim):
     def __init__(
         self,
@@ -213,11 +204,21 @@ class NetworkSim(DiscreteEventSim):
         # communication
         for i, m in enumerate(self.miners):
             if i != miner_id:
-                self.delay(self.message_delay(), m.deliver, block)
-                # TODO this does not respect in-order delivery
+                self.delay(self.message_delay(), self.deliver, m, block)
 
         # next mining event
         self.delay(self.mining_delay(), self.mining)
+
+    def deliver(self, miner, block):
+        # deliver once
+        if block in miner.visible:
+            return
+
+        # deliver in-order
+        for p in miner.dag.parents(block):
+            self.deliver(miner, p)
+
+        miner.deliver(block)
 
     def reward_and_progress(self):
         history = self.judge.history()
@@ -237,17 +238,11 @@ class NetworkSim(DiscreteEventSim):
 
         rew, prg = self.reward_and_progress()
 
-        print(dict(time=self.clock, rew=rew, prg=prg))
-
-
-from . import protocols
-from numpy import random
-
-# TODO move to test suite
-NetworkSim(
-    protocols.Bitcoin,
-    n_miners=3,
-    mining_delay=lambda: random.exponential(600),
-    select_miner=lambda: random.randint(0, 3),
-    message_delay=lambda: random.uniform(2),
-).sim(100)
+        print(
+            dict(
+                time=self.clock,
+                blocks=self.dag.size(),
+                rew=rew,
+                prg=prg,
+            )
+        )
