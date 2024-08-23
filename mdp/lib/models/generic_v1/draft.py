@@ -238,11 +238,9 @@ class NetworkSim(DiscreteEventSim):
 
         rew, prg = self.reward_and_progress()
 
-        print(
-            dict(
-                time=self.clock,
-                blocks=self.dag.size(),
-                rew=rew,
-                prg=prg,
-            )
+        return dict(
+            time=self.clock,
+            blocks=self.dag.size(),
+            rew=rew,
+            prg=prg,
         )
