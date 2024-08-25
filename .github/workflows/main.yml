@@ -79,7 +79,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'pip<24.1'
           python -m pip install 'wheel<0.39' 'setuptools<67' # gym compatibility, see https://stackoverflow.com/a/77205046
           pip install -r requirements.txt
 
