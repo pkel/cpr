@@ -44,3 +44,120 @@ class Model:
         Define state transitions. Action a is applied to state s.
         """
         raise NotImplementedError
+
+    def shutdown(self, s: State) -> list[Transition]:
+        """
+        Define a fair shutdown mechanism. We call this at the end of each
+        episode.
+
+        Example. For selfish mining we force the agent to release all blocks,
+        then do one last round of communication, before calculating the final
+        rewards. This encourages risk-taking in the light of probabilistic
+        termination.
+        """
+        raise NotImplementedError
+
+    def acc_effect(self, a: Effect, b: Effect) -> Effect:
+        """
+        When merging two steps, what's the accumulated effect?
+        """
+        if a is None and b is None:
+            return None
+        else:
+            raise NotImplementedError
+
+    def honest(self, s: State) -> Action:
+        """
+        What would an honest participant do?
+        """
+        raise NotImplementedError
+
+
+class PTO_wrapper(Model):
+    def __init__(self, model, *args, horizon: int, terminal_state):
+        assert horizon > 0
+        assert isinstance(model, Model)
+        assert not isinstance(model, PTO_wrapper)
+
+        self.unwrapped = model
+        self.terminal = terminal_state
+        self.horizon = horizon
+
+    def start(self):
+        return self.unwrapped.start()
+
+    def actions(self, state):
+        if state is self.terminal:
+            return []
+        else:
+            return self.unwrapped.actions(state)
+
+    def continue_probability_of_progress(self, progress):
+        return (1.0 - (1.0 / self.horizon)) ** progress
+
+    def apply(self, action, state):
+        assert state is not self.terminal
+
+        # update original transition list to include termination
+        transitions = []
+        for t in self.unwrapped.apply(action, state):
+            if t.progress == 0.0:
+                transitions.append(t)
+            else:
+                continue_p = self.continue_probability_of_progress(t.progress)
+                assert 0 < continue_p < 1
+                # one transition for continuing
+                continue_t = Transition(
+                    probability=t.probability * continue_p,
+                    state=t.state,
+                    reward=t.reward,
+                    progress=t.progress,
+                    effect=t.effect,
+                )
+                transitions.append(continue_t)
+
+                # multiple transitions for shutdown
+                term_p = 1 - continue_p
+                for st in self.unwrapped.shutdown(t.state):
+                    term_e = self.unwrapped.acc_effect(t.effect, st.effect)
+                    term_t = Transition(
+                        probability=t.probability * term_p * st.probability,
+                        state=self.terminal,
+                        reward=t.reward + st.reward,
+                        progress=t.progress + st.progress,
+                        effect=term_e,
+                    )
+                    transitions.append(term_t)
+
+        return transitions
+
+    def honest(self, state):
+        assert state is not self.terminal
+        return self.unwrapped.honest(state)
+
+    def shutdown(self, state):
+        if state is self.terminal:
+            return []
+        else:
+            ts = []
+            for t in self.unwrapped.shutdown(state):
+                continue_p = self.continue_probability_of_progress(t.progress)
+                ts.append(
+                    Transition(
+                        probability=t.probability * continue_p,
+                        state=t.state,
+                        reward=t.reward,
+                        progress=t.progress,
+                        effect=t.effect,
+                    )
+                )
+                ts.append(
+                    Transition(
+                        probability=t.probability * (1 - continue_p),
+                        state=self.terminal,
+                        reward=t.reward,
+                        progress=t.progress,
+                        effect=t.effect,
+                    )
+                )
+            return ts

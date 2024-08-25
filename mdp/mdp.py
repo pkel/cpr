@@ -29,7 +29,7 @@ class MDP:
     n_states: int = 0
     n_transitions: int = 0
     n_actions: int = 0
-    tab: list[dict[action, list[Transition]]] = field(default_factory=list)
+    tab: list[list[list[Transition]]] = field(default_factory=list)
     start: dict[int, float] = field(default_factory=dict)
 
     def __repr__(self):
@@ -46,27 +46,36 @@ class MDP:
         max_id = max(src, dst)
         if max_id >= len(self.tab):
             for i in range(len(self.tab), max_id + 1):
-                self.tab.append(dict())
+                self.tab.append(list())
                 self.n_states += 1
             assert max_id == len(self.tab) - 1
         assert self.n_states == len(self.tab)
         # grow n_actions on demand
         self.n_actions = max(self.n_actions, act + 1)
         # create transition list on demand
-        if act not in self.tab[src]:
-            self.tab[src][act] = list()
+        assert act <= len(self.tab[src]), "please handle append actions in order!"
+        if act == len(self.tab[src]):
+            self.tab[src].append(list())
         # append transition and count
         self.tab[src][act].append(t)
         self.n_transitions += 1
 
     def check(self, *args):
+        # check table type list[list[list[Transition]]]
+        assert isinstance(self.tab, list)
+        for state in self.tab:
+            assert isinstance(state, list)
+            for action in state:
+                assert isinstance(action, list)
+                for transition in action:
+                    assert isinstance(transition, Transition)
         # start states
         assert sum_to_one(self.start.values())
         for state in self.start.keys():
             assert state >= 0 and state < self.n_states, state
         # check that outgoing probabilities sum up to one
         for src in range(self.n_states):
-            for act, transitions in self.tab[src].items():
+            for act, transitions in enumerate(self.tab[src]):
                 assert sum_to_one([t.probability for t in transitions]), f"{src}/{act}"
         # check continuity of actions / states & number of transitions
         act_seen = [False for _ in range(self.n_actions)]
@@ -74,7 +83,7 @@ class MDP:
         n_transitions = 0
         for src in range(self.n_states):
             state_seen[src] = True
-            for act, transitions in self.tab[src].items():
+            for act, transitions in enumerate(self.tab[src]):
                 act_seen[act] = True
                 for t in transitions:
                     n_transitions += 1
@@ -103,6 +112,7 @@ class MDP:
         start = time()
 
         value = numpy.zeros((2, self.n_states), dtype=float)
+        progress = numpy.zeros((2, self.n_states), dtype=float)
         policy = numpy.zeros((2, self.n_states), dtype=int)
 
         i = 1
@@ -112,19 +122,26 @@ class MDP:
 
             for src, actions in enumerate(self.tab):
                 best_v = 0.0
+                best_p = 0.0
                 best_a = -1  # no action possible
-                for act, lst in actions.items():
+                for act, lst in enumerate(actions):
                     if act < 0:
                         continue
                     this_v = 0.0
+                    this_p = 0.0
                     for t in lst:
                         this_v += t.probability * (
                             t.reward + discount * value[prev, t.destination]
                         )
+                        this_p += t.probability * (
+                            t.progress + discount * progress[prev, t.destination]
+                        )
                     if this_v >= best_v:  # intentionally, to not stick with action -1
                         best_v = this_v
+                        best_p = this_p
                         best_a = act
                 value[next, src] = best_v
+                progress[next, src] = best_p
                 policy[next, src] = best_a
                 assert best_a >= 0 or len(actions) == 0
 
@@ -153,6 +170,7 @@ class MDP:
             vi_stop_delta=stop_delta,
             vi_policy=policy[next,],
             vi_value=value[next,],
+            vi_progress=progress[next,],
             vi_iter=i,
             vi_max_iter=max_iter,
             vi_time=time() - start,
@@ -331,7 +349,9 @@ class MDP:
 
             for src in included_states:
                 a = policy[src]
-                if a < 0:
+                if a < 0:  # undefined policy
+                    continue
+                if len(self.tab[src]) < 1:  # terminal state
                     continue
                 r = 0.0
                 p = 0.0

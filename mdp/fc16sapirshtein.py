@@ -33,7 +33,7 @@ class BState:  # Bitcoin State
 class BitcoinSM(Model):
     def __init__(self, *args, alpha: float, gamma: float, maximum_fork_length: int):
         if alpha < 0 or alpha >= 0.5:
-            raise ValueError("alpha must be between 0 and 1")
+            raise ValueError("alpha must be between 0 and 0.5")
         if gamma < 0 or gamma > 1:
             raise ValueError("gamma must be between 0 and 1")
         if maximum_fork_length <= 0:
@@ -170,6 +170,41 @@ class BitcoinSM(Model):
             return self.apply_wait(s)
         assert False, "invalid action"
 
+    def honest(self, s: BState) -> list[Action]:
+        if s.a > s.h:
+            return OVERRIDE
+        else:
+            return ADOPT
+
+    def shutdown(self, s: BState) -> list[Transition]:
+        # Abort attack in favor of attacker; go back to start.
+        ts = []
+        for snew, p in self.start():
+            if s.h > s.a:
+                ts.append(Transition(state=snew, probability=p, reward=0, progress=s.h))
+            elif s.a > s.h:
+                ts.append(
+                    Transition(state=snew, probability=p, reward=s.a, progress=s.a)
+                )
+            elif s.a == s.h:
+                ts.append(
+                    Transition(
+                        state=snew, probability=p * self.gamma, reward=s.a, progress=s.a
+                    )
+                )
+                ts.append(
+                    Transition(
+                        state=snew,
+                        probability=p * (1 - self.gamma),
+                        reward=0,
+                        progress=s.h,
+                    )
+                )
+            else:
+                raise Exception("logic error")
+        assert mdp.sum_to_one([t.probability for t in ts])
+        return ts
+
 
 mappable_params = dict(alpha=0.125, gamma=0.25)
 
@@ -191,13 +226,13 @@ def map_params(m: mdp.MDP, *args, alpha: float, gamma: float):
     # map probabilities
     tab = []
     for actions in m.tab:
-        new_actions = dict()
-        for act, transitions in actions.items():
+        new_actions = list()
+        for act, transitions in enumerate(actions):
             new_transitions = []
             for t in transitions:
                 new_t = replace(t, probability=mapping[t.probability])
                 new_transitions.append(new_t)
-            new_actions[act] = new_transitions
+            new_actions.append(new_transitions)
         tab.append(new_actions)
 
     start = dict()

@@ -17,6 +17,7 @@ scikit-optimize
 seaborn
 
 networkx
+xxhash
 
 --no-binary=pynauty
 pynauty
