@@ -136,7 +136,7 @@ class MDP:
                         this_p += t.probability * (
                             t.progress + discount * progress[prev, t.destination]
                         )
-                    if this_v >= best_v:  # intentionally, to not stick with action -1
+                    if this_v > best_v or best_a < 0:
                         best_v = this_v
                         best_p = this_p
                         best_a = act
