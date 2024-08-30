@@ -54,6 +54,10 @@ class Model:
         then do one last round of communication, before calculating the final
         rewards. This encourages risk-taking in the light of probabilistic
         termination.
+
+        This does not correspond directly to terminal states in the associated
+        MDP. This aborts any ongoing attack. It's okay to continue running the
+        model after shutdown.
         """
         raise NotImplementedError
 
@@ -115,6 +119,26 @@ class PTO_wrapper(Model):
                     effect=t.effect,
                 )
                 transitions.append(continue_t)
+
+                # multiple transitions for shutdown
+                term_p = 1 - continue_p
+                for st in self.unwrapped.shutdown(state):
+                    term_t = Transition(
+                        probability=t.probability * term_p * st.probability,
+                        state=self.terminal,
+                        reward=st.reward,
+                        progress=st.progress,
+                        effect=st.effect,
+                    )
+                    transitions.append(term_t)
+
+                # Here arises a question, whether the transitions (step that
+                # leads to shutdown and effect of shutdown) should be
+                # accumulated or replaced. I previously accumulated. Now I
+                # found out that the evaluated expected progress of honest
+                # policy in Bitcoin is H + 1. This smells like we should
+                # replace here instead. That's what the above version is doing.
+                continue
 
                 # multiple transitions for shutdown
                 term_p = 1 - continue_p
