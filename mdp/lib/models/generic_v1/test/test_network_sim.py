@@ -20,7 +20,6 @@ def test_discrete_event_sim():
 
 
 from numpy import random
-from .. import protocols
 
 
 def sim_3_ethereum(upto_progress, *args, **kwargs):
