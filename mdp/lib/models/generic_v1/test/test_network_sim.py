@@ -1,5 +1,5 @@
 from ..protocols import *
-from ..draft import DiscreteEventSim, NetworkSim
+from ..sim import DiscreteEventSim, NetworkSim
 
 
 def test_discrete_event_sim():

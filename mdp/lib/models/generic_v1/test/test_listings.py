@@ -1,4 +1,4 @@
-from ..draft import DAG, DynObj
+from ..model import DAG, DynObj
 import os
 import importlib
 

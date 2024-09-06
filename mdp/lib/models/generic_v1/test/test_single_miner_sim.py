@@ -1,5 +1,5 @@
 from ..protocols import *
-from ..draft import SingleMinerSim
+from ..sim import SingleMinerSim
 
 
 def single_miner_sim(protocol, **kwargs):
