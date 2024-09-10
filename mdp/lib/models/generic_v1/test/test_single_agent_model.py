@@ -4,7 +4,7 @@ import random
 
 
 def reward_and_progress(s: SingleAgentImp):
-    history = s.defender.history()
+    history = s.defender.history()[1:]  # skip genesis
     rew = {None: 0, 0: 0, 1: 0}
     prg = 0
     for b in history:
@@ -15,10 +15,10 @@ def reward_and_progress(s: SingleAgentImp):
     return (rew, prg)
 
 
-def sim_around_honest(*args, exp, alpha, gamma, **kwargs):
+def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
     s = SingleAgentImp(*args, **kwargs)
 
-    for _ in range(250):
+    for _ in range(n):
         if random.random() < exp:
             options = s.actions()
             action = options[random.randrange(len(options))]
@@ -33,15 +33,15 @@ def sim_around_honest(*args, exp, alpha, gamma, **kwargs):
 def per_protocol(*args, **kwargs):
     alpha_gamma = dict(alpha=0.33, gamma=0.5)
 
-    rew, prg = sim_around_honest(*args, **kwargs, **alpha_gamma, exp=0.0)
+    rew, prg = sim_around_honest(1000, *args, **kwargs, **alpha_gamma, exp=0.0)
     rpp = rew[0] / prg
-    assert rpp >= 0.30
+    assert 0.3 <= rpp <= 0.36
 
-    rew, prg = sim_around_honest(*args, **kwargs, **alpha_gamma, exp=0.1)
+    rew, prg = sim_around_honest(250, *args, **kwargs, **alpha_gamma, exp=0.1)
     rpp = rew[0] / prg
-    assert rpp >= 0.25
+    assert 0.25 <= rpp <= 0.4
 
-    rew, prg = sim_around_honest(*args, **kwargs, **alpha_gamma, exp=0.5)
+    rew, prg = sim_around_honest(100, *args, **kwargs, **alpha_gamma, exp=0.5)
 
 
 def test_bitcoin():

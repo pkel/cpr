@@ -174,6 +174,7 @@ class SingleAgentImp:
         }
 
     def do_consider(self, b):
+        self.ignored.remove(b)
         self.attacker.deliver(b)
 
     def just_released(self):
@@ -200,10 +201,13 @@ class SingleAgentImp:
     def do_mining(self, attacker_mines_next_block: bool):
         if attacker_mines_next_block:
             parents = self.attacker.mining()
-            self.dag.append(parents, 0)
+            b = self.dag.append(parents, 0)
+            self.ignored.add(b)
+            self.withheld.add(b)
         else:
             parents = self.defender.mining()
-            self.dag.append(parents, 1)
+            b = self.dag.append(parents, 1)
+            self.ignored.add(b)
 
     def apply(self, a: Action, *, gamma: float, alpha: float):
         if isinstance(a, Release):
@@ -231,11 +235,11 @@ class SingleAgentImp:
     def honest(self) -> Action:
         to_release = self.to_release()
         if len(to_release) > 0:
-            return Release(block=to_release[0])
+            return Release(block=to_release.pop())
 
         to_consider = self.to_consider()
         if len(to_consider) > 0:
-            return Consider(block=to_consider[0])
+            return Consider(block=to_consider.pop())
 
         return Continue()
 
