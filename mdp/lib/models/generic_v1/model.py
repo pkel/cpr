@@ -1,4 +1,5 @@
 from typing import Optional
+import copy
 
 ### BLOCK DAG
 
@@ -148,11 +149,13 @@ class Continue(Action):
 # imperative logic, actions modify state
 class SingleAgentImp:
     def __init__(self, protocol: type[Protocol], *args, **kwargs):
+        self.miner_fn = lambda dag: Miner(dag, protocol, *args, **kwargs)
+
         self.dag = DAG()
         self.ignored = set()
         self.withheld = set()
-        self.attacker = Miner(self.dag, protocol, *args, **kwargs)
-        self.defender = Miner(self.dag, protocol, *args, **kwargs)
+        self.attacker = self.miner_fn(self.dag)
+        self.defender = self.miner_fn(self.dag)
 
     def to_release(self):
         # withheld blocks where no parent is withheld
@@ -221,14 +224,14 @@ class SingleAgentImp:
             assert isinstance(a, Action)
             assert False, "unknown action"
 
-    def actions(self) -> list[Action]:
-        acc = [Continue()]
+    def actions(self) -> set[Action]:
+        acc = {Continue()}
 
         for b in self.to_release():
-            acc.append(Release(block=b))
+            acc.add(Release(block=b))
 
         for b in self.to_consider():
-            acc.append(Consider(block=b))
+            acc.add(Consider(block=b))
 
         return acc
 
@@ -243,44 +246,99 @@ class SingleAgentImp:
 
         return Continue()
 
+    def do_shutdown(self, attacker_communicates_fast: bool):
+        self.withheld = set()
+        self.do_communication(attacker_communicates_fast)
+
+    def copy(self):
+        new = self.__class__.__new__(self.__class__)
+        new.miner_fn = self.miner_fn
+        new.dag = copy.deepcopy(self.dag)
+        new.ignored = self.ignored.copy()
+        new.withheld = self.withheld.copy()
+
+        new.attacker = self.miner_fn(new.dag)
+        new.attacker.protocol.state = copy.deepcopy(self.attacker.protocol.state)
+        for b in self.attacker.visible:
+            new.attacker.visible.add(b)
+
+        new.defender = self.miner_fn(new.dag)
+        new.defender.protocol.state = copy.deepcopy(self.defender.protocol.state)
+        for b in self.defender.visible:
+            new.defender.visible.add(b)
+
+        return new
+
 
 from ...implicit_mdp import Model as ImplicitMDP
-from ...implicit_mdp import Transition, Effect
+from ...implicit_mdp import Transition
 
 
-@dataclass(frozen=True)
-class State:
-    dag: DAG
-    ignored: set[int]
-    withheld: set[int]
+from typing import NewType
+
+State = NewType("State", SingleAgentImp)  # Py 3.12: type State = SingleAgentImp
 
 
-# TODO implement class SingleAgent(ImplicitMDP); it's only a template so far
-# functional logic, actions return updated state
 class SingleAgent(ImplicitMDP):
-    def __init__(self, protocol: type[Protocol], *args, **kwargs):
-        self.protocol_fn = protocol
-        self.protocol_args = args
-        self.protocol_kwargs = kwargs
-        raise NotImplementedError
+    def __init__(self, protocol: type[Protocol], *args, alpha, gamma, **kwargs):
+        assert 0 <= alpha <= 1
+        assert 0 <= gamma <= 1
+
+        self.start_state = SingleAgentImp(protocol, *args, **kwargs)
+        self.alpha = alpha
+        self.gamma = gamma
 
     def start(self) -> list[tuple[State, float]]:
         """
         Define start states and initial probabilities.
         """
-        raise NotImplementedError
+        return [(self.start_state, 1.0)]
 
     def actions(self, s: State) -> set[Action]:
         """
         Define valid actions.
         """
-        raise NotImplementedError
+        return s.actions()
+
+    def honest(self, s: State) -> Action:
+        """
+        What would an honest participant do?
+        """
+        return s.honest()
 
     def apply(self, a: Action, s: State) -> list[Transition]:
         """
         Define state transitions. Action a is applied to state s.
         """
-        raise NotImplementedError
+        if isinstance(a, Release):
+            cases = [(1.0, lambda s: s.do_release(a.block))]
+            return self.finalize_transitions(s, cases)
+        elif isinstance(a, Consider):
+            cases = [(1.0, lambda s: s.do_consider(a.block))]
+            return self.finalize_transitions(s, cases)
+        elif isinstance(a, Continue):
+            cases = [
+                (
+                    self.alpha * self.gamma,
+                    lambda s: [s.do_communication(True), s.do_mining(True)],
+                ),
+                (
+                    self.alpha * (1 - self.gamma),
+                    lambda s: [s.do_communication(False), s.do_mining(True)],
+                ),
+                (
+                    (1 - self.alpha) * self.gamma,
+                    lambda s: [s.do_communication(True), s.do_mining(False)],
+                ),
+                (
+                    (1 - self.alpha) * (1 - self.gamma),
+                    lambda s: [s.do_communication(False), s.do_mining(False)],
+                ),
+            ]
+            return self.finalize_transitions(s, cases)
+        else:
+            assert isinstance(a, Action)
+            raise ValueError("unknown action")
 
     def shutdown(self, s: State) -> list[Transition]:
         """
@@ -296,19 +354,57 @@ class SingleAgent(ImplicitMDP):
         MDP. This aborts any ongoing attack. It's okay to continue running the
         model after shutdown.
         """
-        raise NotImplementedError
+        cases = [
+            (
+                self.gamma,
+                lambda s: s.do_shutdown(True),
+            ),
+            (
+                1 - self.gamma,
+                lambda s: s.do_shutdown(False),
+            ),
+        ]
+        return self.finalize_transitions(s, cases)
 
-    def acc_effect(self, a: Effect, b: Effect) -> Effect:
-        """
-        When merging two steps, what's the accumulated effect?
-        """
-        if a is None and b is None:
-            return None
-        else:
-            raise NotImplementedError
+    def finalize_transitions(self, old, cases):
+        # We measure the attacker's reward on the defender's chain
+        # and calculate the delta between new and old state.
 
-    def honest(self, s: State) -> Action:
-        """
-        What would an honest participant do?
-        """
-        raise NotImplementedError
+        def measure(hist, judge):
+            rew = 0.0  # attacker's reward
+            prg = 0.0  # progress
+            for b in hist:
+                prg += judge.progress(b)
+                for miner, amount in judge.coinbase(b):
+                    assert miner in [0, 1]
+                    if miner == 0:
+                        rew += amount
+
+            return (rew, prg)
+
+        old_hist = old.defender.history()
+        assert old_hist[0] == 0  # genesis_check
+
+        old_rew, old_prg = measure(old_hist[1:], old.defender)  # skip genesis
+
+        transitions = []
+        for prb, fn in cases:
+            new = old.copy()
+            fn(new)
+
+            new_hist = new.defender.history()
+            assert new_hist[0] == 0  # genesis check
+
+            new_rew, new_prg = measure(new_hist[1:], new.defender)  # no genesis
+
+            transitions.append(
+                Transition(
+                    probability=prb,
+                    state=new,
+                    reward=new_rew - old_rew,
+                    progress=new_prg - old_prg,
+                    effect=None,
+                )
+            )
+
+        return transitions
