@@ -1,8 +1,8 @@
-from bitcoin import Bitcoin
-from compiler import Compiler
-from ethereum import EthereumWhitepaper, EthereumByzantium
-from parallel import Parallel
-from sm import SelfishMining, mappable_params
+from lib.models.generic_v0.bitcoin import Bitcoin
+from lib.models.generic_v0.ethereum import EthereumWhitepaper, EthereumByzantium
+from lib.models.generic_v0.parallel import Parallel
+from lib.models.generic_v0.model import SelfishMining, mappable_params
+from lib.compiler import Compiler
 from time import time
 import joblib
 import os

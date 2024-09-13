@@ -1,8 +1,8 @@
-from bitcoin import Bitcoin
-from ethereum import EthereumWhitepaper, EthereumByzantium
-from compiler import Compiler
-from parallel import Parallel
-from sm import Editor, Miner, SelfishMining, mappable_params
+from .bitcoin import Bitcoin
+from .ethereum import EthereumWhitepaper, EthereumByzantium
+from .parallel import Parallel
+from ...compiler import Compiler
+from .model import Editor, Miner, SelfishMining, mappable_params
 import pprint
 import psutil
 

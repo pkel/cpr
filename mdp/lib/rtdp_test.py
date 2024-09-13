@@ -1,12 +1,12 @@
-import aft20barzur
-from model import PTO_wrapper
-from rtdp import RTDP
+from .models import aft20barzur
+from .implicit_mdp import PTO_wrapper
+from .rtdp import RTDP
 import pprint
 import psutil
 import sys
 
-from bitcoin import Bitcoin
-from sm import SelfishMining
+from .models.generic_v0.bitcoin import Bitcoin
+from .models.generic_v0.model import SelfishMining
 
 pp = pprint.PrettyPrinter(indent=2)
 

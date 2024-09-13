@@ -1,15 +1,15 @@
 # reference models
-import fc16sapirshtein
-import aft20barzur
+from lib.models import fc16sapirshtein
+from lib.models import aft20barzur
 
 # generic model
-from bitcoin import Bitcoin
-from sm import SelfishMining
+from lib.models.generic_v0.bitcoin import Bitcoin
+from lib.models.generic_v0.model import SelfishMining
 
 # solving algorithm
-from model import PTO_wrapper
-from rtdp import RTDP
-from compiler import Compiler
+from lib.implicit_mdp import PTO_wrapper
+from lib.rtdp import RTDP
+from lib.compiler import Compiler
 
 # generic tools
 import argparse

@@ -1,9 +1,9 @@
 from enum import IntEnum
 from dataclasses import dataclass, replace
-from mdp import MDP
+from ...explicit_mdp import MDP
 import pickle
-from model import Effect, Model, Transition
-from protocol import Protocol, View
+from ...implicit_mdp import Effect, Model, Transition
+from .protocol import Protocol, View
 import pynauty
 import subprocess
 import xxhash

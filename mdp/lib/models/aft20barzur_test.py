@@ -1,5 +1,5 @@
-import aft20barzur
-from compiler import Compiler
+from . import aft20barzur
+from ..compiler import Compiler
 import pprint
 import psutil
 

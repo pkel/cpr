@@ -1,5 +1,5 @@
-from mdp import MDP, Transition, sum_to_one
-from model import Model
+from .explicit_mdp import MDP, Transition, sum_to_one
+from .implicit_mdp import Model
 import queue
 
 

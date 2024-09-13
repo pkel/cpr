@@ -10,8 +10,8 @@
 # https://github.com/roibarzur/pto-selfish-mining/blob/89c408638c9c875457d596dcd30fe82114160422/blockchain_mdps/bitcoin_model.py
 
 from dataclasses import dataclass, replace
-from model import Action, Model, Transition
-import mdp
+from ..implicit_mdp import Action, Model, Transition
+from .. import explicit_mdp as mdp
 
 # Bitcoin action space
 ADOPT = 0

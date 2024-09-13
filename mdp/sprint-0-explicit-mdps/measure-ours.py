@@ -5,7 +5,7 @@ import joblib
 import pandas
 import pickle
 import random
-import sm
+from lib.models.generic_v0 import model as sm
 import util
 
 argp = argparse.ArgumentParser()

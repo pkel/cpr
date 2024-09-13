@@ -1,6 +1,6 @@
-import mdp
-from mdp import sum_to_one
-from model import Model, Transition
+from . import explicit_mdp as mdp
+from .explicit_mdp import sum_to_one
+from .implicit_mdp import Model, Transition
 import random
 import sys
 

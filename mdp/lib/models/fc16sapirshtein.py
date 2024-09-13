@@ -4,8 +4,8 @@
 # https://doi.org/10.1007/978-3-662-54970-4_30
 
 from dataclasses import dataclass, replace
-from model import Action, Model, Transition
-import mdp
+from ..implicit_mdp import Action, Model, Transition
+from .. import explicit_mdp as mdp
 
 # Bitcoin action space
 ADOPT = 0

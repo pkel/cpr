@@ -1,6 +1,6 @@
 from typing import Optional
 
-from protocol import Block, Protocol, Reward, View
+from .protocol import Block, Protocol, Reward, View
 
 
 class EthereumWhitepaper(Protocol):

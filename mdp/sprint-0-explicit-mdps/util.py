@@ -1,4 +1,4 @@
-import aft20barzur
+from lib.models import aft20barzur
 import numpy
 from time import time
 

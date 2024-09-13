@@ -1,15 +1,15 @@
-from compiler import Compiler
+from lib.compiler import Compiler
+from lib.models import aft20barzur
+from lib.models import fc16sapirshtein
+from lib.models.generic_v0 import model as sm
 from time import time
 from tqdm import tqdm
-import aft20barzur
 import argparse
-import fc16sapirshtein
 import gzip
 import joblib
 import pandas
 import pickle
 import random
-import sm
 import util
 
 argp = argparse.ArgumentParser()

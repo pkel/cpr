@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from model import Effect
+from .implicit_mdp import Effect
 from time import time
 from typing import Optional
 import math
