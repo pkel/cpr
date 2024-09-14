@@ -26,7 +26,7 @@ def history(state):
     return history_of(state.head)
 
 
-def progress(_block):
+def progress(block):
     return 1
 
 

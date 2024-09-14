@@ -1,7 +1,7 @@
 k: int = ...  # protocol parameter
 
 
-def mining(_state):
+def mining(state):
     return tips(G)
 
 
@@ -28,7 +28,7 @@ def is_k_cluster(G, S):
     return all(len(anticone(G, b) & S) <= k for b in S)
 
 
-def history(_state):
+def history(state):
     _blue, history = history_of(G)
     return history
 
