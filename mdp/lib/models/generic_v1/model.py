@@ -60,6 +60,23 @@ class DAG:
     def topological_order(self, blocks: set[int]):
         return sorted(list(blocks))
 
+    def _past_or_future(self, relation, block):
+        acc = set()
+        stack = set(relation(block))
+        while len(stack) > 0:
+            b = stack.pop()
+            if b not in acc:
+                acc.add(b)
+                for p in set(relation(b)):
+                    stack.add(p)
+        return acc
+
+    def past(self, block):
+        return self._past_or_future(self.parents, block)
+
+    def future(self, block):
+        return self.past_or_future(self.children, block)
+
 
 # ## MINERS
 
@@ -277,16 +294,23 @@ class SingleAgent(ImplicitMDP):
     def __init__(self, protocol: type[Protocol], *args, alpha, gamma, **kwargs):
         assert 0 <= alpha <= 1
         assert 0 <= gamma <= 1
-
-        self.start_state = SingleAgentImp(protocol, *args, **kwargs)
         self.alpha = alpha
         self.gamma = gamma
+
+        self.start_attacker = SingleAgentImp(protocol, *args, **kwargs)
+        self.start_attacker.do_mining(True)
+
+        self.start_defender = SingleAgentImp(protocol, *args, **kwargs)
+        self.start_defender.do_mining(False)
 
     def start(self) -> list[tuple[State, float]]:
         """
         Define start states and initial probabilities.
         """
-        return [(self.start_state, 1.0)]
+        return [
+            (self.start_attacker, self.alpha),
+            (self.start_defender, 1 - self.alpha),
+        ]
 
     def actions(self, s: State) -> set[Action]:
         """
@@ -394,7 +418,7 @@ class SingleAgent(ImplicitMDP):
             transitions.append(
                 Transition(
                     probability=prb,
-                    state=new,
+                    state=self.close_honest_loop(new, new_hist),
                     reward=new_rew - old_rew,
                     progress=new_prg - old_prg,
                     effect=None,
@@ -402,3 +426,45 @@ class SingleAgent(ImplicitMDP):
             )
 
         return transitions
+
+    def close_honest_loop(self, new, new_hist):
+        # Our analysis relies on the honest policy looping on a closed set of states.
+        # We apply a heuristic: if state looks honest, transition back to start.
+        dag_size = new.dag.size()
+        last_block = dag_size - 1
+
+        def common(loop_state):
+            # communication is complete
+            assert len(new.attacker.visible) == dag_size - 1
+            if len(new.defender.visible) != dag_size - 1:
+                return new
+
+            # history must be the same
+            atk_hist = new.attacker.history()
+            if len(atk_hist) != len(new_hist) or atk_hist != new_hist:
+                return new
+
+            # All blocks in the history must be confirmed by the last block of the history.
+            # This might be relevant for GhostDAG.
+            if set(new_hist[:-1]) != new.dag.past(new_hist[-1]):
+                return new
+
+            return loop_state
+
+        # Case 1: attacker has mined the last block
+        if (
+            new.dag.miner_of(last_block) == 0
+            and new.withheld == {last_block}
+            and new.ignored == {last_block}
+        ):
+            return common(self.start_attacker)
+
+        # Case 2: defender has mined the last block
+        if (
+            new.dag.miner_of(last_block) == 1
+            and new.withheld == set()
+            and new.ignored == {last_block}
+        ):
+            return common(self.start_defender)
+
+        return new
