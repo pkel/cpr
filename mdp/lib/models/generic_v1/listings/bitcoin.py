@@ -1,12 +1,12 @@
-def init(state):
+def init():
     state.head = genesis
 
 
-def mining(state):
+def mining():
     return [state.head]
 
 
-def update(state, block):
+def update(block):
     if height(block) > height(state.head):
         state.head = block
 
@@ -22,7 +22,7 @@ def history_of(block):
         return history_of(parents(block)[0]) + [block]
 
 
-def history(state):
+def history():
     return history_of(state.head)
 
 

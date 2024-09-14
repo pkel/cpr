@@ -34,11 +34,11 @@ def anticone(subgraph, block):
 ## omitted, boring protocol spec functions
 
 
-def init(state):
+def init():
     pass
 
 
-def update(state, block):
+def update(block):
     pass
 
 
