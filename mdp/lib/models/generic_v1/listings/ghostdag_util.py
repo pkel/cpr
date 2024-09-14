@@ -1,6 +1,6 @@
 k = 3
 
-## omitted, boring helper functions
+# omitted, boring helper functions
 
 
 def tips(subgraph):
@@ -31,7 +31,7 @@ def anticone(subgraph, block):
     return subgraph - {block} - past(subgraph, block) - future(subgraph, block)
 
 
-## omitted, boring protocol spec functions
+# omitted, boring protocol spec functions
 
 
 def init():

@@ -1,5 +1,6 @@
-from ..protocols import *
+from ..protocols import Bitcoin, Ghostdag
 from ..sim import DiscreteEventSim, NetworkSim
+from numpy import random
 
 
 def test_discrete_event_sim():
@@ -17,9 +18,6 @@ def test_discrete_event_sim():
 
     # check output
     assert out == [0, 2, 3]
-
-
-from numpy import random
 
 
 def sim_3_ethereum(upto_progress, *args, **kwargs):

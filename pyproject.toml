@@ -4,6 +4,7 @@ extend-exclude = [
   'rl',
   'wandb',
   'website/node_modules',
+  'mdp/lib/models/generic_v1/listings',
 ]
 extend-ignore = ['E203']
 max-line-length = 99

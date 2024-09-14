@@ -1,4 +1,5 @@
 from .model import DAG, Protocol, Miner
+from queue import PriorityQueue
 from typing import Callable
 
 
@@ -33,9 +34,6 @@ class SingleMinerSim:
         return rew, prg
 
 
-from queue import PriorityQueue
-
-
 class DiscreteEventSim:
     def __init__(self):
         self.clock = 0
@@ -48,7 +46,7 @@ class DiscreteEventSim:
         self.clock, fun, args, kwargs = self.event_queue.get()
         fun(*args, **kwargs)
 
-    def loop(self, stop_condition: (lambda x: false)):
+    def loop(self, stop_condition: (lambda x: False)):
         while not (self.event_queue.empty() or stop_condition(self)):
             self.step()
 

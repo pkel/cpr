@@ -1,5 +1,5 @@
 from ..model import SingleAgentImp
-from ..protocols import *
+from ..protocols import Bitcoin, Ghostdag
 import random
 
 

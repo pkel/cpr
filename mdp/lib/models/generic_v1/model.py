@@ -1,7 +1,12 @@
-from typing import Optional
+from ...implicit_mdp import Model as ImplicitMDP
+from ...implicit_mdp import Transition
+from .protocols.interface import Protocol
+from dataclasses import dataclass
+from typing import Optional, NewType
 import copy
+import random
 
-### BLOCK DAG
+# ## BLOCK DAG
 
 
 class DAG:
@@ -56,7 +61,7 @@ class DAG:
         return sorted(list(blocks))
 
 
-### MINERS
+# ## MINERS
 
 
 class DynObj:
@@ -67,8 +72,6 @@ class DynObj:
 # DynObj() objects allow to create attributes on first assign. We use this for
 # the miners' state to give the protocol spec full authority over the attribute
 # names.
-
-from .protocols.interface import Protocol
 
 
 class Miner:
@@ -119,11 +122,8 @@ class Miner:
         return self.protocol.progress(block)
 
 
-### Attack Model
+# ## Attack Model
 #   modeled after Sapirshtein et al. and later Bar-Zur et al.
-
-from dataclasses import dataclass
-import random
 
 
 @dataclass(frozen=True)
@@ -269,12 +269,6 @@ class SingleAgentImp:
 
         return new
 
-
-from ...implicit_mdp import Model as ImplicitMDP
-from ...implicit_mdp import Transition
-
-
-from typing import NewType
 
 State = NewType("State", SingleAgentImp)  # Py 3.12: type State = SingleAgentImp
 

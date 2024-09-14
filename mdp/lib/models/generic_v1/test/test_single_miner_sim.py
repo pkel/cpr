@@ -1,4 +1,4 @@
-from ..protocols import *
+from ..protocols import Bitcoin, Ghostdag
 from ..sim import SingleMinerSim
 
 
