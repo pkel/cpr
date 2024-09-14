@@ -75,13 +75,19 @@ class BitcoinSM(Model):
             # high gamma. Thus I do a >= h here.
             # In the author implementation they do a >= h as well.
             actions.append(MATCH)
-        # giving up is always possible
-        actions.append(ADOPT)
+        # adopt when possible
+        if s.h > 0:
+            # for s.h = 0 this would produce a zero-progress loop
+            actions.append(ADOPT)
         return actions
 
     def honest(self, s: BState) -> list[Action]:
-        if s.a > s.h:
+        if s.a == s.h == 0:
+            return WAIT
+        elif s.a > s.h:
             return OVERRIDE
+        elif s.a == s.h and s.fork == RELEVANT:
+            return MATCH
         else:
             return ADOPT
 
