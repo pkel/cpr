@@ -62,7 +62,7 @@ rel  = "sitemap"
   tag = "tags"
 
 [permalinks]
-  blog = "/blog/:title/"
+  blog = "/blog/:year/:month/:slugorfilename/"
 # docs = "/docs/1.0/:sections[1:]/:title/"
 
 [minify.tdewolff.html]

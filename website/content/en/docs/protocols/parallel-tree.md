@@ -51,10 +51,10 @@ honest behaviour. Imagine a situation where two miners---one weak (let's
 say 2% of the hash-rate) and one strong (20% of the hash-rate)---mine
 blocks around the same time and create a fork. Obviously, the weak miner
 tries to confirm her block, the strong miner tries to confirm the other.
-We do not know what the other miners (72% of the hash-rate) do. If we
+We do not know what the other miners (78% of the hash-rate) do. If we
 assume that they are unbiased, that is, they mine one or the other block
-with equal probability, we end up in a situation were 38% of the hash
-rate tries to confirm the weak miners block and 62% of the hash rate
+with equal probability, we end up in a situation were 41% of the hash
+rate tries to confirm the weak miners block and 59% of the hash rate
 tries to confirm the strong miners block. Only one of the blocks will
 end up in the final blockchain. The other does not get rewards. The
 punishment mechanism for non-linearity is biased in favour of the strong
