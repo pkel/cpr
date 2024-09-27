@@ -165,8 +165,11 @@ class Continue(Action):
 
 # imperative logic, actions modify state
 class SingleAgentImp:
-    def __init__(self, protocol: type[Protocol], *args, **kwargs):
+    def __init__(
+        self, protocol: type[Protocol], *args, force_consider_own=False, **kwargs
+    ):
         self.miner_fn = lambda dag: Miner(dag, protocol, *args, **kwargs)
+        self.force_consider_own = force_consider_own
 
         self.dag = DAG()
         self.ignored = set()
@@ -244,24 +247,41 @@ class SingleAgentImp:
     def actions(self) -> set[Action]:
         acc = {Continue()}
 
+        for b in sorted(self.to_consider()):
+            # We simplify the model by forcing the attacker to consider its own
+            # blocks.
+            if self.force_consider_own and self.dag.miner_of(b) == 0:
+                return {Consider(block=b)}
+
+            acc.add(Consider(block=b))
+
         for b in self.to_release():
             acc.add(Release(block=b))
 
-        for b in self.to_consider():
-            acc.add(Consider(block=b))
-
         return acc
 
-    def honest(self) -> Action:
-        to_release = self.to_release()
-        if len(to_release) > 0:
-            return Release(block=to_release.pop())
+    def _honest(self) -> Action:
+        to_consider = sorted(self.to_consider())
 
-        to_consider = self.to_consider()
+        # We craft honest policy to overlap with possible actions.
+        if self.force_consider_own:
+            for b in to_consider:
+                if self.dag.miner_of(b) == 0:
+                    return Consider(block=b)
+
+        to_release = sorted(self.to_release())
+        if len(to_release) > 0:
+            return Release(block=to_release[0])
+
         if len(to_consider) > 0:
-            return Consider(block=to_consider.pop())
+            return Consider(block=to_consider[0])
 
         return Continue()
+
+    def honest(self) -> Action:
+        a = self._honest()
+        assert a in self.actions()
+        return a
 
     def do_shutdown(self, attacker_communicates_fast: bool):
         self.withheld = set()
@@ -270,6 +290,7 @@ class SingleAgentImp:
     def copy(self):
         new = self.__class__.__new__(self.__class__)
         new.miner_fn = self.miner_fn
+        new.force_consider_own = self.force_consider_own
         new.dag = copy.deepcopy(self.dag)
         new.ignored = self.ignored.copy()
         new.withheld = self.withheld.copy()

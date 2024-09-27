@@ -76,11 +76,15 @@ class Explorer:
 
             self.explored_upto = s_id
 
-    def explore_aside_policy(self):
+    def explore_aside_policy(self, *, max_states: int = -1):
         self.explore_along_policy()
         assert self.explored_upto == self.max_state_id
 
         while self.fully_explored_upto < self.explored_upto:
+            # optional logic to abort exploration beyond a certain size
+            if max_states > 0 and self.n_states > max_states:
+                raise RuntimeError("state size limit exceeded")
+
             self.fully_explored_upto += 1
             s_id = self.fully_explored_upto
             s = self.states[s_id]
