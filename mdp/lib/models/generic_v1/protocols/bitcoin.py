@@ -35,4 +35,5 @@ class Listing(Interface):
 
 
 class Protocol(Listing):
-    pass
+    def relabel_state(self, new_ids):
+        self.state.head = new_ids[self.state.head]

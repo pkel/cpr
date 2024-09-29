@@ -4,6 +4,7 @@ from .protocols.interface import Protocol
 from dataclasses import dataclass
 from typing import Optional, NewType
 import copy
+import pynauty
 import random
 
 # ## BLOCK DAG
@@ -20,6 +21,9 @@ class DAG:
         # ... and also maintain the inverse relation
         self._children = [set()]
 
+        # ... and the height to have a topological ordering ready
+        self._height = [0]
+
         # each block has a miner (except the genesis block)
         self._miner = [None]
 
@@ -33,16 +37,19 @@ class DAG:
         return {b for b, m in enumerate(self._miner) if m == miner}
 
     def append(self, parents: list[int], miner: int) -> int:
-        new_block = len(self._parents)
+        b = len(self._parents)  # new block
 
         self._parents.append(parents)
         self._children.append(set())
         self._miner.append(miner)
 
+        # track children relationship and height
+        self._height.append(0)
         for p in parents:
-            self._children[p].add(new_block)
+            self._children[p].add(b)
+            self._height[b] = max(self._height[b], self._height[p] + 1)
 
-        return new_block
+        return b
 
     def parents(self, block: int) -> list[int]:
         # the model guarantees that parents are always visible
@@ -56,6 +63,9 @@ class DAG:
 
     def miner_of(self, block: int) -> int:
         return self._miner[block]
+
+    def height(self, block: int) -> int:
+        return self._height[block]
 
     def topological_order(self, blocks: set[int]):
         return sorted(list(blocks))
@@ -306,6 +316,68 @@ class SingleAgentImp:
             new.defender.visible.add(b)
 
         return new
+
+    def relabel(self, prio: list[int]):
+        # returns an state with the blocks relabelled from 0 to self.size() - 1
+        # following the priorities (high comes first) given.
+
+        if len(prio) != self.dag.size():
+            raise ValueError("size mismatch for list of priorities")
+
+        # this class assumes that block ids are topologically ordered
+        # we modify the priorities accordingly:
+
+        prio = [(self.dag.height(b), -prio[b], b) for b in self.dag.all_blocks()]
+        old_blocks_in_new_order = [b for _, _, b in sorted(prio)]
+        new_ids = {b: i for i, b in enumerate(old_blocks_in_new_order)}
+
+        # self.copy() + block renaming
+
+        new = self.__class__.__new__(self.__class__)
+        new.miner_fn = self.miner_fn
+        new.force_consider_own = self.force_consider_own
+
+        new.dag = DAG()
+        for b in old_blocks_in_new_order:
+            new_parents = [new_ids[p] for p in self.dag.parents(b)]
+            miner = self.dag.miner_of(b)
+            new.dag.append(new_parents, miner)
+
+        new.ignored = {new_ids[b] for b in self.ignored}
+        new.withheld = {new_ids[b] for b in self.withheld}
+
+        new.attacker = self.miner_fn(new.dag)
+        new.attacker.protocol.state = copy.deepcopy(self.attacker.protocol.state)
+        self.attacker.protocol.relabel_state(new_ids)
+        for b in self.attacker.visible:
+            new.attacker.visible.add(new_ids[b])
+
+        new.defender = self.miner_fn(new.dag)
+        new.defender.protocol.state = copy.deepcopy(self.defender.protocol.state)
+        self.defender.protocol.relabel_state(new_ids)
+        for b in self.defender.visible:
+            new.defender.visible.add(new_ids[b])
+
+        return new
+
+    def canonical_order(self):
+        # see models/generic_v0/model.py:canocically_ordered for explanations
+
+        g = pynauty.Graph(
+            self.dag.size(),
+            directed=True,
+            adjacency_dict={b: self.dag.parents(b) for b in self.dag.all_blocks()},
+            # vertex_coloring=vc,
+        )
+
+        # find canonical labels and return
+        canon = pynauty.canon_label(g)
+
+        return canon
+
+    def normalize(self):
+        prio = self.canonical_order()
+        return self.relabel(prio)
 
 
 State = NewType("State", SingleAgentImp)  # Py 3.12: type State = SingleAgentImp

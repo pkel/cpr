@@ -92,3 +92,6 @@ class Protocol(Util):
     def __init__(self, *, k: int):
         super().__init__()
         self.k = k
+
+    def relabel_state(self, new_ids):
+        pass

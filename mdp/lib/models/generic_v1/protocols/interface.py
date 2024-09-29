@@ -70,3 +70,15 @@ class Protocol:
         a single block in a linear history.
         """
         raise NotImplementedError
+
+    def relabel_state(self, new_ids):
+        """
+        Some algorithms need to relabel the block ids to merge isomorphic
+        states. This is mostly transparent to the protocol spec except when
+        the protocol references block ids in its state. Example: the preferred
+        block in Bitcoin.
+
+        This functions modifies the protocol state in-place, updating all block
+        references.
+        """
+        raise NotImplementedError
