@@ -100,7 +100,7 @@ class NetworkSim(DiscreteEventSim):
             return
 
         # deliver in-order
-        for p in miner.dag.parents(block):
+        for p in miner.parents(block):
             self.deliver(miner, p)
 
         miner.deliver(block)

@@ -17,8 +17,8 @@ def test_copy():
     assert a.defender.visible == {0, 1}
     assert a.attacker.children(0) == {1}
     assert a.defender.children(0) == {1}
-    assert a.attacker.protocol.state.head == 1
-    assert a.defender.protocol.state.head == 1
+    assert a.attacker.state.head == 1
+    assert a.defender.state.head == 1
 
     # b remains unchanged:
     assert b.dag.all_blocks() == {0}
@@ -27,8 +27,8 @@ def test_copy():
     assert b.defender.visible == {0}
     assert b.attacker.children(0) == set()
     assert b.defender.children(0) == set()
-    assert b.attacker.protocol.state.head == 0
-    assert b.defender.protocol.state.head == 0
+    assert b.attacker.state.head == 0
+    assert b.defender.state.head == 0
 
     b.dag.append([0, 0], 1)  # invalid BTC block; useful only for this test
     b.attacker.deliver(1)
@@ -40,8 +40,8 @@ def test_copy():
     assert a.defender.visible == {0, 1}
     assert a.attacker.children(0) == {1}
     assert a.defender.children(0) == {1}
-    assert a.attacker.protocol.state.head == 1
-    assert a.defender.protocol.state.head == 1
+    assert a.attacker.state.head == 1
+    assert a.defender.state.head == 1
 
     # b changes as we expect:
     assert b.dag.all_blocks() == {0, 1}
@@ -50,5 +50,5 @@ def test_copy():
     assert b.defender.visible == {0}
     assert b.attacker.children(0) == {1}
     assert b.defender.children(0) == set()
-    assert b.attacker.protocol.state.head == 1
-    assert b.defender.protocol.state.head == 0
+    assert b.attacker.state.head == 1
+    assert b.defender.state.head == 0

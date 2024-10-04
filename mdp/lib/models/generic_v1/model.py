@@ -13,7 +13,7 @@ import random
 class DAG:
     def __init__(self) -> int:
         # blocks are numbers 0, 1, ...
-        self.genesis = 0
+        self._genesis = 0
 
         # we store the parent relationship as adjacency list ...
         self._parents = [[]]
@@ -27,6 +27,29 @@ class DAG:
         # each block has a miner (except the genesis block)
         self._miner = [None]
 
+        # the object can be frozen
+        self._frozen = False
+
+    def copy(self):
+        new = self.__class__.__new__(self.__class__)
+        new._genesis = self._genesis  # int
+        new._parents = copy.deepcopy(self._parents)  # list[list[int]]
+        new._children = copy.deepcopy(self._children)  # list[set[int]]
+        new._height = self._height.copy()  # list[int]
+        new._miner = self._miner.copy()  # list[int]
+        new._frozen = False
+        return new
+
+    def freeze(self):
+        if self._frozen:
+            raise AttributeError("object already frozen")
+
+        self._frozen = True
+
+    @property
+    def genesis(self) -> int:
+        return self._genesis
+
     def size(self) -> int:
         return len(self._parents)
 
@@ -37,6 +60,9 @@ class DAG:
         return {b for b, m in enumerate(self._miner) if m == miner}
 
     def append(self, parents: list[int], miner: int) -> int:
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
         b = len(self._parents)  # new block
 
         self._parents.append(parents)
@@ -92,8 +118,37 @@ class DAG:
 
 
 class DynObj:
+    def __init__(self):
+        self._frozen = False
+        self._attributes = dict()
+
+    def copy(self):
+        new = self.__class__.__new__(self.__class__)
+        new._attributes = copy.deepcopy(self._attributes)  # dict[string, Any]
+        new._frozen = False
+        return new
+
+    def freeze(self):
+        if self._frozen:
+            raise AttributeError("object already frozen")
+
+        self._frozen = True
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            super().__getattr__(name)
+        elif name in self._attributes:
+            return self._attributes[name]
+        else:
+            raise AttributeError(f"'DynObj' has not attribute '{name}'")
+
     def __setattr__(self, name, value):
-        self.__dict__[name] = value
+        if name.startswith("_"):
+            super().__setattr__(name, value)
+        elif self._frozen:
+            raise AttributeError("cannot modify frozen object")
+        else:
+            self._attributes[name] = value
 
 
 # DynObj() objects allow to create attributes on first assign. We use this for
@@ -103,50 +158,98 @@ class DynObj:
 
 class Miner:
     def __init__(self, dag: DAG, protocol: type[Protocol], *args, **kwargs):
-        self.dag = dag
+        self._dag = dag
+        self._protocol_fn = lambda: protocol(*args, **kwargs)
 
-        # initialize local visibility
-        self.visible = {self.dag.genesis}
-
-        # load protocol spec
-        self.protocol = protocol(*args, **kwargs)
-        self.protocol.genesis = self.dag.genesis
-        self.protocol.children = self.children
-        self.protocol.parents = self.dag.parents
-        self.protocol.G = self.visible
-        self.protocol.topological_order = self.dag.topological_order
-        self.protocol.miner_of = self.dag.miner_of
+        self._visible = {dag.genesis}
+        self._load_protocol_spec()
 
         # create and init miner's state as defined in protocol spec
-        self.protocol.state = DynObj()
-        self.protocol.init()
+        self._protocol.state = DynObj()
+        self._protocol.init()
+
+        self._frozen = False
+
+    def copy_onto(self, dag):
+        new = self.__class__.__new__(self.__class__)
+        new._dag = dag
+        new._protocol_fn = self._protocol_fn
+
+        new._visible = self._visible.copy()
+        new._load_protocol_spec()
+
+        new._protocol.state = self._protocol.state.copy()
+
+        new._frozen = False
+
+        return new
+
+    def _load_protocol_spec(self):
+        # load protocol spec (sorry for the mess)
+        self._protocol = self._protocol_fn()
+        self._protocol.genesis = self._dag.genesis
+        self._protocol.children = self.children
+        self._protocol.parents = self.parents
+        self._protocol.G = self._visible
+        self._protocol.topological_order = self._dag.topological_order
+        self._protocol.miner_of = self._dag.miner_of
+
+    @property
+    def visible(self):
+        return self._visible.copy()
+
+    @property
+    def state(self):
+        return self._protocol.state.copy()
+
+    def freeze(self):
+        if self._frozen:
+            raise AttributeError("object already frozen")
+
+        if not self._dag._frozen:
+            raise AttributeError("cannot freeze miner on non-frozen DAG")
+
+        self._protocol.state.freeze()
+        self._frozen = True
+
+    def parents(self, block: int):
+        return self._dag.parents(block)
 
     def children(self, block: int):
-        return self.dag.children(block, self.visible)
+        return self._dag.children(block, self._visible)
 
     def deliver(self, block: int) -> None:
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
         # spec assumes each block is delivered once
-        assert block not in self.visible, "deliver once"
+        assert block not in self._visible, "deliver once"
 
         # spec assumes topologically ordered delivery
-        assert all([p in self.visible for p in self.dag.parents(block)])
+        assert all([p in self._visible for p in self._dag.parents(block)])
 
         # do the actual delivery
-        self.visible.add(block)
-        self.protocol.update(block)
+        self._visible.add(block)
+        self._protocol.update(block)
 
     def mining(self) -> list[int]:
-        set_or_list = self.protocol.mining()
+        set_or_list = self._protocol.mining()
         return list(set_or_list)
 
     def history(self) -> list[int]:
-        return self.protocol.history()
+        return self._protocol.history()
 
     def coinbase(self, block):
-        return self.protocol.coinbase(block)
+        return self._protocol.coinbase(block)
 
     def progress(self, block):
-        return self.protocol.progress(block)
+        return self._protocol.progress(block)
+
+    def relabel_state(self, new_ids):
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
+        self._protocol.relabel_state(new_ids)
 
 
 # ## Attack Model
@@ -187,6 +290,37 @@ class SingleAgentImp:
         self.attacker = self.miner_fn(self.dag)
         self.defender = self.miner_fn(self.dag)
 
+        # the object can be frozen
+        self._frozen = False
+
+    def freeze(self):
+        if self._frozen:
+            raise AttributeError("object already frozen")
+
+        self.dag.freeze()
+        self.attacker.freeze()
+        self.defender.freeze()
+        self._frozen = True
+
+    def _collision_resistant_hash(self):
+        raise NotImplementedError("TODO")
+
+    @property
+    def fingerprint(self):
+        if not self._frozen:
+            raise AttributeError("mutable agent; use .freeze() first")
+
+        if not hasattr(self, "_fingerprint"):
+            self._fingerprint = self._collision_resistant_hash()
+
+        return self._fingerprint
+
+    def __hash__(self):
+        return hash(self.fingerprint)
+
+    def __eq__(self, other):
+        return self.fingerprint() == other.fingerprint()
+
     def to_release(self):
         # withheld blocks where no parent is withheld
         return {
@@ -196,6 +330,9 @@ class SingleAgentImp:
         }
 
     def do_release(self, b):
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
         self.withheld.remove(b)
 
     def to_consider(self):
@@ -207,6 +344,9 @@ class SingleAgentImp:
         }
 
     def do_consider(self, b):
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
         self.ignored.remove(b)
         self.attacker.deliver(b)
 
@@ -219,6 +359,9 @@ class SingleAgentImp:
         return self.dag.blocks_of(1) - self.defender.visible
 
     def do_communication(self, attacker_communicates_fast: bool):
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
         just_released = sorted(self.just_released())
         just_mined_by_defender = sorted(self.just_mined_by_defender())
         if attacker_communicates_fast:
@@ -232,6 +375,9 @@ class SingleAgentImp:
             self.defender.deliver(b)
 
     def do_mining(self, attacker_mines_next_block: bool):
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
         if attacker_mines_next_block:
             parents = self.attacker.mining()
             b = self.dag.append(parents, 0)
@@ -294,6 +440,9 @@ class SingleAgentImp:
         return a
 
     def do_shutdown(self, attacker_communicates_fast: bool):
+        if self._frozen:
+            raise AttributeError("cannot modify frozen object")
+
         self.withheld = set()
         self.do_communication(attacker_communicates_fast)
 
@@ -301,24 +450,19 @@ class SingleAgentImp:
         new = self.__class__.__new__(self.__class__)
         new.miner_fn = self.miner_fn
         new.force_consider_own = self.force_consider_own
-        new.dag = copy.deepcopy(self.dag)
+        new.dag = self.dag.copy()
         new.ignored = self.ignored.copy()
         new.withheld = self.withheld.copy()
 
-        new.attacker = self.miner_fn(new.dag)
-        new.attacker.protocol.state = copy.deepcopy(self.attacker.protocol.state)
-        for b in self.attacker.visible:
-            new.attacker.visible.add(b)
+        new.attacker = self.attacker.copy_onto(new.dag)
+        new.defender = self.defender.copy_onto(new.dag)
 
-        new.defender = self.miner_fn(new.dag)
-        new.defender.protocol.state = copy.deepcopy(self.defender.protocol.state)
-        for b in self.defender.visible:
-            new.defender.visible.add(b)
+        new._frozen = False
 
         return new
 
-    def relabel(self, prio: list[int]):
-        # returns an state with the blocks relabelled from 0 to self.size() - 1
+    def copy_and_relabel(self, prio: list[int]):
+        # returns a copy with the blocks relabelled from 0 to self.size() - 1
         # following the priorities (high comes first) given.
 
         if len(prio) != self.dag.size():
@@ -346,17 +490,13 @@ class SingleAgentImp:
         new.ignored = {new_ids[b] for b in self.ignored}
         new.withheld = {new_ids[b] for b in self.withheld}
 
-        new.attacker = self.miner_fn(new.dag)
-        new.attacker.protocol.state = copy.deepcopy(self.attacker.protocol.state)
-        self.attacker.protocol.relabel_state(new_ids)
-        for b in self.attacker.visible:
-            new.attacker.visible.add(new_ids[b])
+        new.attacker = self.attacker.copy_onto(new.dag)
+        self.attacker.relabel_state(new_ids)
 
-        new.defender = self.miner_fn(new.dag)
-        new.defender.protocol.state = copy.deepcopy(self.defender.protocol.state)
-        self.defender.protocol.relabel_state(new_ids)
-        for b in self.defender.visible:
-            new.defender.visible.add(new_ids[b])
+        new.defender = self.defender.copy_onto(new.dag)
+        self.defender.relabel_state(new_ids)
+
+        new._frozen = False
 
         return new
 
@@ -367,7 +507,7 @@ class SingleAgentImp:
             self.dag.size(),
             directed=True,
             adjacency_dict={b: self.dag.parents(b) for b in self.dag.all_blocks()},
-            # vertex_coloring=vc,
+            # vertex_coloring=vc, # TODO
         )
 
         # find canonical labels and return
@@ -375,9 +515,9 @@ class SingleAgentImp:
 
         return canon
 
-    def normalize(self):
+    def copy_and_normalize(self):
         prio = self.canonical_order()
-        return self.relabel(prio)
+        return self.copy_and_relabel(prio)
 
 
 State = NewType("State", SingleAgentImp)  # Py 3.12: type State = SingleAgentImp
@@ -392,9 +532,11 @@ class SingleAgent(ImplicitMDP):
 
         self.start_attacker = SingleAgentImp(protocol, *args, **kwargs)
         self.start_attacker.do_mining(True)
+        self.start_attacker.freeze()
 
         self.start_defender = SingleAgentImp(protocol, *args, **kwargs)
         self.start_defender.do_mining(False)
+        self.start_defender.freeze()
 
     def start(self) -> list[tuple[State, float]]:
         """
@@ -502,6 +644,7 @@ class SingleAgent(ImplicitMDP):
         for prb, fn in cases:
             new = old.copy()
             fn(new)
+            new.freeze()
 
             new_hist = new.defender.history()
             assert new_hist[0] == 0  # genesis check
