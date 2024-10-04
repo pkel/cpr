@@ -545,7 +545,9 @@ class SingleAgentImp:
         new._force_consider_own = self._force_consider_own
 
         new._dag = DAG()
-        for b in old_blocks_in_new_order:
+        assert old_blocks_in_new_order[0] == 0, "genesis"
+
+        for b in old_blocks_in_new_order[1:]:
             new_parents = [new_ids[p] for p in self._dag.parents(b)]
             miner = self._dag.miner_of(b)
             new._dag.append(new_parents, miner)
