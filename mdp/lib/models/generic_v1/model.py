@@ -6,15 +6,13 @@ from typing import Optional, NewType
 import copy
 import pynauty
 import random
+import xxhash
 
 # ## BLOCK DAG
 
 
 class DAG:
     def __init__(self) -> int:
-        # blocks are numbers 0, 1, ...
-        self._genesis = 0
-
         # we store the parent relationship as adjacency list ...
         self._parents = [[]]
 
@@ -32,7 +30,6 @@ class DAG:
 
     def copy(self):
         new = self.__class__.__new__(self.__class__)
-        new._genesis = self._genesis  # int
         new._parents = copy.deepcopy(self._parents)  # list[list[int]]
         new._children = copy.deepcopy(self._children)  # list[set[int]]
         new._height = self._height.copy()  # list[int]
@@ -46,9 +43,21 @@ class DAG:
 
         self._frozen = True
 
+    def fingerprint(self):
+        if not self._frozen:
+            raise AttributeError("mutable DAG; use .freeze() first")
+
+        x = xxhash.xxh128()
+        for i, parents in enumerate(self._parents):
+            x.update(f"{i},{self._miner[i]},")
+            for j, p in enumerate(parents):
+                x.update(f"{j},{p},")
+
+        return x.digest()
+
     @property
     def genesis(self) -> int:
-        return self._genesis
+        return 0
 
     def size(self) -> int:
         return len(self._parents)
@@ -134,6 +143,16 @@ class DynObj:
 
         self._frozen = True
 
+    def fingerprint(self):
+        if not self._frozen:
+            raise AttributeError("mutable object; use .freeze() first")
+
+        x = xxhash.xxh128()
+        for i, (k, v) in enumerate(sorted(self._attributes.items())):
+            x.update(f"{i},{k},{v}")
+
+        return x.digest()
+
     def __getattr__(self, name):
         if name.startswith("_"):
             super().__getattr__(name)
@@ -193,6 +212,17 @@ class Miner:
         self._protocol.G = self._visible
         self._protocol.topological_order = self._dag.topological_order
         self._protocol.miner_of = self._dag.miner_of
+
+    def fingerprint(self):
+        if not self._frozen:
+            raise AttributeError("mutable miner; use .freeze() first")
+
+        x = xxhash.xxh128()
+        for i, b in enumerate(self._visible):
+            x.update(f"{i},{b},")
+        x.update(self._protocol.state.fingerprint())
+
+        return x.digest()
 
     @property
     def visible(self):
@@ -281,14 +311,14 @@ class SingleAgentImp:
     def __init__(
         self, protocol: type[Protocol], *args, force_consider_own=False, **kwargs
     ):
-        self.miner_fn = lambda dag: Miner(dag, protocol, *args, **kwargs)
-        self.force_consider_own = force_consider_own
+        self._miner_fn = lambda dag: Miner(dag, protocol, *args, **kwargs)
+        self._force_consider_own = force_consider_own
 
-        self.dag = DAG()
-        self.ignored = set()
-        self.withheld = set()
-        self.attacker = self.miner_fn(self.dag)
-        self.defender = self.miner_fn(self.dag)
+        self._dag = DAG()
+        self._ignored = set()
+        self._withheld = set()
+        self._attacker = self._miner_fn(self._dag)
+        self._defender = self._miner_fn(self._dag)
 
         # the object can be frozen
         self._frozen = False
@@ -297,66 +327,101 @@ class SingleAgentImp:
         if self._frozen:
             raise AttributeError("object already frozen")
 
-        self.dag.freeze()
-        self.attacker.freeze()
-        self.defender.freeze()
+        self._dag.freeze()
+        self._attacker.freeze()
+        self._defender.freeze()
         self._frozen = True
 
-    def _collision_resistant_hash(self):
-        raise NotImplementedError("TODO")
+    @property
+    def dag(self):
+        return self._dag
+
+    @property
+    def attacker(self):
+        return self._attacker
+
+    @property
+    def defender(self):
+        return self._defender
+
+    @property
+    def withheld(self):
+        return self._withheld.copy()
+
+    @property
+    def ignored(self):
+        return self._ignored.copy()
+
+    def _fingerprint(self):
+        x = xxhash.xxh128()
+
+        x.update(self._dag.fingerprint())
+        x.update(self._attacker.fingerprint())
+        x.update(self._defender.fingerprint())
+        for i, b in enumerate(self._withheld):
+            x.update(f"{i},{b}")
+        x.update("|")
+        for i, b in enumerate(self._ignored):
+            x.update(f"{i},{b}")
+
+        return x.digest()
 
     @property
     def fingerprint(self):
         if not self._frozen:
             raise AttributeError("mutable agent; use .freeze() first")
 
-        if not hasattr(self, "_fingerprint"):
-            self._fingerprint = self._collision_resistant_hash()
+        assert self._dag._frozen
+        assert self._attacker._frozen
+        assert self._defender._frozen
 
-        return self._fingerprint
+        if not hasattr(self, "_cached_fingerprint"):
+            self._cached_fingerprint = self._fingerprint()
+
+        return self._cached_fingerprint
 
     def __hash__(self):
         return hash(self.fingerprint)
 
     def __eq__(self, other):
-        return self.fingerprint() == other.fingerprint()
+        return self.fingerprint == other.fingerprint
 
     def to_release(self):
         # withheld blocks where no parent is withheld
         return {
             b
-            for b in self.withheld
-            if not any(p in self.withheld for p in self.dag.parents(b))
+            for b in self._withheld
+            if not any(p in self._withheld for p in self._dag.parents(b))
         }
 
     def do_release(self, b):
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
 
-        self.withheld.remove(b)
+        self._withheld.remove(b)
 
     def to_consider(self):
         # ignored blocks where no parent is ignored
         return {
             b
-            for b in self.ignored
-            if not any(p in self.ignored for p in self.dag.parents(b))
+            for b in self._ignored
+            if not any(p in self._ignored for p in self._dag.parents(b))
         }
 
     def do_consider(self, b):
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
 
-        self.ignored.remove(b)
-        self.attacker.deliver(b)
+        self._ignored.remove(b)
+        self._attacker.deliver(b)
 
     def just_released(self):
         # released attacker block not yet known to the defender
-        return self.dag.blocks_of(0) - self.withheld - self.defender.visible
+        return self._dag.blocks_of(0) - self._withheld - self._defender.visible
 
     def just_mined_by_defender(self):
         # defender blocks not yet known to the defender
-        return self.dag.blocks_of(1) - self.defender.visible
+        return self._dag.blocks_of(1) - self._defender.visible
 
     def do_communication(self, attacker_communicates_fast: bool):
         if self._frozen:
@@ -372,21 +437,21 @@ class SingleAgentImp:
         # sort ensures delivery in topological order
 
         for b in to_deliver:
-            self.defender.deliver(b)
+            self._defender.deliver(b)
 
     def do_mining(self, attacker_mines_next_block: bool):
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
 
         if attacker_mines_next_block:
-            parents = self.attacker.mining()
-            b = self.dag.append(parents, 0)
-            self.ignored.add(b)
-            self.withheld.add(b)
+            parents = self._attacker.mining()
+            b = self._dag.append(parents, 0)
+            self._ignored.add(b)
+            self._withheld.add(b)
         else:
-            parents = self.defender.mining()
-            b = self.dag.append(parents, 1)
-            self.ignored.add(b)
+            parents = self._defender.mining()
+            b = self._dag.append(parents, 1)
+            self._ignored.add(b)
 
     def apply(self, a: Action, *, gamma: float, alpha: float):
         if isinstance(a, Release):
@@ -406,7 +471,7 @@ class SingleAgentImp:
         for b in sorted(self.to_consider()):
             # We simplify the model by forcing the attacker to consider its own
             # blocks.
-            if self.force_consider_own and self.dag.miner_of(b) == 0:
+            if self._force_consider_own and self.dag.miner_of(b) == 0:
                 return {Consider(block=b)}
 
             acc.add(Consider(block=b))
@@ -420,9 +485,9 @@ class SingleAgentImp:
         to_consider = sorted(self.to_consider())
 
         # We craft honest policy to overlap with possible actions.
-        if self.force_consider_own:
+        if self._force_consider_own:
             for b in to_consider:
-                if self.dag.miner_of(b) == 0:
+                if self._dag.miner_of(b) == 0:
                     return Consider(block=b)
 
         to_release = sorted(self.to_release())
@@ -443,19 +508,19 @@ class SingleAgentImp:
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
 
-        self.withheld = set()
+        self._withheld = set()
         self.do_communication(attacker_communicates_fast)
 
     def copy(self):
         new = self.__class__.__new__(self.__class__)
-        new.miner_fn = self.miner_fn
-        new.force_consider_own = self.force_consider_own
-        new.dag = self.dag.copy()
-        new.ignored = self.ignored.copy()
-        new.withheld = self.withheld.copy()
+        new._miner_fn = self._miner_fn
+        new._force_consider_own = self._force_consider_own
+        new._dag = self._dag.copy()
+        new._ignored = self._ignored.copy()
+        new._withheld = self._withheld.copy()
 
-        new.attacker = self.attacker.copy_onto(new.dag)
-        new.defender = self.defender.copy_onto(new.dag)
+        new._attacker = self._attacker.copy_onto(new.dag)
+        new._defender = self._defender.copy_onto(new.dag)
 
         new._frozen = False
 
@@ -465,36 +530,34 @@ class SingleAgentImp:
         # returns a copy with the blocks relabelled from 0 to self.size() - 1
         # following the priorities (high comes first) given.
 
-        if len(prio) != self.dag.size():
+        if len(prio) != self._dag.size():
             raise ValueError("size mismatch for list of priorities")
 
         # this class assumes that block ids are topologically ordered
         # we modify the priorities accordingly:
 
-        prio = [(self.dag.height(b), -prio[b], b) for b in self.dag.all_blocks()]
+        prio = [(self._dag.height(b), -prio[b], b) for b in self._dag.all_blocks()]
         old_blocks_in_new_order = [b for _, _, b in sorted(prio)]
         new_ids = {b: i for i, b in enumerate(old_blocks_in_new_order)}
 
-        # self.copy() + block renaming
-
         new = self.__class__.__new__(self.__class__)
-        new.miner_fn = self.miner_fn
-        new.force_consider_own = self.force_consider_own
+        new._miner_fn = self._miner_fn
+        new._force_consider_own = self._force_consider_own
 
-        new.dag = DAG()
+        new._dag = DAG()
         for b in old_blocks_in_new_order:
-            new_parents = [new_ids[p] for p in self.dag.parents(b)]
-            miner = self.dag.miner_of(b)
-            new.dag.append(new_parents, miner)
+            new_parents = [new_ids[p] for p in self._dag.parents(b)]
+            miner = self._dag.miner_of(b)
+            new._dag.append(new_parents, miner)
 
-        new.ignored = {new_ids[b] for b in self.ignored}
-        new.withheld = {new_ids[b] for b in self.withheld}
+        new._ignored = {new_ids[b] for b in self._ignored}
+        new._withheld = {new_ids[b] for b in self._withheld}
 
-        new.attacker = self.attacker.copy_onto(new.dag)
-        self.attacker.relabel_state(new_ids)
+        new._attacker = self._attacker.copy_onto(new._dag)
+        new._attacker.relabel_state(new_ids)
 
-        new.defender = self.defender.copy_onto(new.dag)
-        self.defender.relabel_state(new_ids)
+        new._defender = self._defender.copy_onto(new._dag)
+        new._defender.relabel_state(new_ids)
 
         new._frozen = False
 
@@ -504,9 +567,9 @@ class SingleAgentImp:
         # see models/generic_v0/model.py:canocically_ordered for explanations
 
         g = pynauty.Graph(
-            self.dag.size(),
+            self._dag.size(),
             directed=True,
-            adjacency_dict={b: self.dag.parents(b) for b in self.dag.all_blocks()},
+            adjacency_dict={b: self._dag.parents(b) for b in self._dag.all_blocks()},
             # vertex_coloring=vc, # TODO
         )
 
