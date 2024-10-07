@@ -226,11 +226,11 @@ class Miner:
 
     @property
     def visible(self):
-        return self._visible.copy()
+        return frozenset(self._visible)
 
     @property
     def state(self):
-        return self._protocol.state.copy()
+        return self._protocol.state
 
     def freeze(self):
         if self._frozen:
@@ -278,6 +278,13 @@ class Miner:
     def relabel_state(self, new_ids):
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
+
+        # relabel elements of _visible w/o creating a new set as the set is
+        # linked to self._protocol
+        tmp = self._visible.copy()
+        self._visible.clear()
+        for b in tmp:
+            self._visible.add(new_ids[b])
 
         self._protocol.relabel_state(new_ids)
 
@@ -471,7 +478,7 @@ class SingleAgentImp:
         for b in sorted(self.to_consider()):
             # We simplify the model by forcing the attacker to consider its own
             # blocks.
-            if self._force_consider_own and self.dag.miner_of(b) == 0:
+            if self._force_consider_own and self._dag.miner_of(b) == 0:
                 return {Consider(block=b)}
 
             acc.add(Consider(block=b))
@@ -519,35 +526,39 @@ class SingleAgentImp:
         new._ignored = self._ignored.copy()
         new._withheld = self._withheld.copy()
 
-        new._attacker = self._attacker.copy_onto(new.dag)
-        new._defender = self._defender.copy_onto(new.dag)
+        new._attacker = self._attacker.copy_onto(new._dag)
+        new._defender = self._defender.copy_onto(new._dag)
 
         new._frozen = False
 
         return new
 
-    def copy_and_relabel(self, prio: list[int]):
-        # returns a copy with the blocks relabelled from 0 to self.size() - 1
-        # following the priorities (high comes first) given.
+    def copy_and_relabel(self, order: list[int]):
+        # returns a copy with the blocks relabelled according to the order given
 
-        if len(prio) != self._dag.size():
-            raise ValueError("size mismatch for list of priorities")
+        if len(order) != self._dag.size():
+            raise ValueError("size mismatch for ordering")
+
+        if set(order) != self._dag.all_blocks():
+            raise ValueError("order does not cover all block ids")
+
+        new_heights = [self._dag.height(b) for b in order]
+        if sorted(new_heights) != new_heights:
+            raise ValueError("order is not topological")
 
         # this class assumes that block ids are topologically ordered
         # we modify the priorities accordingly:
 
-        prio = [(self._dag.height(b), -prio[b], b) for b in self._dag.all_blocks()]
-        old_blocks_in_new_order = [b for _, _, b in sorted(prio)]
-        new_ids = {b: i for i, b in enumerate(old_blocks_in_new_order)}
+        new_ids = {b: i for i, b in enumerate(order)}
 
         new = self.__class__.__new__(self.__class__)
         new._miner_fn = self._miner_fn
         new._force_consider_own = self._force_consider_own
 
         new._dag = DAG()
-        assert old_blocks_in_new_order[0] == 0, "genesis"
+        assert order[0] == 0, "genesis"
 
-        for b in old_blocks_in_new_order[1:]:
+        for b in order[1:]:
             new_parents = [new_ids[p] for p in self._dag.parents(b)]
             miner = self._dag.miner_of(b)
             new._dag.append(new_parents, miner)
@@ -572,35 +583,67 @@ class SingleAgentImp:
             self._dag.size(),
             directed=True,
             adjacency_dict={b: self._dag.parents(b) for b in self._dag.all_blocks()},
-            # vertex_coloring=vc, # TODO
+            # vertex_coloring=vc, # TODO; I think we can merge more DAGs if we
+            # inform pynauty about the vertex attributes: miner, withheld, ignored.
         )
 
-        # find canonical labels and return
-        canon = pynauty.canon_label(g)
+        old_blocks_in_canonical_order = pynauty.canon_label(g)
 
-        return canon
+        # In principle we have a canonical ordering now. It does not respect an
+        # important invariant of the DAG class though: block ids are
+        # topologically ordered. We fix this here. A deterministic permutation
+        # of a canonical ordering is still canonical!
+
+        new_positions_of_old_blocks = {
+            old: new for new, old in enumerate(old_blocks_in_canonical_order)
+        }
+
+        prioritized_blocks = [
+            (
+                self._dag.height(b),
+                new_positions_of_old_blocks[b],
+                self._dag.miner_of(b),
+                b,
+            )
+            for b in sorted(self._dag.all_blocks())
+        ]
+
+        return [b for _, _, _, b in sorted(prioritized_blocks)]
 
     def copy_and_normalize(self):
-        prio = self.canonical_order()
-        return self.copy_and_relabel(prio)
+        order = self.canonical_order()
+        return self.copy_and_relabel(order)
 
 
 State = NewType("State", SingleAgentImp)  # Py 3.12: type State = SingleAgentImp
 
 
 class SingleAgent(ImplicitMDP):
-    def __init__(self, protocol: type[Protocol], *args, alpha, gamma, **kwargs):
+    def __init__(
+        self,
+        protocol: type[Protocol],
+        *args,
+        alpha,
+        gamma,
+        merge_isomorphic=False,
+        **kwargs,
+    ):
         assert 0 <= alpha <= 1
         assert 0 <= gamma <= 1
         self.alpha = alpha
         self.gamma = gamma
+        self.merge_isomorphic = merge_isomorphic
 
         self.start_attacker = SingleAgentImp(protocol, *args, **kwargs)
         self.start_attacker.do_mining(True)
-        self.start_attacker.freeze()
-
         self.start_defender = SingleAgentImp(protocol, *args, **kwargs)
         self.start_defender.do_mining(False)
+
+        if merge_isomorphic:
+            self.start_attacker = self.start_attacker.copy_and_normalize()
+            self.start_defender = self.start_defender.copy_and_normalize()
+
+        self.start_attacker.freeze()
         self.start_defender.freeze()
 
     def start(self) -> list[tuple[State, float]]:
@@ -709,6 +752,8 @@ class SingleAgent(ImplicitMDP):
         for prb, fn in cases:
             new = old.copy()
             fn(new)
+            if self.merge_isomorphic:
+                new = new.copy_and_normalize()  # TODO avoid redundant copy above
             new.freeze()
 
             new_hist = new.defender.history()
@@ -731,7 +776,7 @@ class SingleAgent(ImplicitMDP):
     def close_honest_loop(self, new, new_hist):
         # Our analysis relies on the honest policy looping on a closed set of states.
         # We apply a heuristic: if state looks honest, transition back to start.
-        dag_size = new.dag.size()
+        dag_size = new._dag.size()
         last_block = dag_size - 1
 
         def common(loop_state):

@@ -1,6 +1,5 @@
 from ..model import SingleAgentImp
 from ..protocols import Bitcoin
-import pytest
 
 
 def test_relabel():
@@ -11,7 +10,7 @@ def test_relabel():
     _ = a.copy_and_relabel([0, 1])
     a.attacker.deliver(1)
     a.defender.deliver(1)
-    _ = a.copy_and_relabel([1, 0])
+    _ = a.copy_and_relabel([0, 1])
 
 
 def test_hash_and_eq_of_copy():
@@ -52,9 +51,8 @@ def test_hash_and_eq_of_equivalant_dag():
     assert a == b
 
 
-@pytest.mark.skip(reason="TODO")
 def test_normalize_singe_colour():
-    a = SingleAgentImp(Bitcoin, merge_isomorphic=True)
+    a = SingleAgentImp(Bitcoin)
     b = a.copy()
 
     a.dag.append([0], 0)
@@ -67,10 +65,10 @@ def test_normalize_singe_colour():
     b.dag.append([1], 0)
     b.dag.append([3], 0)
 
-    a = a.copy_and_normalize()
-    b = b.copy_and_normalize()
+    an = a.copy_and_normalize()
+    bn = b.copy_and_normalize()
 
-    a.freeze()
-    b.freeze()
+    an.freeze()
+    bn.freeze()
 
-    assert a == b
+    assert an == bn
