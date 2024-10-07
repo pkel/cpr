@@ -576,15 +576,29 @@ class SingleAgentImp:
 
         return new
 
-    def canonical_order(self):
+    def canonical_order(self, *, colors=None):
         # see models/generic_v0/model.py:canocically_ordered for explanations
+
+        if colors is None:
+            coloring = dict()
+        else:
+            assert len(colors) == self._dag.size()
+
+            color_sets = dict()
+            for b, c in enumerate(colors):
+                if c not in color_sets:
+                    color_sets[c] = set()
+                color_sets[c].add(b)
+
+            vc = [color_sets[c] for c in sorted(color_sets.keys())]
+
+            coloring = dict(vertex_coloring=vc)
 
         g = pynauty.Graph(
             self._dag.size(),
             directed=True,
             adjacency_dict={b: self._dag.parents(b) for b in self._dag.all_blocks()},
-            # vertex_coloring=vc, # TODO; I think we can merge more DAGs if we
-            # inform pynauty about the vertex attributes: miner, withheld, ignored.
+            **coloring,
         )
 
         old_blocks_in_canonical_order = pynauty.canon_label(g)
@@ -611,7 +625,22 @@ class SingleAgentImp:
         return [b for _, _, _, b in sorted(prioritized_blocks)]
 
     def copy_and_normalize(self):
-        order = self.canonical_order()
+        colors = [0]  # genesis
+        colors += [self._dag.miner_of(b) for b in range(1, self._dag.size())]
+
+        for b in self._defender.visible:
+            colors[b] |= 2
+
+        for b in self._attacker.visible:
+            colors[b] |= 4
+
+        for b in self._withheld:
+            colors[b] |= 8
+
+        for b in self._ignored:
+            colors[b] |= 16
+
+        order = self.canonical_order(colors=colors)
         return self.copy_and_relabel(order)
 
 
