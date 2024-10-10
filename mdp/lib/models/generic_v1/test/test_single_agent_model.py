@@ -1,6 +1,8 @@
 from ..model import SingleAgent
 from ..protocols import Bitcoin, Ghostdag
+from ....policy_guided_explorer import Explorer
 import random
+import pytest
 
 
 def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
@@ -33,7 +35,7 @@ def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
 # ---
 
 
-def per_protocol(*args, **kwargs):
+def simulate_protocol(*args, **kwargs):
     alpha_gamma = dict(alpha=0.33, gamma=0.5)
 
     rew, prg = sim_around_honest(100, *args, **kwargs, **alpha_gamma, exp=0)
@@ -51,11 +53,53 @@ def per_protocol(*args, **kwargs):
     )
 
 
-def test_bitcoin():
+def test_sim_bitcoin():
     random.seed(42)
-    per_protocol(Bitcoin)
+    simulate_protocol(Bitcoin)
 
 
-def test_ghostdag_3():
+def test_sim_ghostdag_3():
     random.seed(42)
-    per_protocol(Ghostdag, k=3)
+    simulate_protocol(Ghostdag, k=3)
+
+
+# ---
+
+
+def finite_exploration(*args, **kwargs):
+    m = SingleAgent(*args, **kwargs, alpha=0.3, gamma=0.2)
+    e = Explorer(m, m.honest)
+
+    cap = dict(max_states=100)
+
+    # distance 0
+    e.explore_along_policy(**cap)
+
+    # distance 1
+    e.explore_aside_policy(**cap)
+    e.explore_along_policy(**cap)
+
+
+def test_explore_bitcoin():
+    finite_exploration(Bitcoin)
+
+
+def test_explore_bitcoin_mi():
+    finite_exploration(Bitcoin, merge_isomorphic=True)
+
+
+@pytest.mark.skip(reason="WIP")
+def test_explore_bitcoin_tcc():
+    finite_exploration(Bitcoin, truncate_common_chain=True)
+
+
+def test_explore_ghostdag_3():
+    finite_exploration(Ghostdag, k=3)
+
+
+def test_explore_ghostdag_3_mi():
+    finite_exploration(Ghostdag, k=3, merge_isomorphic=True)
+
+
+def test_explore_ghostdag_3_tcc():
+    finite_exploration(Ghostdag, k=3, truncate_common_chain=True)

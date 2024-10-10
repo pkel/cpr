@@ -6,6 +6,7 @@ from typing import Optional, NewType
 import copy
 import pynauty
 import random
+import subprocess
 import xxhash
 
 # ## BLOCK DAG
@@ -169,6 +170,9 @@ class DynObj:
             raise AttributeError("cannot modify frozen object")
         else:
             self._attributes[name] = value
+
+    def __repr__(self):
+        return super().__repr__() + ": " + str(self._attributes)
 
 
 # DynObj() objects allow to create attributes on first assign. We use this for
@@ -648,6 +652,46 @@ class SingleAgentImp:
         order = self.canonical_order(colors=colors)
         return self.copy_and_relabel(order)
 
+    def graph_easy(self, info=dict()):
+        lbls = []
+        lns = []
+        for b in self._dag.all_blocks():
+            if self._dag.miner_of(b) == 0:
+                lbl = f"{b}: atk"
+            else:
+                lbl = f"{b}: def"
+
+            if b in self._ignored:
+                lbl += ", ign"
+
+            if b in self._withheld:
+                lbl += ", whd"
+
+            lbls.append(lbl)
+            lns.append(f"[{lbls[-1]}]")
+
+        for b in self._dag.all_blocks():
+            for p in self._dag.parents(b):
+                lns.append(f"[{lbls[b]}] --> [{lbls[p]}]")
+        return "\n".join(lns)
+
+    def asciify(self, info=dict()):
+        rendered = subprocess.run(
+            ["graph-easy"], input=self.graph_easy(info), text=True, capture_output=True
+        )
+        rendered.check_returncode()
+
+        ret = rendered.stdout
+        ret += "attacker: " + str(self._attacker.state) + "\n"
+        ret += "defender: " + str(self._defender.state)
+        return ret
+
+    def debug_print(self, info=dict()):
+        print(self.asciify(info))
+
+    def __repr__(self):
+        return super().__repr__() + ":\n" + self.asciify()
+
 
 State = NewType("State", SingleAgentImp)  # Py 3.12: type State = SingleAgentImp
 
@@ -875,6 +919,18 @@ class SingleAgent(ImplicitMDP):
         # - the latest viable genesis block on the common history
         # - past and future of this block must cover the whole DAG
         # - removing the past must leave behind a unique root
+
+        # TODO. The heuristic does not work for Bitcoin. Consider the following
+        # scenario with stale block 1:
+        # +-------------+     +--------+
+        # |   1: atk    | --> | 0: def | <--------------------+
+        # +-------------+     +--------+                      |
+        #                                                     |
+        # +-------------+     +--------+     +--------+     +--------+
+        # | 5: def, ign | --> | 4: atk | --> | 3: def | --> | 2: def |
+        # +-------------+     +--------+     +--------+     +--------+
+        # attacker: {'head': 4}
+        # defender: {'head': 4}
 
         next_genesis = state.dag.genesis
 
