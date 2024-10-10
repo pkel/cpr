@@ -103,7 +103,8 @@ class DAG:
         return self._height[block]
 
     def topological_order(self, blocks: set[int]):
-        return sorted(list(blocks))
+        with_height = [(self._height[b], b) for b in blocks]
+        return list(map(lambda x: x[1], sorted(with_height)))
 
     def _past_or_future(self, relation, block):
         acc = set()
@@ -120,7 +121,7 @@ class DAG:
         return self._past_or_future(self.parents, block)
 
     def future(self, block):
-        return self.past_or_future(self.children, block)
+        return self._past_or_future(self.children, block)
 
 
 # ## MINERS
@@ -284,7 +285,8 @@ class Miner:
         tmp = self._visible.copy()
         self._visible.clear()
         for b in tmp:
-            self._visible.add(new_ids[b])
+            if b in new_ids:
+                self._visible.add(new_ids[b])
 
         self._protocol.relabel_state(new_ids)
 
@@ -533,21 +535,24 @@ class SingleAgentImp:
 
         return new
 
-    def copy_and_relabel(self, order: list[int]):
-        # returns a copy with the blocks relabelled according to the order given
+    def copy_and_relabel(self, order: list[int], *, strict=True):
+        # Returns a copy with the blocks relabelled according to the order
+        # given.
 
-        if len(order) != self._dag.size():
+        # This may be used to remove blocks from the DAG, e.g. when truncating
+        # common history.
+
+        if strict and len(order) != self._dag.size():
             raise ValueError("size mismatch for ordering")
 
-        if set(order) != self._dag.all_blocks():
+        if strict and set(order) != self._dag.all_blocks():
             raise ValueError("order does not cover all block ids")
 
         new_heights = [self._dag.height(b) for b in order]
         if sorted(new_heights) != new_heights:
             raise ValueError("order is not topological")
 
-        # this class assumes that block ids are topologically ordered
-        # we modify the priorities accordingly:
+        # ---
 
         new_ids = {b: i for i, b in enumerate(order)}
 
@@ -556,7 +561,7 @@ class SingleAgentImp:
         new._force_consider_own = self._force_consider_own
 
         new._dag = DAG()
-        assert order[0] == 0, "genesis"
+        assert not strict or order[0] == self._dag.genesis
 
         for b in order[1:]:
             new_parents = [new_ids[p] for p in self._dag.parents(b)]
@@ -655,6 +660,7 @@ class SingleAgent(ImplicitMDP):
         alpha,
         gamma,
         merge_isomorphic=False,
+        truncate_common_chain=False,
         **kwargs,
     ):
         assert 0 <= alpha <= 1
@@ -662,6 +668,11 @@ class SingleAgent(ImplicitMDP):
         self.alpha = alpha
         self.gamma = gamma
         self.merge_isomorphic = merge_isomorphic
+
+        if truncate_common_chain:
+            self.loop = "truncate_common_chain"
+        else:
+            self.loop = "honest_to_start"
 
         self.start_attacker = SingleAgentImp(protocol, *args, **kwargs)
         self.start_attacker.do_mining(True)
@@ -781,19 +792,29 @@ class SingleAgent(ImplicitMDP):
         for prb, fn in cases:
             new = old.copy()
             fn(new)
-            if self.merge_isomorphic:
-                new = new.copy_and_normalize()  # TODO avoid redundant copy above
             new.freeze()
 
             new_hist = new.defender.history()
-            assert new_hist[0] == 0  # genesis check
+            assert new_hist[0] == new.dag.genesis
 
             new_rew, new_prg = measure(new_hist[1:], new.defender)  # no genesis
+
+            if self.loop == "honest_to_start":
+                new = self.loop_honest_to_start(new, new_hist)
+            elif self.loop == "truncate_common_chain":
+                new = self.loop_truncate_common_chain(new, new_hist)
+            else:
+                raise ValueError(f"unknown loop mechanism: {self.loop}")
+
+            if self.merge_isomorphic:
+                # TODO avoid redundant copy
+                new = new.copy_and_normalize()
+                new.freeze()
 
             transitions.append(
                 Transition(
                     probability=prb,
-                    state=self.close_honest_loop(new, new_hist),
+                    state=new,
                     reward=new_rew - old_rew,
                     progress=new_prg - old_prg,
                     effect=None,
@@ -802,7 +823,7 @@ class SingleAgent(ImplicitMDP):
 
         return transitions
 
-    def close_honest_loop(self, new, new_hist):
+    def loop_honest_to_start(self, new, new_hist):
         # Our analysis relies on the honest policy looping on a closed set of states.
         # We apply a heuristic: if state looks honest, transition back to start.
         dag_size = new._dag.size()
@@ -843,3 +864,49 @@ class SingleAgent(ImplicitMDP):
             return common(self.start_defender)
 
         return new
+
+    def loop_truncate_common_chain(self, state, def_hist):
+        atk_hist = state.attacker.history()
+
+        assert atk_hist[0] == state.dag.genesis == def_hist[0]
+
+        # ---
+        # find point of truncation:
+        # - the latest viable genesis block on the common history
+        # - past and future of this block must cover the whole DAG
+        # - removing the past must leave behind a unique root
+
+        next_genesis = state.dag.genesis
+
+        for i in range(1, min(len(atk_hist), len(def_hist))):
+            b = atk_hist[i]
+            if b != def_hist[i]:
+                # histories have diverged; no further truncation possible
+                break
+
+            # does removing the past of b leave b as a single root block?
+            # if yes: b can serve as next genesis block
+            past = state.dag.past(b)
+            b_is_viable = True
+
+            for pb in past:
+                if len(state.dag.children(pb) - past - {b}) > 0:
+                    b_is_viable = False
+                    break
+
+            if b_is_viable:
+                next_genesis = b
+
+        # ---
+        # truncate past of next_genesis
+
+        if next_genesis == state.dag.genesis:
+            return state
+
+        subset = {next_genesis} | state.dag.future(next_genesis)
+
+        ordered_subset = state.dag.topological_order(subset)
+        assert ordered_subset[0] == next_genesis
+        truncated = state.copy_and_relabel(ordered_subset, strict=False)
+        truncated.freeze()
+        return truncated
