@@ -9,7 +9,7 @@ class Listing(Interface):
         self.state.head = self.genesis
 
     def mining(self):
-        return [self.state.head]
+        return {self.state.head}
 
     def update(self, block):
         if self.height(block) > self.height(self.state.head):
@@ -22,7 +22,7 @@ class Listing(Interface):
         if block == self.genesis:
             return [self.genesis]
         else:
-            return self.history_of(self.parents(block)[0]) + [block]
+            return self.history_of(self.parents(block).pop()) + [block]
 
     def history(self):
         return self.history_of(self.state.head)
@@ -37,3 +37,6 @@ class Listing(Interface):
 class Protocol(Listing):
     def relabel_state(self, new_ids):
         self.state.head = new_ids[self.state.head]
+
+    def collect_garbage(self):
+        return {self.state.head}
