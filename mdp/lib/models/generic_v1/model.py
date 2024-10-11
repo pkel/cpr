@@ -69,7 +69,7 @@ class DAG:
     def blocks_of(self, miner) -> set[int]:
         return {b for b, m in enumerate(self._miner) if m == miner}
 
-    def append(self, parents: list[int], miner: int) -> int:
+    def append(self, parents: set[int], miner: int) -> int:
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
 
@@ -87,13 +87,13 @@ class DAG:
 
         return b
 
-    def parents(self, block: int) -> list[int]:
+    def parents(self, block: int) -> set[int]:
         # the model guarantees that parents are always visible
-        return self._parents[block]
+        return self._parents[block].copy()
 
     def children(self, block: int, subgraph: Optional[list[int]] = None) -> set[int]:
         if subgraph is None:
-            return self._children[block]
+            return self._children[block].copy()
         else:
             return self._children[block] & subgraph
 
@@ -267,9 +267,8 @@ class Miner:
         self._visible.add(block)
         self._protocol.update(block)
 
-    def mining(self) -> list[int]:
-        set_or_list = self._protocol.mining()
-        return list(set_or_list)
+    def mining(self) -> set[int]:
+        return self._protocol.mining()
 
     def history(self) -> list[int]:
         return self._protocol.history()
@@ -293,6 +292,9 @@ class Miner:
                 self._visible.add(new_ids[b])
 
         self._protocol.relabel_state(new_ids)
+
+    def collect_garbage(self):
+        return self._protocol.collect_garbage()
 
 
 # ## Attack Model
@@ -705,6 +707,7 @@ class SingleAgent(ImplicitMDP):
         gamma,
         merge_isomorphic=False,
         truncate_common_chain=False,
+        collect_garbage=False,
         **kwargs,
     ):
         assert 0 <= alpha <= 1
@@ -712,6 +715,7 @@ class SingleAgent(ImplicitMDP):
         self.alpha = alpha
         self.gamma = gamma
         self.merge_isomorphic = merge_isomorphic
+        self.collect_garbage = collect_garbage
 
         if truncate_common_chain:
             self.loop = "truncate_common_chain"
@@ -838,6 +842,10 @@ class SingleAgent(ImplicitMDP):
             fn(new)
             new.freeze()
 
+            if self.collect_garbage:
+                # TODO avoid redundant copy
+                new = self.copy_and_collect_garbage(new)
+
             new_hist = new.defender.history()
             assert new_hist[0] == new.dag.genesis
 
@@ -846,6 +854,7 @@ class SingleAgent(ImplicitMDP):
             if self.loop == "honest_to_start":
                 new = self.loop_honest_to_start(new, new_hist)
             elif self.loop == "truncate_common_chain":
+                # TODO avoid redundant copy
                 new = self.loop_truncate_common_chain(new, new_hist)
             else:
                 raise ValueError(f"unknown loop mechanism: {self.loop}")
@@ -866,6 +875,28 @@ class SingleAgent(ImplicitMDP):
             )
 
         return transitions
+
+    def copy_and_collect_garbage(self, state):
+        # we keep blocks
+        # - which are not visible to either party
+        # - which are marked relevant by either party
+        # - the closure w.r.t the parents relationship
+        keep = set()
+
+        all_blocks = state.dag.all_blocks()
+        keep |= all_blocks - state.defender.visible
+        keep |= all_blocks - state.attacker.visible
+        keep |= state.attacker.collect_garbage()
+        keep |= state.defender.collect_garbage()
+
+        for b in keep.copy():
+            keep |= state.dag.past(b)
+
+        ordered_keep = state.dag.topological_order(keep)
+
+        cleaned = state.copy_and_relabel(ordered_keep, strict=False)
+        cleaned.freeze()
+        return cleaned
 
     def loop_honest_to_start(self, new, new_hist):
         # Our analysis relies on the honest policy looping on a closed set of states.
@@ -914,14 +945,14 @@ class SingleAgent(ImplicitMDP):
 
         assert atk_hist[0] == state.dag.genesis == def_hist[0]
 
-        # ---
-        # find point of truncation:
+        # Heuristic for finding point of truncation:
         # - the latest viable genesis block on the common history
         # - past and future of this block must cover the whole DAG
         # - removing the past must leave behind a unique root
 
-        # TODO. The heuristic does not work for Bitcoin. Consider the following
-        # scenario with stale block 1:
+        # Note: The heuristic breaks for protocols producing stale blocks.
+        #
+        # Consider the following scenario in Bitcoin:
         # +-------------+     +--------+
         # |   1: atk    | --> | 0: def | <--------------------+
         # +-------------+     +--------+                      |
@@ -931,6 +962,16 @@ class SingleAgent(ImplicitMDP):
         # +-------------+     +--------+     +--------+     +--------+
         # attacker: {'head': 4}
         # defender: {'head': 4}
+        #
+        # 0 is the old genesis
+        # 0, 2, 3, 4 is the common chain
+        # 4 should be the new genesis
+        # removing 0, 2, 3 would leave behind 1 as another root
+        # 1 is a stale/irrelevant block
+        #
+        # My solution is to let the protocol (spec) decide which blocks are
+        # still relevant; then remove irrelevant blocks on each iteration.
+        # See copy_and_collect_garbage().
 
         next_genesis = state.dag.genesis
 

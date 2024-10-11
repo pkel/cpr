@@ -95,3 +95,6 @@ class Protocol(Util):
 
     def relabel_state(self, new_ids):
         pass
+
+    def collect_garbage(self):
+        return self.tips(self.G)

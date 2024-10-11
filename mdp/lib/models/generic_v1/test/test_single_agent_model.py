@@ -2,7 +2,6 @@ from ..model import SingleAgent
 from ..protocols import Bitcoin, Ghostdag
 from ....policy_guided_explorer import Explorer
 import random
-import pytest
 
 
 def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
@@ -88,9 +87,8 @@ def test_explore_bitcoin_mi():
     finite_exploration(Bitcoin, merge_isomorphic=True)
 
 
-@pytest.mark.skip(reason="WIP")
 def test_explore_bitcoin_tcc():
-    finite_exploration(Bitcoin, truncate_common_chain=True)
+    finite_exploration(Bitcoin, collect_garbage=True, truncate_common_chain=True)
 
 
 def test_explore_ghostdag_3():

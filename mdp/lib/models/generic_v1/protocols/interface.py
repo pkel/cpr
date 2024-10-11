@@ -21,8 +21,13 @@ class Protocol:
 
         Technically:
         The miner's state (self.state) is read-only.
-        The function returns a list of parent blocks.
+        The function returns a set of parent blocks.
         The model then attaches a new block with these parents to the DAG.
+
+        Note:
+        It's a set of parents because outgoing edges in the DAG are not
+        ordered. Protocols relying on the ordering of parents, i.e. you would
+        return a list here, are currently not supported.
         """
         raise NotImplementedError
 
@@ -80,5 +85,19 @@ class Protocol:
 
         This functions modifies the protocol state in-place, updating all block
         references.
+        """
+        raise NotImplementedError
+
+    def collect_garbage(self):
+        """
+        Some algorithms benefit from discarding stale blocks. Deciding which
+        blocks are stale depends on the protocol. E.g., in Bitcoin, all blocks
+        off the longest chain are stale; in Ghostdag, no block is stale as all
+        blocks are merged into the chain.
+
+        This function returns the tips that are still relevant. Relevant tips
+        and their past are considered _not_ stale. E.g., for Bitcoin this
+        function returns the preferred tip of the chain; for Ghostdag it would
+        return all tips.
         """
         raise NotImplementedError
