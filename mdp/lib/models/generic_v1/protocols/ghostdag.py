@@ -24,7 +24,7 @@ class Listing(Interface):
         for b in self.topological_order(self.anticone(G, b_max)):
             if self.is_k_cluster(G, blue | {b}):
                 blue = blue | {b}
-            hist = hist + [b]
+                hist = hist + [b]  # only blue blocks get a reward
 
         return (blue, hist)
 
