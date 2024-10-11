@@ -19,7 +19,7 @@ def history_of(G):  # eprint.iacr.org/2018/104.pdf ; Alg. 1
     for b in topological_order(anticone(G, b_max)):
         if is_k_cluster(G, blue | {b}):
             blue = blue | {b}
-        hist = hist + [b]
+            hist = hist + [b]  # only blue blocks get a reward
 
     return (blue, hist)
 

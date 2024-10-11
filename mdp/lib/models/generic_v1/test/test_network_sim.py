@@ -1,4 +1,4 @@
-from ..protocols import Bitcoin, Ghostdag
+from ..protocols import Bitcoin, Ghostdag, Parallel
 from ..sim import DiscreteEventSim, NetworkSim
 from numpy import random
 
@@ -41,3 +41,7 @@ def test_bitcoin():
 
 def test_ghostdag_3():
     sim_3_ethereum(50, Ghostdag, k=3)
+
+
+def test_parallel_3():
+    sim_3_ethereum(50, Parallel, k=3)
