@@ -79,3 +79,7 @@ def test_bitcoin():
 
 def test_ghostdag():
     sim(100, "ghostdag")
+
+
+def test_parallel():
+    sim(100, "parallel")

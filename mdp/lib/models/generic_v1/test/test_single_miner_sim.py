@@ -1,4 +1,4 @@
-from ..protocols import Bitcoin, Ghostdag
+from ..protocols import Bitcoin, Ghostdag, Parallel
 from ..sim import SingleMinerSim
 
 
@@ -13,3 +13,7 @@ def test_bitcoin():
 
 def test_ghostdag_7():
     single_miner_sim(Ghostdag, k=7)
+
+
+def test_parallel_7():
+    single_miner_sim(Parallel, k=7)

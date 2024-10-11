@@ -6,7 +6,7 @@ def test_relabel():
     a = SingleAgentImp(Bitcoin)
     _ = a.copy_and_relabel([0])
 
-    a.dag.append([0], 0)
+    a.dag.append({0}, 0)
     _ = a.copy_and_relabel([0, 1])
     a.attacker.deliver(1)
     a.defender.deliver(1)
@@ -37,13 +37,13 @@ def test_hash_and_eq_of_equivalant_dag():
     a = SingleAgentImp(Bitcoin)
     b = a.copy()
 
-    a.dag.append([0], 0)
-    a.dag.append([1], 0)
-    a.dag.append([1], 0)
+    a.dag.append({0}, 0)
+    a.dag.append({1}, 0)
+    a.dag.append({1}, 0)
 
-    b.dag.append([0], 0)
-    b.dag.append([1], 0)
-    b.dag.append([1], 0)
+    b.dag.append({0}, 0)
+    b.dag.append({1}, 0)
+    b.dag.append({1}, 0)
 
     a.freeze()
     b.freeze()
@@ -51,19 +51,19 @@ def test_hash_and_eq_of_equivalant_dag():
     assert a == b
 
 
-def test_normalize_singe_colour():
+def test_normalize_single_color():
     a = SingleAgentImp(Bitcoin)
     b = a.copy()
 
-    a.dag.append([0], 0)
-    a.dag.append([1], 0)
-    a.dag.append([1], 0)
-    a.dag.append([2], 0)
+    a.dag.append({0}, 0)
+    a.dag.append({1}, 0)
+    a.dag.append({1}, 0)
+    a.dag.append({2}, 0)
 
-    b.dag.append([0], 0)
-    b.dag.append([1], 0)
-    b.dag.append([1], 0)
-    b.dag.append([3], 0)
+    b.dag.append({0}, 0)
+    b.dag.append({1}, 0)
+    b.dag.append({1}, 0)
+    b.dag.append({3}, 0)
 
     an = a.copy_and_normalize()
     bn = b.copy_and_normalize()

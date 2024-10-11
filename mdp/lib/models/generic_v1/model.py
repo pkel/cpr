@@ -15,7 +15,7 @@ import xxhash
 class DAG:
     def __init__(self) -> int:
         # we store the parent relationship as adjacency list ...
-        self._parents = [[]]
+        self._parents = [set()]
 
         # ... and also maintain the inverse relation
         self._children = [set()]
@@ -72,6 +72,8 @@ class DAG:
     def append(self, parents: set[int], miner: int) -> int:
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
+
+        assert isinstance(parents, set), "parents are not ordered"
 
         b = len(self._parents)  # new block
 
@@ -570,7 +572,7 @@ class SingleAgentImp:
         assert not strict or order[0] == self._dag.genesis
 
         for b in order[1:]:
-            new_parents = [new_ids[p] for p in self._dag.parents(b)]
+            new_parents = {new_ids[p] for p in self._dag.parents(b)}
             miner = self._dag.miner_of(b)
             new._dag.append(new_parents, miner)
 
@@ -834,7 +836,8 @@ class SingleAgent(ImplicitMDP):
         old_hist = old.defender.history()
         assert old_hist[0] == 0  # genesis_check
 
-        old_rew, old_prg = measure(old_hist[1:], old.defender)  # skip genesis
+        # skip genesis; it has been considered before
+        old_rew, old_prg = measure(old_hist[1:], old.defender)
 
         transitions = []
         for prb, fn in cases:

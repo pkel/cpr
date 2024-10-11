@@ -3,7 +3,7 @@ def init():
 
 
 def mining():
-    return [state.head]
+    return {state.head}
 
 
 def update(block):
@@ -19,7 +19,7 @@ def history_of(block):
     if block == genesis:
         return [genesis]
     else:
-        return history_of(parents(block)[0]) + [block]
+        return history_of(parents(block).pop()) + [block]
 
 
 def history():
