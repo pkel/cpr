@@ -1,4 +1,4 @@
-k: int = ...
+k: int = ...  # protocol parameter
 
 
 def init():
@@ -15,10 +15,8 @@ def mining():
 def update(block):
     if is_vote(block):
         block = parents(block).pop()
-
     if height(block) > height(state.head):
         state.head = block
-
     elif height(block) == height(state.head):
         if len(children(block)) > len(children(state.head)):
             state.head = block

@@ -5,7 +5,7 @@ from .interface import Protocol as Interface
 
 
 class Listing(Interface):
-    k: int = ...
+    k: int = ...  # protocol parameter
 
     def init(self):
         self.state.head = self.genesis
@@ -19,12 +19,9 @@ class Listing(Interface):
     def update(self, block):
         if self.is_vote(block):
             block = self.parents(block).pop()
-
         assert not self.is_vote(block)
-
         if self.height(block) > self.height(self.state.head):
             self.state.head = block
-
         elif self.height(block) == self.height(self.state.head):
             if len(self.children(block)) > len(self.children(self.state.head)):
                 self.state.head = block

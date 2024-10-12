@@ -15,7 +15,8 @@ def filter_source(txt):
         ln = ln.replace(indent, "", 1)
         ln = re.sub(r"^(def [a-zA-Z-9_]*)\(self,? ?", "\\1(", ln)
         ln = re.sub(r"self\.", "", ln)
-        ln = re.sub(r"^\s+assert.*$", "", ln)
+        if re.match(r"\s+assert.*", ln):
+            continue
         acc.append(ln)
     return "\n".join(acc)
 
