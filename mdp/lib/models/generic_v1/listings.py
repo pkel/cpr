@@ -1,6 +1,6 @@
 import inspect
 import re
-import subprocess
+import black
 
 # class decorator for registering listings with a name
 #
@@ -46,8 +46,7 @@ def filter_source(txt):
 
 
 def format_source(txt):
-    p = subprocess.run(["black", "-q", "-"], input=txt, capture_output=True, text=True)
-    return p.stdout
+    return black.format_str(txt, mode=black.Mode())
 
 
 def generate_listing(name: str, raw=False):
