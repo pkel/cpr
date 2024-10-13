@@ -1,5 +1,5 @@
 from ..model import SingleAgent
-from ..protocols import Bitcoin, Ethereum, Ghostdag, Parallel
+from ..protocols import Bitcoin, Byzantium, Ethereum, Ghostdag, Parallel
 from ....policy_guided_explorer import Explorer
 import random
 import pytest
@@ -67,6 +67,11 @@ def simulate_protocol(*args, **kwargs):
 def test_sim_bitcoin():
     random.seed(42)
     simulate_protocol(Bitcoin)
+
+
+def test_sim_byzantion():
+    random.seed(42)
+    simulate_protocol(Byzantium)
 
 
 def test_sim_ethereum():

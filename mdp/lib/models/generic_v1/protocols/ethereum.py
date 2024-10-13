@@ -10,18 +10,19 @@ class Protocol0(Interface):
         self.state.head = self.genesis
 
     def mining(self):
+        return {self.state.head} | self.available_uncles()
+
+    def available_uncles(self):
         hist = self.history_of(self.state.head)
         allowed_parents = set(hist[-self.horizon - 1 : -2])
-        leaves = {b for b in self.G if len(self.children(b)) == 0}
         uncles = set()
+        leaves = {b for b in self.G if len(self.children(b)) == 0}
         for b in leaves:
             p, _ = self.parent_and_uncles(b)
             if p in allowed_parents:
                 uncles.add(b)
-
         assert all(self.height(u) < self.height(self.state.head) for u in uncles)
-
-        return {self.state.head} | uncles
+        return uncles
 
     def update(self, block):
         if self.height(block) > self.height(self.state.head):
@@ -66,4 +67,4 @@ class Protocol(Protocol0):
         self.state.head = new_ids[self.state.head]
 
     def collect_garbage(self):
-        return self.mining()
+        return {self.state.head} | self.available_uncles()
