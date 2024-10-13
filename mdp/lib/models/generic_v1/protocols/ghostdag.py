@@ -1,10 +1,9 @@
-# The following class(es) will go straight into the paper; references to self.*
-# will be replaced with global variables.
-
+from ..listings import listing
 from .interface import Protocol as Interface
 
 
-class Listing(Interface):
+@listing("ghostdag")
+class Protocol0(Interface):
     k: int = ...  # protocol parameter
 
     def mining(self):
@@ -39,8 +38,8 @@ class Listing(Interface):
     # progress() and coinbase() are like in Bitcoin
 
 
-# goes listings/%_util.py
-class Util(Listing):
+@listing("ghostdag_util")
+class Protocol1(Protocol0):
     k = 3
 
     # omitted, boring helper functions
@@ -88,7 +87,7 @@ class Util(Listing):
         return [(self.miner_of(block), 1)]
 
 
-class Protocol(Util):
+class Protocol(Protocol1):
     def __init__(self, *, k: int):
         super().__init__()
         self.k = k

@@ -1,17 +1,15 @@
+from ..listings import generate_listing
 from ..model import DAG, DynObj
-import os
-import importlib
+import types
 
 
-def import_spec(name):
-    path = os.path.abspath(__file__)
-    path = os.path.dirname(path)
-    path = os.path.dirname(path)
-    path = path + "/listings/" + name + ".py"
+def load_listing(name):
+    code = generate_listing(name)
 
-    spec = importlib.util.spec_from_file_location(f"listings.{name}", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module_name = f"listings.{name}"
+    module = types.ModuleType(module_name)
+    exec(code, module.__dict__)
+
     return module
 
 
@@ -25,18 +23,18 @@ def load_protocol(name, dag, state):
         module.topological_order = dag.topological_order
         module.G = {dag.genesis}
 
-    miner = import_spec(name)
+    miner = load_listing(name)
     patch_globals(miner)
 
     try:
-        util = import_spec(name + "_util")
+        util = load_listing(name + "_util")
         patch_globals(util)
         for u in dir(util):
             if u.startswith("_"):
                 pass
             else:
                 setattr(miner, u, getattr(util, u))
-    except FileNotFoundError:
+    except KeyError:
         pass
 
     miner.init()

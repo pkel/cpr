@@ -1,10 +1,9 @@
-# The following class(es) will go straight into the paper; references to self.*
-# will be replaced with global variables.
-
+from ..listings import listing
 from .interface import Protocol as Interface
 
 
-class Listing(Interface):
+@listing("bitcoin")
+class Protocol0(Interface):
     def init(self):
         self.state.head = self.genesis
 
@@ -34,7 +33,7 @@ class Listing(Interface):
         return [(self.miner_of(block), 1)]
 
 
-class Protocol(Listing):
+class Protocol(Protocol0):
     def relabel_state(self, new_ids):
         self.state.head = new_ids[self.state.head]
 

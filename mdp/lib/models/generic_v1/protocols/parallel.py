@@ -1,10 +1,9 @@
-# The following class(es) will go straight into the paper; references to self.*
-# will be replaced with global variables.
-
+from ..listings import listing
 from .interface import Protocol as Interface
 
 
-class Listing(Interface):
+@listing("parallel")
+class Protocol0(Interface):
     k: int = ...  # protocol parameter
 
     def init(self):
@@ -54,12 +53,12 @@ class Listing(Interface):
         return [(self.miner_of(b), 1) for b in {block} | self.parents(block)]
 
 
-# goes listings/%_util.py
-class Util(Listing):
+@listing("parallel_util")
+class Protocol1(Protocol0):
     k = 3
 
 
-class Protocol(Util):
+class Protocol(Protocol1):
     def __init__(self, *, k):
         assert k >= 2  # required to distinguish votes from blocks in self.is_vote()
 
