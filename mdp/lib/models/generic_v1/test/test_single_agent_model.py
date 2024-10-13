@@ -5,12 +5,17 @@ import random
 import pytest
 
 
-def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
+def sim_around_honest(n, *args, exp, alpha, gamma, verbose=False, **kwargs):
     m = SingleAgent(*args, **kwargs, alpha=alpha, gamma=gamma)
 
     s = m.start()[0][0]  # state
     prg = 0.0
     rew = 0.0
+
+    if verbose:
+        print("start state")
+        print(s)
+        print(f"prg = {prg}, rew = {rew}")
 
     for _ in range(n):
         if random.random() < exp:
@@ -28,6 +33,12 @@ def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
         s = t.state
         prg += t.progress
         rew += t.reward
+
+        if verbose:
+            print("-" * 42)
+            print("state")
+            print(s)
+            print(f"prg = {prg}, rew = {rew}")
 
     return rew, prg, s
 
@@ -68,10 +79,11 @@ def test_sim_ghostdag_3():
     simulate_protocol(Ghostdag, k=3)
 
 
-@pytest.mark.skip()
+@pytest.mark.skip
 def test_sim_parallel_3():
     random.seed(42)
-    simulate_protocol(Parallel, k=3)
+    # TODO the loop honest heuristic does not work for this protocol!
+    simulate_protocol(Parallel, k=3, truncate_common_chain=True)
 
 
 # ---
