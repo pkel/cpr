@@ -1,9 +1,5 @@
-from . import bitcoin
-from . import ethereum
-from . import ghostdag
-from . import parallel
-
-Bitcoin = bitcoin.Protocol
-Ethereum = ethereum.Protocol
-Ghostdag = ghostdag.Protocol
-Parallel = parallel.Protocol
+from .bitcoin import Protocol as Bitcoin
+from .byzantium import Protocol as Byzantium
+from .ethereum import Protocol as Ethereum
+from .ghostdag import Protocol as Ghostdag
+from .parallel import Protocol as Parallel
