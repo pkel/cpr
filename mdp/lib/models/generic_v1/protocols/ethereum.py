@@ -54,15 +54,16 @@ class Protocol0(Interface):
 
 
 class Protocol(Protocol0):
-    def __init__(self, horizon: int = 7):
-        if horizon < 2:
+    def __init__(self, h: int = 7):
+        # we call the parameter h here instead of horizon to avoid
+        # overlap with PTO's horizon
+        if h < 2:
             print("WARNING: Ethereum uncles are feasible for horizon >= 2 only")
 
-        self.horizon = horizon
+        self.horizon = h
 
     def relabel_state(self, new_ids):
         self.state.head = new_ids[self.state.head]
 
     def collect_garbage(self):
-        raise NotImplementedError
-        return {self.state.head}  # TODO + uncle candidates
+        return self.mining()
