@@ -4,7 +4,7 @@ from .interface import Protocol as Interface
 
 @listing("ghostdag")
 class Protocol0(Interface):
-    k: int = ...  # protocol parameter
+    k: int = ...
 
     def mining(self):
         return self.tips(self.G)

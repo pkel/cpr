@@ -1,5 +1,5 @@
+from .. import protocols  # trigger registry of listings # noqa: F401
 from ..listings import generate_listing
-from ..protocols import *  # trigger registry of listings # noqa: F401, F403
 import sys
 
 if __name__ == "__main__":

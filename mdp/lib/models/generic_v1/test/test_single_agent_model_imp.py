@@ -1,5 +1,5 @@
 from ..model import SingleAgentImp
-from ..protocols import Bitcoin, Ghostdag, Parallel
+from ..protocols import Bitcoin, Ethereum, Ghostdag, Parallel
 import random
 
 
@@ -47,6 +47,11 @@ def per_protocol(*args, **kwargs):
 def test_bitcoin():
     random.seed(42)
     per_protocol(Bitcoin)
+
+
+def test_ethereum():
+    random.seed(42)
+    per_protocol(Ethereum)
 
 
 def test_ghostdag_3():
