@@ -906,6 +906,7 @@ class SingleAgent(ImplicitMDP):
     def loop_honest_to_start(self, new, new_hist):
         # Our analysis relies on the honest policy looping on a closed set of states.
         # We apply a heuristic: if state looks honest, transition back to start.
+        # TODO this heuristic does not work for the parallel protocol!
         dag_size = new._dag.size()
         last_block = dag_size - 1
 
