@@ -4,7 +4,7 @@ from .interface import Protocol as Interface
 
 @listing("parallel")
 class Protocol0(Interface):
-    k: int = ...  # protocol parameter
+    k: int = ...
 
     def init(self):
         self.state.head = self.genesis
@@ -27,9 +27,6 @@ class Protocol0(Interface):
 
     def is_vote(self, block):
         return len(self.parents(block)) == 1
-
-    def height(self, block):
-        return len(self.history_of(block))
 
     def history_of(self, block):
         if block == self.genesis:

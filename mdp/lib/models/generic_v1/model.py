@@ -21,6 +21,7 @@ class DAG:
         self._children = [set()]
 
         # ... and the height to have a topological ordering ready
+        #     (height = distance to genesis)
         self._height = [0]
 
         # each block has a miner (except the genesis block)
@@ -218,6 +219,7 @@ class Miner:
         self._protocol.parents = self.parents
         self._protocol.G = self._visible
         self._protocol.topological_order = self._dag.topological_order
+        self._protocol.height = self._dag.height
         self._protocol.miner_of = self._dag.miner_of
 
     def fingerprint(self):

@@ -14,17 +14,14 @@ class Protocol0(Interface):
         if self.height(block) > self.height(self.state.head):
             self.state.head = block
 
-    def height(self, block):
-        return len(self.history_of(block))
-
-    def history_of(self, block):
-        if block == self.genesis:
-            return [self.genesis]
-        else:
-            return self.history_of(self.parents(block).pop()) + [block]
-
     def history(self):
-        return self.history_of(self.state.head)
+        def history_of(block):
+            if block == self.genesis:
+                return [self.genesis]
+            else:
+                return history_of(self.parents(block).pop()) + [block]
+
+        return history_of(self.state.head)
 
     def progress(self, block):
         return 1

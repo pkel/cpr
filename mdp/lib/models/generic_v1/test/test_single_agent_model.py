@@ -1,7 +1,8 @@
 from ..model import SingleAgent
-from ..protocols import Bitcoin, Ghostdag
+from ..protocols import Bitcoin, Ethereum, Ghostdag, Parallel
 from ....policy_guided_explorer import Explorer
 import random
+import pytest
 
 
 def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
@@ -20,15 +21,15 @@ def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
 
         transitions = m.apply(action, s)
 
-        t = random.choices(transitions, weights=[t.probability for t in transitions])[0]
-
         assert sum(t.probability for t in transitions) >= 0.9999
+
+        t = random.choices(transitions, weights=[t.probability for t in transitions])[0]
 
         s = t.state
         prg += t.progress
         rew += t.reward
 
-    return rew, prg
+    return rew, prg, s
 
 
 # ---
@@ -37,11 +38,11 @@ def sim_around_honest(n, *args, exp, alpha, gamma, **kwargs):
 def simulate_protocol(*args, **kwargs):
     alpha_gamma = dict(alpha=0.33, gamma=0.5)
 
-    rew, prg = sim_around_honest(100, *args, **kwargs, **alpha_gamma, exp=0)
+    rew, prg, s = sim_around_honest(100, *args, **kwargs, **alpha_gamma, exp=0)
     rpp = rew / prg
     assert 0.3 <= rpp <= 0.4
 
-    rew, prg = sim_around_honest(50, *args, **kwargs, **alpha_gamma, exp=0.5)
+    rew, prg, s = sim_around_honest(50, *args, **kwargs, **alpha_gamma, exp=0.5)
 
     # --
     sim_around_honest(
@@ -57,9 +58,20 @@ def test_sim_bitcoin():
     simulate_protocol(Bitcoin)
 
 
+def test_sim_ethereum():
+    random.seed(42)
+    simulate_protocol(Ethereum)
+
+
 def test_sim_ghostdag_3():
     random.seed(42)
     simulate_protocol(Ghostdag, k=3)
+
+
+@pytest.mark.skip()
+def test_sim_parallel_3():
+    random.seed(42)
+    simulate_protocol(Parallel, k=3)
 
 
 # ---

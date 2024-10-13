@@ -20,6 +20,7 @@ def load_protocol(name, dag, state):
         module.parents = dag.parents
         module.children = dag.children
         module.miner_of = dag.miner_of
+        module.height = dag.height
         module.topological_order = dag.topological_order
         module.G = {dag.genesis}
 
@@ -70,9 +71,16 @@ def sim(max_progress, protocol):
 
         i += 1
 
+        if i > max_progress * 10:
+            raise RuntimeError("diminishing progress")
+
 
 def test_bitcoin():
     sim(100, "bitcoin")
+
+
+def test_ethereum():
+    sim(100, "ethereum")
 
 
 def test_ghostdag():
