@@ -118,12 +118,12 @@ class Explorer:
                     )
                     self._mdp.add_transition(src=s_id, act=a_idx, t=t)
 
-    def mdp(self):
+    def mdp(self, **kwargs):
         # Note 1. For some states in self._mdp; we've only explored the honest action.
         # That's okay, it forces the attacker to abort the attack.
         # Note 2. Some states are reachable but not yet explored; we have to fix this before
         # returning the MDP.
-        self.explore_along_policy()
+        self.explore_along_policy(**kwargs)
         assert self.explored_upto == self.max_state_id
 
         self._mdp.check()

@@ -117,7 +117,9 @@ def test_v0_bitcoin():
 
 
 def test_v1_bitcoin():
-    model = v1model.SingleAgent(v1bitcoin.Protocol, alpha=0.25, gamma=0.33)
+    model = v1model.SingleAgent(
+        v1bitcoin.Protocol, alpha=0.25, gamma=0.33, loop_honest=True
+    )
     model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
 
     explorer = Explorer(model, model.honest)
@@ -143,7 +145,9 @@ def test_v1_bitcoin():
 
 
 def test_v1_ghostdag3():
-    model = v1model.SingleAgent(v1ghostdag.Protocol, k=3, alpha=0.25, gamma=0.33)
+    model = v1model.SingleAgent(
+        v1ghostdag.Protocol, k=3, alpha=0.25, gamma=0.33, loop_honest=True
+    )
     model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
 
     explorer = Explorer(model, model.honest)

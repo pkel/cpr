@@ -109,11 +109,11 @@ def finite_exploration(*args, **kwargs):
 
 
 def test_explore_bitcoin():
-    finite_exploration(Bitcoin)
+    finite_exploration(Bitcoin, loop_honest=True)
 
 
 def test_explore_bitcoin_mi():
-    finite_exploration(Bitcoin, merge_isomorphic=True)
+    finite_exploration(Bitcoin, merge_isomorphic=True, loop_honest=True)
 
 
 def test_explore_bitcoin_tcc():
@@ -121,11 +121,11 @@ def test_explore_bitcoin_tcc():
 
 
 def test_explore_ghostdag_3():
-    finite_exploration(Ghostdag, k=3)
+    finite_exploration(Ghostdag, k=3, loop_honest=True)
 
 
 def test_explore_ghostdag_3_mi():
-    finite_exploration(Ghostdag, k=3, merge_isomorphic=True)
+    finite_exploration(Ghostdag, k=3, merge_isomorphic=True, loop_honest=True)
 
 
 def test_explore_ghostdag_3_tcc():

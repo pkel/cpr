@@ -711,6 +711,7 @@ class SingleAgent(ImplicitMDP):
         gamma,
         merge_isomorphic=False,
         truncate_common_chain=False,
+        loop_honest=False,
         collect_garbage=False,
         **kwargs,
     ):
@@ -720,11 +721,11 @@ class SingleAgent(ImplicitMDP):
         self.gamma = gamma
         self.merge_isomorphic = merge_isomorphic
         self.collect_garbage = collect_garbage
+        self.truncate_common_chain = truncate_common_chain
+        self.loop_honest = loop_honest
 
-        if truncate_common_chain:
-            self.loop = "truncate_common_chain"
-        else:
-            self.loop = "honest_to_start"
+        if truncate_common_chain and loop_honest:
+            raise ValueError("choose either truncate_common_chain or loop_honest")
 
         self.start_attacker = SingleAgentImp(protocol, *args, **kwargs)
         self.start_attacker.do_mining(True)
@@ -856,13 +857,14 @@ class SingleAgent(ImplicitMDP):
 
             new_rew, new_prg = measure(new_hist[1:], new.defender)  # no genesis
 
-            if self.loop == "honest_to_start":
+            assert not (self.loop_honest and self.truncate_common_chain)
+
+            if self.loop_honest:
                 new = self.loop_honest_to_start(new, new_hist)
-            elif self.loop == "truncate_common_chain":
+
+            if self.truncate_common_chain:
                 # TODO avoid redundant copy
                 new = self.loop_truncate_common_chain(new, new_hist)
-            else:
-                raise ValueError(f"unknown loop mechanism: {self.loop}")
 
             if self.merge_isomorphic:
                 # TODO avoid redundant copy
