@@ -95,5 +95,8 @@ class Protocol(Protocol1):
     def relabel_state(self, new_ids):
         pass
 
+    def color_block(self, block):
+        return 0
+
     def collect_garbage(self):
         return self.tips(self.G)

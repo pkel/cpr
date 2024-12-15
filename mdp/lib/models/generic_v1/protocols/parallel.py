@@ -64,5 +64,11 @@ class Protocol(Protocol1):
     def relabel_state(self, new_ids):
         self.state.head = new_ids[self.state.head]
 
+    def color_block(self, block):
+        if self.state.head == block:
+            return 1
+        else:
+            return 0
+
     def collect_garbage(self):
         return {self.state.head} | self.children(self.state.head)

@@ -88,6 +88,19 @@ class Protocol:
         """
         raise NotImplementedError
 
+    def color_block(self, block):
+        """
+        DAG normalization works better if the block coloring captures also the
+        miner's state. Finding the right colors requires input from the
+        protocol designer. E.g. in bitcoin the preferred block has a different
+        color than all other blocks.
+
+        This function returns the color of the given block.
+
+        We currently support at most 2 colors. The function must return 0 or 1.
+        """
+        raise NotImplementedError
+
     def collect_garbage(self):
         """
         Some algorithms benefit from discarding stale blocks. Deciding which

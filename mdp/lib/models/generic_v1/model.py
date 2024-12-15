@@ -283,6 +283,9 @@ class Miner:
     def progress(self, block):
         return self._protocol.progress(block)
 
+    def color_block(self, block):
+        return self._protocol.color_block(block)
+
     def relabel_state(self, new_ids):
         if self._frozen:
             raise AttributeError("cannot modify frozen object")
@@ -642,18 +645,35 @@ class SingleAgentImp:
     def copy_and_normalize(self):
         colors = [0]  # genesis
         colors += [self._dag.miner_of(b) for b in range(1, self._dag.size())]
+        bits = 1
 
         for b in self._defender.visible:
-            colors[b] |= 2
+            colors[b] |= 1 << bits
+        bits += 1
 
         for b in self._attacker.visible:
-            colors[b] |= 4
+            colors[b] |= 1 << bits
+        bits += 1
 
         for b in self._withheld:
-            colors[b] |= 8
+            colors[b] |= 1 << bits
+        bits += 1
 
         for b in self._ignored:
-            colors[b] |= 16
+            colors[b] |= 1 << bits
+        bits += 1
+
+        for b in self._defender.visible:
+            dcol = self._defender.color_block(b)
+            assert 0 <= dcol <= 1
+            colors[b] |= dcol << bits
+        bits += 1
+
+        for b in self._attacker.visible:
+            dcol = self._attacker.color_block(b)
+            assert 0 <= dcol <= 1
+            colors[b] |= dcol << bits
+        bits += 1
 
         order = self.canonical_order(colors=colors)
         return self.copy_and_relabel(order)
