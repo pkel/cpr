@@ -2,5 +2,6 @@
 *.pkl
 *.pkl.gz
 *.tex
+*.csv
 explored-models
 explored-models.bak
