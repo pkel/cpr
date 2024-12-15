@@ -2,7 +2,6 @@ from ..model import SingleAgent
 from ..protocols import Bitcoin, Byzantium, Ethereum, Ghostdag, Parallel
 from ....policy_guided_explorer import Explorer
 import random
-import pytest
 
 
 def sim_around_honest(n, *args, exp, alpha, gamma, verbose=False, **kwargs):
@@ -57,10 +56,21 @@ def simulate_protocol(*args, **kwargs):
 
     # --
     sim_around_honest(
-        50, *args, **kwargs, **alpha_gamma, exp=0.3, merge_isomorphic=True
+        50,
+        *args,
+        **kwargs,
+        **alpha_gamma,
+        exp=0.3,
+        truncate_common_chain=True,
     )
     sim_around_honest(
-        50, *args, **kwargs, **alpha_gamma, exp=0.3, truncate_common_chain=True
+        50,
+        *args,
+        **kwargs,
+        **alpha_gamma,
+        exp=0.3,
+        truncate_common_chain=True,
+        merge_isomorphic=True,
     )
 
 
@@ -84,11 +94,9 @@ def test_sim_ghostdag_3():
     simulate_protocol(Ghostdag, k=3)
 
 
-@pytest.mark.skip
 def test_sim_parallel_3():
     random.seed(42)
-    # TODO the loop honest heuristic does not work for this protocol!
-    simulate_protocol(Parallel, k=3, truncate_common_chain=True)
+    simulate_protocol(Parallel, k=3)
 
 
 # ---
