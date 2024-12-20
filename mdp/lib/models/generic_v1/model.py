@@ -32,7 +32,7 @@ class DAG:
 
     def copy(self):
         new = self.__class__.__new__(self.__class__)
-        new._parents = copy.deepcopy(self._parents)  # list[list[int]]
+        new._parents = copy.deepcopy(self._parents)  # list[set[int]]
         new._children = copy.deepcopy(self._children)  # list[set[int]]
         new._height = self._height.copy()  # list[int]
         new._miner = self._miner.copy()  # list[int]
@@ -615,7 +615,9 @@ class SingleAgentImp:
         g = pynauty.Graph(
             self._dag.size(),
             directed=True,
-            adjacency_dict={b: self._dag.parents(b) for b in self._dag.all_blocks()},
+            adjacency_dict={
+                b: sorted(self._dag.parents(b)) for b in self._dag.all_blocks()
+            },
             **coloring,
         )
 

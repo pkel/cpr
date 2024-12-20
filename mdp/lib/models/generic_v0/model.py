@@ -430,7 +430,7 @@ class Editor(View):
         # Anyhow, it is important to note that we only use these canonical
         # labels to reindex the blocks in our state. By reordering alone we
         # cannot invalidate the state transitions. Merging two states that
-        # should not be merged is not impossible.
+        # should not be merged should not be possible.
 
         # canon_blocks is a canonically sorted list of blocks.
         # To maintain the invariant that block ids are topologically ordered
