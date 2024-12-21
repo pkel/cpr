@@ -254,6 +254,7 @@ def ptmdp(old: mdp.MDP, *args, horizon: int):
                     Dt = t.progress
                     H = horizon
                     term_prob = 1.0 - ((1.0 - (1.0 / H)) ** Dt)
+                    assert term_prob >= 0.0, "negative transition probability"
                     new_transitions.append(
                         mdp.Transition(
                             destination=terminal,
