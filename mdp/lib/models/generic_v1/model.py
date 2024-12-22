@@ -589,7 +589,7 @@ class SingleAgentImp:
         return new
 
     def canonical_order(self, *, colors=None):
-        # see models/generic_v0/model.py:canocically_ordered for explanations
+        # see models/generic_v0/model.py:canonically_ordered for explanations
 
         if colors is None:
             coloring = dict()
@@ -615,7 +615,13 @@ class SingleAgentImp:
             **coloring,
         )
 
-        old_blocks_in_canonical_order = pynauty.canon_label(g)
+        canon_label = pynauty.canon_label(g)
+
+        assert isinstance(canon_label, list)
+        assert isinstance(canon_label[0], int)
+        assert len(canon_label) == self._dag.size()
+
+        old_blocks_in_canonical_order = canon_label
 
         # In principle we have a canonical ordering now. It does not respect an
         # important invariant of the DAG class though: block ids are
@@ -633,7 +639,7 @@ class SingleAgentImp:
                 self._dag.miner_of(b) if b != self._dag.genesis else -1,
                 b,
             )
-            for b in sorted(self._dag.all_blocks())
+            for b in self._dag.all_blocks()
         ]
 
         return [b for _, _, _, b in sorted(prioritized_blocks)]
