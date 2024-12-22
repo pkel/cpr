@@ -725,6 +725,7 @@ class SingleAgent(ImplicitMDP):
         loop_honest=False,
         merge_isomorphic=False,
         reward_common_chain=False,  # instead of defender chain
+        traditional_height_cutoff=None,  # int; force abort attack at height
         truncate_common_chain=False,
         **kwargs,
     ):
@@ -736,6 +737,7 @@ class SingleAgent(ImplicitMDP):
         self.loop_honest = loop_honest
         self.merge_isomorphic = merge_isomorphic
         self.reward_common_chain = reward_common_chain
+        self.traditional_height_cutoff = traditional_height_cutoff
         self.truncate_common_chain = truncate_common_chain
 
         if truncate_common_chain and loop_honest:
@@ -769,7 +771,14 @@ class SingleAgent(ImplicitMDP):
         """
         Define valid actions.
         """
-        return s.actions()
+        all_actions = s.actions()
+
+        if self.traditional_height_cutoff is not None:
+            max_height = max(s.dag.height(b) for b in s.dag.all_blocks())
+            if max_height >= self.traditional_height_cutoff:
+                all_actions.remove(Continue())
+
+        return all_actions
 
     def honest(self, s: State) -> Action:
         """
