@@ -170,3 +170,115 @@ def test_v1_ghostdag3():
     # explorer.explore_aside_policy()
     # m = explorer.mdp()
     # assert m.n_states == 1585
+
+
+def test_v1_bitcoin_tcc():
+    model = v1model.SingleAgent(
+        v1bitcoin.Protocol,
+        alpha=0.25,
+        gamma=0.33,
+        collect_garbage=True,
+        truncate_common_chain=True,
+    )
+    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
+
+    explorer = Explorer(model, model.honest)
+
+    # distance 0
+    m = explorer.mdp()
+    assert m.n_states == 6
+
+    # distance 1
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 27
+
+    # distance 2
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 152
+
+
+def test_v1_ghostdag3_tcc():
+    model = v1model.SingleAgent(
+        v1ghostdag.Protocol,
+        k=3,
+        alpha=0.25,
+        gamma=0.33,
+        collect_garbage=True,
+        truncate_common_chain=True,
+    )
+    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
+
+    explorer = Explorer(model, model.honest)
+
+    # distance 0
+    m = explorer.mdp()
+    assert m.n_states == 6
+
+    # distance 1
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 31
+
+    # distance 2
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 219
+
+
+def test_v1_bitcoin_mi():
+    model = v1model.SingleAgent(
+        v1bitcoin.Protocol,
+        alpha=0.25,
+        gamma=0.33,
+        merge_isomorphic=True,
+        collect_garbage=True,
+        truncate_common_chain=True,
+    )
+    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
+
+    explorer = Explorer(model, model.honest)
+
+    # distance 0
+    m = explorer.mdp()
+    assert m.n_states == 6
+
+    # distance 1
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 34
+
+    # distance 2
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 185
+
+
+def test_v1_ghostdag3_mi():
+    model = v1model.SingleAgent(
+        v1ghostdag.Protocol,
+        k=3,
+        alpha=0.25,
+        gamma=0.33,
+        merge_isomorphic=True,
+        collect_garbage=True,
+        truncate_common_chain=True,
+    )
+    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
+
+    explorer = Explorer(model, model.honest)
+
+    # distance 0
+    m = explorer.mdp()
+    assert m.n_states == 6
+
+    # distance 1
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 28
+
+    # distance 2
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 164
