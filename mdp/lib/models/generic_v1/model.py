@@ -55,7 +55,7 @@ class DAG:
         x = xxhash.xxh128()
         for i, parents in enumerate(self._parents[1:]):
             x.update(f"{i},{self._miner[i]},")
-            for j, p in enumerate(parents):
+            for j, p in enumerate(sorted(parents)):
                 x.update(f"{j},{p},")
 
         return x.digest()
@@ -231,7 +231,7 @@ class Miner:
             raise AttributeError("mutable miner; use .freeze() first")
 
         x = xxhash.xxh128()
-        for i, b in enumerate(self._visible):
+        for i, b in enumerate(sorted(self._visible)):
             x.update(f"{i},{b},")
         x.update(self._protocol.state.fingerprint())
 
@@ -384,10 +384,10 @@ class SingleAgentImp:
         x.update(self._dag.fingerprint())
         x.update(self._attacker.fingerprint())
         x.update(self._defender.fingerprint())
-        for i, b in enumerate(self._withheld):
+        for i, b in enumerate(sorted(self._withheld)):
             x.update(f"{i},{b}")
         x.update("|")
-        for i, b in enumerate(self._ignored):
+        for i, b in enumerate(sorted(self._ignored)):
             x.update(f"{i},{b}")
 
         return x.digest()
@@ -873,7 +873,7 @@ class SingleAgent(ImplicitMDP):
 
             return (rew, prg)
 
-        if not self.reward_common_chain:
+        if not self.reward_common_chain:  # reward defender chain
             # We measure the attacker's reward on the defender's chain
             # and calculate the delta between new and old state.
 
@@ -889,7 +889,7 @@ class SingleAgent(ImplicitMDP):
             fn(new)
             new.freeze()
 
-            if not self.reward_common_chain:
+            if not self.reward_common_chain:  # reward defender chain
                 new_hist = new.defender.history()
                 assert new_hist[0] == new.dag.genesis
 
@@ -917,6 +917,7 @@ class SingleAgent(ImplicitMDP):
                         rew, prg = 0.0, 0.0
                     else:
                         hist = []
+                        assert truncated_upto in old.defender.history()[1:]
                         for b in old.defender.history()[1:]:  # skip old genesis
                             hist.append(b)
                             if b == truncated_upto:
