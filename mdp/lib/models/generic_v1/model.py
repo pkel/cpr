@@ -875,10 +875,10 @@ class SingleAgent(ImplicitMDP):
             fn(new)
             new.freeze()
 
-            new_hist = new.defender.history()
-            assert new_hist[0] == new.dag.genesis
-
             if not self.reward_common_chain:
+                new_hist = new.defender.history()
+                assert new_hist[0] == new.dag.genesis
+
                 new_rew, new_prg = measure(new_hist[1:], new.defender)  # no genesis
                 rew = new_rew - old_rew
                 prg = new_prg - old_prg
@@ -890,11 +890,11 @@ class SingleAgent(ImplicitMDP):
             assert not (self.loop_honest and self.truncate_common_chain)
 
             if self.loop_honest:
-                new = self.loop_honest_to_start(new, new_hist)
+                new = self.loop_honest_to_start(new)
 
             if self.truncate_common_chain:
                 # TODO avoid redundant copy
-                new, truncated_upto = self.loop_truncate_common_chain(new, new_hist)
+                new, truncated_upto = self.loop_truncate_common_chain(new)
 
                 if self.reward_common_chain:
                     # calculate reward/progress on truncated chain
@@ -948,12 +948,14 @@ class SingleAgent(ImplicitMDP):
         cleaned.freeze()
         return cleaned
 
-    def loop_honest_to_start(self, new, new_hist):
+    def loop_honest_to_start(self, new):
         # Our analysis relies on the honest policy looping on a closed set of states.
         # We apply a heuristic: if state looks honest, transition back to start.
         # TODO this heuristic does not work for the parallel protocol!
         dag_size = new._dag.size()
         last_block = dag_size - 1
+
+        def_hist = new.defender.history()
 
         def common(loop_state):
             # communication is complete
@@ -963,12 +965,12 @@ class SingleAgent(ImplicitMDP):
 
             # history must be the same
             atk_hist = new.attacker.history()
-            if len(atk_hist) != len(new_hist) or atk_hist != new_hist:
+            if len(atk_hist) != len(def_hist) or atk_hist != def_hist:
                 return new
 
             # All blocks in the history must be confirmed by the last block of the history.
             # This might be relevant for GhostDAG.
-            if set(new_hist[:-1]) != new.dag.past(new_hist[-1]):
+            if set(def_hist[:-1]) != new.dag.past(def_hist[-1]):
                 return new
 
             return loop_state
@@ -991,8 +993,9 @@ class SingleAgent(ImplicitMDP):
 
         return new
 
-    def loop_truncate_common_chain(self, state, def_hist):
+    def loop_truncate_common_chain(self, state):
         atk_hist = state.attacker.history()
+        def_hist = state.defender.history()
 
         assert atk_hist[0] == state.dag.genesis == def_hist[0]
 
