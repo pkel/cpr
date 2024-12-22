@@ -885,21 +885,24 @@ class SingleAgent(ImplicitMDP):
 
             if self.truncate_common_chain:
                 # TODO avoid redundant copy
-                new, truncated_upto = self.loop_truncate_common_chain(new)
+                pre = new
+                post, truncated_upto = self.loop_truncate_common_chain(pre)
 
                 if self.reward_common_chain:
                     # calculate reward/progress on truncated chain
-                    if truncated_upto == old.dag.genesis:
+                    if truncated_upto == pre.dag.genesis:
                         # no truncation happened
                         rew, prg = 0.0, 0.0
                     else:
                         hist = []
-                        assert truncated_upto in old.defender.history()[1:]
-                        for b in old.defender.history()[1:]:  # skip old genesis
+                        assert truncated_upto in pre.defender.history()[1:]
+                        for b in pre.defender.history()[1:]:  # skip old genesis
                             hist.append(b)
                             if b == truncated_upto:
                                 break  # include new genesis
-                        rew, prg = measure(hist, old.defender)
+                        rew, prg = measure(hist, pre.defender)
+
+                new = post
 
             if self.merge_isomorphic:
                 # TODO avoid redundant copy
