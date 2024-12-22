@@ -46,7 +46,7 @@ def load_protocol(name, dag, state):
 def reward_and_progress(miner):
     history = miner.history()
     rew, prg = 0, 0
-    for b in history:
+    for b in history[1:]:  # skip genesis block
         for _, amount in miner.coinbase(b):
             rew += amount
         prg += miner.progress(b)

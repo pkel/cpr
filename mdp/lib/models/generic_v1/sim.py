@@ -16,7 +16,7 @@ class SingleMinerSim:
     def reward_and_progress(self):
         history = self.miner.history()
         rew, prg = 0, 0
-        for b in history:
+        for b in history[1:]:  # skip genesis block
             for _, amount in self.miner.coinbase(b):
                 rew += amount
             prg += self.miner.progress(b)
@@ -108,7 +108,7 @@ class NetworkSim(DiscreteEventSim):
     def reward_and_progress(self):
         history = self.judge.history()
         rew, prg = 0, 0
-        for b in history:
+        for b in history[1:]:  # skip genesis block
             for _, amount in self.judge.coinbase(b):
                 rew += amount
             prg += self.judge.progress(b)

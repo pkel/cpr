@@ -49,8 +49,11 @@ class DAG:
         if not self._frozen:
             raise AttributeError("mutable DAG; use .freeze() first")
 
+        assert self._parents[0] == set()
+        assert self._miner[0] is None
+
         x = xxhash.xxh128()
-        for i, parents in enumerate(self._parents):
+        for i, parents in enumerate(self._parents[1:]):
             x.update(f"{i},{self._miner[i]},")
             for j, p in enumerate(parents):
                 x.update(f"{j},{p},")
@@ -101,6 +104,7 @@ class DAG:
             return self._children[block] & subgraph
 
     def miner_of(self, block: int) -> int:
+        assert block != self.genesis, "unsafe usage of miner_of"
         return self._miner[block]
 
     def height(self, block: int) -> int:
@@ -626,7 +630,7 @@ class SingleAgentImp:
             (
                 self._dag.height(b),
                 new_positions_of_old_blocks[b],
-                self._dag.miner_of(b),
+                self._dag.miner_of(b) if b != self._dag.genesis else -1,
                 b,
             )
             for b in sorted(self._dag.all_blocks())
@@ -747,6 +751,8 @@ class SingleAgent(ImplicitMDP):
             raise ValueError("reward_common_chain requires truncate_common_chain")
 
         self.start_state = SingleAgentImp(protocol, *args, **kwargs)
+        if merge_isomorphic:
+            self.start_state = self.start_state.copy_and_normalize()
         self.start_state.freeze()
 
         if self.loop_honest:

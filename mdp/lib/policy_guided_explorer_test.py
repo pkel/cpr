@@ -126,22 +126,22 @@ def test_v1_bitcoin():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    assert m.n_states == 5
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 27
+    assert m.n_states == 24
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 185
+    assert m.n_states == 169
 
     # distance 3
     # explorer.explore_aside_policy()
     # m = explorer.mdp()
-    # assert m.n_states == 1189
+    # assert m.n_states == 1081
 
 
 def test_v1_ghostdag3():
@@ -154,19 +154,19 @@ def test_v1_ghostdag3():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    assert m.n_states == 5
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 32
+    assert m.n_states == 23
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 264
+    assert m.n_states == 197
 
     # distance 3
     # explorer.explore_aside_policy()
     # m = explorer.mdp()
-    # assert m.n_states == 2185
+    # assert m.n_states == 1585
