@@ -750,11 +750,6 @@ class SingleAgent(ImplicitMDP):
         if reward_common_chain and not truncate_common_chain:
             raise ValueError("reward_common_chain requires truncate_common_chain")
 
-        self.start_state = SingleAgentImp(protocol, *args, **kwargs)
-        if merge_isomorphic:
-            self.start_state = self.start_state.copy_and_normalize()
-        self.start_state.freeze()
-
         if self.loop_honest:
             # prepare two honest states to loop back to
             self.reset_attacker = SingleAgentImp(protocol, *args, **kwargs)
@@ -768,6 +763,11 @@ class SingleAgent(ImplicitMDP):
 
             self.reset_attacker.freeze()
             self.reset_defender.freeze()
+        else:
+            self.start_state = SingleAgentImp(protocol, *args, **kwargs)
+            if merge_isomorphic:
+                self.start_state = self.start_state.copy_and_normalize()
+            self.start_state.freeze()
 
     def start(self) -> list[tuple[State, float]]:
         """
