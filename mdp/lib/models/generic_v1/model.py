@@ -721,23 +721,28 @@ class SingleAgent(ImplicitMDP):
         *args,
         alpha,
         gamma,
-        merge_isomorphic=False,
-        truncate_common_chain=False,
-        loop_honest=False,
         collect_garbage=False,
+        loop_honest=False,
+        merge_isomorphic=False,
+        reward_common_chain=False,  # instead of defender chain
+        truncate_common_chain=False,
         **kwargs,
     ):
         assert 0 <= alpha <= 1
         assert 0 <= gamma <= 1
         self.alpha = alpha
         self.gamma = gamma
-        self.merge_isomorphic = merge_isomorphic
         self.collect_garbage = collect_garbage
-        self.truncate_common_chain = truncate_common_chain
         self.loop_honest = loop_honest
+        self.merge_isomorphic = merge_isomorphic
+        self.reward_common_chain = reward_common_chain
+        self.truncate_common_chain = truncate_common_chain
 
         if truncate_common_chain and loop_honest:
             raise ValueError("choose either truncate_common_chain or loop_honest")
+
+        if reward_common_chain and not truncate_common_chain:
+            raise ValueError("reward_common_chain requires truncate_common_chain")
 
         self.start_attacker = SingleAgentImp(protocol, *args, **kwargs)
         self.start_attacker.do_mining(True)
@@ -833,9 +838,6 @@ class SingleAgent(ImplicitMDP):
         return self.finalize_transitions(s, cases)
 
     def finalize_transitions(self, old, cases):
-        # We measure the attacker's reward on the defender's chain
-        # and calculate the delta between new and old state.
-
         def measure(hist, judge):
             rew = 0.0  # attacker's reward
             prg = 0.0  # progress
@@ -848,11 +850,15 @@ class SingleAgent(ImplicitMDP):
 
             return (rew, prg)
 
-        old_hist = old.defender.history()
-        assert old_hist[0] == 0  # genesis_check
+        if not self.reward_common_chain:
+            # We measure the attacker's reward on the defender's chain
+            # and calculate the delta between new and old state.
 
-        # skip genesis; it has been considered before
-        old_rew, old_prg = measure(old_hist[1:], old.defender)
+            old_hist = old.defender.history()
+            assert old_hist[0] == 0  # genesis_check
+
+            # skip genesis; it has been considered before
+            old_rew, old_prg = measure(old_hist[1:], old.defender)
 
         transitions = []
         for prb, fn in cases:
@@ -860,14 +866,17 @@ class SingleAgent(ImplicitMDP):
             fn(new)
             new.freeze()
 
-            if self.collect_garbage:
-                # TODO avoid redundant copy
-                new = self.copy_and_collect_garbage(new)
-
             new_hist = new.defender.history()
             assert new_hist[0] == new.dag.genesis
 
-            new_rew, new_prg = measure(new_hist[1:], new.defender)  # no genesis
+            if not self.reward_common_chain:
+                new_rew, new_prg = measure(new_hist[1:], new.defender)  # no genesis
+                rew = new_rew - old_rew
+                prg = new_prg - old_prg
+
+            if self.collect_garbage:
+                # TODO avoid redundant copy
+                new = self.copy_and_collect_garbage(new)
 
             assert not (self.loop_honest and self.truncate_common_chain)
 
@@ -876,7 +885,20 @@ class SingleAgent(ImplicitMDP):
 
             if self.truncate_common_chain:
                 # TODO avoid redundant copy
-                new = self.loop_truncate_common_chain(new, new_hist)
+                new, truncated_upto = self.loop_truncate_common_chain(new, new_hist)
+
+                if self.reward_common_chain:
+                    # calculate reward/progress on truncated chain
+                    if truncated_upto == old.dag.genesis:
+                        # no truncation happened
+                        rew, prg = 0.0, 0.0
+                    else:
+                        hist = []
+                        for b in old.defender.history()[1:]:  # skip old genesis
+                            hist.append(b)
+                            if b == truncated_upto:
+                                break  # include new genesis
+                        rew, prg = measure(hist, old.defender)
 
             if self.merge_isomorphic:
                 # TODO avoid redundant copy
@@ -887,8 +909,8 @@ class SingleAgent(ImplicitMDP):
                 Transition(
                     probability=prb,
                     state=new,
-                    reward=new_rew - old_rew,
-                    progress=new_prg - old_prg,
+                    reward=rew,
+                    progress=prg,
                     effect=None,
                 )
             )
@@ -1018,7 +1040,7 @@ class SingleAgent(ImplicitMDP):
         # truncate past of next_genesis
 
         if next_genesis == state.dag.genesis:
-            return state
+            return (state, next_genesis)
 
         subset = {next_genesis} | state.dag.future(next_genesis)
 
@@ -1026,4 +1048,4 @@ class SingleAgent(ImplicitMDP):
         assert ordered_subset[0] == next_genesis
         truncated = state.copy_and_relabel(ordered_subset, strict=False)
         truncated.freeze()
-        return truncated
+        return (truncated, next_genesis)
