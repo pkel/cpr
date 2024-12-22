@@ -746,26 +746,34 @@ class SingleAgent(ImplicitMDP):
         if reward_common_chain and not truncate_common_chain:
             raise ValueError("reward_common_chain requires truncate_common_chain")
 
-        self.start_attacker = SingleAgentImp(protocol, *args, **kwargs)
-        self.start_attacker.do_mining(True)
-        self.start_defender = SingleAgentImp(protocol, *args, **kwargs)
-        self.start_defender.do_mining(False)
+        self.start_state = SingleAgentImp(protocol, *args, **kwargs)
+        self.start_state.freeze()
 
-        if merge_isomorphic:
-            self.start_attacker = self.start_attacker.copy_and_normalize()
-            self.start_defender = self.start_defender.copy_and_normalize()
+        if self.loop_honest:
+            # prepare two honest states to loop back to
+            self.reset_attacker = SingleAgentImp(protocol, *args, **kwargs)
+            self.reset_attacker.do_mining(True)
+            self.reset_defender = SingleAgentImp(protocol, *args, **kwargs)
+            self.reset_defender.do_mining(False)
 
-        self.start_attacker.freeze()
-        self.start_defender.freeze()
+            if merge_isomorphic:
+                self.reset_attacker = self.reset_attacker.copy_and_normalize()
+                self.reset_defender = self.reset_defender.copy_and_normalize()
+
+            self.reset_attacker.freeze()
+            self.reset_defender.freeze()
 
     def start(self) -> list[tuple[State, float]]:
         """
         Define start states and initial probabilities.
         """
-        return [
-            (self.start_attacker, self.alpha),
-            (self.start_defender, 1 - self.alpha),
-        ]
+        if self.loop_honest:
+            return [
+                (self.reset_attacker, self.alpha),
+                (self.reset_defender, 1 - self.alpha),
+            ]
+        else:
+            return [(self.start_state, 1.0)]
 
     def actions(self, s: State) -> set[Action]:
         """
@@ -981,7 +989,7 @@ class SingleAgent(ImplicitMDP):
             and new.withheld == {last_block}
             and new.ignored == {last_block}
         ):
-            return common(self.start_attacker)
+            return common(self.reset_attacker)
 
         # Case 2: defender has mined the last block
         if (
@@ -989,7 +997,7 @@ class SingleAgent(ImplicitMDP):
             and new.withheld == set()
             and new.ignored == {last_block}
         ):
-            return common(self.start_defender)
+            return common(self.reset_defender)
 
         return new
 
