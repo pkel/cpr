@@ -15,34 +15,19 @@ def test_aft20barzur():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 4
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 9
+    # distance 1...
+    for _ in range(5):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 16
-
-    # distance 3
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 26
-
-    # distance 4
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 38
-
-    # distance 5
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 53
+    assert n_states == [4, 9, 16, 26, 38, 53]
 
 
 def test_fc16sapirshtein():
@@ -53,34 +38,19 @@ def test_fc16sapirshtein():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 4
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 8
+    # distance 1...
+    for _ in range(5):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 15
-
-    # distance 3
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 24
-
-    # distance 4
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 36
-
-    # distance 5
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 50
+    assert n_states == [4, 8, 15, 24, 36, 50]
 
 
 def test_v0_bitcoin():
@@ -91,29 +61,19 @@ def test_v0_bitcoin():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 11
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 37
+    # distance 1...
+    for _ in range(4):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 111
-
-    # distance 3
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 279
-
-    # distance 4
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 601
+    assert n_states == [11, 37, 111, 279, 601]
 
 
 def test_v1_bitcoin():
@@ -124,24 +84,19 @@ def test_v1_bitcoin():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 5
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 24
+    # distance 1...
+    for _ in range(2):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 169
-
-    # distance 3
-    # explorer.explore_aside_policy()
-    # m = explorer.mdp()
-    # assert m.n_states == 1081
+    assert n_states == [6, 27, 185]
 
 
 def test_v1_ghostdag3():
@@ -152,24 +107,19 @@ def test_v1_ghostdag3():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 5
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 23
+    # distance 1...
+    for _ in range(2):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 197
-
-    # distance 3
-    # explorer.explore_aside_policy()
-    # m = explorer.mdp()
-    # assert m.n_states == 1585
+    assert n_states == [6, 32, 264]
 
 
 def test_v1_bitcoin_tcc():
@@ -184,19 +134,19 @@ def test_v1_bitcoin_tcc():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 27
+    # distance 1...
+    for _ in range(2):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 152
+    assert n_states == [7, 30, 171]
 
 
 def test_v1_ghostdag3_tcc():
@@ -212,19 +162,19 @@ def test_v1_ghostdag3_tcc():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 31
+    # distance 1...
+    for _ in range(2):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 219
+    assert n_states == [7, 41, 305]
 
 
 def test_v1_bitcoin_mi():
@@ -240,19 +190,19 @@ def test_v1_bitcoin_mi():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 34
+    # distance 1...
+    for _ in range(2):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 185
+    assert n_states == [7, 41, 227]
 
 
 def test_v1_ghostdag3_mi():
@@ -269,16 +219,16 @@ def test_v1_ghostdag3_mi():
 
     explorer = Explorer(model, model.honest)
 
+    n_states = []
+
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    n_states.append(m.n_states)
 
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 28
+    # distance 1...
+    for _ in range(2):
+        explorer.explore_aside_policy()
+        m = explorer.mdp()
+        n_states.append(m.n_states)
 
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 164
+    assert n_states == [7, 37, 230]

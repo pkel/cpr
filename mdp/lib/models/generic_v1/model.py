@@ -53,10 +53,10 @@ class DAG:
         assert self._miner[0] is None
 
         x = xxhash.xxh128()
-        for i, parents in enumerate(self._parents[1:]):
-            x.update(f"{i},{self._miner[i]},")
-            for j, p in enumerate(sorted(parents)):
-                x.update(f"{j},{p},")
+        for i in range(1, len(self._parents)):  # skip genesis
+            x.update(f";{i},{self._miner[i]}")
+            for p in sorted(self._parents[i]):
+                x.update(f",{p}")
 
         return x.digest()
 
@@ -158,7 +158,7 @@ class DynObj:
 
         x = xxhash.xxh128()
         for i, (k, v) in enumerate(sorted(self._attributes.items())):
-            x.update(f"{i},{k},{v}")
+            x.update(f";{i},{k},{v}")
 
         return x.digest()
 
@@ -232,7 +232,7 @@ class Miner:
 
         x = xxhash.xxh128()
         for i, b in enumerate(sorted(self._visible)):
-            x.update(f"{i},{b},")
+            x.update(f";{i},{b}")
         x.update(self._protocol.state.fingerprint())
 
         return x.digest()
@@ -384,11 +384,11 @@ class SingleAgentImp:
         x.update(self._dag.fingerprint())
         x.update(self._attacker.fingerprint())
         x.update(self._defender.fingerprint())
-        for i, b in enumerate(sorted(self._withheld)):
-            x.update(f"{i},{b}")
-        x.update("|")
-        for i, b in enumerate(sorted(self._ignored)):
-            x.update(f"{i},{b}")
+        for b in sorted(self._withheld):
+            x.update(f",{b}")
+        x.update(";")
+        for b in sorted(self._ignored):
+            x.update(f",{b}")
 
         return x.digest()
 
