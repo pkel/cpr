@@ -772,14 +772,14 @@ class SingleAgent(ImplicitMDP):
         """
         Define valid actions.
         """
-        all_actions = s.actions()
 
+        # Force honest behavior beyond a certain DAG height
         if self.traditional_height_cutoff is not None:
             max_height = max(s.dag.height(b) for b in s.dag.all_blocks())
             if max_height >= self.traditional_height_cutoff:
-                all_actions.remove(Continue())
+                return {self.honest(s)}
 
-        return all_actions
+        return s.actions()
 
     def honest(self, s: State) -> Action:
         """

@@ -23,6 +23,10 @@ class Compiler:
             # schedule exploration
             self.queue.put(state)
 
+    @property
+    def n_states(self):
+        return len(self.state_map)
+
     def explore(self, steps=1000) -> bool:
         for i in range(steps):
             if self.queue.empty():
