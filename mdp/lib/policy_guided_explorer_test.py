@@ -126,77 +126,27 @@ def test_v1_bitcoin():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 4
-
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 21
-
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 155
-
-
-def test_v1_ghostdag3():
-    model = v1model.SingleAgent(
-        v1ghostdag.Protocol, k=3, alpha=0.25, gamma=0.33, loop_honest=True
-    )
-    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
-
-    explorer = Explorer(model, model.honest)
-
-    # distance 0
-    m = explorer.mdp()
-    assert m.n_states == 4
-
-    # distance 1
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 22
-
-    # distance 2
-    explorer.explore_aside_policy()
-    m = explorer.mdp()
-    assert m.n_states == 172
-
-
-def test_v1_bitcoin_tcc():
-    model = v1model.SingleAgent(
-        v1bitcoin.Protocol,
-        alpha=0.25,
-        gamma=0.33,
-        collect_garbage=True,
-        truncate_common_chain=True,
-    )
-    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
-
-    explorer = Explorer(model, model.honest)
-
-    # distance 0
-    m = explorer.mdp()
     assert m.n_states == 5
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 21
+    assert m.n_states == 24
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 138
+    assert m.n_states == 169
+
+    # distance 3
+    # explorer.explore_aside_policy()
+    # m = explorer.mdp()
+    # assert m.n_states == 1081
 
 
-def test_v1_ghostdag3_tcc():
+def test_v1_ghostdag3():
     model = v1model.SingleAgent(
-        v1ghostdag.Protocol,
-        k=3,
-        alpha=0.25,
-        gamma=0.33,
-        collect_garbage=True,
-        truncate_common_chain=True,
+        v1ghostdag.Protocol, k=3, alpha=0.25, gamma=0.33, loop_honest=True
     )
     model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
 
@@ -214,7 +164,67 @@ def test_v1_ghostdag3_tcc():
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 170
+    assert m.n_states == 197
+
+    # distance 3
+    # explorer.explore_aside_policy()
+    # m = explorer.mdp()
+    # assert m.n_states == 1585
+
+
+def test_v1_bitcoin_tcc():
+    model = v1model.SingleAgent(
+        v1bitcoin.Protocol,
+        alpha=0.25,
+        gamma=0.33,
+        collect_garbage=True,
+        truncate_common_chain=True,
+    )
+    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
+
+    explorer = Explorer(model, model.honest)
+
+    # distance 0
+    m = explorer.mdp()
+    assert m.n_states == 6
+
+    # distance 1
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 27
+
+    # distance 2
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 152
+
+
+def test_v1_ghostdag3_tcc():
+    model = v1model.SingleAgent(
+        v1ghostdag.Protocol,
+        k=3,
+        alpha=0.25,
+        gamma=0.33,
+        collect_garbage=True,
+        truncate_common_chain=True,
+    )
+    model = PTO_wrapper(model, horizon=100, terminal_state=terminal_state)
+
+    explorer = Explorer(model, model.honest)
+
+    # distance 0
+    m = explorer.mdp()
+    assert m.n_states == 6
+
+    # distance 1
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 31
+
+    # distance 2
+    explorer.explore_aside_policy()
+    m = explorer.mdp()
+    assert m.n_states == 219
 
 
 def test_v1_bitcoin_mi():
@@ -232,17 +242,17 @@ def test_v1_bitcoin_mi():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 5
+    assert m.n_states == 6
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 21
+    assert m.n_states == 34
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 110
+    assert m.n_states == 185
 
 
 def test_v1_ghostdag3_mi():
@@ -261,14 +271,14 @@ def test_v1_ghostdag3_mi():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 5
+    assert m.n_states == 6
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 20
+    assert m.n_states == 28
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 103
+    assert m.n_states == 164
