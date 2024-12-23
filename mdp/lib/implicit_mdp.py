@@ -120,6 +120,22 @@ class PTO_wrapper(Model):
                 )
                 transitions.append(continue_t)
 
+                # one transition for termination
+                term_p = 1 - continue_p
+                term_t = Transition(
+                    probability=t.probability * term_p,
+                    state=self.terminal,
+                    reward=0.0,
+                    progress=0.0,
+                    effect=None,
+                )
+                transitions.append(term_t)
+
+                # I previously had two variants of doing a fair shutdown here.
+                # I think this is not required anymore. If it's required, it's
+                # still the wrong place doing it here.
+                continue
+
                 # multiple transitions for shutdown
                 term_p = 1 - continue_p
                 for st in self.unwrapped.shutdown(state):
