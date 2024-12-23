@@ -474,8 +474,6 @@ class SingleAgentImp:
             b = self._dag.append(parents, 0)
             self._ignored.add(b)
             self._withheld.add(b)
-            if self._force_consider_own:
-                self.do_consider(b)
         else:
             parents = self._defender.mining()
             b = self._dag.append(parents, 1)
@@ -496,7 +494,12 @@ class SingleAgentImp:
     def actions(self) -> set[Action]:
         acc = {Continue()}
 
-        for b in self.to_consider():
+        for b in sorted(self.to_consider()):
+            # We simplify the model by forcing the attacker to consider its own
+            # blocks.
+            if self._force_consider_own and self._dag.miner_of(b) == 0:
+                return {Consider(block=b)}
+
             acc.add(Consider(block=b))
 
         for b in self.to_release():
@@ -505,13 +508,20 @@ class SingleAgentImp:
         return acc
 
     def _honest(self) -> Action:
-        to_consider = self._dag.topological_order(self.to_consider())
-        if len(to_consider) > 0:
-            return Consider(block=to_consider[0])
+        to_consider = sorted(self.to_consider())
 
-        to_release = self._dag.topological_order(self.to_release())
+        # We craft honest policy to overlap with possible actions.
+        if self._force_consider_own:
+            for b in to_consider:
+                if self._dag.miner_of(b) == 0:
+                    return Consider(block=b)
+
+        to_release = sorted(self.to_release())
         if len(to_release) > 0:
             return Release(block=to_release[0])
+
+        if len(to_consider) > 0:
+            return Consider(block=to_consider[0])
 
         return Continue()
 

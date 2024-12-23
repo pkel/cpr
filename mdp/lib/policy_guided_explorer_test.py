@@ -126,22 +126,17 @@ def test_v1_bitcoin():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 5
+    assert m.n_states == 4
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 24
+    assert m.n_states == 21
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 169
-
-    # distance 3
-    # explorer.explore_aside_policy()
-    # m = explorer.mdp()
-    # assert m.n_states == 1081
+    assert m.n_states == 155
 
 
 def test_v1_ghostdag3():
@@ -154,22 +149,17 @@ def test_v1_ghostdag3():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 5
+    assert m.n_states == 4
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 23
+    assert m.n_states == 22
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 197
-
-    # distance 3
-    # explorer.explore_aside_policy()
-    # m = explorer.mdp()
-    # assert m.n_states == 1585
+    assert m.n_states == 172
 
 
 def test_v1_bitcoin_tcc():
@@ -186,17 +176,17 @@ def test_v1_bitcoin_tcc():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    assert m.n_states == 5
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 27
+    assert m.n_states == 21
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 152
+    assert m.n_states == 138
 
 
 def test_v1_ghostdag3_tcc():
@@ -214,17 +204,17 @@ def test_v1_ghostdag3_tcc():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    assert m.n_states == 5
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 31
+    assert m.n_states == 23
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 219
+    assert m.n_states == 170
 
 
 def test_v1_bitcoin_mi():
@@ -242,17 +232,17 @@ def test_v1_bitcoin_mi():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    assert m.n_states == 5
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 34
+    assert m.n_states == 21
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 185
+    assert m.n_states == 110
 
 
 def test_v1_ghostdag3_mi():
@@ -271,14 +261,14 @@ def test_v1_ghostdag3_mi():
 
     # distance 0
     m = explorer.mdp()
-    assert m.n_states == 6
+    assert m.n_states == 5
 
     # distance 1
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 28
+    assert m.n_states == 20
 
     # distance 2
     explorer.explore_aside_policy()
     m = explorer.mdp()
-    assert m.n_states == 164
+    assert m.n_states == 103
