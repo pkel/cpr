@@ -4,7 +4,7 @@ from .protocols.interface import Protocol
 from dataclasses import dataclass
 from typing import Optional, NewType
 import copy
-import igraph
+import pynauty
 import random
 import subprocess
 import xxhash
@@ -591,22 +591,51 @@ class SingleAgentImp:
     def canonical_order(self, *, colors=None):
         # see models/generic_v0/model.py:canonically_ordered for explanations
 
-        g = igraph.Graph(directed=True)
-        g.add_vertices(self._dag.size())
-        for b in self._dag.all_blocks():
-            g.add_edges([(b, p) for p in self._dag.parents(b)])
+        if colors is None:
+            coloring = dict()
+        else:
+            assert len(colors) == self._dag.size()
 
-        canonical_labels_for_old_blocks = g.canonical_permutation(color=colors)
+            color_sets = dict()
+            for b, c in enumerate(colors):
+                if c not in color_sets:
+                    color_sets[c] = set()
+                color_sets[c].add(b)
+
+            vc = [color_sets[c] for c in sorted(color_sets.keys())]
+
+            coloring = dict(vertex_coloring=vc)
+
+        g = pynauty.Graph(
+            self._dag.size(),
+            directed=True,
+            adjacency_dict={
+                b: sorted(self._dag.parents(b)) for b in self._dag.all_blocks()
+            },
+            **coloring,
+        )
+
+        canon_label = pynauty.canon_label(g)
+
+        assert isinstance(canon_label, list)
+        assert isinstance(canon_label[0], int)
+        assert len(canon_label) == self._dag.size()
+
+        old_blocks_in_canonical_order = canon_label
 
         # In principle we have a canonical ordering now. It does not respect an
         # important invariant of the DAG class though: block ids are
         # topologically ordered. We fix this here. A deterministic permutation
         # of a canonical ordering is still canonical!
 
+        new_positions_of_old_blocks = {
+            old: new for new, old in enumerate(old_blocks_in_canonical_order)
+        }
+
         prioritized_blocks = [
             (
                 self._dag.height(b),
-                canonical_labels_for_old_blocks[b],
+                new_positions_of_old_blocks[b],
                 self._dag.miner_of(b) if b != self._dag.genesis else -1,
                 b,
             )
