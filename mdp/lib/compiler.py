@@ -8,7 +8,6 @@ class Compiler:
         self.model = model
         self.queue = queue.Queue()
         self.state_map = dict()  # maps state to integer
-        self.action_map = dict()  # maps action to integer
         self.explored = set()  # ids of already explored states
         self._mdp = MDP()
 
@@ -25,7 +24,7 @@ class Compiler:
 
     @property
     def n_states(self):
-        return len(self.state_map)
+        return self._mdp.n_states
 
     def explore(self, steps=1000) -> bool:
         for i in range(steps):
@@ -77,10 +76,14 @@ class Compiler:
         )
         self._mdp.add_transition(state_id, action_id, t)
 
-    def mdp(self):
+    def mdp(self, finish_exploration=True):
         # exploration might be incomplete
-        while self.queue.qsize() > 0:
-            self.step()
+        if finish_exploration:
+            while self.queue.qsize() > 0:
+                self.step()
+        else:
+            if self.queue.qsize() > 0:
+                raise RuntimeError("unfished exploration")
 
         self._mdp.check()
 
