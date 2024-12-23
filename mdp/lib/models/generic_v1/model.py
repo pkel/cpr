@@ -703,6 +703,7 @@ class SingleAgent(ImplicitMDP):
         alpha,
         gamma,
         collect_garbage=False,
+        dag_size_cutoff=None,  # int; force abort attack at dag size
         loop_honest=False,
         merge_isomorphic=False,
         reward_common_chain=False,  # instead of defender chain
@@ -715,6 +716,7 @@ class SingleAgent(ImplicitMDP):
         self.alpha = alpha
         self.gamma = gamma
         self.collect_garbage = collect_garbage
+        self.dag_size_cutoff = dag_size_cutoff
         self.loop_honest = loop_honest
         self.merge_isomorphic = merge_isomorphic
         self.reward_common_chain = reward_common_chain
@@ -763,10 +765,13 @@ class SingleAgent(ImplicitMDP):
         Define valid actions.
         """
 
-        # Force honest behavior beyond a certain DAG height
+        # Force honest behavior beyond a certain DAG height / size
         if self.traditional_height_cutoff is not None:
             max_height = max(s.dag.height(b) for b in s.dag.all_blocks())
             if max_height >= self.traditional_height_cutoff:
+                return {self.honest(s)}
+        if self.dag_size_cutoff is not None:
+            if s.dag.size() >= self.dag_size_cutoff:
                 return {self.honest(s)}
 
         return s.actions()
