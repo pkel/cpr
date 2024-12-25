@@ -684,7 +684,9 @@ class SingleAgentImp:
         lbls = []
         lns = []
         for b in self._dag.all_blocks():
-            if self._dag.miner_of(b) == 0:
+            if b == self._dag.genesis:
+                lbl = f"{b}: genesis"
+            elif self._dag.miner_of(b) == 0:
                 lbl = f"{b}: atk"
             else:
                 lbl = f"{b}: def"
@@ -1032,33 +1034,10 @@ class SingleAgent(ImplicitMDP):
 
         assert atk_hist[0] == state.dag.genesis == def_hist[0]
 
-        # Heuristic for finding point of truncation:
-        # - the latest viable genesis block on the common history
-        # - past and future of this block must cover the whole DAG
-        # - removing the past must leave behind a unique root
-
-        # Note: The heuristic breaks for protocols producing stale blocks.
-        #
-        # Consider the following scenario in Bitcoin:
-        # +-------------+     +--------+
-        # |   1: atk    | --> | 0: def | <--------------------+
-        # +-------------+     +--------+                      |
-        #                                                     |
-        # +-------------+     +--------+     +--------+     +--------+
-        # | 5: def, ign | --> | 4: atk | --> | 3: def | --> | 2: def |
-        # +-------------+     +--------+     +--------+     +--------+
-        # attacker: {'head': 4}
-        # defender: {'head': 4}
-        #
-        # 0 is the old genesis
-        # 0, 2, 3, 4 is the common chain
-        # 4 should be the new genesis
-        # removing 0, 2, 3 would leave behind 1 as another root
-        # 1 is a stale/irrelevant block
-        #
-        # My solution is to let the protocol (spec) decide which blocks are
-        # still relevant; then remove irrelevant blocks on each iteration.
-        # See copy_and_collect_garbage().
+        # Find latest block on common history that can serve as the new
+        # genesis block. We will remove its past. This should not change the
+        # semantics of the DAG and it should leave behind a single root block.
+        # git blame this for more information.
 
         next_genesis = state.dag.genesis
 
@@ -1068,16 +1047,14 @@ class SingleAgent(ImplicitMDP):
                 # histories have diverged; no further truncation possible
                 break
 
-            # does removing the past of b leave b as a single root block?
-            # if yes: b can serve as next genesis block
             past = state.dag.past(b)
-            b_is_viable = True
+            past_and_b = {b} | past
 
+            b_is_viable = True
             for pb in past:
-                if len(state.dag.children(pb) - past - {b}) > 0:
+                if not all(c in past_and_b for c in state.dag.children(pb)):
                     b_is_viable = False
                     break
-
             if b_is_viable:
                 next_genesis = b
 
@@ -1085,9 +1062,12 @@ class SingleAgent(ImplicitMDP):
         # truncate past of next_genesis
 
         if next_genesis == state.dag.genesis:
-            return (state, next_genesis)
+            # no truncation happens
+            return (state, state.dag.genesis)
 
         subset = {next_genesis} | state.dag.future(next_genesis)
+
+        assert subset == state.dag.all_blocks() - state.dag.past(next_genesis)
 
         ordered_subset = state.dag.topological_order(subset)
         assert ordered_subset[0] == next_genesis
