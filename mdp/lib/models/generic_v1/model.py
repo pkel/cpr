@@ -794,22 +794,20 @@ class SingleAgent(ImplicitMDP):
         Define valid actions.
         """
 
-        all_actions = s.actions()
-
-        # Enforce artificial limits on DAG height / size
-        # We do this by removing the Continue action if the limit is reached
-        # This is similar to removing the Wait action in fc16sapirshtein and
-        # aft20barzur. Another option would be to force honest behavior, but
-        # this might be more restrictive.
+        # Force honest behavior beyond a certain DAG height / size.
+        # Note: The traditional models (fc16/aft20) force aborting the attack
+        # by forbidding the Wait action. We could do the same here, by
+        # forbidding the Continue action. But this does not work here, because
+        # the Release action is executed only with the next Continue step.
         if self.traditional_height_cutoff is not None:
             max_height = max(s.dag.height(b) for b in s.dag.all_blocks())
             if max_height >= self.traditional_height_cutoff:
-                return all_actions - {Continue()}
+                return {self.honest(s)}
         if self.dag_size_cutoff is not None:
             if s.dag.size() >= self.dag_size_cutoff:
-                return all_actions - {Continue()}
+                return {self.honest(s)}
 
-        return all_actions
+        return s.actions()
 
     def honest(self, s: State) -> Action:
         """
