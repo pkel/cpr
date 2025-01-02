@@ -37,34 +37,53 @@ class BState:  # Bitcoin State
 
 
 class BitcoinSM(Model):
-    def __init__(self, *args, alpha: float, gamma: float, maximum_fork_length: int):
+    def __init__(
+        self,
+        *args,
+        alpha: float,
+        gamma: float,
+        maximum_fork_length: int,
+        maximum_dag_size: int = 0,
+    ):
         if alpha < 0 or alpha >= 0.5:
             raise ValueError("alpha must be between 0 and 0.5")
         if gamma < 0 or gamma > 1:
             raise ValueError("gamma must be between 0 and 1")
-        if maximum_fork_length <= 0:
-            raise ValueError("maximum_fork_length must be greater 0")
 
         self.alpha = alpha
         self.gamma = gamma
         self.mfl = maximum_fork_length
+        self.mds = maximum_dag_size
 
     def __repr__(self):
         return (
             f"aft20barzur.BitcoinSM("
             f"alpha={self.alpha}, "
             f"gamma={self.gamma}, "
-            f"maximum_fork_length={self.mfl})"
+            f"maximum_fork_length={self.mfl}, "
+            f"maximum_dag_size={self.mds})"
         )
 
     def start(self) -> list[tuple[BState, float]]:
         s = BState(a=0, h=0, fork=IRRELEVANT)
         return [(s, 1)]
 
+    def truncate_state_space(self, s: BState) -> bool:
+        # based on fork length; original approach
+        if self.mfl > 0 and (s.a >= self.mfl or s.h >= self.mfl):
+            return True
+
+        # based on number of blocks (size of BlockDAG); implemented to allow
+        # comparison to my generic models
+        if self.mds > 0 and (s.a + s.h + 1 >= self.mds):
+            return True
+
+        return False
+
     def actions(self, s: BState) -> list[Action]:
         actions = []
         # truncation: allow mining only up to a certain point
-        if self.mfl < 1 or (s.a < self.mfl and s.h < self.mfl):
+        if not self.truncate_state_space(s):
             actions.append(WAIT)
         # override/match when it makes sense
         if s.a > s.h:
@@ -104,7 +123,6 @@ class BitcoinSM(Model):
                     progress=0,
                 )
             )
-            assert snew.a <= self.mfl
 
             # defender mines block
             snew = BState(a=s.a, h=s.h + 1, fork=RELEVANT)
@@ -116,7 +134,6 @@ class BitcoinSM(Model):
                     progress=0,
                 )
             )
-            assert snew.h <= self.mfl
         else:
             # attacker mines block
             snew = BState(a=s.a + 1, h=s.h, fork=ACTIVE)
@@ -128,7 +145,6 @@ class BitcoinSM(Model):
                     progress=0,
                 )
             )
-            assert snew.a <= self.mfl
 
             # defender mines on top of attacker's chain
             # NOTE The paper assigns probability alpha * gamma on p.8
@@ -157,7 +173,6 @@ class BitcoinSM(Model):
                     progress=0,
                 )
             )
-            assert snew.h <= self.mfl
 
         return t
 
