@@ -36,10 +36,9 @@ class Protocol0(Interface):
             return self.history_of(parent) + [block]
 
     def parent_and_uncles(self, block):
-        parents_with_prio = [(-self.height(p), p) for p in self.parents(block)]
-        prioritized_parents = [p for _, p in sorted(parents_with_prio)]
-        if len(prioritized_parents) > 0:
-            return prioritized_parents[0], set(prioritized_parents[1:])
+        ranked = sorted(self.parents(block), key=lambda p: -self.height(p))
+        if len(ranked) > 0:
+            return ranked[0], set(ranked[1:])
         else:
             return None, set()
 

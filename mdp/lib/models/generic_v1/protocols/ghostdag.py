@@ -20,9 +20,8 @@ class Protocol0(Interface):
         blue = blue[b_max] | {b_max}
         hist = hist[b_max] + [b_max]
 
-        for b in sorted(
-            self.anticone(G, b_max), key=lambda b: (self.height(b), hash(b))
-        ):
+        ac = self.anticone(G, b_max)
+        for b in sorted(ac, key=lambda b: (self.height(b), hash(b))):
             if self.is_k_cluster(G, blue | {b}):
                 blue = blue | {b}
                 hist = hist + [b]  # only blue blocks get a reward
