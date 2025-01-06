@@ -11,8 +11,8 @@ class Protocol(Ethereum):
         return {self.state.head} | set(ranked[0:2])
 
     def update(self, block):
-        prg_new = [self.progress(b) for b in self.history_of(block)]
-        prg_old = [self.progress(b) for b in self.history_of(self.state.head)]
+        prg_new = sum(self.progress(b) for b in self.history_of(block))
+        prg_old = sum(self.progress(b) for b in self.history_of(self.state.head))
         if prg_new > prg_old:
             self.state.head = block
 
