@@ -23,6 +23,7 @@ def load_protocol(name, dag, state):
         module.height = dag.height
         module.topological_order = dag.topological_order
         module.G = {dag.genesis}
+        module.me = 0
 
     miner = load_listing(name)
     patch_globals(miner)

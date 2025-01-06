@@ -6,7 +6,7 @@ from typing import Callable
 class SingleMinerSim:
     def __init__(self, protocol: type[Protocol], *args, **kwargs):
         self.dag = DAG()
-        self.miner = Miner(self.dag, protocol, *args, **kwargs)
+        self.miner = Miner(self.dag, protocol, *args, **kwargs, id=0)
 
     def step(self):
         parents = self.miner.mining()
@@ -67,9 +67,9 @@ class NetworkSim(DiscreteEventSim):
 
         self.dag = DAG()
         self.miners = [
-            Miner(self.dag, protocol, *args, **kwargs) for i in range(n_miners)
+            Miner(self.dag, protocol, *args, **kwargs, id=i) for i in range(n_miners)
         ]
-        self.judge = Miner(self.dag, protocol, *args, **kwargs)
+        self.judge = Miner(self.dag, protocol, *args, **kwargs, id=None)
 
         self.mining_delay = mining_delay
         self.select_miner = select_miner

@@ -16,11 +16,13 @@ class Protocol0(Interface):
         blue, hist = dict(), dict()
         for b in self.tips(G):
             blue[b], hist[b] = self.history_of(self.past(G, b))
-        b_max = max((len(blue[b]), hash(b), b) for b in self.tips(G))[2]
+        b_max = sorted(self.tips(G), key=lambda b: (-len(blue[b]), hash(b)))[0]
         blue = blue[b_max] | {b_max}
         hist = hist[b_max] + [b_max]
 
-        for b in self.topological_order(self.anticone(G, b_max)):
+        for b in sorted(
+            self.anticone(G, b_max), key=lambda b: (self.height(b), hash(b))
+        ):
             if self.is_k_cluster(G, blue | {b}):
                 blue = blue | {b}
                 hist = hist + [b]  # only blue blocks get a reward

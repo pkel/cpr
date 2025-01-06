@@ -188,9 +188,10 @@ class DynObj:
 
 
 class Miner:
-    def __init__(self, dag: DAG, protocol: type[Protocol], *args, **kwargs):
+    def __init__(self, dag: DAG, protocol: type[Protocol], *args, id, **kwargs):
         self._dag = dag
         self._protocol_fn = lambda: protocol(*args, **kwargs)
+        self._id = id
 
         self._visible = {dag.genesis}
         self._load_protocol_spec()
@@ -205,6 +206,7 @@ class Miner:
         new = self.__class__.__new__(self.__class__)
         new._dag = dag
         new._protocol_fn = self._protocol_fn
+        new._id = self._id
 
         new._visible = self._visible.copy()
         new._load_protocol_spec()
@@ -225,6 +227,7 @@ class Miner:
         self._protocol.topological_order = self._dag.topological_order
         self._protocol.height = self._dag.height
         self._protocol.miner_of = self._dag.miner_of
+        self._protocol.me = self._id
 
     def fingerprint(self):
         if not self._frozen:
@@ -337,14 +340,13 @@ class SingleAgentImp:
     def __init__(
         self, protocol: type[Protocol], *args, force_consider_own=False, **kwargs
     ):
-        self._miner_fn = lambda dag: Miner(dag, protocol, *args, **kwargs)
         self._force_consider_own = force_consider_own
 
         self._dag = DAG()
         self._ignored = set()
         self._withheld = set()
-        self._attacker = self._miner_fn(self._dag)
-        self._defender = self._miner_fn(self._dag)
+        self._attacker = Miner(self._dag, protocol, *args, **kwargs, id=0)
+        self._defender = Miner(self._dag, protocol, *args, **kwargs, id=1)
 
         # the object can be frozen
         self._frozen = False
@@ -529,7 +531,6 @@ class SingleAgentImp:
 
     def copy(self):
         new = self.__class__.__new__(self.__class__)
-        new._miner_fn = self._miner_fn
         new._force_consider_own = self._force_consider_own
         new._dag = self._dag.copy()
         new._ignored = self._ignored.copy()
@@ -564,7 +565,6 @@ class SingleAgentImp:
         new_ids = {b: i for i, b in enumerate(order)}
 
         new = self.__class__.__new__(self.__class__)
-        new._miner_fn = self._miner_fn
         new._force_consider_own = self._force_consider_own
 
         new._dag = DAG()

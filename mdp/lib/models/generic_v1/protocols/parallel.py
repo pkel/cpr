@@ -12,7 +12,9 @@ class Protocol0(Interface):
     def mining(self):
         votes = self.children(self.state.head)
         if len(votes) >= self.k:
-            return {votes.pop() for _ in range(self.k)}
+            # choose k votes, own votes first
+            ranked = sorted(votes, key=lambda v: self.miner_of(v) != self.me)
+            return set(ranked[0 : self.k])
         return {self.state.head}
 
     def update(self, block):

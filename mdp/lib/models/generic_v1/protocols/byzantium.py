@@ -6,9 +6,9 @@ from .ethereum import Protocol as Ethereum
 class Protocol(Ethereum):
     def mining(self):
         uncles = self.available_uncles()
-        while len(uncles) > 2:
-            uncles.pop()
-        return {self.state.head} | uncles
+        # choose at most 2 uncles, own blocks first
+        ranked = sorted(uncles, key=lambda u: self.miner_of(u) != self.me)
+        return {self.state.head} | set(ranked[0:2])
 
     def update(self, block):
         prg_new = [self.progress(b) for b in self.history_of(block)]
