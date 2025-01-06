@@ -4,7 +4,7 @@ from .interface import Protocol as Interface
 
 @listing("ghostdag")
 class Protocol0(Interface):
-    k: int = ...
+    k: int = 3
 
     def mining(self):
         return self.tips(self.G)
@@ -42,9 +42,7 @@ class Protocol0(Interface):
 
 @listing("ghostdag_util")
 class Protocol1(Protocol0):
-    k = 3
-
-    # omitted, boring helper functions
+    # protocol helper functions
 
     def tips(self, subgraph):
         return {b for b in subgraph if len(self.children(b) & subgraph) == 0}
@@ -74,7 +72,7 @@ class Protocol1(Protocol0):
             - self.future(subgraph, block)
         )
 
-    # omitted, boring protocol spec functions
+    # remaining protocol specification functions
 
     def init(self):
         pass

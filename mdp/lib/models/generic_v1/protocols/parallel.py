@@ -4,7 +4,7 @@ from .interface import Protocol as Interface
 
 @listing("parallel")
 class Protocol0(Interface):
-    k: int = ...
+    k: int = 3
 
     def init(self):
         self.state.head = self.genesis

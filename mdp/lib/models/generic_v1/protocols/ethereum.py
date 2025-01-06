@@ -4,7 +4,7 @@ from .interface import Protocol as Interface
 
 @listing("ethereum")
 class Protocol0(Interface):
-    horizon: int = 7
+    h: int = 3
 
     def init(self):
         self.state.head = self.genesis
@@ -14,7 +14,7 @@ class Protocol0(Interface):
 
     def available_uncles(self):
         hist = self.history_of(self.state.head)
-        allowed_parents = set(hist[-self.horizon - 1 : -2])
+        allowed_parents = set(hist[-self.h - 1 : -2])
         uncles = set()
         leaves = {b for b in self.G if len(self.children(b)) == 0}
         for b in leaves:
@@ -56,12 +56,10 @@ class Protocol0(Interface):
 
 class Protocol(Protocol0):
     def __init__(self, h: int = 7):
-        # we call the parameter h here instead of horizon to avoid
-        # overlap with PTO's horizon
         if h < 2:
-            print("WARNING: Ethereum uncles are feasible for horizon >= 2 only")
+            print("WARNING: Ethereum uncles are feasible for horizon h >= 2 only")
 
-        self.horizon = h
+        self.h = h
 
     def relabel_state(self, new_ids):
         self.state.head = new_ids[self.state.head]

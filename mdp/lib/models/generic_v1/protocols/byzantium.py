@@ -24,7 +24,7 @@ class Protocol(Ethereum):
         _, uncles = self.parent_and_uncles(block)
         lst = [(self.miner_of(block), 1 + 0.3125 * len(uncles))]
         h = self.height(block)
-        max_d = self.horizon + 1
+        max_d = self.h + 1
         for u in uncles:
             d = h - self.height(u)
             lst.append((self.miner_of(u), (max_d - d) / max_d))
