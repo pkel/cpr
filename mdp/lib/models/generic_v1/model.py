@@ -733,7 +733,7 @@ class SingleAgent(ImplicitMDP):
         *args,
         alpha,
         gamma,
-        collect_garbage=False,  # "judge", "simple", None, True (=judge), False (=None)
+        collect_garbage=False,  # "judge", "simple", None, True (=simple), False (=None)
         dag_size_cutoff=None,  # int; force abort attack at dag size
         loop_honest=False,
         merge_isomorphic=False,
@@ -755,7 +755,7 @@ class SingleAgent(ImplicitMDP):
 
         if isinstance(collect_garbage, bool):
             if collect_garbage:
-                self.collect_garbage = "judge"
+                self.collect_garbage = "simple"
             else:
                 self.collect_garbage = None
         else:

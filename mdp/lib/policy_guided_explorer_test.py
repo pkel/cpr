@@ -146,7 +146,7 @@ def test_v1_bitcoin_tcc():
         m = explorer.mdp()
         n_states.append(m.n_states)
 
-    assert n_states == [7, 14, 24]
+    assert n_states == [7, 30, 171]
 
 
 def test_v1_ghostdag3_tcc():
@@ -202,7 +202,7 @@ def test_v1_bitcoin_mi():
         m = explorer.mdp()
         n_states.append(m.n_states)
 
-    assert n_states == [7, 14, 24]
+    assert n_states == [7, 41, 227]
 
 
 def test_v1_ghostdag3_mi():
