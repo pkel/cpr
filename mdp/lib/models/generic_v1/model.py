@@ -575,8 +575,8 @@ class SingleAgentImp:
             miner = self._dag.miner_of(b)
             new._dag.append(new_parents, miner)
 
-        new._ignored = {new_ids[b] for b in self._ignored}
-        new._withheld = {new_ids[b] for b in self._withheld}
+        new._ignored = {new_ids[b] for b in self._ignored if b in new_ids}
+        new._withheld = {new_ids[b] for b in self._withheld if b in new_ids}
 
         new._attacker = self._attacker.copy_onto(new._dag)
         new._attacker.relabel_state(new_ids)
@@ -733,7 +733,7 @@ class SingleAgent(ImplicitMDP):
         *args,
         alpha,
         gamma,
-        collect_garbage=False,
+        collect_garbage=False,  # "judge", "simple", None, True (=judge), False (=None)
         dag_size_cutoff=None,  # int; force abort attack at dag size
         loop_honest=False,
         merge_isomorphic=False,
@@ -746,13 +746,20 @@ class SingleAgent(ImplicitMDP):
         assert 0 <= gamma <= 1
         self.alpha = alpha
         self.gamma = gamma
-        self.collect_garbage = collect_garbage
         self.dag_size_cutoff = dag_size_cutoff
         self.loop_honest = loop_honest
         self.merge_isomorphic = merge_isomorphic
         self.reward_common_chain = reward_common_chain
         self.traditional_height_cutoff = traditional_height_cutoff
         self.truncate_common_chain = truncate_common_chain
+
+        if isinstance(collect_garbage, bool):
+            if collect_garbage:
+                self.collect_garbage = "judge"
+            else:
+                self.collect_garbage = None
+        else:
+            self.collect_garbage = collect_garbage
 
         if truncate_common_chain and loop_honest:
             raise ValueError("choose either truncate_common_chain or loop_honest")
@@ -961,11 +968,12 @@ class SingleAgent(ImplicitMDP):
 
         return transitions
 
-    def copy_and_collect_garbage(self, state):
+    def collect_garbage_simple(self, state):
         # we keep blocks
         # - which are not visible to either party
         # - which are marked relevant by either party
         # - the closure w.r.t the parents relationship
+
         keep = set()
 
         all_blocks = state.dag.all_blocks()
@@ -976,6 +984,40 @@ class SingleAgent(ImplicitMDP):
 
         for b in keep.copy():
             keep |= state.dag.past(b)
+
+        return keep
+
+    def collect_garbage_judge(self, state):
+        # we keep blocks
+        # - which are marked relevant by either party
+        # - that the defender would keep after learning about all blocks
+        # - the closure w.r.t the parents relationship
+
+        judge = state.defender.copy_onto(state.dag)
+        missing_blocks = state.dag.all_blocks() - judge.visible
+        for b in state.dag.topological_order(missing_blocks):
+            judge.deliver(b)
+
+        keep = judge.collect_garbage()
+        keep |= state.attacker.collect_garbage()
+        keep |= state.defender.collect_garbage()
+
+        for b in keep.copy():
+            keep |= state.dag.past(b)
+
+        return keep
+
+    def copy_and_collect_garbage(self, state):
+        if self.collect_garbage == "simple":
+            keep = self.collect_garbage_simple(state)
+        elif self.collect_garbage == "judge":
+            keep = self.collect_garbage_judge(state)
+        elif self.collect_garbage is None:
+            raise Exception("collecting garbage although self.collect_garbage is None")
+        else:
+            raise Exception(
+                "invalid value for self.collect_garbage: " + repr(self.collect_garbage)
+            )
 
         ordered_keep = state.dag.topological_order(keep)
 
