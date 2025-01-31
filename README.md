@@ -15,7 +15,7 @@ I'm working on [a website](https://pkel.github.io/cpr/) with more details.
 ##### Related Work
 
 - CPR was inspired by my previous work on HotPoW and Parallel Proof-of-Work
-  / $\mathcal B_k$. (Neetwork Simulation)
+  / $\mathcal B_k$. (Network Simulation)
   [[code]](https://github.com/pkel/hotpow)
   [[preprint]](https://arxiv.org/abs/1907.13531)
   [[AFT'22 paper]](https://arxiv.org/abs/2204.00034)
@@ -23,8 +23,12 @@ I'm working on [a website](https://pkel.github.io/cpr/) with more details.
   (Network Simulation, RL)
   [[preprint]](https://arxiv.org/abs/2306.12206)
   [[AFT'23 paper]](https://drops.dagstuhl.de/storage/00lipics/lipics-vol282-aft2023/LIPIcs.AFT.2023.6/LIPIcs.AFT.2023.6.pdf)
+- I've applied CPR to analyze a few DAG-based proof-of-work protocol
+  proposals. (RL)
+  [[preprint]](https://arxiv.org/abs/2312.03111)
 - I've applied CPR to analyze GhostDAG and other DAG-based proof-of-work
   protocols (MDP)
+  [[early]](https://arxiv.org/abs/2309.11924)
   [[pull-request]](https://github.com/pkel/cpr/pull/51)
   [[preprint]](https://arxiv.org/abs/2501.10888)
 
