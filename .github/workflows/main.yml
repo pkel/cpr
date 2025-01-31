@@ -45,7 +45,7 @@ jobs:
             cp _build/default/simulator/gym/cpr_gym_engine.so ./
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cpr_gym_engine-${{ matrix.os }}-ocaml-${{ matrix.ocaml-compiler }}
           path: cpr_gym_engine.so
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Download engine DLL
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: cpr_gym_engine-ubuntu-22.04-ocaml-4.12.1
           path: ./gym/ocaml/
