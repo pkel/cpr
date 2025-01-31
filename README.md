@@ -6,6 +6,7 @@ consensus protocols. In this repository you find
 - implementations of known attacks against these protocols,
 - a simulator that executes the specified protocols and attacks in a
   virtual environment,
+- tooling for automatic attack-search with MDPs and
 - tooling for automatic attack-search with reinforcement learning (RL) and
 - evaluation scripts and notebooks for the above.
 
@@ -13,13 +14,19 @@ I'm working on [a website](https://pkel.github.io/cpr/) with more details.
 
 ##### Related Work
 
-- CPR was inspired by previous work on HotPoW and Parallel Proof-of-Work
-  / $\mathcal B_k$.
+- CPR was inspired by my previous work on HotPoW and Parallel Proof-of-Work
+  / $\mathcal B_k$. (Neetwork Simulation)
   [[code]](https://github.com/pkel/hotpow)
   [[preprint]](https://arxiv.org/abs/1907.13531)
   [[AFT'22 paper]](https://arxiv.org/abs/2204.00034)
-- We applied CPR to analyze the Tailstorm consensus and cryptocurrency.
+- I've applied CPR to analyze the Tailstorm consensus and cryptocurrency.
+  (Network Simulation, RL)
   [[preprint]](https://arxiv.org/abs/2306.12206)
+  [[AFT'23 paper]](https://drops.dagstuhl.de/storage/00lipics/lipics-vol282-aft2023/LIPIcs.AFT.2023.6/LIPIcs.AFT.2023.6.pdf)
+- I've applied CPR to analyze GhostDAG and other DAG-based proof-of-work
+  protocols (MDP)
+  [[pull-request]](https://github.com/pkel/cpr/pull/51)
+  [[preprint]](https://arxiv.org/abs/2501.10888)
 
 
 ## Python/RL Quickstart
