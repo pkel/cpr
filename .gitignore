@@ -14,3 +14,5 @@ _venv/
 
 saved_models/
 wandb/
+
+.envrc
