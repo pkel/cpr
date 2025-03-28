@@ -52,8 +52,8 @@ first in case of a block race.
 I like this approach because it reduces a wide variety of possible
 network conditions into a single, explainable parameter. The big
 drawback is the close coupling of the definition with the [attacked
-protocol]({{< protocol "nakamoto" >}}) and the [corresponding attack
-space](#missing-pieces).
+protocol]({{< protocol "nakamoto" >}}) and the corresponding attack
+space.
 
 ## CPR's Generic Network
 
@@ -65,8 +65,8 @@ sending node, outgoing connection, and message.
 
 {{< img-figure src="net4.png" alt="Fully-connected network with 4 nodes" >}}
 CPR network example. Circles represent nodes, arrows represent outgoing
-connections. The four nodes are fully connected; message forwarding is
-not necessary.
+connections. The four nodes are fully connected, thus message
+forwarding is not necessary.
 {{< /img-figure >}}
 
 In the remainder of this post, I will describe how to model CPR networks
@@ -79,38 +79,37 @@ network assumptions compatible with the Selfish Mining literature.
 ## Reordering Messages
 
 In the Selfish Mining literature, $\gamma$ represents the share of
-defenders (by hash-rate) who adopt the attacker's block in case of a
-block race. The term block race refers to a situation where one of the
-honest nodes mines a new block $b_0$ while the attacker already has
-mined---but kept private---a block $b_1$ of the same height. If the
-attacker decides to release $b_1$ at the very same time, the defenders'
-reactions depend on individual message propagation delays and hence the
-network assumptions. Defender's will proceed mining on the block they
-received first. Attackers with network-level capabilities can delay
-propagation of $b_0$ and hence make the defenders prefer the attacker's
-block $b_1$. The prevalent assumption is that, after each block race
-$\gamma$ of the defender's hash-rate is used to mine on $b_1$, the rest
-on $b_0$.
+defenders (weighted by hash-rate) who adopt the attacker's block in case
+of a block race. The term *block race* refers to a situation where one
+of the honest nodes mines a new block $b_0$ while the attacker already
+has mined---but kept private---a block $b_1$ of the same height. If the
+attacker decides to release $b_1$ at the very same time it is not
+obvious how the defenders will react. The [protocol]({{< protocol
+"nakamoto" >}}) prescribes to prefer the block first received, but this
+depends on individual message propagation delays. Attackers with
+network-level capabilities can delay propagation of $b_0$ and hence make
+the defenders prefer the attacker's block $b_1$. The prevalent
+assumption is that, after each block race, $\gamma$ of the defender's
+hash-rate is used to mine on $b_1$, the rest on $b_0$.
 
-The block race situation uses what BFT researches would call message
-reordering. The honest miner sends $b_0$ before the attacker sends
-$b_1$, but (some of) the other defender nodes receive $b_1$ before $b_0$.
-The $\gamma$ parameter abstractly defines how often and to which
-defenders this reordering succeeds.
-
-Based on the more general notion of message reordering, we can derive a
-CPR-network exhibiting a given $\gamma.$
+This attack relies on what BFT researches would typically call *message
+reordering*. The honest miner sends $b_0$ before the attacker sends
+$b_1$, but (some of) the remaining defender nodes receive $b_1$ before
+$b_0$. The $\gamma$ parameter abstractly defines how often the
+reordering succeeds.
+Based on this more general notion of message reordering, we can derive a
+CPR network exhibiting a given $\gamma$.
 
 ## Constructing a Network
 
 We start by imposing a couple of restrictions on the design space.
-First, the network should consist of $n \geq 3$ nodes. One attacker and
-at least two defenders. We need at least two defenders---one sends a
-message before the attacker does, the other receives the two messages,
-potentially in reversed order. Second, all defenders have the same
-hash-rate. Third, the nodes are fully-connected, that is, each node has
-outgoing connections to all other nodes. Forth, the attacker receives
-all messages immediately. Fifth, message delays between defenders are
+First, the network should consist of $n \geq 3$ nodes. We need one
+attacker and at least two defenders---one sends a message before the
+attacker does, the other receives the two messages in potentially
+reversed order. Second, all defenders have the same hash-rate. Third,
+the nodes are fully-connected, that is, each node has outgoing
+connections to all other nodes. Forth, the attacker receives all
+messages immediately. Fifth, message delays between defenders are
 constant but small, let's say $\varepsilon$. Sixth, all outgoing
 connections from the attacker to defender have the same properties.
 
@@ -126,7 +125,7 @@ With these restrictions in place, we have only one dimension left. How
 do we have to delay messages from attacker to defender, such that
 $\gamma$ of the block races end in favor of the attacker?
 
-There are one attacker node and $n - 1$ defender nodes. One of the
+We have one attacker node and $n - 1$ defender nodes. One of the
 defenders sends a message---in Selfish Mining that would be a freshly
 mined block. The other $n - 2$ defenders receive the message after
 $\varepsilon$ time. The attacker receives it immediately, sends another
@@ -176,7 +175,7 @@ $\gamma$-assumption in Selfish Mining.
 
 ## Limiting Gamma
 
-It is common practice to evaluate Selfish Mining for $\gamma = 1$.
+Related literature evaluates Selfish Mining for $\gamma = 1$.
 This is not possible with our approach. But $\gamma = 1$ is also
 not possible in practice.
 
@@ -194,28 +193,28 @@ first.
 In our network with $n-1$ defenders this manifest as follows. After any
 block race, $\frac{1}{n-1}$ of the defenders' hash-rate will be used to mine
 on the honest block. Consequently, $\gamma$ must be lower or equal $1 -
-\frac{1}{n-1} = \frac{n-2}{n-1}$. In reverse, in order to emulate a
-given $\gamma$ we have to simulate at least $n \geq \frac{1}{1 -
-\gamma}+ 1$ nodes. Setting $\gamma = 1$ implies $n = \infty$ and makes
-simulations unfeasible.
+\frac{1}{n-1} = \frac{n-2}{n-1}$. Thus, in order to emulate a given
+$\gamma$ we have to simulate at least $n \geq \frac{1}{1 - \gamma}+ 1$
+nodes. Setting $\gamma = 1$ implies $n = \infty$ and makes simulations
+unfeasible.
 
 Astute readers will now (at the latest) start questioning the formulas
 in the previous section. Why does the limitation presented here not show
-up above? It's because one of the steps requires qualification. We used
-that $D_i$ is uniformly distributed on the interval from $0$ to $d$.
-Then we said that $P[D_i < \varepsilon] = \frac{\varepsilon}{d}$. That's
-true if $d \geq \varepsilon$ but otherwise the probability is $1$.
-As a result, $E[X] \leq n-2$ and $\gamma \leq \frac{n-2}{n-1}$.
+up above? It's because one of the steps above requires qualification. We
+used that $D_i$ is uniformly distributed on the interval from $0$ to
+$d$. Then we said that $P[D_i < \varepsilon] = \frac{\varepsilon}{d}$.
+That's true if $d \geq \varepsilon$ but otherwise the probability is
+$1$. As a result, $E[X] \leq n-2$ and $\gamma \leq \frac{n-2}{n-1}$.
 
-In the real world, most of the hash-rate is concentrated around a view
+In the real world, most of the hash-rate is concentrated around a few
 nodes. In December 2022, the two biggest Bitcoin mining pools have 26%
-and 19% of the overall hash-rate. Assume the bigger one turns malicious
-and starts selfish mining. That leaves 74% of the hash rate to the
-defender, of which about 26% belong to the second-biggest miner
-(the 19% one). In 26% of the block races, the second-biggest miner will
-be the sender of the block which the attacker tries to outrun. So in
-26% of the cases 26% of the defender hash-rate will not mine on the
-attacker's block. This alone makes $\gamma > 0.94$ unrealistic.
+and 19% of the overall hash-rate. Let's assume the bigger one turns
+malicious and starts selfish mining. That leaves 74% of the hash-rate to
+the defender, of which about 26% belong to the second-biggest miner (the
+19% one). In 26% of the block races, the second-biggest miner will be
+the sender of the block which the attacker tries to outrun. So in 26% of
+the cases 26% of the defender hash-rate will not mine on the attacker's
+block. This alone makes any $\gamma > 0.94$ unrealistic.
 
 ## Choosing Parameters
 
@@ -226,7 +225,7 @@ description]({{< method "simulator" >}})
 additionally sets the attacker's relative hash-rate $\alpha$, and the
 network's overall mining rate $\lambda$.
 
-A couple of restrictions follow either from definitions of the
+A couple of restrictions follow either from the definitions of the
 parameters themselves or from the construction above.
 
 * Gamma and alpha are fractions, thus $0 \leq \gamma \leq 1$ and $0 \leq
@@ -249,22 +248,22 @@ to avoid them. That's possible by setting $\varepsilon \ll
 \lambda^{-1}$, that is, making the defender's message delay much smaller
 than the (expected) block interval. A nice trick is to set $\lambda = 1$
 which implies that the natural orphan rate is bounded by $\varepsilon$.
-We typically use $\lambda = 1$ and $\varepsilon = 10^{-5}$.
+We typically use $\lambda = 1$ and $\varepsilon = 10^{-9}$.
 
 The network size $n$ matters as well. In Selfish Mining, after *each*
 block race *exactly* $\gamma$ of the defender hash-rate mines on the
 attacker's block. In the constructed network, the number of defenders
 mining on the attacker's block is random. The expected value is $\gamma$
-by construction. But the variance depends on the number of defenders.
+by construction, but the variance depends on the number of defenders.
 Higher $n$ implies more messages per block race and---by the law of large
 numbers---less variance around $\gamma$.
 
 ## Specification
 
-Last step is to produce some Python-like specification that works as
+The last step is to produce some Python-like specification that works as
 input for our [network simulator]({{< method "simulator" >}}). As
-promised, it works with any protocol specification (supplied in Python
-module `protocol`) and attack (supplied in `attacker`).
+promised above, it works with any protocol specification (supplied in
+Python module `protocol`) and attack (supplied in `attacker`).
 
 ```python
 import protocol  # protocol specification
@@ -275,7 +274,7 @@ from numpy import random
 n = 42  # network size
 alpha = 1 / 3  # attacker's relative hash-rate
 gamma = 0.5  # Selfish Mining's Gamma
-epsilon = 1e-5  # propagation delay honest --> honest
+epsilon = 1e-9  # propagation delay honest --> honest
 lambda_ = 1 / 600  # network's mining rate
 
 # Safety checks:
@@ -290,7 +289,7 @@ def mining_delay():
     return random.exponential(scale=1 / lambda_)
 
 
-def miner():
+def select_miner():
     dhr = (1 - alpha) / (n - 1)  # defender hash rate
     hash_rates = [alpha] + [dhr] * (n - 1)
     return random.choice(range(n), p=hash_rates)

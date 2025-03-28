@@ -148,7 +148,7 @@ def preference(old: Block, new: Block):
 
 
 def summarize(b: Block):
-    assert b.kind == "block"
+    assert b.kind == "summary"
     if len(confirming_sub_blocks(b)) < k:
         return []  # summary infeasible
     else:
