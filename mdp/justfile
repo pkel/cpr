@@ -1,0 +1,10 @@
+reproduce-acns25:
+  just eval 5a
+  just eval 5b
+  just eval 5c
+  just eval 5d
+  just eval 6a
+  just eval 7a
+
+eval N:
+  time ../_venv/bin/jupyter nbconvert --to ipynb --inplace --execute "{{N}}-*.ipynb"
