@@ -22,7 +22,7 @@ class Protocol(Ethereum):
 
     def coinbase(self, block):
         _, uncles = self.parent_and_uncles(block)
-        lst = [(self.miner_of(block), 1 + 0.3125 * len(uncles))]
+        lst = [(self.miner_of(block), 1 + 0.03125 * len(uncles))]
         h = self.height(block)
         max_d = self.h + 1
         for u in uncles:

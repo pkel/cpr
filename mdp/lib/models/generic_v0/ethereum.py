@@ -136,7 +136,7 @@ class EthereumByzantium(EthereumWhitepaper):
         assert len(v.parents(b)) > 0, "genesis reward not defined"
 
         _, uncles = self.parent_and_uncles(v, b)
-        rew = [Reward(v.miner(b), 1 + 0.3125 * len(uncles))]
+        rew = [Reward(v.miner(b), 1 + 0.03125 * len(uncles))]
         h = v.height(b)
         max_d = self.horizon + 1  # TODO separate protocol parameter?
         for u in uncles:
