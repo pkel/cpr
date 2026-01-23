@@ -1,6 +1,6 @@
 # Consensus Protocol Research
 
-CPR is a toolbox for specifying, simulating, and attacking proof-of-work
+CPR is my toolbox for specifying, simulating, and attacking proof-of-work
 consensus protocols. In this repository you find
 - protocol specifications for Bitcoin, Ethereum PoW, and others,
 - implementations of known attacks against these protocols,
@@ -10,9 +10,11 @@ consensus protocols. In this repository you find
 - tooling for automatic attack-search with reinforcement learning (RL) and
 - evaluation scripts and notebooks for the above.
 
-I'm working on [a website](https://pkel.github.io/cpr/) with more details.
+I've implemented these tools during my PhD studies at the University of
+Innsbruck. [[PhD Thesis]](./phd-thesis.pdf) [[research
+website]](https://informationsecurity.uibk.ac.at/people/patrik-keller/)
 
-##### Related Work
+##### Publications
 
 - CPR was inspired by my previous work on HotPoW and Parallel Proof-of-Work
   / $\mathcal B_k$. (Network Simulation)
@@ -28,10 +30,17 @@ I'm working on [a website](https://pkel.github.io/cpr/) with more details.
   [[preprint]](https://arxiv.org/abs/2312.03111)
 - I've applied CPR to analyze GhostDAG and other DAG-based proof-of-work
   protocols (MDP)
-  [[early]](https://arxiv.org/abs/2309.11924)
+  [[early draft]](https://arxiv.org/abs/2309.11924)
   [[pull-request]](https://github.com/pkel/cpr/pull/51)
   [[preprint]](https://arxiv.org/abs/2501.10888)
+  [[ACNS'25 paper]](https://link.springer.com/chapter/10.1007/978-3-031-95761-1_8)
 
+##### Documentation
+
+I recommend reading my thesis and research papers, then follow the deep
+links from there into this repository and read the code. Afterwards you
+will probably have many question remaining, which I'm happy to discuss
+1:1. Just drop me an email.
 
 ## Python/RL Quickstart
 
