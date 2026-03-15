@@ -1,9 +1,9 @@
 ---
 title: "Launching the CPR website"
 description: |
-  Introducing the CPR website.
+  (draft). Introducing the CPR website.
 excerpt: |
-  Introducing the CPR website.
+  (draft). Introducing the CPR website.
 date: 2022-11-28
 draft: true
 weight: 50
